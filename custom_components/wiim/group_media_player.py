@@ -272,23 +272,23 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
     @property
     def media_position(self):
         master_coord = self._find_coordinator_by_ip(self.master_ip)
-        if master_coord:
-            return master_coord.data.get("status", {}).get("position")
-        return None
+        if not master_coord or master_coord.data is None:
+            return None
+        return master_coord.data.get("status", {}).get("position")
 
     @property
     def media_duration(self):
         master_coord = self._find_coordinator_by_ip(self.master_ip)
-        if master_coord:
-            return master_coord.data.get("status", {}).get("duration")
-        return None
+        if not master_coord or master_coord.data is None:
+            return None
+        return master_coord.data.get("status", {}).get("duration")
 
     @property
     def media_position_updated_at(self):
         master_coord = self._find_coordinator_by_ip(self.master_ip)
-        if master_coord:
-            return master_coord.data.get("status", {}).get("position_updated_at")
-        return None
+        if not master_coord or master_coord.data is None:
+            return None
+        return master_coord.data.get("status", {}).get("position_updated_at")
 
     async def async_set_volume_level(self, volume):
         # Always get the latest volume from each coordinator
