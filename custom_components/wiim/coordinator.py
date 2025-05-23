@@ -306,9 +306,9 @@ class WiiMCoordinator(DataUpdateCoordinator):
 
             # Determine role
             role = "solo"
-            # LinkPlay firmwares sometimes return the numeric value **1** instead of the string "1".
-            # Cast to *str* so we detect both representations transparently.
             if str(multiroom.get("type")) == "1":
+                role = "slave"
+            elif str(status.get("group")) == "1":  # Fallback flag many firmwares use
                 role = "slave"
             elif multiroom.get("slave_list"):
                 role = "master"
