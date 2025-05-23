@@ -1,0 +1,32 @@
+{
+  "title": "{{ name }} ({{ host }})",
+  "config": {
+    "step": {
+      "user": {
+        "title": "WiiM Host",
+        "description": "Enter the IP address or host of the WiiM device.",
+        "data": {
+          "host": "Host"
+        }
+      },
+      "confirm": {
+        "title": "Add discovered WiiM",
+        "description": "Confirm you want to add the discovered WiiM device."
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to device"
+    },
+    "options": {
+      "step": {
+        "init": {
+          "title": "WiiM Options",
+          "data": {
+            "poll_interval": "Polling interval (seconds)",
+            "volume_step": "Default volume step"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,10 +1,25 @@
 {
   "domain": "wiim",
-  "name": "WiiM",
-  "documentation": "https://github.com/mjcumming/wiim",
-  "issue_tracker": "https://github.com/mjcumming/wiim/issues",
+  "name": "WiiM Audio (LinkPlay)",
+  "author": "Michael Cumming (@mjcumming)",
+  "documentation": "https://github.com/yourusername/ha-wiim/blob/main/config/custom_components/wiim/README.md",
   "dependencies": [],
-  "config_flow": true,
   "codeowners": ["@mjcumming"],
-  "requirements": []
+  "requirements": [],
+  "version": "0.1.1",
+  "logo": "WIIM.png",
+  "config_flow": true,
+  "zeroconf": [
+    "_linkplay._tcp.local."
+  ],
+  "integration_type": "hub",
+  "ssdp": [
+    { "st": "upnp:rootdevice" },
+    { "device_type": "urn:schemas-upnp-org:device:MediaRenderer:1" },
+    { "st": "urn:schemas-upnp-org:device:MediaRenderer:1" },
+    { "st": "urn:schemas-upnp-org:service:AVTransport:1" },
+    { "st": "urn:schemas-upnp-org:service:RenderingControl:1" }
+  ],
+  "iot_class": "local_push",
+  "icon": "mdi:speaker-multiple"
 }

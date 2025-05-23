@@ -1,0 +1,55 @@
+play_preset:
+  name: Play Preset
+  description: Play a preset on the WiiM device.
+  fields:
+    entity_id:
+      name: Entity
+      description: Name of the WiiM entity to control.
+      selector:
+        entity:
+          domain: media_player
+          integration: wiim
+    preset:
+      name: Preset
+      description: Preset number to play (1-6).
+      selector:
+        number:
+          min: 1
+          max: 6
+          step: 1
+
+toggle_power:
+  name: Toggle Power
+  description: Toggle the power state of the WiiM device.
+  fields:
+    entity_id:
+      name: Entity
+      description: Name of the WiiM entity to control.
+      selector:
+        entity:
+          domain: media_player
+          integration: wiim
+
+reboot_device:
+  name: Reboot Device
+  description: Soft-reboot the WiiM speaker.
+  fields:
+    entity_id:
+      name: Entity
+      description: Name of the WiiM entity to reboot.
+      selector:
+        entity:
+          domain: media_player
+          integration: wiim
+
+sync_time:
+  name: Sync Time
+  description: Push Home Assistant's current Unix timestamp to the speaker.
+  fields:
+    entity_id:
+      name: Entity
+      description: Name of the WiiM entity to update.
+      selector:
+        entity:
+          domain: media_player
+          integration: wiim
