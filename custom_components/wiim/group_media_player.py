@@ -104,6 +104,13 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             )
             return MediaPlayerState.IDLE
 
+        if master_coord.data is None:
+            _LOGGER.debug(
+                "[WiiMGroup] Coordinator for %s has no data yet (state init)",
+                self.master_ip,
+            )
+            return MediaPlayerState.IDLE
+
         status = master_coord.data.get("status", {})
         role = master_coord.data.get("role")
         _LOGGER.debug(

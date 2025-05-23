@@ -2,7 +2,7 @@
   "domain": "wiim",
   "name": "WiiM Audio (LinkPlay)",
   "author": "Michael Cumming (@mjcumming)",
-  "documentation": "https://github.com/mjcumming/wiim/wiki",
+  "documentation": "https://github.com/mjcumming/wiim#readme",
   "dependencies": [],
   "codeowners": ["@mjcumming"],
   "requirements": [
