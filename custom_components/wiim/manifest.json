@@ -2,10 +2,12 @@
   "domain": "wiim",
   "name": "WiiM Audio (LinkPlay)",
   "author": "Michael Cumming (@mjcumming)",
-  "documentation": "https://github.com/yourusername/ha-wiim/blob/main/config/custom_components/wiim/README.md",
+  "documentation": "https://github.com/mjcumming/wiim/wiki",
   "dependencies": [],
   "codeowners": ["@mjcumming"],
-  "requirements": [],
+  "requirements": [
+    "async-upnp-client>=0.29.0"
+  ],
   "version": "0.1.1",
   "logo": "WIIM.png",
   "config_flow": true,

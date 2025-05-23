@@ -1,21 +1,28 @@
 {
-  "title": "{{ name }} ({{ host }})",
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "WiiM Host",
-        "description": "Enter the IP address or host of the WiiM device.",
+        "description": "Enter the hostname or IP address of the WiiM/LinkPlay speaker.",
         "data": {
           "host": "Host"
+        },
+        "data_description": {
+          "host": "The hostname or IP address of the speaker."
         }
       },
-      "confirm": {
-        "title": "Add discovered WiiM",
-        "description": "Confirm you want to add the discovered WiiM device."
+      "discovery_confirm": {
+        "description": "Do you want to set up {name}?"
       }
     },
+    "abort": {
+      "already_configured": "This WiiM speaker is already configured.",
+      "already_in_progress": "The device is already being set up."
+    },
     "error": {
-      "cannot_connect": "Unable to connect to device"
+      "cannot_connect": "Unable to connect to the device.",
+      "unknown": "Unknown error occurred."
     },
     "options": {
       "step": {
