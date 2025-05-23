@@ -191,83 +191,19 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     @property
     def entity_picture(self):
-        master_coord = self._find_coordinator_by_ip(self.master_ip)
-        if not master_coord:
-            _LOGGER.debug(
-                "[WiiMGroup] No coordinator found for master %s in group %s",
-                self.master_ip,
-                self._attr_name,
-            )
-            return None
-        pic = master_coord.data.get("status", {}).get("entity_picture")
-        if not pic:
-            _LOGGER.debug(
-                "[WiiMGroup] No entity_picture for master %s in group %s: %s",
-                self.master_ip,
-                self._attr_name,
-                master_coord.data.get("status", {}),
-            )
-        return pic
+        return self._master_status().get("entity_picture")
 
     @property
     def media_title(self):
-        master_coord = self._find_coordinator_by_ip(self.master_ip)
-        if not master_coord:
-            _LOGGER.debug(
-                "[WiiMGroup] No coordinator found for master %s in group %s",
-                self.master_ip,
-                self._attr_name,
-            )
-            return None
-        title = master_coord.data.get("status", {}).get("title")
-        if not title:
-            _LOGGER.debug(
-                "[WiiMGroup] No media_title for master %s in group %s: %s",
-                self.master_ip,
-                self._attr_name,
-                master_coord.data.get("status", {}),
-            )
-        return title
+        return self._master_status().get("title")
 
     @property
     def media_artist(self):
-        master_coord = self._find_coordinator_by_ip(self.master_ip)
-        if not master_coord:
-            _LOGGER.debug(
-                "[WiiMGroup] No coordinator found for master %s in group %s",
-                self.master_ip,
-                self._attr_name,
-            )
-            return None
-        artist = master_coord.data.get("status", {}).get("artist")
-        if not artist:
-            _LOGGER.debug(
-                "[WiiMGroup] No media_artist for master %s in group %s: %s",
-                self.master_ip,
-                self._attr_name,
-                master_coord.data.get("status", {}),
-            )
-        return artist
+        return self._master_status().get("artist")
 
     @property
     def media_album_name(self):
-        master_coord = self._find_coordinator_by_ip(self.master_ip)
-        if not master_coord:
-            _LOGGER.debug(
-                "[WiiMGroup] No coordinator found for master %s in group %s",
-                self.master_ip,
-                self._attr_name,
-            )
-            return None
-        album = master_coord.data.get("status", {}).get("album")
-        if not album:
-            _LOGGER.debug(
-                "[WiiMGroup] No media_album_name for master %s in group %s: %s",
-                self.master_ip,
-                self._attr_name,
-                master_coord.data.get("status", {}),
-            )
-        return album
+        return self._master_status().get("album")
 
     @property
     def media_position(self):
@@ -409,3 +345,26 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             "[WiiMGroup] No coordinator found for IP %s (likely not yet set up)", ip
         )
         return None
+
+    # ---------------------------------------------------------------------
+    # Helper – centralised guard so we don't repeat None checks everywhere
+    # ---------------------------------------------------------------------
+
+    def _master_status(self) -> dict:
+        """Return master's status dict or an empty one when unavailable."""
+
+        coord = self._find_coordinator_by_ip(self.master_ip)
+        if not coord or coord.data is None:
+            return {}
+        return coord.data.get("status", {})
+
+    # Override availability so the entity is marked unavailable unless this
+    # speaker currently acts as master.  That keeps the UI clean when users
+    # opt to always create a group entity.
+
+    @property
+    def available(self) -> bool:  # noqa: D401 – HA field
+        master_coord = self._find_coordinator_by_ip(self.master_ip)
+        if not master_coord or master_coord.data is None:
+            return False
+        return master_coord.data.get("role") == "master"

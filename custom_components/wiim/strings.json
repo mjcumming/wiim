@@ -31,7 +31,7 @@
           "data": {
             "poll_interval": "Polling interval (seconds)",
             "volume_step": "Default volume step",
-            "create_group_entities": "Create virtual group media players"
+            "own_group_entity": "Always create a group entity for this speaker"
           }
         }
       }

@@ -458,8 +458,8 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                     default=self.entry.options.get("debug_logging", False),
                 ): bool,
                 vol.Optional(
-                    "create_group_entities",
-                    default=self.entry.options.get("create_group_entities", True),
+                    "own_group_entity",
+                    default=self.entry.options.get("own_group_entity", False),
                 ): bool,
             }
         )

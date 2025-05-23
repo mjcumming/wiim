@@ -126,13 +126,8 @@ async def async_setup_entry(
     if not hasattr(hass.data[DOMAIN], "_group_entities"):
         hass.data[DOMAIN]["_group_entities"] = {}
 
-    create_groups = config_entry.options.get("create_group_entities", True)
-
     async def update_group_entities():
         """Create or remove group entities based on coordinator group registry."""
-        if not create_groups:
-            return
-
         group_entities = hass.data[DOMAIN]["_group_entities"]
         all_masters = set()
         ent_reg = None
@@ -141,7 +136,16 @@ async def async_setup_entry(
         for coord in hass.data[DOMAIN].values():
             if not hasattr(coord, "groups"):
                 continue
-            for master_ip in coord.groups.keys():
+            entry = hass.config_entries.async_get_entry(getattr(coord, "entry_id", ""))
+            own_group = False
+            if entry is not None:
+                own_group = entry.options.get("own_group_entity", False)
+
+            potential_masters = set(coord.groups.keys())
+            if own_group:
+                potential_masters.add(coord.client.host)
+
+            for master_ip in potential_masters:
                 all_masters.add(master_ip)
 
                 if master_ip in group_entities:
