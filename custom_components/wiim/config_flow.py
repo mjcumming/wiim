@@ -85,6 +85,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 client = WiiMClient(host)
                 info = await client.get_player_status()
+                # Make sure device starts in *solo* mode for clean setup
+                info = await self._ensure_solo(client, info)
                 # Use host/IP as unique_id to guarantee one entry per device
                 unique_id = host
                 # If device is in a group, ungroup it
@@ -178,6 +180,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     client = WiiMClient(host)
                     info = await client.get_player_status()
+                    # Make sure device starts in *solo* mode for clean setup
+                    info = await self._ensure_solo(client, info)
                     device_name = (
                         info.get("device_name") or info.get("DeviceName") or host
                     )
@@ -210,6 +214,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     client = WiiMClient(first_host)
                     info = await client.get_player_status()
+                    # Make sure device starts in *solo* mode for clean setup
+                    info = await self._ensure_solo(client, info)
                     device_name = (
                         info.get("device_name") or info.get("DeviceName") or first_host
                     )
@@ -264,6 +270,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 client = WiiMClient(host)
                 info = await client.get_player_status()
+                # Make sure device starts in *solo* mode for clean setup
+                info = await self._ensure_solo(client, info)
                 # Use host/IP as unique_id to guarantee one entry per device
                 unique_id = host
                 await client.close()
@@ -314,6 +322,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             client = WiiMClient(host)
             info = await client.get_player_status()
+            # Make sure device starts in *solo* mode for clean setup
+            info = await self._ensure_solo(client, info)
             # If device is in a group, ungroup it to enumerate all devices
             if info.get("role") == "slave" or info.get("group") == "1":
                 try:
@@ -385,6 +395,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             client = WiiMClient(host)
             info = await client.get_player_status()
+            # Make sure device starts in *solo* mode for clean setup
+            info = await self._ensure_solo(client, info)
             # Use host/IP as unique_id to guarantee one entry per device
             unique_id = host
             # If device is in a group, ungroup it
@@ -415,6 +427,37 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_import(self, import_config: dict[str, Any]) -> FlowResult:
         """Handle import from YAML or programmatic flow."""
         return await self.async_step_user(import_config)
+
+    async def _ensure_solo(
+        self, client: "WiiMClient", info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """If the speaker is in a multi-room group, leave or disband it.
+
+        We leave groups when the device is **slave** and delete the whole
+        group when it is **master** with at least one slave.  Returns an
+        updated status dict after the operation (may be unchanged when the
+        device was already solo).
+        """
+
+        # If device is a slave → leave group
+        if info.get("role") == "slave" or str(info.get("group")) == "1":
+            try:
+                await client.leave_group()
+            except Exception:
+                pass
+            return await client.get_player_status()
+
+        # If device is master with slaves → disband group
+        multi = info.get("multiroom", {})
+        has_slaves = bool(multi.get("slave_list")) or multi.get("slaves", 0)
+        if has_slaves:
+            try:
+                await client.delete_group()
+            except Exception:
+                pass
+            return await client.get_player_status()
+
+        return info
 
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):
