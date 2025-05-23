@@ -5,6 +5,7 @@ from homeassistant.components.media_player import (
 )
 from .const import DOMAIN
 import logging
+from homeassistant.helpers.entity import DeviceInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +77,15 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             | MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.GROUPING
+        )
+
+        # Attach the group entity to the same *device* as the master speaker so it
+        # shows up under the hub in the Devices & Services UI.
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, master_ip)},
+            name=group_name,
+            manufacturer="WiiM",
+            model="WiiM Group",
         )
 
     @property
