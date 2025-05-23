@@ -31,6 +31,7 @@ import zeroconf
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def _async_validate_host(host: str) -> None:
     """Validate we can talk to the WiiM device and always close the session."""
     client = WiiMClient(host)
@@ -44,7 +45,12 @@ async def _async_validate_host(host: str) -> None:
         except WiiMError as err:
             if attempt == max_retries - 1:
                 raise
-            _LOGGER.debug("Attempt %d failed to validate WiiM device at %s: %s", attempt + 1, host, err)
+            _LOGGER.debug(
+                "Attempt %d failed to validate WiiM device at %s: %s",
+                attempt + 1,
+                host,
+                err,
+            )
             await asyncio.sleep(retry_delay)
         finally:
             # Ensure the underlying aiohttp session is closed even on failure
@@ -108,8 +114,15 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 for entry in existing_entry:
                     if entry.unique_id == unique_id:
                         if entry.data.get(CONF_HOST) != host:
-                            _LOGGER.debug("[WiiM] Updating host for %s: %s -> %s", unique_id, entry.data.get(CONF_HOST), host)
-                            self.hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_HOST: host})
+                            _LOGGER.debug(
+                                "[WiiM] Updating host for %s: %s -> %s",
+                                unique_id,
+                                entry.data.get(CONF_HOST),
+                                host,
+                            )
+                            self.hass.config_entries.async_update_entry(
+                                entry, data={**entry.data, CONF_HOST: host}
+                            )
                         self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=device_name, data={CONF_HOST: host}
@@ -124,16 +137,23 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({vol.Required(CONF_HOST): str})
         # Try to show placeholders if we have info
         placeholders = {}
-        if 'device_name' in locals():
+        if "device_name" in locals():
             placeholders = {
                 "device_name": device_name,
                 "host": host,
                 "model": model,
                 "firmware": firmware,
             }
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors, description_placeholders=placeholders)
+        return self.async_show_form(
+            step_id="user",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders=placeholders,
+        )
 
-    async def async_step_upnp(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_upnp(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Discover WiiM/LinkPlay devices via UPnP/SSDP."""
         errors: dict[str, str] = {}
         if not self._discovered_hosts:
@@ -158,7 +178,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     client = WiiMClient(host)
                     info = await client.get_player_status()
-                    device_name = info.get("device_name") or info.get("DeviceName") or host
+                    device_name = (
+                        info.get("device_name") or info.get("DeviceName") or host
+                    )
                 except Exception:
                     pass
                 finally:
@@ -174,10 +196,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._discovered_hosts:
             # Build a label→host map so the dropdown shows nice names
             options_map = {
-                f"{name} ({host})": host for host, name in self._discovered_hosts.items()
+                f"{name} ({host})": host
+                for host, name in self._discovered_hosts.items()
             }
             self._options_map = options_map  # type: ignore[attr-defined]
-            schema = vol.Schema({vol.Required(CONF_HOST): vol.In(list(options_map.keys()))})
+            schema = vol.Schema(
+                {vol.Required(CONF_HOST): vol.In(list(options_map.keys()))}
+            )
             # Try to show placeholders for the first discovered device
             first_host = next(iter(self._discovered_hosts), None)
             placeholders = {}
@@ -185,7 +210,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     client = WiiMClient(first_host)
                     info = await client.get_player_status()
-                    device_name = info.get("device_name") or info.get("DeviceName") or first_host
+                    device_name = (
+                        info.get("device_name") or info.get("DeviceName") or first_host
+                    )
                     model = info.get("device_model") or info.get("hardware") or ""
                     firmware = info.get("firmware") or ""
                     await client.close()
@@ -214,7 +241,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         discovered: dict[str, str] = {}
         known_ids = {entry.unique_id for entry in self._async_current_entries()}
-        in_progress_ids = {flow['context'].get('unique_id') for flow in self.hass.config_entries.flow.async_progress() if flow['handler'] == DOMAIN}
+        in_progress_ids = {
+            flow["context"].get("unique_id")
+            for flow in self.hass.config_entries.flow.async_progress()
+            if flow["handler"] == DOMAIN
+        }
         all_known = known_ids | in_progress_ids
 
         async def _on_ssdp_device(device):
@@ -257,7 +288,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         return discovered
 
-    async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
+    async def async_step_zeroconf(
+        self, discovery_info: zeroconf.ZeroconfServiceInfo
+    ) -> FlowResult:
         """Handle Zeroconf discovery, filter duplicates, and use device name from API."""
         host = discovery_info.host
         # ────────────────────────────────────────────────────────────────────
@@ -269,7 +302,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         unique_id = host
         # Filter out already-configured or in-progress
         known_ids = {entry.unique_id for entry in self._async_current_entries()}
-        in_progress_ids = {flow['context'].get('unique_id') for flow in self.hass.config_entries.flow.async_progress() if flow['handler'] == DOMAIN}
+        in_progress_ids = {
+            flow["context"].get("unique_id")
+            for flow in self.hass.config_entries.flow.async_progress()
+            if flow["handler"] == DOMAIN
+        }
         if unique_id in (known_ids | in_progress_ids):
             return self.async_abort(reason="already_configured")
         await self.async_set_unique_id(unique_id)
@@ -287,10 +324,17 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             device_name = info.get("device_name") or info.get("DeviceName") or host
             await client.close()
         except WiiMError as err:
-            _LOGGER.error("Failed to validate WiiM device at %s from Zeroconf: %s", host, err)
+            _LOGGER.error(
+                "Failed to validate WiiM device at %s from Zeroconf: %s", host, err
+            )
             return self.async_abort(reason="cannot_connect")
         except Exception as e:
-            _LOGGER.error("Unknown error validating WiiM device at %s from Zeroconf: %s", host, e, exc_info=True)
+            _LOGGER.error(
+                "Unknown error validating WiiM device at %s from Zeroconf: %s",
+                host,
+                e,
+                exc_info=True,
+            )
             return self.async_abort(reason="unknown_error_validation")
         self.context["configuration_in_progress"] = True
         self._host = host
@@ -302,7 +346,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Confirm discovery."""
         if user_input is not None:
-            device_name = self.context.get("title_placeholders", {}).get("name") or f"WiiM {self._host}"
+            device_name = (
+                self.context.get("title_placeholders", {}).get("name")
+                or f"WiiM {self._host}"
+            )
             return self.async_create_entry(
                 title=device_name,
                 data={CONF_HOST: self._host},
@@ -352,7 +399,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception:
             return self.async_abort(reason="cannot_connect")
         known_ids = {entry.unique_id for entry in self._async_current_entries()}
-        in_progress_ids = {flow['context'].get('unique_id') for flow in self.hass.config_entries.flow.async_progress() if flow['handler'] == DOMAIN}
+        in_progress_ids = {
+            flow["context"].get("unique_id")
+            for flow in self.hass.config_entries.flow.async_progress()
+            if flow["handler"] == DOMAIN
+        }
         if unique_id in (known_ids | in_progress_ids):
             return self.async_abort(reason="already_configured")
         await self.async_set_unique_id(unique_id)
@@ -405,6 +456,10 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     "debug_logging",
                     default=self.entry.options.get("debug_logging", False),
+                ): bool,
+                vol.Optional(
+                    "create_group_entities",
+                    default=self.entry.options.get("create_group_entities", True),
                 ): bool,
             }
         )

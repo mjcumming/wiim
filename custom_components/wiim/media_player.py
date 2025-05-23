@@ -126,20 +126,56 @@ async def async_setup_entry(
     if not hasattr(hass.data[DOMAIN], "_group_entities"):
         hass.data[DOMAIN]["_group_entities"] = {}
 
+    create_groups = config_entry.options.get("create_group_entities", True)
+
     async def update_group_entities():
         """Create or remove group entities based on coordinator group registry."""
+        if not create_groups:
+            return
+
         group_entities = hass.data[DOMAIN]["_group_entities"]
         all_masters = set()
+        ent_reg = None
+
         # Find all current group masters
         for coord in hass.data[DOMAIN].values():
             if not hasattr(coord, "groups"):
                 continue
             for master_ip in coord.groups.keys():
                 all_masters.add(master_ip)
-                if master_ip not in group_entities:
-                    group_entity = WiiMGroupMediaPlayer(hass, coord, master_ip)
-                    async_add_entities([group_entity])
-                    group_entities[master_ip] = group_entity
+
+                if master_ip in group_entities:
+                    continue  # already have runtime entity
+
+                # Build unique_id that WiiMGroupMediaPlayer will use
+                group_info = coord.groups.get(master_ip, {})
+                group_name = group_info.get("name") or f"WiiM Group {master_ip}"
+                safe_name = (
+                    group_name.replace(" ", "_")
+                    .replace("(", "")
+                    .replace(")", "")
+                    .replace(",", "")
+                    .replace(".", "_")
+                    .replace("none", "")
+                    .replace("null", "")
+                    .lower()
+                )
+                unique_id = f"wiim_group_{master_ip.replace('.', '_')}_{safe_name}"
+
+                # Check entity registry – skip creating if it already exists
+                if ent_reg is None:
+                    from homeassistant.helpers import entity_registry as er
+
+                    ent_reg = er.async_get(hass)
+
+                if ent_reg.async_get_entity_id("media_player", DOMAIN, unique_id):
+                    continue  # entity already registered, will be restored by HA
+
+                # Safe to create new runtime entity
+                group_entity = WiiMGroupMediaPlayer(hass, coord, master_ip)
+                async_add_entities([group_entity])
+                group_entities[master_ip] = group_entity
+
         # Remove group entities for groups that no longer exist
         for master_ip in list(group_entities.keys()):
             if master_ip not in all_masters:

@@ -30,7 +30,8 @@
           "title": "WiiM Options",
           "data": {
             "poll_interval": "Polling interval (seconds)",
-            "volume_step": "Default volume step"
+            "volume_step": "Default volume step",
+            "create_group_entities": "Create virtual group media players"
           }
         }
       }
