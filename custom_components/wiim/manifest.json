@@ -1,0 +1,10 @@
+{
+  "domain": "wiim",
+  "name": "WiiM",
+  "documentation": "https://github.com/mjcumming/wiim",
+  "issue_tracker": "https://github.com/mjcumming/wiim/issues",
+  "dependencies": [],
+  "config_flow": true,
+  "codeowners": ["@mjcumming"],
+  "requirements": []
+}
