@@ -6,7 +6,7 @@
 [![hacs][hacsbadge]][hacs]
 [![Community Forum][forum-shield]][forum]
 
-![WiiM Logo](https://github.com/home-assistant/brands/raw/master/core_integrations/linkplay/icon.png)
+![LinkPlay Logo](https://github.com/home-assistant/brands/raw/master/core_integrations/linkplay/logo.png)
 
 **Transform your WiiM and LinkPlay speakers into smart Home Assistant media players with full multiroom support.**
 
@@ -280,7 +280,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ### Links
 
-- **GitHub Repository**: [ha-wiim-integration][github]
+- **GitHub Repository**: [mjcumming/wiim][github]
 - **Home Assistant Forum**: [Community discussion][forum]
 - **Issue Tracker**: [Bug reports & features][issues]
 
@@ -308,15 +308,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Enjoying the integration? ⭐ Star the repository and share with others!**
 
-[releases-shield]: https://img.shields.io/github/release/mjcumming/ha-wiim-integration.svg?style=for-the-badge
-[releases]: https://github.com/mjcumming/ha-wiim-integration/releases
-[commits-shield]: https://img.shields.io/github/commit-activity/y/mjcumming/ha-wiim-integration.svg?style=for-the-badge
-[commits]: https://github.com/mjcumming/ha-wiim-integration/commits/main
-[license-shield]: https://img.shields.io/github/license/mjcumming/ha-wiim-integration.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/mjcumming/wiim.svg?style=for-the-badge
+[releases]: https://github.com/mjcumming/wiim/releases
+[commits-shield]: https://img.shields.io/github/commit-activity/y/mjcumming/wiim.svg?style=for-the-badge
+[commits]: https://github.com/mjcumming/wiim/commits/main
+[license-shield]: https://img.shields.io/github/license/mjcumming/wiim.svg?style=for-the-badge
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
 [hacs]: https://github.com/hacs/integration
 [forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
 [forum]: https://community.home-assistant.io/
-[github]: https://github.com/mjcumming/ha-wiim-integration
-[issues]: https://github.com/mjcumming/ha-wiim-integration/issues
-[contributors]: https://github.com/mjcumming/ha-wiim-integration/graphs/contributors
+[github]: https://github.com/mjcumming/wiim
+[issues]: https://github.com/mjcumming/wiim/issues
+[contributors]: https://github.com/mjcumming/wiim/graphs/contributors

@@ -16,6 +16,10 @@ from .api import WiiMClient, WiiMError
 from .const import (
     CONF_POLL_INTERVAL,
     CONF_VOLUME_STEP,
+    CONF_STATUS_UPDATE_INTERVAL,
+    CONF_VOLUME_STEP_PERCENT,
+    CONF_ENABLE_GROUP_ENTITY,
+    CONF_DEBUG_LOGGING,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_VOLUME_STEP,
     DOMAIN,
@@ -479,37 +483,72 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:  # noqa: D401
         """Handle options flow."""
         if user_input is not None:
-            # Set logger level based on debug_logging option
-            debug_logging = user_input.get("debug_logging", False)
-            await self.hass.services.async_call(
-                "logger",
-                "set_level",
-                {"custom_components.wiim": "debug" if debug_logging else "info"},
-                blocking=True,
-            )
-            return self.async_create_entry(title="Options", data=user_input)
+            # Convert user-friendly names back to internal names
+            options_data = {}
+
+            # Map user-friendly field names to internal names
+            if CONF_STATUS_UPDATE_INTERVAL in user_input:
+                options_data[CONF_POLL_INTERVAL] = user_input[
+                    CONF_STATUS_UPDATE_INTERVAL
+                ]
+
+            # Convert volume step from percentage back to decimal
+            if CONF_VOLUME_STEP_PERCENT in user_input:
+                options_data[CONF_VOLUME_STEP] = (
+                    user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
+                )
+
+            # Map group entity option (keep existing internal key for compatibility)
+            if CONF_ENABLE_GROUP_ENTITY in user_input:
+                options_data["own_group_entity"] = user_input[CONF_ENABLE_GROUP_ENTITY]
+
+            # Map debug logging option (keep existing internal key for compatibility)
+            if CONF_DEBUG_LOGGING in user_input:
+                options_data["debug_logging"] = user_input[CONF_DEBUG_LOGGING]
+                # Set logger level based on debug_logging option
+                await self.hass.services.async_call(
+                    "logger",
+                    "set_level",
+                    {
+                        "custom_components.wiim": "debug"
+                        if user_input[CONF_DEBUG_LOGGING]
+                        else "info"
+                    },
+                    blocking=True,
+                )
+
+            return self.async_create_entry(title="", data=options_data)
+
+        # Get current values and convert for display
+        current_poll_interval = self.entry.options.get(
+            CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
+        )
+        current_volume_step = self.entry.options.get(
+            CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
+        )
+        current_debug_logging = self.entry.options.get("debug_logging", False)
+        current_group_entity = self.entry.options.get("own_group_entity", False)
+
+        # Convert volume step from decimal to percentage for user display
+        volume_step_percent = int(current_volume_step * 100)
 
         schema = vol.Schema(
             {
                 vol.Optional(
-                    CONF_POLL_INTERVAL,
-                    default=self.entry.options.get(
-                        CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
-                    ),
+                    CONF_STATUS_UPDATE_INTERVAL,
+                    default=current_poll_interval,
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
                 vol.Optional(
-                    CONF_VOLUME_STEP,
-                    default=self.entry.options.get(
-                        CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
-                    ),
-                ): vol.All(vol.Coerce(float), vol.Range(min=0.01, max=0.5)),
+                    CONF_VOLUME_STEP_PERCENT,
+                    default=volume_step_percent,
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
                 vol.Optional(
-                    "debug_logging",
-                    default=self.entry.options.get("debug_logging", False),
+                    CONF_ENABLE_GROUP_ENTITY,
+                    default=current_group_entity,
                 ): bool,
                 vol.Optional(
-                    "own_group_entity",
-                    default=self.entry.options.get("own_group_entity", False),
+                    CONF_DEBUG_LOGGING,
+                    default=current_debug_logging,
                 ): bool,
             }
         )

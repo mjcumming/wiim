@@ -1,46 +1,99 @@
 {
+  "title": "WiiM Audio (LinkPlay)",
   "config": {
     "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "WiiM Host",
-        "description": "Enter the hostname or IP address of the WiiM/LinkPlay speaker.",
+        "title": "Add WiiM Speaker",
+        "description": "Set up your WiiM or LinkPlay-compatible speaker.",
         "data": {
-          "host": "Host"
+          "host": "IP Address"
         },
         "data_description": {
-          "host": "The hostname or IP address of the speaker."
+          "host": "Enter the IP address of your WiiM speaker (e.g., 192.168.1.100)"
         }
       },
-      "discovery_confirm": {
-        "description": "Do you want to set up {name}?"
+      "upnp": {
+        "title": "Select WiiM Speaker",
+        "description": "Choose a speaker from the discovered devices, or configure manually.",
+        "data": {
+          "host": "Speaker"
+        }
+      },
+      "confirm": {
+        "title": "Confirm Setup",
+        "description": "Confirm adding this WiiM speaker to Home Assistant.",
+        "data": {}
       }
     },
     "abort": {
-      "already_configured": "This WiiM speaker is already configured.",
-      "already_in_progress": "The device is already being set up."
+      "already_configured": "This speaker is already configured.",
+      "cannot_connect": "Unable to connect to the speaker.",
+      "unknown_error_validation": "Unknown error during speaker validation."
     },
     "error": {
-      "cannot_connect": "Unable to connect to the device.",
-      "unknown": "Unknown error occurred."
-    },
-    "options": {
-      "step": {
-        "init": {
-          "title": "WiiM Device Settings",
-          "description": "Configure settings for this WiiM device. Changes apply immediately.",
-          "data": {
-            "poll_interval": "Status polling interval (1-60 seconds)",
-            "volume_step": "Volume adjustment step (1-50%)",
-            "own_group_entity": "Enable group control entity (creates virtual group player when this device is master)"
-          },
-          "data_description": {
-            "poll_interval": "How often to check device status. Lower values = more responsive but higher network usage.",
-            "volume_step": "Volume change amount when using volume up/down buttons.",
-            "own_group_entity": "When enabled, creates a group media player entity that appears when this device controls other speakers in a multiroom group."
-          }
+      "cannot_connect": "Failed to connect to the speaker. Check the IP address and network connection.",
+      "unknown": "Unexpected error occurred. Please try again.",
+      "already_configured": "This speaker is already configured.",
+      "no_host": "Could not determine speaker IP address."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Speaker Settings",
+        "description": "Adjust settings for this WiiM speaker. Changes apply immediately without restart.",
+        "data": {
+          "status_update_interval": "Status Update Frequency",
+          "volume_step_percent": "Volume Button Step",
+          "enable_group_entity": "Enable Group Control",
+          "debug_logging": "Enable Debug Logging"
+        },
+        "data_description": {
+          "status_update_interval": "How often to check speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
+          "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
+          "enable_group_entity": "Create a virtual group controller when this speaker acts as a multiroom master. Allows unified control of speaker groups.",
+          "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
         }
       }
+    }
+  },
+  "services": {
+    "play_preset": {
+      "name": "Play Preset",
+      "description": "Play a preset station or playlist (buttons 1-6 on speaker).",
+      "fields": {
+        "preset": {
+          "name": "Preset Number",
+          "description": "Preset button to trigger (1-6)"
+        }
+      }
+    },
+    "toggle_power": {
+      "name": "Toggle Power",
+      "description": "Toggle speaker power on/off."
+    },
+    "set_eq": {
+      "name": "Set Equalizer",
+      "description": "Configure speaker equalizer settings.",
+      "fields": {
+        "preset": {
+          "name": "EQ Preset",
+          "description": "Equalizer preset to apply"
+        },
+        "custom_values": {
+          "name": "Custom EQ Values",
+          "description": "Custom 10-band equalizer values (-12 to +12 dB)"
+        }
+      }
+    },
+    "reboot_device": {
+      "name": "Reboot Speaker",
+      "description": "Restart the speaker remotely."
+    },
+    "sync_time": {
+      "name": "Sync Time",
+      "description": "Synchronize speaker clock with Home Assistant time."
     }
   }
 }

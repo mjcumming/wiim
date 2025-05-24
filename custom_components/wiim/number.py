@@ -19,6 +19,7 @@ from .const import (
 )
 from .coordinator import WiiMCoordinator
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -31,16 +32,23 @@ async def async_setup_entry(
     ]
     async_add_entities(entities)
 
+
 class _BaseWiiMNumber(CoordinatorEntity[WiiMCoordinator], NumberEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: WiiMCoordinator, entry: ConfigEntry, key: str, name: str):
+    def __init__(
+        self, coordinator: WiiMCoordinator, entry: ConfigEntry, key: str, name: str
+    ):
         super().__init__(coordinator)
         self._entry = entry
         self._key = key
         self._attr_unique_id = f"{coordinator.client.host}-{key}"
         self._attr_name = name
-        status = coordinator.data.get("status", {}) if isinstance(coordinator.data, dict) else {}
+        status = (
+            coordinator.data.get("status", {})
+            if isinstance(coordinator.data, dict)
+            else {}
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.client.host)},
             name=coordinator.friendly_name,
@@ -55,6 +63,7 @@ class _BaseWiiMNumber(CoordinatorEntity[WiiMCoordinator], NumberEntity):
         options = dict(self._entry.options)
         options[self._key] = value
         self.hass.config_entries.async_update_entry(self._entry, options=options)
+
 
 class _PollIntervalNumber(_BaseWiiMNumber):
     _attr_native_min_value = 1
@@ -80,17 +89,23 @@ class _PollIntervalNumber(_BaseWiiMNumber):
         await self.coordinator.async_start()
         await self.coordinator.async_refresh()
 
+
 class _VolumeStepNumber(_BaseWiiMNumber):
-    _attr_native_min_value = 0.01
-    _attr_native_max_value = 0.5
-    _attr_native_step = 0.01
+    _attr_native_min_value = 1
+    _attr_native_max_value = 50
+    _attr_native_step = 1
+    _attr_unit_of_measurement = "%"
 
     def __init__(self, coordinator: WiiMCoordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry, CONF_VOLUME_STEP, "Volume Step")
 
     @property
     def native_value(self):
-        return self._entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+        # Convert from internal decimal (0.01-0.5) to percentage (1-50%)
+        decimal_value = self._entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+        return int(decimal_value * 100)
 
     async def async_set_native_value(self, value):
-        self._save(float(value))
+        # Convert from percentage (1-50%) to internal decimal (0.01-0.5)
+        decimal_value = float(value) / 100.0
+        self._save(decimal_value)
