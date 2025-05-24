@@ -4,7 +4,6 @@ title: "[Question]: "
 labels:
   - "question"
   - "needs-triage"
-assignees: []
 
 body:
   - type: markdown
