@@ -1,0 +1,133 @@
+name: 🐛 Bug Report
+description: File a bug report to help us improve the WiiM integration
+title: "[Bug]: "
+labels:
+  - "bug"
+  - "needs-triage"
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+
+        **Before submitting**, please:
+        - Search existing issues to avoid duplicates
+        - Update to the latest version if possible
+        - Enable debug logging as described in our [troubleshooting guide](https://github.com/mjcumming/wiim/blob/main/docs/troubleshooting.md)
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate
+          required: true
+        - label: I am using the latest version of the WiiM integration
+          required: true
+        - label: I have enabled debug logging and included relevant logs below
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Integration Version
+      description: What version of the WiiM integration are you running?
+      placeholder: "e.g., v0.1.1 or commit hash"
+    validations:
+      required: true
+
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant Version
+      description: What version of Home Assistant are you running?
+      placeholder: "e.g., 2024.12.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device-model
+    attributes:
+      label: WiiM Device Model
+      description: What WiiM/LinkPlay device are you using?
+      options:
+        - WiiM Mini
+        - WiiM Pro
+        - WiiM Pro Plus
+        - WiiM Amp
+        - WiiM Ultra
+        - Other LinkPlay device
+        - Unknown/Multiple devices
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: Describe what happened and what you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Your configuration (remove sensitive information)
+      render: yaml
+      placeholder: |
+        # Example configuration
+        # Remove any sensitive information like IP addresses, passwords, etc.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug Logs
+      description: |
+        Relevant debug logs. To enable debug logging add this to configuration.yaml:
+        ```yaml
+        logger:
+          default: warning
+          logs:
+            custom_components.wiim: debug
+        ```
+      render: text
+      placeholder: Paste relevant debug logs here
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context about the problem
+      placeholder: Add any other context, screenshots, or information that might be helpful
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Installation Method
+      description: How did you install the integration?
+      options:
+        - HACS
+        - Manual installation
+        - Other
+    validations:
+      required: true

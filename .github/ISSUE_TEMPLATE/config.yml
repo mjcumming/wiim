@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/mjcumming/wiim/tree/main/docs
+    about: Check our comprehensive documentation and guides
+  - name: 💬 Home Assistant Community
+    url: https://community.home-assistant.io/
+    about: Ask questions and discuss with the Home Assistant community
+  - name: 🔧 WiiM Official Support
+    url: https://www.wiimhome.com/support
+    about: Official WiiM device support and documentation

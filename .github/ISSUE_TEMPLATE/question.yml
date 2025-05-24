@@ -1,0 +1,90 @@
+name: ❓ Question/Support
+description: Ask a question or get help with the WiiM integration
+title: "[Question]: "
+labels:
+  - "question"
+  - "needs-triage"
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reaching out for help!
+
+        **Before submitting**, please:
+        - Check our [documentation](https://github.com/mjcumming/wiim/tree/main/docs)
+        - Search existing issues to see if your question has been answered
+        - Try the troubleshooting steps in our [troubleshooting guide](https://github.com/mjcumming/wiim/blob/main/docs/troubleshooting.md)
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have checked the documentation and troubleshooting guide
+          required: true
+        - label: I have searched existing issues for similar questions
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question Category
+      description: What type of help do you need?
+      options:
+        - Installation/Setup
+        - Configuration
+        - Multiroom/Grouping
+        - Device Compatibility
+        - Home Assistant Integration
+        - Troubleshooting
+        - Usage/How-to
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like help with?
+      placeholder: "How do I... / I'm trying to... / I don't understand..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What I've Tried
+      description: What have you already tried to solve this?
+      placeholder: "I tried... / I looked at... / I followed the guide but..."
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Integration Version
+      description: What version of the WiiM integration are you running?
+      placeholder: "e.g., v0.1.1"
+    validations:
+      required: false
+
+  - type: input
+    id: device-model
+    attributes:
+      label: WiiM Device Model
+      description: What WiiM/LinkPlay device are you using?
+      placeholder: "e.g., WiiM Pro Plus"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other details that might be helpful
+      placeholder: "Screenshots, configuration details, error messages, etc."
+    validations:
+      required: false
