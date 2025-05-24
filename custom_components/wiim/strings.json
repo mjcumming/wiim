@@ -31,7 +31,7 @@
           "data": {
             "poll_interval": "Polling interval (seconds)",
             "volume_step": "Default volume step",
-            "own_group_entity": "Always create a group entity for this speaker"
+            "own_group_entity": "Create a master group entity for this device (controls this device + any slaves when acting as master)"
           }
         }
       }

@@ -141,7 +141,8 @@ async def async_setup_entry(
             if entry is not None:
                 own_group = entry.options.get("own_group_entity", False)
 
-            potential_masters = set(coord.groups.keys())
+            # Only create group entities when user explicitly enables the option
+            potential_masters = set()
             if own_group:
                 potential_masters.add(coord.client.host)
 

@@ -16,35 +16,46 @@
 
 ## Feature Matrix
 
-| Category        | Details                                                                                                                                        |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Transport**   | Play / Pause / Stop / Next / Previous · seek/position slider · standby toggle                                                                  |
-| **Volume**      | Absolute 0–100 % · configurable volume step (per-device) · mute toggle · group-wide volume levelling                                           |
-| **Equaliser**   | Enable / disable EQ · select preset · 10-band custom curve (-12 dB … +12 dB)                                                                   |
-| **Presets**     | Front-panel preset keys 1-6 via `play_preset` service                                                                                          |
-| **Metadata**    | Title · Artist · Album · Cover art · Position · Shuffle / Repeat · Streaming service (Spotify, Tidal, …)                                       |
-| **Discovery**   | SSDP/UPnP (`MediaRenderer:1`) · Zeroconf `_linkplay._tcp` · automatic re-import of existing LinkPlay groups                                    |
-| **Multi-room**  | Create new group · Join / Leave any LinkPlay master · Virtual **Group Player** entity · Attributes: `group_members`, `group_role`, `master_ip` |
-| **Entities**    | `media_player` (device) · `media_player` (group) · `sensor.group_role` · `number` (poll interval, volume step) · `button` (reboot, sync-time)  |
-| **Services**    | `media_player.play_preset` · `media_player.toggle_power` · `wiim.reboot_device` · `wiim.sync_time`                                             |
-| **Diagnostics** | Reboot, clock sync, Wi-Fi RSSI / channel sensors _(coming soon)_                                                                               |
-| **Config**      | Poll interval (1-60 s) · Volume step (1-50 %) via Options Flow                                                                                 |
+| Category        | Details                                                                                                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Transport**   | Play / Pause / Stop / Next / Previous · seek/position slider · standby toggle                                                                                                     |
+| **Volume**      | Absolute 0–100 % · configurable volume step (per-device) · mute toggle · group-wide volume levelling                                                                              |
+| **Equaliser**   | Enable / disable EQ · select preset · 10-band custom curve (-12 dB … +12 dB)                                                                                                      |
+| **Presets**     | Front-panel preset keys 1-6 via `play_preset` service                                                                                                                             |
+| **Metadata**    | Title · Artist · Album · Cover art · Position · Shuffle / Repeat · Streaming service (Spotify, Tidal, …)                                                                          |
+| **Discovery**   | SSDP/UPnP (`MediaRenderer:1`) · Zeroconf `_linkplay._tcp` · manual IP entry                                                                                                       |
+| **Multi-room**  | Create new group · Join / Leave any LinkPlay master · **Optional** Virtual Group Player entity (user-enabled per device) · Attributes: `group_members`, `group_role`, `master_ip` |
+| **Entities**    | `media_player` (device) · `media_player` (group) · `sensor.group_role` · `number` (poll interval, volume step) · `button` (reboot, sync-time)                                     |
+| **Services**    | `media_player.play_preset` · `media_player.toggle_power` · `wiim.reboot_device` · `wiim.sync_time`                                                                                |
+| **Diagnostics** | Reboot, clock sync, Wi-Fi RSSI / channel sensors _(coming soon)_                                                                                                                  |
+| **Config**      | Poll interval (1-60 s) · Volume step (1-50 %) via Options Flow                                                                                                                    |
 
 ---
 
 ## Multi-room 101
 
-WiiM (and generic LinkPlay) speakers can form synchronous groups. This integration mirrors that model with **one virtual group entity per master**.
+WiiM (and generic LinkPlay) speakers can form synchronous groups. This integration provides **optional virtual group entities** that you can enable per device.
 
 🔹 **Master** – the speaker that originates the audio stream.
 🔹 **Guest** – speakers that receive audio from the master.
 
-When a master with guests is detected, the integration instantly creates `media_player.<group_name> (Group)`:
+**Group Entity Creation (User Controlled)**
+
+Group entities are **not created automatically**. Instead, you can enable a "master group entity" for any device via the device's options:
+
+1. Go to **Settings → Devices & Services → WiiM Audio**
+2. Click **Configure** on any device
+3. Enable **"Create a master group entity for this device"**
+4. A group entity `media_player.<device_name> (Group)` will be created
+5. This entity becomes **available** only when that device is actually acting as a master with slaves
+
+**Group Entity Behavior:**
 
 • **Playback controls** (play/pause/next/prev) map _only_ to the master – exactly like the physical remote.
 • **Group volume** adjusts members relatively, preserving their offsets.
 • **Mute** toggles every member; the group is reported as muted only when _all_ members are muted.
 • **Attributes** expose per-member volume, mute, and IP, so you can build advanced Lovelace cards.
+• **Availability** – the group entity is only available when the device is actually acting as a master
 
 Because every member keeps its own device entity you can still fine-tune individual speakers while using the group.
 
@@ -70,10 +81,10 @@ Because every member keeps its own device entity you can still fine-tune individ
 
 1. Open _Settings → Devices & Services_.
 2. Devices are auto-discovered; if none appear, click **Add Integration** → search _WiiM Audio (LinkPlay)_ and enter the speaker's IP.
-3. Tick **Enable multi-room import** if you want existing LinkPlay groups to appear instantly.
-4. After setup, click **Configure** on the integration tile to adjust:
+3. After setup, click **Configure** on any device to adjust:
    • _Polling interval_ (default 5 s)
    • _Volume step_ (default 5 %)
+   • _Create a master group entity_ (enables virtual group control for this device)
 
 Changes apply immediately – no restart required.
 
