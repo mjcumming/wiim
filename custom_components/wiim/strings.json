@@ -27,11 +27,17 @@
     "options": {
       "step": {
         "init": {
-          "title": "WiiM Options",
+          "title": "WiiM Device Settings",
+          "description": "Configure settings for this WiiM device. Changes apply immediately.",
           "data": {
-            "poll_interval": "Polling interval (seconds)",
-            "volume_step": "Default volume step",
-            "own_group_entity": "Create a master group entity for this device (controls this device + any slaves when acting as master)"
+            "poll_interval": "Status polling interval (1-60 seconds)",
+            "volume_step": "Volume adjustment step (1-50%)",
+            "own_group_entity": "Enable group control entity (creates virtual group player when this device is master)"
+          },
+          "data_description": {
+            "poll_interval": "How often to check device status. Lower values = more responsive but higher network usage.",
+            "volume_step": "Volume change amount when using volume up/down buttons.",
+            "own_group_entity": "When enabled, creates a group media player entity that appears when this device controls other speakers in a multiroom group."
           }
         }
       }

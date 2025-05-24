@@ -79,14 +79,33 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             | MediaPlayerEntityFeature.GROUPING
         )
 
-        # Attach the group entity to the same *device* as the master speaker so it
-        # shows up under the hub in the Devices & Services UI.
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, master_ip)},
-            name=group_name,
-            manufacturer="WiiM",
-            model="WiiM Group",
-        )
+        # Find the master coordinator to get proper device info
+        master_coord = self._find_coordinator_by_ip(master_ip)
+        if master_coord:
+            # Get device info from master coordinator's data to match exactly
+            status = master_coord.data.get("status", {}) if master_coord.data else {}
+            device_name = (
+                status.get("DeviceName") or status.get("device_name") or master_ip
+            )
+            # Use the same device identifiers as the master entity
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, master_coord.client.host)},
+                name=device_name,
+                manufacturer="WiiM",
+                model=status.get("hardware") or status.get("project") or "WiiM Device",
+                sw_version=status.get("firmware"),
+                connections={("mac", status.get("MAC"))}
+                if status.get("MAC")
+                else set(),
+            )
+        else:
+            # Fallback when coordinator not found
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, master_ip)},
+                name=group_name.replace(" (Group)", ""),
+                manufacturer="WiiM",
+                model="WiiM Device",
+            )
 
     @property
     def group_info(self):

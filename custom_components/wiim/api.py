@@ -248,7 +248,7 @@ class WiiMClient:
             _LOGGER.warning(
                 "Failed to load WiiM CA certificate for %s: %s. This may indicate a device with a self-signed certificate.",
                 self.host,
-                e
+                e,
             )
 
         self.ssl_context = ctx
@@ -274,7 +274,7 @@ class WiiMClient:
             WiiMRequestError: If there is an error communicating with the device.
             WiiMResponseError: If the device returns an error response.
         """
-        if self._session is None:
+        if self._session is None or self._session.closed:
             # aiohttp>=3.9 requires a ClientTimeout object
             timeout_obj = aiohttp.ClientTimeout(total=self.timeout)
             self._session = aiohttp.ClientSession(timeout=timeout_obj)
@@ -301,16 +301,52 @@ class WiiMClient:
                         if text.strip() == "OK":
                             return {"raw": text.strip()}
                         return json.loads(text)
-            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as err:
+                # Handle session closed errors gracefully
+                if (
+                    isinstance(err, RuntimeError)
+                    and "session is closed" in str(err).lower()
+                ):
+                    _LOGGER.debug(
+                        "Session closed for %s, recreating session", self.host
+                    )
+                    try:
+                        if self._session and not self._session.closed:
+                            await self._session.close()
+                    except Exception:
+                        pass  # Ignore errors when closing
+                    self._session = None
+                    # Retry once with new session
+                    if self._session is None:
+                        timeout_obj = aiohttp.ClientTimeout(total=self.timeout)
+                        self._session = aiohttp.ClientSession(timeout=timeout_obj)
+                        try:
+                            async with async_timeout.timeout(self.timeout):
+                                async with self._session.request(
+                                    method, url, **kwargs
+                                ) as response:
+                                    response.raise_for_status()
+                                    text = await response.text()
+                                    _LOGGER.debug("Response from %s: %s", url, text)
+                                    if text.strip() == "OK":
+                                        return {"raw": text.strip()}
+                                    return json.loads(text)
+                        except Exception as retry_err:
+                            last_error = retry_err
+                            _LOGGER.debug("Retry failed for %s: %s", url, retry_err)
+                            continue
+                    continue
                 last_error = err
                 _LOGGER.debug(
                     "Connection error for %s: %s. Will try next configuration.",
                     url,
-                    err
+                    err,
                 )
                 if verify_ssl:
                     continue
-                raise WiiMConnectionError(f"Failed to connect to WiiM device: {err}") from err
+                raise WiiMConnectionError(
+                    f"Failed to connect to WiiM device: {err}"
+                ) from err
             except json.JSONDecodeError:
                 # Most control endpoints return plain "OK". Treat any
                 # non-JSON body as a successful raw response instead of an
@@ -319,7 +355,9 @@ class WiiMClient:
                 return {"raw": text.strip()}
 
         # If we get here, all attempts failed
-        error_msg = f"Failed to communicate with WiiM device after trying: {', '.join(tried)}"
+        error_msg = (
+            f"Failed to communicate with WiiM device after trying: {', '.join(tried)}"
+        )
         if last_error:
             error_msg += f"\nLast error: {last_error}"
         raise WiiMRequestError(error_msg)
@@ -484,9 +522,7 @@ class WiiMClient:
         _LOGGER.debug("[WiiM] Creating multiroom group on %s", self.host)
 
         # 1) Preferred modern endpoint (firmware ≥ 4.8)
-        cmd_modern = (
-            f"/httpapi.asp?command=ConnectMasterAp:CreateGroupMaster:eth{self.host}:wifi0.0.0.0"
-        )
+        cmd_modern = f"/httpapi.asp?command=ConnectMasterAp:CreateGroupMaster:eth{self.host}:wifi0.0.0.0"
 
         # 2) Legacy endpoint kept for backwards compatibility
         cmd_legacy = API_ENDPOINT_GROUP_CREATE  # setMultiroom:Master
@@ -517,7 +553,10 @@ class WiiMClient:
                 return
             except Exception as err:  # noqa: BLE001 – broad on purpose, we'll raise later
                 _LOGGER.debug(
-                    "[WiiM] Failed to create group on %s using %s: %s", self.host, cmd, err
+                    "[WiiM] Failed to create group on %s using %s: %s",
+                    self.host,
+                    cmd,
+                    err,
                 )
                 errors.append(f"{cmd} → {err}")
 
@@ -749,8 +788,8 @@ class WiiMClient:
         "vol": "volume",
         "mute": "mute",
         "eq": "eq_preset",
-        "EQ": "eq_preset",        # Some firmwares use upper-case EQ
-        "eq_mode": "eq_preset",   # Seen on recent builds (e.g. W281)
+        "EQ": "eq_preset",  # Some firmwares use upper-case EQ
+        "eq_mode": "eq_preset",  # Seen on recent builds (e.g. W281)
         "loop": "loop_mode",
         "curpos": "position_ms",
         "totlen": "duration_ms",
@@ -765,23 +804,23 @@ class WiiMClient:
 
     # Mapping of ``mode`` codes → canonical source names.
     _MODE_MAP: dict[str, str] = {
-        "0": "idle",        # idle/unknown
+        "0": "idle",  # idle/unknown
         "1": "airplay",
         "2": "dlna",
-        "3": "wifi",        # network / built-in streamer / vTuner etc.
+        "3": "wifi",  # network / built-in streamer / vTuner etc.
         "4": "line_in",
         "5": "bluetooth",
         "6": "optical",
-        "10": "wifi",       # many firmwares report 10 for NET/Streamer
-        "11": "usb",        # local U-Disk playback
-        "20": "wifi",       # HTTPAPI initiated play
-        "31": "spotify",    # Spotify Connect session active
+        "10": "wifi",  # many firmwares report 10 for NET/Streamer
+        "11": "usb",  # local U-Disk playback
+        "20": "wifi",  # HTTPAPI initiated play
+        "31": "spotify",  # Spotify Connect session active
         "40": "line_in",
         "41": "bluetooth",
         "43": "optical",
         "47": "line_in_2",
-        "51": "usb",        # USB-DAC on WiiM Pro Plus
-        "99": "follower",   # guest/relay in multiroom
+        "51": "usb",  # USB-DAC on WiiM Pro Plus
+        "99": "follower",  # guest/relay in multiroom
     }
 
     # Map numeric EQ codes → canonical preset strings understood by the
@@ -915,20 +954,36 @@ class WiiMClient:
     async def get_multiroom_info(self) -> dict[str, Any]:
         """Get multiroom status."""
         response = await self._request(API_ENDPOINT_GROUP_SLAVES)
-        _LOGGER.debug("[WiiM] get_multiroom_info response for %s: %s", self.host, response)
+        _LOGGER.debug(
+            "[WiiM] get_multiroom_info response for %s: %s", self.host, response
+        )
         # Try to set group_master for slave
         if "master" in response:
             self._group_master = response["master"]
-            _LOGGER.debug("[WiiM] %s: Set group_master from 'master' field: %s", self.host, self._group_master)
+            _LOGGER.debug(
+                "[WiiM] %s: Set group_master from 'master' field: %s",
+                self.host,
+                self._group_master,
+            )
         elif "master_ip" in response:
             self._group_master = response["master_ip"]
-            _LOGGER.debug("[WiiM] %s: Set group_master from 'master_ip' field: %s", self.host, self._group_master)
+            _LOGGER.debug(
+                "[WiiM] %s: Set group_master from 'master_ip' field: %s",
+                self.host,
+                self._group_master,
+            )
         elif "master_uuid" in response:
             self._group_master = response["master_uuid"]
-            _LOGGER.debug("[WiiM] %s: Set group_master from 'master_uuid' field: %s", self.host, self._group_master)
+            _LOGGER.debug(
+                "[WiiM] %s: Set group_master from 'master_uuid' field: %s",
+                self.host,
+                self._group_master,
+            )
         else:
             self._group_master = None
-            _LOGGER.debug("[WiiM] %s: No master info found in group info response.", self.host)
+            _LOGGER.debug(
+                "[WiiM] %s: No master info found in group info response.", self.host
+            )
         return response
 
     async def kick_slave(self, slave_ip: str) -> None:
@@ -943,7 +998,9 @@ class WiiMClient:
         if not self.is_master:
             raise WiiMError("Not a group master")
         _LOGGER.debug("[WiiM] Setting mute=%s for slave %s", mute, slave_ip)
-        await self._request(f"{API_ENDPOINT_GROUP_SLAVE_MUTE}{slave_ip}:{1 if mute else 0}")
+        await self._request(
+            f"{API_ENDPOINT_GROUP_SLAVE_MUTE}{slave_ip}:{1 if mute else 0}"
+        )
 
     # ---------------------------------------------------------------------
     # Diagnostic / maintenance helpers
@@ -984,6 +1041,7 @@ class WiiMClient:
         """Play a notification sound (lowers volume, plays, then restores)."""
         from .const import API_ENDPOINT_PLAY_PROMPT_URL
         from urllib.parse import quote
+
         encoded_url = quote(url, safe="")
         await self._request(f"{API_ENDPOINT_PLAY_PROMPT_URL}{encoded_url}")
 
@@ -1065,7 +1123,9 @@ async def session_call_api_json(
         ) from exc
 
 
-async def session_call_api_ok(endpoint: str, session: ClientSession, command: str) -> None:
+async def session_call_api_ok(
+    endpoint: str, session: ClientSession, command: str
+) -> None:
     """Call the API and assert the speaker answers exactly 'OK'."""
 
     result = await session_call_api(endpoint, session, command)

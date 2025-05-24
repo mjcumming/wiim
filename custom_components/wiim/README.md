@@ -144,3 +144,49 @@ Pull requests are welcome! Make sure your code is formatted with `black` (120 co
 ---
 
 © 2025 WiiM Custom Integration Project – MIT License
+
+## UX Improvements & Entity Management
+
+### Current Entity Organization Issues
+
+Based on user feedback, the current entity layout can be overwhelming. Here are the main issues and planned improvements:
+
+**Problems:**
+
+- Too many diagnostic entities enabled by default
+- Confusing entity names (e.g., `sensor.master_bedroom_group_role`)
+- Group entities creating separate device entries instead of attaching to master device
+- IP addresses visible in device names instead of friendly names
+
+**Planned Improvements:**
+
+1. **Simplified Default Setup**
+
+   - Only essential entities enabled by default: `media_player` and `number.volume_step`
+   - Diagnostic entities (`group_role`, `ip_address`, `reboot`, `sync_time`) become optional
+   - Users can enable advanced entities via device options
+
+2. **Better Entity Names**
+
+   - `sensor.master_bedroom_group_role` → `sensor.master_bedroom_multiroom_role`
+   - `number.master_bedroom_polling_interval` → `number.master_bedroom_poll_rate`
+   - Group entities properly attached to master device (no separate "WiiM Group 192.168.1.68" device)
+
+3. **Device Options for Entity Control**
+
+   - **Basic Setup**: Only media player + volume step
+   - **Advanced Diagnostics**: Enable sensors for group role, IP address, Wi-Fi info
+   - **Maintenance Tools**: Enable reboot and time sync buttons
+   - **Group Control**: Enable group entity for this device (current implementation)
+
+4. **Cleaner UI Organization**
+   - All device entities grouped under device's friendly name
+   - Group entities appear under master device, not separate device entry
+   - Optional entities clearly marked as "Advanced" or "Diagnostic"
+
+### Implementation Status
+
+- ✅ **Group Entity Device Attachment**: Fixed - group entities now attach to master device
+- 🔄 **Optional Diagnostic Entities**: Planned for next release
+- 🔄 **Improved Entity Naming**: Planned for next release
+- 🔄 **Device Options UI**: Partially implemented (group entities), expanding

@@ -2,14 +2,13 @@
   "domain": "wiim",
   "name": "WiiM Audio (LinkPlay)",
   "author": "Michael Cumming (@mjcumming)",
-  "documentation": "https://github.com/mjcumming/wiim#readme",
   "dependencies": [],
   "codeowners": ["@mjcumming"],
   "requirements": [
     "async-upnp-client>=0.29.0"
   ],
   "version": "0.1.1",
-  "logo": "WIIM.png",
+  "icon": "mdi:speaker-multiple",
   "config_flow": true,
   "zeroconf": [
     "_linkplay._tcp.local."
@@ -23,5 +22,5 @@
     { "st": "urn:schemas-upnp-org:service:RenderingControl:1" }
   ],
   "iot_class": "local_push",
-  "icon": "mdi:speaker-multiple"
+  "quality_scale": "gold"
 }

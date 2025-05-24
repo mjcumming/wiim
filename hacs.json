@@ -1,7 +1,12 @@
 {
-  "name": "WiiM",
-  "hacs": "1.6.0",
-  "domains": ["binary_sensor", "sensor", "switch"],
-  "iot_class": "Cloud Polling",
-  "homeassistant": "0.118.0"
+  "name": "WiiM Audio (LinkPlay)",
+  "content_in_root": false,
+  "filename": "wiim.zip",
+  "hide_default_branch": true,
+  "homeassistant": "2024.12.0",
+  "render_readme": true,
+  "zip_release": true,
+  "country": ["US", "CA", "GB", "DE", "FR", "AU", "NL", "SE", "NO", "DK"],
+  "domains": ["media_player", "sensor", "number", "button"],
+  "iot_class": "Local Push"
 }
