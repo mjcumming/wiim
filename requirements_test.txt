@@ -1,2 +1,15 @@
 -r requirements_dev.txt
-pytest-homeassistant-custom-component==0.12.49
+
+# Testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-timeout>=2.1.0
+pytest-homeassistant-custom-component>=0.13.0
+
+# Test utilities
+aresponses>=2.1.6
+freezegun>=1.2.2
+
+# Code quality
+coverage>=7.3.0

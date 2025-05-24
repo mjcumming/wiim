@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: Prepare release
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Update version in manifest
+        run: |
+          VERSION=${{ steps.get_version.outputs.VERSION }}
+          # Remove 'v' prefix if present
+          VERSION=${VERSION#v}
+
+          # Update manifest.json
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/wiim/manifest.json
+
+          # Update const.py if it exists
+          if [ -f custom_components/wiim/const.py ]; then
+            sed -i "s/VERSION = \".*\"/VERSION = \"$VERSION\"/" custom_components/wiim/const.py
+          fi
+
+      - name: Create release archive
+        run: |
+          cd custom_components
+          zip -r ../wiim.zip wiim/
+
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./wiim.zip
+          asset_name: wiim.zip
+          asset_content_type: application/zip
+
+      - name: Validate with hassfest
+        uses: home-assistant/actions/hassfest@master
+
+      - name: Validate with HACS
+        uses: hacs/action@24.7.0
+        with:
+          category: integration
