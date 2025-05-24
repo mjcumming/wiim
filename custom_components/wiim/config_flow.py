@@ -66,6 +66,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Set up instance."""
         self._host: str | None = None
         self._discovered_hosts: dict[str, str] = {}
+        self._options_map: dict[str, str] = {}  # Initialize to prevent linter error
 
     @staticmethod
     @callback
@@ -80,6 +81,12 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle the initial step (manual or UPnP discovery), use device name from API, and filter duplicates."""
         errors: dict[str, str] = {}
+        # Initialize variables to prevent linter errors
+        device_name = ""
+        host = ""
+        model = ""
+        firmware = ""
+
         if user_input is not None:
             host = user_input[CONF_HOST]
             try:
@@ -139,7 +146,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({vol.Required(CONF_HOST): str})
         # Try to show placeholders if we have info
         placeholders = {}
-        if "device_name" in locals():
+        if device_name:  # Only set placeholders if we have device info
             placeholders = {
                 "device_name": device_name,
                 "host": host,
@@ -163,8 +170,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._discovered_hosts = await self._discover_upnp_hosts()
         if user_input is not None:
             selected = user_input[CONF_HOST]
-            if hasattr(self, "_options_map") and selected in self._options_map:  # type: ignore[attr-defined]
-                host = self._options_map[selected]  # type: ignore[attr-defined]
+            if selected in self._options_map:
+                host = self._options_map[selected]
             else:
                 host = selected
             await self.async_set_unique_id(host)
@@ -203,7 +210,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 f"{name} ({host})": host
                 for host, name in self._discovered_hosts.items()
             }
-            self._options_map = options_map  # type: ignore[attr-defined]
+            self._options_map = options_map
             schema = vol.Schema(
                 {vol.Required(CONF_HOST): vol.In(list(options_map.keys()))}
             )
