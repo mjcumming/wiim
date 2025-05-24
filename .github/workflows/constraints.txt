@@ -1,5 +1,5 @@
 pip==25.1.1
 pre-commit==4.2.0
 black==25.1.0
-flake8==3.8.4
+flake8==7.2.0
 reorder-python-imports==3.14.0
