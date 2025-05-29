@@ -21,10 +21,6 @@ Complete documentation for the WiiM Audio (LinkPlay) Home Assistant integration.
 - **[API Reference](api-reference.md)** - HTTP API documentation
 - **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
 
-### Technical References
-
-- **[SPARC Protocol](sparc.md)** - Protocol specification
-
 ## 🚀 Quick Start
 
 1. **Install**: Use [HACS](installation.md#method-1-hacs-installation-recommended) for easiest setup
