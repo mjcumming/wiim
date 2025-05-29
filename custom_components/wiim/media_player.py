@@ -150,9 +150,6 @@ async def async_setup_entry(
 
     async def update_group_entities():
         """Create or remove group entities based on coordinator group registry and user preferences."""
-        # Temporarily disable group entity creation to debug device duplication issue
-        return
-
         group_entities = hass.data[DOMAIN]["_group_entities"]
         all_coordinators = set()
         ent_reg = None
@@ -173,6 +170,11 @@ async def async_setup_entry(
             enable_group_entity = config_entry.options.get("own_group_entity", False)
             if not enable_group_entity:
                 # User has disabled group entities for this device
+                continue
+
+            # Only create group entity for master or solo devices
+            role = coord.data.get("role", "solo")
+            if role not in ("master", "solo"):
                 continue
 
             if device_ip in group_entities:
@@ -201,10 +203,21 @@ async def async_setup_entry(
 
                 ent_reg = er.async_get(hass)
 
-            if ent_reg.async_get_entity_id("media_player", DOMAIN, unique_id):
+            # Check if entity already exists in registry
+            existing_entity_id = ent_reg.async_get_entity_id(
+                "media_player", DOMAIN, unique_id
+            )
+            if existing_entity_id:
+                _LOGGER.debug(
+                    "[WiiM] Group entity already exists in registry: %s",
+                    existing_entity_id,
+                )
                 continue  # entity already registered, will be restored by HA
 
             # Safe to create new runtime entity - group entity (user enabled)
+            _LOGGER.info(
+                "[WiiM] Creating group entity for %s (user enabled option)", device_ip
+            )
             group_entity = WiiMGroupMediaPlayer(hass, coord, device_ip)
             async_add_entities([group_entity])
             group_entities[device_ip] = group_entity
@@ -232,7 +245,42 @@ async def async_setup_entry(
 
             if should_remove:
                 group_entity = group_entities.pop(device_ip)
-                await group_entity.async_remove()
+
+                # Properly remove the entity from Home Assistant
+                _LOGGER.info(
+                    "[WiiM] Removing group entity for %s (option disabled or coordinator removed)",
+                    device_ip,
+                )
+
+                # First remove from entity registry if it exists
+                if ent_reg is None:
+                    from homeassistant.helpers import entity_registry as er
+
+                    ent_reg = er.async_get(hass)
+
+                # Find and remove the entity from registry
+                entity_id = (
+                    group_entity.entity_id
+                    if hasattr(group_entity, "entity_id")
+                    else None
+                )
+                if entity_id:
+                    entity_entry = ent_reg.async_get(entity_id)
+                    if entity_entry:
+                        _LOGGER.debug(
+                            "[WiiM] Removing entity %s from registry", entity_id
+                        )
+                        ent_reg.async_remove(entity_id)
+
+                # Then remove the entity itself
+                try:
+                    await group_entity.async_remove()
+                except Exception as remove_err:
+                    _LOGGER.warning(
+                        "[WiiM] Failed to remove group entity for %s: %s",
+                        device_ip,
+                        remove_err,
+                    )
 
     # Listen for coordinator updates to refresh group entities
     async def _on_coordinator_update():
@@ -477,7 +525,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 if not hasattr(coord, "client"):
                     continue
                 # Check if this coordinator is a master
-                if coord.data.get("role") != "master":
+                if not coord.data or coord.data.get("role") != "master":
                     continue
                 # Check master's multiroom info for this slave
                 master_multiroom = coord.data.get("multiroom", {})
@@ -946,6 +994,45 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         )
         return None
 
+    async def _trigger_group_updates(self) -> None:
+        """Trigger updates for all players in the group."""
+        role = (
+            self.coordinator.data.get("role", "solo")
+            if self.coordinator.data
+            else "solo"
+        )
+
+        if role == "master":
+            # For master, update all slaves
+            for ip in self.coordinator.wiim_group_members:
+                coord = next(
+                    (
+                        c
+                        for c in self.hass.data[DOMAIN].values()
+                        if hasattr(c, "client") and c.client.host == ip
+                    ),
+                    None,
+                )
+                if coord:
+                    try:
+                        await coord.async_request_refresh()
+                    except Exception as err:
+                        _LOGGER.debug(
+                            "[WiiM] Failed to trigger update for %s: %s", ip, err
+                        )
+        elif role == "slave":
+            # For slave, update master
+            master_coord = self._find_master_coordinator()
+            if master_coord:
+                try:
+                    await master_coord.async_request_refresh()
+                except Exception as err:
+                    _LOGGER.debug(
+                        "[WiiM] Failed to trigger update for master %s: %s",
+                        master_coord.client.host,
+                        err,
+                    )
+
     async def async_media_play(self) -> None:
         """Send play command."""
         role = self.coordinator.data.get("role")
@@ -958,6 +1045,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 return
         await self.coordinator.client.play()
         await self.coordinator.async_refresh()
+        await self._trigger_group_updates()
 
     async def async_media_pause(self) -> None:
         """Send pause command."""
@@ -971,12 +1059,14 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 return
         await self.coordinator.client.pause()
         await self.coordinator.async_refresh()
+        await self._trigger_group_updates()
 
     async def async_media_stop(self) -> None:
         """Send stop command."""
         try:
             await self.coordinator.client.stop()
             await self.coordinator.async_refresh()
+            await self._trigger_group_updates()
         except WiiMError as err:
             _LOGGER.error("Failed to stop WiiM device: %s", err)
             raise
@@ -993,6 +1083,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 return
         await self.coordinator.client.next_track()
         await self.coordinator.async_refresh()
+        await self._trigger_group_updates()
 
     async def async_media_previous_track(self) -> None:
         """Send previous track command."""
@@ -1006,6 +1097,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 return
         await self.coordinator.client.previous_track()
         await self.coordinator.async_refresh()
+        await self._trigger_group_updates()
 
     def _volume_step(self) -> float:
         entry_id = getattr(self.coordinator, "entry_id", None)
@@ -1022,6 +1114,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             try:
                 await self.coordinator.client.set_volume(min(1.0, volume + step))
                 await self.coordinator.async_refresh()
+                await self._trigger_group_updates()
             except WiiMError as err:
                 _LOGGER.error("Failed to increase volume on WiiM device: %s", err)
                 raise
@@ -1033,6 +1126,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             try:
                 await self.coordinator.client.set_volume(max(0.0, volume - step))
                 await self.coordinator.async_refresh()
+                await self._trigger_group_updates()
             except WiiMError as err:
                 _LOGGER.error("Failed to decrease volume on WiiM device: %s", err)
                 raise
@@ -1042,6 +1136,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         try:
             await self.coordinator.client.set_volume(volume)
             await self.coordinator.async_refresh()
+            await self._trigger_group_updates()
         except WiiMError as err:
             _LOGGER.error("Failed to set volume on WiiM device: %s", err)
             raise
@@ -1051,6 +1146,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         try:
             await self.coordinator.client.set_mute(mute)
             await self.coordinator.async_refresh()
+            await self._trigger_group_updates()
         except WiiMError as err:
             _LOGGER.error("Failed to mute WiiM device: %s", err)
             raise

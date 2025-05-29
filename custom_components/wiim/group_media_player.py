@@ -75,9 +75,10 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             | MediaPlayerEntityFeature.GROUPING
         )
 
-        # Don't set device_info to prevent creating duplicate devices
-        # The group entity will appear as a separate entity in HA
-        self._attr_device_info = None
+        # Set device_info to match the master device so the group entity is grouped under the master
+        self._attr_device_info = (
+            coordinator.device_info if hasattr(coordinator, "device_info") else None
+        )
 
     @property
     def group_info(self):

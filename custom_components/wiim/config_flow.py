@@ -76,6 +76,7 @@ async def wiim_factory_client(host: str, max_retries: int = 3) -> WiiMClient:
                 host,
                 client._endpoint,
             )
+            # Don't close here - return the working client
             return client
         except WiiMError as err:
             if attempt == max_retries - 1:
@@ -111,7 +112,11 @@ async def wiim_factory_client(host: str, max_retries: int = 3) -> WiiMClient:
 async def _async_validate_host(host: str) -> None:
     """Validate we can talk to the WiiM device and always close the session."""
     client = await wiim_factory_client(host)
-    await client.close()
+    try:
+        # Client is already validated by wiim_factory_client
+        pass
+    finally:
+        await client.close()
 
 
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -144,16 +149,20 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST]
             try:
                 client = await wiim_factory_client(host)
-                info = await client.get_player_status()
-                info = await self._ensure_solo(client, info)
+                try:
+                    info = await client.get_player_status()
+                    info = await self._ensure_solo(client, info)
 
-                # Use host/IP as unique_id to guarantee one entry per device
-                unique_id = host
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
+                    # Use host/IP as unique_id to guarantee one entry per device
+                    unique_id = host
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
 
-                device_name = info.get("device_name") or info.get("DeviceName") or host
-                await client.close()
+                    device_name = (
+                        info.get("device_name") or info.get("DeviceName") or host
+                    )
+                finally:
+                    await client.close()
 
                 return self.async_create_entry(
                     title=device_name, data={CONF_HOST: host}
@@ -196,10 +205,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             try:
                 client = await wiim_factory_client(host)
-                info = await client.get_player_status()
-                info = await self._ensure_solo(client, info)
-                device_name = info.get("device_name") or info.get("DeviceName") or host
-                await client.close()
+                try:
+                    info = await client.get_player_status()
+                    info = await self._ensure_solo(client, info)
+                    device_name = (
+                        info.get("device_name") or info.get("DeviceName") or host
+                    )
+                finally:
+                    await client.close()
 
                 return self.async_create_entry(
                     title=device_name,
@@ -253,11 +266,15 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 # Quick validation - just check if device responds
                 client = await wiim_factory_client(host)
-                info = await client.get_player_status()
-                info = await self._ensure_solo(client, info)
-                device_name = info.get("device_name") or info.get("DeviceName") or host
-                await client.close()
-                discovered[host] = device_name
+                try:
+                    info = await client.get_player_status()
+                    info = await self._ensure_solo(client, info)
+                    device_name = (
+                        info.get("device_name") or info.get("DeviceName") or host
+                    )
+                    discovered[host] = device_name
+                finally:
+                    await client.close()
             except (ConfigEntryNotReady, Exception):
                 # Device not reachable or not a WiiM device
                 return
@@ -300,10 +317,12 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             client = await wiim_factory_client(host)
-            info = await client.get_player_status()
-            info = await self._ensure_solo(client, info)
-            device_name = info.get("device_name") or info.get("DeviceName") or host
-            await client.close()
+            try:
+                info = await client.get_player_status()
+                info = await self._ensure_solo(client, info)
+                device_name = info.get("device_name") or info.get("DeviceName") or host
+            finally:
+                await client.close()
         except ConfigEntryNotReady as err:
             # Specific error handling for SSL/connection issues
             if "ssl" in str(err).lower() or "handshake" in str(err).lower():
@@ -371,11 +390,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Validate device and get info
         try:
             client = await wiim_factory_client(host)
-            info = await client.get_player_status()
-            info = await self._ensure_solo(client, info)
-            unique_id = host
-            device_name = info.get("device_name") or info.get("DeviceName") or host
-            await client.close()
+            try:
+                info = await client.get_player_status()
+                info = await self._ensure_solo(client, info)
+                unique_id = host
+                device_name = info.get("device_name") or info.get("DeviceName") or host
+            finally:
+                await client.close()
         except (ConfigEntryNotReady, Exception):
             return self.async_abort(reason="cannot_connect")
 
