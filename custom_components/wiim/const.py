@@ -44,7 +44,7 @@ CONF_ENABLE_GROUP_ENTITY = "enable_group_entity"
 CONF_DEBUG_LOGGING = "debug_logging"
 
 # Defaults
-DEFAULT_PORT = 443  # HTTPS
+DEFAULT_PORT = 443  # HTTPS - like python-linkplay
 DEFAULT_TIMEOUT = 10  # seconds
 DEFAULT_POLL_INTERVAL = 5  # seconds
 DEFAULT_VOLUME_STEP = 0.05  # 5%

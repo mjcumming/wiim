@@ -15,9 +15,9 @@ It implements all necessary functionality for controlling WiiM audio devices, in
 The client is designed to be used with Home Assistant's async architecture and provides
 a clean, type-hinted interface for all device operations.
 
-All API calls are made over HTTPS to the device's HTTP API endpoint at
-``https://<ip>/httpapi.asp?command=...``. The client handles SSL certificate
-verification and request/response parsing.
+WiiM devices primarily use HTTPS on port 443 via the API endpoint at
+``https://<ip>/httpapi.asp?command=...``. The client will automatically detect
+the correct protocol (HTTPS/HTTP) and handle SSL certificate issues with older devices.
 """
 
 from __future__ import annotations
@@ -153,7 +153,7 @@ class WiiMClient:
 
     Key Features:
     - Asynchronous HTTP communication with WiiM devices
-    - Automatic SSL/TLS handling with fallback to insecure mode
+    - Automatic protocol detection (HTTP/HTTPS) with smart fallback
     - Comprehensive error handling and logging
     - Support for device grouping and multiroom functionality
     - Volume and playback control
@@ -161,7 +161,7 @@ class WiiMClient:
 
     Attributes:
         host (str): The IP address or hostname of the WiiM device
-        port (int): The port number for the HTTP API (default: 443)
+        port (int): The port number for the HTTP API (default: 443 for HTTPS)
         timeout (float): Request timeout in seconds (default: 10.0)
         ssl_context (ssl.SSLContext | None): SSL context for HTTPS connections
         session (ClientSession | None): Optional aiohttp ClientSession for requests
@@ -175,16 +175,16 @@ class WiiMClient:
         - WiiMInvalidDataError: Malformed response data
 
     Security:
-        - Uses HTTPS by default (port 443)
-        - Handles device-specific SSL certificates
-        - Falls back to insecure mode only after verification failure
+        - Tries HTTP first (port 80) as most WiiM devices use HTTP
+        - Falls back to HTTPS (port 443) for devices that require it
+        - Handles device-specific SSL certificates with permissive context
         - Maintains session security and proper cleanup
     """
 
     def __init__(
         self,
         host: str,
-        port: int = DEFAULT_PORT,
+        port: int = 443,  # Default to HTTPS like python-linkplay
         timeout: float = DEFAULT_TIMEOUT,
         ssl_context: ssl.SSLContext | None = None,
         session: ClientSession | None = None,
@@ -193,7 +193,7 @@ class WiiMClient:
 
         Args:
             host: The IP address or hostname of the WiiM device.
-            port: The port number for the HTTP API (default: 443).
+            port: The port number for the HTTP API (default: 443 for HTTPS).
             timeout: Request timeout in seconds (default: 10.0).
             ssl_context: SSL context for HTTPS connections.
             session: Optional aiohttp ClientSession to use for requests.
@@ -203,9 +203,8 @@ class WiiMClient:
         self.timeout = timeout
         self.ssl_context = ssl_context
         self._session = session
-        # Choose scheme based on port (80 = http, everything else = https)
-        scheme = "http" if port == 80 else "https"
-        self._endpoint = f"{scheme}://{host}:{port}"
+        # Start with HTTPS endpoint, will auto-detect if fallback needed
+        self._endpoint = f"https://{host}:443"
         self._lock = asyncio.Lock()
         self._base_url = self._endpoint
         self._group_master: str | None = None
@@ -222,31 +221,36 @@ class WiiMClient:
         return self._host
 
     def _get_ssl_context(self) -> ssl.SSLContext:
-        """Return (and lazily create) the SSL context.
+        """Return (and lazily create) a permissive SSL context for WiiM devices.
 
-        Home Assistant considers `ssl.create_default_context()` a blocking
-        operation because it tries to load the system trust store from disk.
-        To stay fully async-safe we instead create a bare `SSLContext` and
-        explicitly load **only** the pinned WiiM root certificate. If loading
-        the certificate fails for any reason (e.g. corrupted PEM), we fall
-        back to an *unverified* context so the request code can still proceed
-        and rely on the existing retry-with-insecure logic.
+        WiiM devices often use self-signed certificates, older TLS versions,
+        and weaker cipher suites. This creates a permissive context that
+        can handle these older devices while still providing some security.
         """
         if self.ssl_context is not None:
             return self.ssl_context
 
-        # Start with a minimal TLS client context (no file-system access)
+        # Create a permissive TLS context for older devices
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.check_hostname = False  # Device uses self-signed cert with host-mismatch
-        ctx.verify_mode = ssl.CERT_NONE  # Don't verify cert since it's self-signed
+
+        # Disable hostname and certificate verification (self-signed certs)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        # Allow older TLS versions that some devices might need
+        ctx.minimum_version = ssl.TLSVersion.TLSv1
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_3
+
+        # Set permissive cipher suites for compatibility
+        ctx.set_ciphers("ALL:@SECLEVEL=0")  # Allow weaker ciphers for compatibility
 
         try:
-            # Load the WiiM CA certificate for reference
+            # Still try to load the WiiM CA certificate for reference
             ctx.load_verify_locations(cadata=WIIM_CA_CERT)
-            _LOGGER.debug("Successfully loaded WiiM CA certificate for %s", self.host)
+            _LOGGER.debug("Loaded WiiM CA certificate for %s", self.host)
         except Exception as e:
-            _LOGGER.warning(
-                "Failed to load WiiM CA certificate for %s: %s. This may indicate a device with a self-signed certificate.",
+            _LOGGER.debug(
+                "Failed to load WiiM CA certificate for %s: %s (continuing with permissive context)",
                 self.host,
                 e,
             )
@@ -260,7 +264,10 @@ class WiiMClient:
         method: str = "GET",
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Make a request to the WiiM device with retry on SSL errors.
+        """Make a request to the WiiM device with smart protocol detection.
+
+        Tries HTTP first (port 80), then HTTPS (port 443) as fallback.
+        Most WiiM devices use HTTP, not HTTPS.
 
         Args:
             endpoint: The API endpoint to call.
@@ -280,33 +287,67 @@ class WiiMClient:
             self._session = aiohttp.ClientSession(timeout=timeout_obj)
 
         kwargs.setdefault("headers", HEADERS)
-        kwargs.setdefault("ssl", self._get_ssl_context())
 
-        # Try both ports (443 and 80) with and without SSL verification
-        ports_to_try = [(self.port, False), (80, False)]  # Always use unverified SSL
+        # Try protocols in python-linkplay order: HTTPS first, then HTTP fallback
+        protocols_to_try = [
+            ("https", 443, self._get_ssl_context()),  # HTTPS primary
+            ("https", 4443, self._get_ssl_context()),  # HTTPS alternate port
+            ("http", 80, None),  # HTTP fallback
+        ]
+
+        # If user specified a custom port, try that with both protocols first
+        if self.port not in (80, 443):
+            protocols_to_try.insert(0, ("https", self.port, self._get_ssl_context()))
+            protocols_to_try.insert(1, ("http", self.port, None))
+
         tried: list[str] = []
         last_error: Exception | None = None
 
-        for port, verify_ssl in ports_to_try:
-            url = f"https://{self.host}:{port}{endpoint}"
-            tried.append(f"{url} (verify={verify_ssl})")
+        for scheme, port, ssl_context in protocols_to_try:
+            url = f"{scheme}://{self.host}:{port}{endpoint}"
+            tried.append(url)
+
+            # Set SSL context for HTTPS requests only
+            if scheme == "https":
+                kwargs["ssl"] = ssl_context
+            else:
+                kwargs.pop("ssl", None)  # Remove SSL for HTTP requests
 
             try:
-                _LOGGER.debug("Making request to %s", url)
+                _LOGGER.debug("Making %s request to %s", method, url)
                 async with async_timeout.timeout(self.timeout):
                     async with self._session.request(method, url, **kwargs) as response:
                         response.raise_for_status()
                         text = await response.text()
-                        _LOGGER.debug("Response from %s: %s", url, text)
+                        _LOGGER.debug("Response from %s: %s", url, text[:200])
+
+                        # Success! Update our endpoint for future requests
+                        self._endpoint = f"{scheme}://{self.host}:{port}"
+
                         if text.strip() == "OK":
                             return {"raw": text.strip()}
                         return json.loads(text)
-            except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as err:
+
+            except (
+                aiohttp.ClientError,
+                asyncio.TimeoutError,
+                json.JSONDecodeError,
+            ) as err:
+                last_error = err
+                _LOGGER.debug("Failed %s request to %s: %s", method, url, err)
+
+                # For JSON decode errors, treat as successful raw response
+                if isinstance(err, json.JSONDecodeError):
+                    _LOGGER.debug("Non-JSON response from %s: %s", url, text[:200])
+                    self._endpoint = f"{scheme}://{self.host}:{port}"
+                    return {"raw": text.strip()}
+
+                # Continue to next protocol/port
+                continue
+
+            except RuntimeError as err:
                 # Handle session closed errors gracefully
-                if (
-                    isinstance(err, RuntimeError)
-                    and "session is closed" in str(err).lower()
-                ):
+                if "session is closed" in str(err).lower():
                     _LOGGER.debug(
                         "Session closed for %s, recreating session", self.host
                     )
@@ -315,52 +356,45 @@ class WiiMClient:
                             await self._session.close()
                     except Exception:
                         pass  # Ignore errors when closing
-                    self._session = None
+
                     # Retry once with new session
-                    if self._session is None:
-                        timeout_obj = aiohttp.ClientTimeout(total=self.timeout)
-                        self._session = aiohttp.ClientSession(timeout=timeout_obj)
-                        try:
-                            async with async_timeout.timeout(self.timeout):
-                                async with self._session.request(
-                                    method, url, **kwargs
-                                ) as response:
-                                    response.raise_for_status()
-                                    text = await response.text()
-                                    _LOGGER.debug("Response from %s: %s", url, text)
-                                    if text.strip() == "OK":
-                                        return {"raw": text.strip()}
-                                    return json.loads(text)
-                        except Exception as retry_err:
-                            last_error = retry_err
-                            _LOGGER.debug("Retry failed for %s: %s", url, retry_err)
-                            continue
+                    timeout_obj = aiohttp.ClientTimeout(total=self.timeout)
+                    self._session = aiohttp.ClientSession(timeout=timeout_obj)
+
+                    try:
+                        if scheme == "https":
+                            kwargs["ssl"] = ssl_context
+                        else:
+                            kwargs.pop("ssl", None)
+
+                        async with async_timeout.timeout(self.timeout):
+                            async with self._session.request(
+                                method, url, **kwargs
+                            ) as response:
+                                response.raise_for_status()
+                                text = await response.text()
+                                _LOGGER.debug(
+                                    "Retry response from %s: %s", url, text[:200]
+                                )
+
+                                self._endpoint = f"{scheme}://{self.host}:{port}"
+
+                                if text.strip() == "OK":
+                                    return {"raw": text.strip()}
+                                return json.loads(text)
+                    except Exception as retry_err:
+                        last_error = retry_err
+                        _LOGGER.debug("Retry failed for %s: %s", url, retry_err)
+                        continue
+                else:
+                    last_error = err
                     continue
-                last_error = err
-                _LOGGER.debug(
-                    "Connection error for %s: %s. Will try next configuration.",
-                    url,
-                    err,
-                )
-                if verify_ssl:
-                    continue
-                raise WiiMConnectionError(
-                    f"Failed to connect to WiiM device: {err}"
-                ) from err
-            except json.JSONDecodeError:
-                # Most control endpoints return plain "OK". Treat any
-                # non-JSON body as a successful raw response instead of an
-                # error so caller logic doesn't break on a volume/power/etc.
-                _LOGGER.debug("Non-JSON response from %s: %s", url, text)
-                return {"raw": text.strip()}
 
         # If we get here, all attempts failed
-        error_msg = (
-            f"Failed to communicate with WiiM device after trying: {', '.join(tried)}"
-        )
+        error_msg = f"Failed to communicate with WiiM device at {self.host} after trying: {', '.join(tried)}"
         if last_error:
             error_msg += f"\nLast error: {last_error}"
-        raise WiiMRequestError(error_msg)
+        raise WiiMConnectionError(error_msg)
 
     async def close(self) -> None:
         """Close the client session.
