@@ -1,87 +1,104 @@
-"""Tests for WiiM api."""
+"""Tests for WiiM API."""
+
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
-from custom_components.wiim.api import (
-    WiiMApiClient,
-)
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import pytest
+from custom_components.wiim.api import WiiMClient
+
+from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
-async def test_api(hass, aioclient_mock, caplog):
-    """Test API calls."""
+@pytest.mark.asyncio
+async def test_wiim_client_init():
+    """Test WiiM client initialization."""
+    client = WiiMClient("192.168.1.100")
 
-    # To test the api submodule, we first create an instance of our API client
-    api = WiiMApiClient("test", "test", async_get_clientsession(hass))
+    assert client.host == "192.168.1.100"
+    assert client.port == 443  # Default HTTPS port
 
-    # Use aioclient_mock which is provided by `pytest_homeassistant_custom_components`
-    # to mock responses to aiohttp requests. In this case we are telling the mock to
-    # return {"test": "test"} when a `GET` call is made to the specified URL. We then
-    # call `async_get_data` which will make that `GET` request.
-    aioclient_mock.get(
-        "https://jsonplaceholder.typicode.com/posts/1", json={"test": "test"}
-    )
-    assert await api.async_get_data() == {"test": "test"}
 
-    # We do the same for `async_set_title`. Note the difference in the mock call
-    # between the previous step and this one. We use `patch` here instead of `get`
-    # because we know that `async_set_title` calls `api_wrapper` with `patch` as the
-    # first parameter
-    aioclient_mock.patch("https://jsonplaceholder.typicode.com/posts/1")
-    assert await api.async_set_title("test") is None
+@pytest.mark.asyncio
+async def test_get_status_success():
+    """Test successful status retrieval."""
+    client = WiiMClient("192.168.1.100")
 
-    # In order to get 100% coverage, we need to test `api_wrapper` to test the code
-    # that isn't already called by `async_get_data` and `async_set_title`. Because the
-    # only logic that lives inside `api_wrapper` that is not being handled by a third
-    # party library (aiohttp) is the exception handling, we also want to simulate
-    # raising the exceptions to ensure that the function handles them as expected.
-    # The caplog fixture allows access to log messages in tests. This is particularly
-    # useful during exception handling testing since often the only action as part of
-    # exception handling is a logging statement
-    caplog.clear()
-    aioclient_mock.put(
-        "https://jsonplaceholder.typicode.com/posts/1", exc=asyncio.TimeoutError
-    )
-    assert (
-        await api.api_wrapper("put", "https://jsonplaceholder.typicode.com/posts/1")
-        is None
-    )
-    assert (
-        len(caplog.record_tuples) == 1
-        and "Timeout error fetching information from" in caplog.record_tuples[0][2]
-    )
+    # Mock the _request method directly
+    with patch.object(
+        client, "_request", return_value=MOCK_STATUS_RESPONSE
+    ) as mock_request:
+        result = await client.get_player_status()
+        assert "play_status" in result
+        mock_request.assert_called_once()
 
-    caplog.clear()
-    aioclient_mock.post(
-        "https://jsonplaceholder.typicode.com/posts/1", exc=aiohttp.ClientError
-    )
-    assert (
-        await api.api_wrapper("post", "https://jsonplaceholder.typicode.com/posts/1")
-        is None
-    )
-    assert (
-        len(caplog.record_tuples) == 1
-        and "Error fetching information from" in caplog.record_tuples[0][2]
-    )
 
-    caplog.clear()
-    aioclient_mock.post("https://jsonplaceholder.typicode.com/posts/2", exc=Exception)
-    assert (
-        await api.api_wrapper("post", "https://jsonplaceholder.typicode.com/posts/2")
-        is None
-    )
-    assert (
-        len(caplog.record_tuples) == 1
-        and "Something really wrong happened!" in caplog.record_tuples[0][2]
-    )
+@pytest.mark.asyncio
+async def test_get_device_info_success():
+    """Test successful device info retrieval."""
+    client = WiiMClient("192.168.1.100")
 
-    caplog.clear()
-    aioclient_mock.post("https://jsonplaceholder.typicode.com/posts/3", exc=TypeError)
-    assert (
-        await api.api_wrapper("post", "https://jsonplaceholder.typicode.com/posts/3")
-        is None
-    )
-    assert (
-        len(caplog.record_tuples) == 1
-        and "Error parsing information from" in caplog.record_tuples[0][2]
-    )
+    # Mock the _request method directly
+    with patch.object(
+        client, "_request", return_value=MOCK_DEVICE_DATA
+    ) as mock_request:
+        result = await client.get_device_info()
+        assert result == MOCK_DEVICE_DATA
+        mock_request.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_play_command():
+    """Test play command."""
+    client = WiiMClient("192.168.1.100")
+
+    # Mock the _request method directly
+    with patch.object(client, "_request", return_value={"raw": "OK"}) as mock_request:
+        await client.play()  # Should not raise
+        mock_request.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_pause_command():
+    """Test pause command."""
+    client = WiiMClient("192.168.1.100")
+
+    # Mock the _request method directly
+    with patch.object(client, "_request", return_value={"raw": "OK"}) as mock_request:
+        await client.pause()  # Should not raise
+        mock_request.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_set_volume_command():
+    """Test set volume command."""
+    client = WiiMClient("192.168.1.100")
+
+    # Mock the _request method directly
+    with patch.object(client, "_request", return_value={"raw": "OK"}) as mock_request:
+        await client.set_volume(0.75)  # Should not raise
+        mock_request.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_connection_error_handling():
+    """Test connection error handling."""
+    client = WiiMClient("192.168.1.100")
+
+    # Mock the _request method to raise an exception
+    with patch.object(
+        client, "_request", side_effect=aiohttp.ClientError("Connection failed")
+    ):
+        with pytest.raises(aiohttp.ClientError):
+            await client.get_player_status()
+
+
+@pytest.mark.asyncio
+async def test_timeout_error_handling():
+    """Test timeout error handling."""
+    client = WiiMClient("192.168.1.100")
+
+    # Mock the _request method to raise a timeout
+    with patch.object(client, "_request", side_effect=asyncio.TimeoutError()):
+        with pytest.raises(asyncio.TimeoutError):
+            await client.get_player_status()
