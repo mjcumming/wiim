@@ -25,9 +25,7 @@ async def test_get_status_success():
     client = WiiMClient("192.168.1.100")
 
     # Mock the _request method directly
-    with patch.object(
-        client, "_request", return_value=MOCK_STATUS_RESPONSE
-    ) as mock_request:
+    with patch.object(client, "_request", return_value=MOCK_STATUS_RESPONSE) as mock_request:
         result = await client.get_player_status()
         assert "play_status" in result
         mock_request.assert_called_once()
@@ -39,9 +37,7 @@ async def test_get_device_info_success():
     client = WiiMClient("192.168.1.100")
 
     # Mock the _request method directly
-    with patch.object(
-        client, "_request", return_value=MOCK_DEVICE_DATA
-    ) as mock_request:
+    with patch.object(client, "_request", return_value=MOCK_DEVICE_DATA) as mock_request:
         result = await client.get_device_info()
         assert result == MOCK_DEVICE_DATA
         mock_request.assert_called_once()
@@ -86,9 +82,7 @@ async def test_connection_error_handling():
     client = WiiMClient("192.168.1.100")
 
     # Mock the _request method to raise an exception
-    with patch.object(
-        client, "_request", side_effect=aiohttp.ClientError("Connection failed")
-    ):
+    with patch.object(client, "_request", side_effect=aiohttp.ClientError("Connection failed")):
         with pytest.raises(aiohttp.ClientError):
             await client.get_player_status()
 
