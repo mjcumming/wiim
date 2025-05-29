@@ -1,22 +1,20 @@
 """Number entities to adjust polling interval and volume step per WiiM device."""
-
 from __future__ import annotations
+
+from datetime import timedelta
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from datetime import timedelta
 
-from .const import (
-    DOMAIN,
-    CONF_POLL_INTERVAL,
-    CONF_VOLUME_STEP,
-    DEFAULT_POLL_INTERVAL,
-    DEFAULT_VOLUME_STEP,
-)
+from .const import CONF_POLL_INTERVAL
+from .const import CONF_VOLUME_STEP
+from .const import DEFAULT_POLL_INTERVAL
+from .const import DEFAULT_VOLUME_STEP
+from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 
 
@@ -36,19 +34,13 @@ async def async_setup_entry(
 class _BaseWiiMNumber(CoordinatorEntity[WiiMCoordinator], NumberEntity):
     _attr_has_entity_name = True
 
-    def __init__(
-        self, coordinator: WiiMCoordinator, entry: ConfigEntry, key: str, name: str
-    ):
+    def __init__(self, coordinator: WiiMCoordinator, entry: ConfigEntry, key: str, name: str):
         super().__init__(coordinator)
         self._entry = entry
         self._key = key
         self._attr_unique_id = f"{coordinator.client.host}-{key}"
         self._attr_name = name
-        status = (
-            coordinator.data.get("status", {})
-            if isinstance(coordinator.data, dict)
-            else {}
-        )
+        status = coordinator.data.get("status", {}) if isinstance(coordinator.data, dict) else {}
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.client.host)},
             name=coordinator.friendly_name,

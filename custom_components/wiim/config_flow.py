@@ -6,35 +6,32 @@ This module implements a simplified discovery flow optimized for Home Assistant:
 - Automatic device ungrouping during setup for clean HA integration
 - Simplified validation and error handling
 """
-
 from __future__ import annotations
 
+import asyncio
+import logging
+from enum import Enum
 from typing import Any
 from urllib.parse import urlparse
-import logging
-import asyncio
-from enum import Enum
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .api import WiiMClient, WiiMError
-from .const import (
-    CONF_POLL_INTERVAL,
-    CONF_VOLUME_STEP,
-    CONF_STATUS_UPDATE_INTERVAL,
-    CONF_VOLUME_STEP_PERCENT,
-    CONF_ENABLE_GROUP_ENTITY,
-    CONF_DEBUG_LOGGING,
-    DEFAULT_POLL_INTERVAL,
-    DEFAULT_VOLUME_STEP,
-    DOMAIN,
-)
+from .api import WiiMClient
+from .api import WiiMError
+from .const import CONF_DEBUG_LOGGING
+from .const import CONF_ENABLE_GROUP_ENTITY
+from .const import CONF_POLL_INTERVAL
+from .const import CONF_STATUS_UPDATE_INTERVAL
+from .const import CONF_VOLUME_STEP
+from .const import CONF_VOLUME_STEP_PERCENT
+from .const import DEFAULT_POLL_INTERVAL
+from .const import DEFAULT_VOLUME_STEP
+from .const import DOMAIN
 
 # --- UPnP/SSDP discovery imports ---
 try:
@@ -104,9 +101,7 @@ async def wiim_factory_client(host: str, max_retries: int = 3) -> WiiMClient:
             await asyncio.sleep(retry_delay)
         except Exception as err:
             await client.close()
-            raise ConfigEntryNotReady(
-                f"Unexpected error connecting to WiiM device at {host}"
-            ) from err
+            raise ConfigEntryNotReady(f"Unexpected error connecting to WiiM device at {host}") from err
 
     # This should never be reached, but just in case
     await client.close()
@@ -143,9 +138,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow."""
         return WiiMOptionsFlow(config_entry)
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step - prioritize discovery methods."""
         errors: dict[str, str] = {}
 
@@ -163,15 +156,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     await self.async_set_unique_id(unique_id)
                     self._abort_if_unique_id_configured()
 
-                    device_name = (
-                        info.get("device_name") or info.get("DeviceName") or host
-                    )
+                    device_name = info.get("device_name") or info.get("DeviceName") or host
                 finally:
                     await client.close()
 
-                return self.async_create_entry(
-                    title=device_name, data={CONF_HOST: host}
-                )
+                return self.async_create_entry(title=device_name, data={CONF_HOST: host})
             except ConfigEntryNotReady:
                 errors["base"] = "cannot_connect"
             except Exception as e:
@@ -191,9 +180,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_upnp(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_upnp(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Discover WiiM/LinkPlay devices via UPnP/SSDP."""
         errors: dict[str, str] = {}
 
@@ -213,9 +200,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     info = await client.get_player_status()
                     info = await self._ensure_solo(client, info)
-                    device_name = (
-                        info.get("device_name") or info.get("DeviceName") or host
-                    )
+                    device_name = info.get("device_name") or info.get("DeviceName") or host
                 finally:
                     await client.close()
 
@@ -228,14 +213,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if self._discovered_hosts:
             # Build options for dropdown
-            options_map = {
-                f"{name} ({host})": host
-                for host, name in self._discovered_hosts.items()
-            }
+            options_map = {f"{name} ({host})": host for host, name in self._discovered_hosts.items()}
             self._options_map = options_map
-            schema = vol.Schema(
-                {vol.Required(CONF_HOST): vol.In(list(options_map.keys()))}
-            )
+            schema = vol.Schema({vol.Required(CONF_HOST): vol.In(list(options_map.keys()))})
             return self.async_show_form(
                 step_id="upnp",
                 data_schema=schema,
@@ -274,9 +254,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     info = await client.get_player_status()
                     info = await self._ensure_solo(client, info)
-                    device_name = (
-                        info.get("device_name") or info.get("DeviceName") or host
-                    )
+                    device_name = info.get("device_name") or info.get("DeviceName") or host
                     discovered[host] = device_name
                 finally:
                     await client.close()
@@ -300,9 +278,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         return discovered
 
-    async def async_step_zeroconf(
-        self, discovery_info: zeroconf.ZeroconfServiceInfo
-    ) -> FlowResult:
+    async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
         """Handle Zeroconf discovery with simplified validation."""
         host = discovery_info.host
         unique_id = host
@@ -321,9 +297,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
         try:
-            client = await wiim_factory_client(
-                host, max_retries=2
-            )  # Reduce retries for discovery
+            client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
             try:
                 info = await client.get_player_status()
                 info = await self._ensure_solo(client, info)
@@ -333,9 +307,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except ConfigEntryNotReady as err:
             # Silently abort on connection failures during discovery
             # These are normal when scanning many devices
-            _LOGGER.debug(
-                "Failed to validate WiiM device at %s from Zeroconf: %s", host, err
-            )
+            _LOGGER.debug("Failed to validate WiiM device at %s from Zeroconf: %s", host, err)
             return self.async_abort(reason="cannot_connect")
         except Exception as e:
             _LOGGER.debug(
@@ -350,15 +322,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.context["title_placeholders"] = {"name": device_name, "host": host}
         return await self.async_step_confirm()
 
-    async def async_step_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Confirm discovery."""
         if user_input is not None:
-            device_name = (
-                self.context.get("title_placeholders", {}).get("name")
-                or f"WiiM {self._host}"
-            )
+            device_name = self.context.get("title_placeholders", {}).get("name") or f"WiiM {self._host}"
             return self.async_create_entry(
                 title=device_name,
                 data={CONF_HOST: self._host},
@@ -389,9 +356,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Validate device and get info
         try:
-            client = await wiim_factory_client(
-                host, max_retries=2
-            )  # Reduce retries for discovery
+            client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
             try:
                 info = await client.get_player_status()
                 info = await self._ensure_solo(client, info)
@@ -400,9 +365,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             finally:
                 await client.close()
         except (ConfigEntryNotReady, Exception) as err:
-            _LOGGER.debug(
-                "Failed to validate WiiM device at %s from SSDP: %s", host, err
-            )
+            _LOGGER.debug("Failed to validate WiiM device at %s from SSDP: %s", host, err)
             return self.async_abort(reason="cannot_connect")
 
         # Check for duplicates
@@ -425,9 +388,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle import from YAML or programmatic flow."""
         return await self.async_step_user(import_config)
 
-    async def _ensure_solo(
-        self, client: "WiiMClient", info: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _ensure_solo(self, client: "WiiMClient", info: dict[str, Any]) -> dict[str, Any]:
         """If the speaker is in a multi-room group, leave or disband it.
 
         We leave groups when the device is **slave** and delete the whole
@@ -464,9 +425,7 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         """Init options flow."""
         self.entry = entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:  # noqa: D401
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: D401
         """Handle options flow."""
         if user_input is not None:
             # Convert user-friendly names back to internal names
@@ -474,15 +433,11 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
 
             # Map user-friendly field names to internal names
             if CONF_STATUS_UPDATE_INTERVAL in user_input:
-                options_data[CONF_POLL_INTERVAL] = user_input[
-                    CONF_STATUS_UPDATE_INTERVAL
-                ]
+                options_data[CONF_POLL_INTERVAL] = user_input[CONF_STATUS_UPDATE_INTERVAL]
 
             # Convert volume step from percentage back to decimal
             if CONF_VOLUME_STEP_PERCENT in user_input:
-                options_data[CONF_VOLUME_STEP] = (
-                    user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
-                )
+                options_data[CONF_VOLUME_STEP] = user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
 
             # Map group entity option (keep existing internal key for compatibility)
             if CONF_ENABLE_GROUP_ENTITY in user_input:
@@ -495,23 +450,15 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                 await self.hass.services.async_call(
                     "logger",
                     "set_level",
-                    {
-                        "custom_components.wiim": "debug"
-                        if user_input[CONF_DEBUG_LOGGING]
-                        else "info"
-                    },
+                    {"custom_components.wiim": "debug" if user_input[CONF_DEBUG_LOGGING] else "info"},
                     blocking=True,
                 )
 
             return self.async_create_entry(title="", data=options_data)
 
         # Get current values and convert for display
-        current_poll_interval = self.entry.options.get(
-            CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
-        )
-        current_volume_step = self.entry.options.get(
-            CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
-        )
+        current_poll_interval = self.entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
+        current_volume_step = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
         current_debug_logging = self.entry.options.get("debug_logging", False)
         current_group_entity = self.entry.options.get("own_group_entity", False)
 

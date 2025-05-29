@@ -27,7 +27,6 @@ API Endpoints:
     - Group management endpoints
     - Device management endpoints
 """
-
 from __future__ import annotations
 
 DOMAIN = "wiim"
@@ -127,9 +126,7 @@ API_ENDPOINT_PLAY_M3U = "/httpapi.asp?command=setPlayerCmd:playlist:"
 API_ENDPOINT_PLAY_PROMPT_URL = "/httpapi.asp?command=playPromptUrl:"
 
 # Multiroom Control
-API_ENDPOINT_GROUP_JOIN = (
-    "/httpapi.asp?command=ConnectMasterAp:JoinGroupMaster:eth{ip}:wifi0.0.0.0"
-)
+API_ENDPOINT_GROUP_JOIN = "/httpapi.asp?command=ConnectMasterAp:JoinGroupMaster:eth{ip}:wifi0.0.0.0"
 API_ENDPOINT_GROUP_EXIT = "/httpapi.asp?command=multiroom:Ungroup"
 API_ENDPOINT_GROUP_CREATE = "/httpapi.asp?command=setMultiroom:Master"
 API_ENDPOINT_GROUP_DELETE = "/httpapi.asp?command=multiroom:Ungroup"

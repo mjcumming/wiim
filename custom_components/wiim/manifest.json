@@ -8,9 +8,7 @@
   "version": "0.2.0",
   "logotype": "linkplay",
   "config_flow": true,
-  "zeroconf": [
-    "_linkplay._tcp.local."
-  ],
+  "zeroconf": ["_linkplay._tcp.local."],
   "integration_type": "hub",
   "ssdp": [
     { "st": "upnp:rootdevice" },

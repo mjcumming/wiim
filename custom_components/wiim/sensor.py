@@ -1,9 +1,9 @@
 """Diagnostic sensors for WiiM speakers."""
-
 from __future__ import annotations
 
 import logging
-from typing import Any, Final
+from typing import Any
+from typing import Final
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -12,10 +12,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    ATTR_GROUP_ROLE,
-    DOMAIN,
-)
+from .const import ATTR_GROUP_ROLE
+from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,11 +60,7 @@ class _WiiMDiagnosticSensor(CoordinatorEntity[WiiMCoordinator], SensorEntity):
         self._attr_name = meta["name"]
         self._attr_native_unit_of_measurement = meta["unit"]
         self._attr_device_class = meta["device_class"]
-        status = (
-            coordinator.data.get("status", {})
-            if isinstance(coordinator.data, dict)
-            else {}
-        )
+        status = coordinator.data.get("status", {}) if isinstance(coordinator.data, dict) else {}
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.client.host)},
             name=coordinator.friendly_name,

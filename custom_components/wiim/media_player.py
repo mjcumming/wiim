@@ -1,55 +1,51 @@
 """WiiM media player entity."""
-
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
-import asyncio
 
-from homeassistant.components.media_player import (
-    MediaPlayerEntity,
-    MediaPlayerEntityFeature,
-    MediaPlayerState,
-)
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers import entity_platform
 import voluptuous as vol
+from homeassistant.components.media_player import MediaPlayerEntity
+from homeassistant.components.media_player import MediaPlayerEntityFeature
+from homeassistant.components.media_player import MediaPlayerState
+from homeassistant.components.media_player.browse_media import BrowseMedia
+from homeassistant.components.media_player.browse_media import MediaClass
 from homeassistant.components.media_player.const import (
     ATTR_GROUP_MEMBERS as HA_ATTR_GROUP_MEMBERS,
 )
-from homeassistant.components.media_player.browse_media import BrowseMedia, MediaClass
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_platform
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import WiiMError
-from .const import (
-    ATTR_DEVICE_ID,
-    ATTR_DEVICE_MODEL,
-    ATTR_DEVICE_NAME,
-    ATTR_EQ_CUSTOM,
-    ATTR_EQ_PRESET,
-    ATTR_FIRMWARE,
-    ATTR_MUTE,
-    ATTR_PLAY_MODE,
-    ATTR_PRESET,
-    ATTR_REPEAT_MODE,
-    ATTR_SHUFFLE_MODE,
-    ATTR_SOURCE,
-    DOMAIN,
-    PLAY_MODE_NORMAL,
-    PLAY_MODE_REPEAT_ALL,
-    PLAY_MODE_REPEAT_ONE,
-    PLAY_MODE_SHUFFLE,
-    PLAY_MODE_SHUFFLE_REPEAT_ALL,
-    CONF_VOLUME_STEP,
-    DEFAULT_VOLUME_STEP,
-    EQ_PRESET_CUSTOM,
-    EQ_PRESET_MAP,
-    SOURCE_MAP,
-    ATTR_IP_ADDRESS,
-)
+from .const import ATTR_DEVICE_ID
+from .const import ATTR_DEVICE_MODEL
+from .const import ATTR_DEVICE_NAME
+from .const import ATTR_EQ_CUSTOM
+from .const import ATTR_EQ_PRESET
+from .const import ATTR_FIRMWARE
+from .const import ATTR_IP_ADDRESS
+from .const import ATTR_MUTE
+from .const import ATTR_PLAY_MODE
+from .const import ATTR_PRESET
+from .const import ATTR_REPEAT_MODE
+from .const import ATTR_SHUFFLE_MODE
+from .const import ATTR_SOURCE
+from .const import CONF_VOLUME_STEP
+from .const import DEFAULT_VOLUME_STEP
+from .const import DOMAIN
+from .const import EQ_PRESET_CUSTOM
+from .const import EQ_PRESET_MAP
+from .const import PLAY_MODE_NORMAL
+from .const import PLAY_MODE_REPEAT_ALL
+from .const import PLAY_MODE_REPEAT_ONE
+from .const import PLAY_MODE_SHUFFLE
+from .const import PLAY_MODE_SHUFFLE_REPEAT_ALL
+from .const import SOURCE_MAP
 from .coordinator import WiiMCoordinator
 from .group_media_player import WiiMGroupMediaPlayer
 
@@ -182,9 +178,7 @@ async def async_setup_entry(
 
             # Build unique_id for the group entity
             status = coord.data.get("status", {})
-            device_name = (
-                status.get("DeviceName") or status.get("device_name") or device_ip
-            )
+            device_name = status.get("DeviceName") or status.get("device_name") or device_ip
             safe_name = (
                 device_name.replace(" ", "_")
                 .replace("(", "")
@@ -204,9 +198,7 @@ async def async_setup_entry(
                 ent_reg = er.async_get(hass)
 
             # Check if entity already exists in registry
-            existing_entity_id = ent_reg.async_get_entity_id(
-                "media_player", DOMAIN, unique_id
-            )
+            existing_entity_id = ent_reg.async_get_entity_id("media_player", DOMAIN, unique_id)
             if existing_entity_id:
                 _LOGGER.debug(
                     "[WiiM] Group entity already exists in registry: %s",
@@ -215,9 +207,7 @@ async def async_setup_entry(
                 continue  # entity already registered, will be restored by HA
 
             # Safe to create new runtime entity - group entity (user enabled)
-            _LOGGER.info(
-                "[WiiM] Creating group entity for %s (user enabled option)", device_ip
-            )
+            _LOGGER.info("[WiiM] Creating group entity for %s (user enabled option)", device_ip)
             group_entity = WiiMGroupMediaPlayer(hass, coord, device_ip)
             async_add_entities([group_entity])
             group_entities[device_ip] = group_entity
@@ -236,9 +226,7 @@ async def async_setup_entry(
                         continue
                     coord = hass.data[DOMAIN][config_entry.entry_id]
                     if hasattr(coord, "client") and coord.client.host == device_ip:
-                        enable_group_entity = config_entry.options.get(
-                            "own_group_entity", False
-                        )
+                        enable_group_entity = config_entry.options.get("own_group_entity", False)
                         if not enable_group_entity:
                             should_remove = True
                         break
@@ -259,17 +247,11 @@ async def async_setup_entry(
                     ent_reg = er.async_get(hass)
 
                 # Find and remove the entity from registry
-                entity_id = (
-                    group_entity.entity_id
-                    if hasattr(group_entity, "entity_id")
-                    else None
-                )
+                entity_id = group_entity.entity_id if hasattr(group_entity, "entity_id") else None
                 if entity_id:
                     entity_entry = ent_reg.async_get(entity_id)
                     if entity_entry:
-                        _LOGGER.debug(
-                            "[WiiM] Removing entity %s from registry", entity_id
-                        )
+                        _LOGGER.debug("[WiiM] Removing entity %s from registry", entity_id)
                         ent_reg.async_remove(entity_id)
 
                 # Then remove the entity itself
@@ -338,11 +320,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Initialize the WiiM media player."""
         super().__init__(coordinator)
         status = coordinator.data.get("status", {})
-        device_name = (
-            status.get("DeviceName")
-            or status.get("device_name")
-            or coordinator.client.host
-        )
+        device_name = status.get("DeviceName") or status.get("device_name") or coordinator.client.host
         safe_name = (
             device_name.replace(" ", "_")
             .replace("(", "")
@@ -353,9 +331,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             .replace("null", "")
             .lower()
         )
-        self._attr_unique_id = (
-            f"wiim_{coordinator.client.host.replace('.', '_')}_{safe_name}"
-        )
+        self._attr_unique_id = f"wiim_{coordinator.client.host.replace('.', '_')}_{safe_name}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.client.host)},
             name=device_name,
@@ -396,11 +372,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     def name(self) -> str:
         """Return the name of the entity, always using the latest device name from status."""
         status = self.coordinator.data.get("status", {})
-        return (
-            status.get("DeviceName")
-            or status.get("device_name")
-            or self.coordinator.client.host
-        )
+        return status.get("DeviceName") or status.get("device_name") or self.coordinator.client.host
 
     @property
     def state(self) -> MediaPlayerState:
@@ -430,9 +402,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         # back to the volume that the *master* advertises for us in its
         # ``multiroom:slave_list`` payload.
 
-        status_volume: int | None = self.coordinator.data.get("status", {}).get(
-            "volume"
-        )
+        status_volume: int | None = self.coordinator.data.get("status", {}).get("volume")
 
         # Early-exit for normal (solo or master) speakers – their own status
         # is considered authoritative.
@@ -546,9 +516,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                             slave_ip,
                             slave_uuid,
                         )
-                        if (my_ip and my_ip == slave_ip) or (
-                            my_uuid and my_uuid == slave_uuid
-                        ):
+                        if (my_ip and my_ip == slave_ip) or (my_uuid and my_uuid == slave_uuid):
                             _LOGGER.debug(
                                 "[WiiM] Slave %s: found master %s by slave_list",
                                 self.coordinator.client.host,
@@ -563,19 +531,12 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             )
 
             # If the device advertised the master IP/UUID, attempt an import.
-            potential_master = (
-                master_id or multiroom.get("master_ip") or multiroom.get("master")
-            )
-            if (
-                potential_master
-                and isinstance(potential_master, str)
-                and "." in potential_master
-            ):
+            potential_master = master_id or multiroom.get("master_ip") or multiroom.get("master")
+            if potential_master and isinstance(potential_master, str) and "." in potential_master:
                 master_ip = potential_master
                 # Check if we already have a coordinator for that IP
                 if not any(
-                    hasattr(c, "client") and c.client.host == master_ip
-                    for c in self.hass.data.get(DOMAIN, {}).values()
+                    hasattr(c, "client") and c.client.host == master_ip for c in self.hass.data.get(DOMAIN, {}).values()
                 ):
                     _LOGGER.debug(
                         "[WiiM] Slave %s: launching import flow for unknown master %s",
@@ -593,9 +554,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             return {}
         # Not a slave: return own status
         status = self.coordinator.data.get("status", {})
-        _LOGGER.debug(
-            "[WiiM] %s: returning own status: %s", self.coordinator.client.host, status
-        )
+        _LOGGER.debug("[WiiM] %s: returning own status: %s", self.coordinator.client.host, status)
         return status
 
     @property
@@ -611,9 +570,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Return the artist of current playing media."""
         status = self._effective_status() or {}
         artist = status.get("artist")
-        _LOGGER.debug(
-            "[WiiM] %s: media_artist=%s", self.coordinator.client.host, artist
-        )
+        _LOGGER.debug("[WiiM] %s: media_artist=%s", self.coordinator.client.host, artist)
         return None if artist in ("unknow", "unknown", None) else artist
 
     @property
@@ -621,9 +578,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Return the album name of current playing media."""
         status = self._effective_status() or {}
         album = status.get("album")
-        _LOGGER.debug(
-            "[WiiM] %s: media_album_name=%s", self.coordinator.client.host, album
-        )
+        _LOGGER.debug("[WiiM] %s: media_album_name=%s", self.coordinator.client.host, album)
         return None if album in ("unknow", "unknown", None) else album
 
     @property
@@ -672,11 +627,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str]:
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # For slaves, show actual sources plus current master as an option
@@ -688,9 +639,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             if master_coord and master_coord.data:
                 master_status = master_coord.data.get("status", {})
                 master_name = (
-                    master_status.get("DeviceName")
-                    or master_status.get("device_name")
-                    or master_coord.client.host
+                    master_status.get("DeviceName") or master_status.get("device_name") or master_coord.client.host
                 )
                 # Put master first, then separator, then actual sources
                 return [f"🔗 {master_name} (Group)"] + mapped_sources
@@ -699,9 +648,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         else:
             # For solo/master devices, show normal sources
             sources = self.coordinator.data.get("status", {}).get("sources", [])
-            _LOGGER.debug(
-                "[WiiM] %s source_list raw sources: %s", self.entity_id, sources
-            )
+            _LOGGER.debug("[WiiM] %s source_list raw sources: %s", self.entity_id, sources)
             mapped_sources = [SOURCE_MAP.get(src, src.title()) for src in sources]
             _LOGGER.debug(
                 "[WiiM] %s source_list mapped sources: %s",
@@ -723,9 +670,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             if master_coord and master_coord.data:
                 master_status = master_coord.data.get("status", {})
                 master_name = (
-                    master_status.get("DeviceName")
-                    or master_status.get("device_name")
-                    or master_coord.client.host
+                    master_status.get("DeviceName") or master_status.get("device_name") or master_coord.client.host
                 )
                 return f"🔗 {master_name} (Group)"
             else:
@@ -768,9 +713,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             # the raw string if we do not know the mapping yet.
             ATTR_SOURCE: SOURCE_MAP.get(status.get("source"), status.get("source")),
             ATTR_MUTE: status.get("mute"),
-            ATTR_EQ_PRESET: EQ_PRESET_MAP.get(
-                status.get("eq_preset"), status.get("eq_preset")
-            ),
+            ATTR_EQ_PRESET: EQ_PRESET_MAP.get(status.get("eq_preset"), status.get("eq_preset")),
             ATTR_EQ_CUSTOM: status.get("eq_custom"),
             "eq_enabled": status.get("eq_enabled", False),
             "eq_presets": status.get("eq_presets", []),
@@ -780,19 +723,13 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             HA_ATTR_GROUP_LEADER: self.group_leader,
             "streaming_service": status.get("streaming_service"),
             # Enhanced device information
-            "device_model": status.get("hardware")
-            or status.get("project")
-            or "WiiM Device",
+            "device_model": status.get("hardware") or status.get("project") or "WiiM Device",
             "mac_address": status.get("MAC"),
-            "wifi_signal": f"{status.get('wifi_rssi', 'Unknown')} dBm"
-            if status.get("wifi_rssi")
-            else None,
+            "wifi_signal": f"{status.get('wifi_rssi', 'Unknown')} dBm" if status.get("wifi_rssi") else None,
             "wifi_channel": status.get("wifi_channel"),
             "uptime": status.get("uptime"),
             # Connection and status info
-            "connection_type": "HTTPS"
-            if "https" in self.coordinator.client._endpoint
-            else "HTTP",
+            "connection_type": "HTTPS" if "https" in self.coordinator.client._endpoint else "HTTP",
             "api_endpoint": self.coordinator.client._endpoint,
             "last_update_success": self.coordinator.last_update_success,
         }
@@ -833,13 +770,9 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             attrs["wiim_group_master"] = self.coordinator.client.host
             attrs["group_total_members"] = group_member_count
             attrs["group_average_volume"] = (
-                round(total_group_volume / group_member_count)
-                if group_member_count > 0
-                else 0
+                round(total_group_volume / group_member_count) if group_member_count > 0 else 0
             )
-            attrs["group_status"] = (
-                f"Master of {len(slave_details)} device{'s' if len(slave_details) != 1 else ''}"
-            )
+            attrs["group_status"] = f"Master of {len(slave_details)} device{'s' if len(slave_details) != 1 else ''}"
 
         elif role == "slave":
             # Show master information for slaves
@@ -847,9 +780,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             if master_coord:
                 master_status = master_coord.data.get("status", {})
                 master_name = (
-                    master_status.get("DeviceName")
-                    or master_status.get("device_name")
-                    or master_coord.client.host
+                    master_status.get("DeviceName") or master_status.get("device_name") or master_coord.client.host
                 )
                 attrs["wiim_group_master"] = master_coord.client.host
                 attrs["wiim_master_name"] = master_name
@@ -868,18 +799,11 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         # Show all available WiiM devices for potential grouping
         available_devices = []
         for coord in self.hass.data[DOMAIN].values():
-            if (
-                not hasattr(coord, "client")
-                or coord.client.host == self.coordinator.client.host
-            ):
+            if not hasattr(coord, "client") or coord.client.host == self.coordinator.client.host:
                 continue
 
             device_status = coord.data.get("status", {}) if coord.data else {}
-            device_name = (
-                device_status.get("DeviceName")
-                or device_status.get("device_name")
-                or coord.client.host
-            )
+            device_name = device_status.get("DeviceName") or device_status.get("device_name") or coord.client.host
             device_role = coord.data.get("role", "solo") if coord.data else "unknown"
 
             available_devices.append(
@@ -961,22 +885,16 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 )
                 for slave in slave_list:
                     if isinstance(slave, dict):
-                        if (my_ip and my_ip == slave.get("ip")) or (
-                            my_uuid and my_uuid == slave.get("uuid")
-                        ):
+                        if (my_ip and my_ip == slave.get("ip")) or (my_uuid and my_uuid == slave.get("uuid")):
                             _LOGGER.debug(
                                 "[WiiM] %s: Matched master %s via slave_list",
                                 self.entity_id,
                                 coord.client.host,
                             )
                             return coord
-            _LOGGER.debug(
-                "[WiiM] %s: No master coordinator found via slave_list", self.entity_id
-            )
+            _LOGGER.debug("[WiiM] %s: No master coordinator found via slave_list", self.entity_id)
             return None
-        _LOGGER.debug(
-            "[WiiM] %s: Master_ip present, searching coordinators", self.entity_id
-        )
+        _LOGGER.debug("[WiiM] %s: Master_ip present, searching coordinators", self.entity_id)
         for coord in self.hass.data[DOMAIN].values():
             if not hasattr(coord, "client"):
                 continue
@@ -996,30 +914,20 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     async def _trigger_group_updates(self) -> None:
         """Trigger updates for all players in the group."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "master":
             # For master, update all slaves
             for ip in self.coordinator.wiim_group_members:
                 coord = next(
-                    (
-                        c
-                        for c in self.hass.data[DOMAIN].values()
-                        if hasattr(c, "client") and c.client.host == ip
-                    ),
+                    (c for c in self.hass.data[DOMAIN].values() if hasattr(c, "client") and c.client.host == ip),
                     None,
                 )
                 if coord:
                     try:
                         await coord.async_request_refresh()
                     except Exception as err:
-                        _LOGGER.debug(
-                            "[WiiM] Failed to trigger update for %s: %s", ip, err
-                        )
+                        _LOGGER.debug("[WiiM] Failed to trigger update for %s: %s", ip, err)
         elif role == "slave":
             # For slave, update master
             master_coord = self._find_master_coordinator()
@@ -1152,11 +1060,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             raise
 
     async def async_select_source(self, source: str) -> None:
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Check if user is selecting the current group master (do nothing)
@@ -1164,9 +1068,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             if master_coord and master_coord.data:
                 master_status = master_coord.data.get("status", {})
                 master_name = (
-                    master_status.get("DeviceName")
-                    or master_status.get("device_name")
-                    or master_coord.client.host
+                    master_status.get("DeviceName") or master_status.get("device_name") or master_coord.client.host
                 )
                 current_group_source = f"🔗 {master_name} (Group)"
 
@@ -1198,9 +1100,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 # Continue anyway - device might already be solo
 
         # Convert user-friendly source back to API source
-        src_api = next(
-            (k for k, v in SOURCE_MAP.items() if v == source), source.lower()
-        )
+        src_api = next((k for k, v in SOURCE_MAP.items() if v == source), source.lower())
 
         # Handle special group source format by extracting just the source part
         if " (Group)" in source:
@@ -1224,9 +1124,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         try:
             if shuffle:
                 if self.repeat == "all":
-                    await self.coordinator.client.set_shuffle_mode(
-                        PLAY_MODE_SHUFFLE_REPEAT_ALL
-                    )
+                    await self.coordinator.client.set_shuffle_mode(PLAY_MODE_SHUFFLE_REPEAT_ALL)
                 else:
                     await self.coordinator.client.set_shuffle_mode(PLAY_MODE_SHUFFLE)
             else:
@@ -1244,9 +1142,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         try:
             if repeat == "all":
                 if self.shuffle:
-                    await self.coordinator.client.set_repeat_mode(
-                        PLAY_MODE_SHUFFLE_REPEAT_ALL
-                    )
+                    await self.coordinator.client.set_repeat_mode(PLAY_MODE_SHUFFLE_REPEAT_ALL)
                 else:
                     await self.coordinator.client.set_repeat_mode(PLAY_MODE_REPEAT_ALL)
             elif repeat == "one":
@@ -1328,22 +1224,15 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                         if not hasattr(coord, "client"):
                             continue
                         status = coord.data.get("status", {})
-                        device_name_from_status = status.get(
-                            "DeviceName"
-                        ) or status.get("device_name")
-                        if (
-                            device_name_from_status
-                            and device_name_from_status.lower() == device_name.lower()
-                        ):
+                        device_name_from_status = status.get("DeviceName") or status.get("device_name")
+                        if device_name_from_status and device_name_from_status.lower() == device_name.lower():
                             _LOGGER.debug(
                                 "[WiiM] _entity_id_to_host: Match found via device name for host=%s",
                                 coord.client.host,
                             )
                             return coord.client.host
         except Exception as reg_err:
-            _LOGGER.debug(
-                "[WiiM] _entity_id_to_host: Entity registry lookup failed: %s", reg_err
-            )
+            _LOGGER.debug("[WiiM] _entity_id_to_host: Entity registry lookup failed: %s", reg_err)
 
         # Third try: Look for any coordinator with matching entity_id in its data
         for coord in self.hass.data[DOMAIN].values():
@@ -1356,9 +1245,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 )
                 return coord.client.host
 
-        _LOGGER.warning(
-            "[WiiM] _entity_id_to_host: No match found for entity_id=%s", entity_id
-        )
+        _LOGGER.warning("[WiiM] _entity_id_to_host: No match found for entity_id=%s", entity_id)
         raise ValueError(f"Unknown entity_id: {entity_id}")
 
     async def async_join(self, group_members: list[str]) -> None:
@@ -1408,9 +1295,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
             for entity_id in group_members:
                 if entity_id == self.entity_id:
-                    _LOGGER.debug(
-                        "[WiiM] %s: Skipping self in group members", self.entity_id
-                    )
+                    _LOGGER.debug("[WiiM] %s: Skipping self in group members", self.entity_id)
                     continue
                 coord = _find_coordinator(self.hass, entity_id)
                 if coord is not None:
@@ -1451,8 +1336,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             desired_hosts = {
                 self._entity_id_to_host(eid)
                 for eid in group_members
-                if eid != self.entity_id
-                and _find_coordinator(self.hass, eid) is not None
+                if eid != self.entity_id and _find_coordinator(self.hass, eid) is not None
             }
             current_slaves = set(self.coordinator.wiim_group_members)
             _LOGGER.debug(
@@ -1470,11 +1354,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     slave_ip,
                 )
                 slave_coord = next(
-                    (
-                        c
-                        for c in self.hass.data[DOMAIN].values()
-                        if hasattr(c, "client") and c.client.host == slave_ip
-                    ),
+                    (c for c in self.hass.data[DOMAIN].values() if hasattr(c, "client") and c.client.host == slave_ip),
                     None,
                 )
                 if slave_coord is not None:
@@ -1493,13 +1373,9 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 self.entity_id,
             )
             await self.coordinator.async_request_refresh()
-            _LOGGER.info(
-                "[WiiM] %s: Join operation completed successfully", self.entity_id
-            )
+            _LOGGER.info("[WiiM] %s: Join operation completed successfully", self.entity_id)
         except Exception as err:
-            _LOGGER.error(
-                "[WiiM] %s: Failed to complete join operation: %s", self.entity_id, err
-            )
+            _LOGGER.error("[WiiM] %s: Failed to complete join operation: %s", self.entity_id, err)
             raise
 
     async def async_unjoin(self) -> None:
@@ -1520,9 +1396,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 self.entity_id,
             )
             await self.coordinator.async_request_refresh()
-            _LOGGER.info(
-                "[WiiM] %s: Unjoin operation completed successfully", self.entity_id
-            )
+            _LOGGER.info("[WiiM] %s: Unjoin operation completed successfully", self.entity_id)
         except Exception as err:
             _LOGGER.error(
                 "[WiiM] %s: Failed to complete unjoin operation: %s",
@@ -1553,9 +1427,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     def join_players(self, group_members: list[str]) -> None:
         """Synchronous join for HA compatibility (thread-safe)."""
-        future = asyncio.run_coroutine_threadsafe(
-            self.async_join(group_members), self.hass.loop
-        )
+        future = asyncio.run_coroutine_threadsafe(self.async_join(group_members), self.hass.loop)
         future.result()
 
     def unjoin_player(self) -> None:
@@ -1563,9 +1435,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         future = asyncio.run_coroutine_threadsafe(self.async_unjoin(), self.hass.loop)
         future.result()
 
-    async def async_play_media(
-        self, media_type: str, media_id: str, **kwargs: Any
-    ) -> None:
+    async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         if media_type == "preset" and media_id.startswith("preset_"):
             preset_num = int(media_id.split("_")[1])
             await self.coordinator.client.play_preset(preset_num)
@@ -1588,9 +1458,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         await self.coordinator.client.play_playlist(playlist_url)
         await self.coordinator.async_refresh()
 
-    async def async_set_eq(
-        self, preset: str, custom_values: list[int] | None = None
-    ) -> None:
+    async def async_set_eq(self, preset: str, custom_values: list[int] | None = None) -> None:
         """Set EQ preset or custom values."""
         if preset == EQ_PRESET_CUSTOM and custom_values is None:
             raise ValueError("Custom values required for custom EQ preset")
@@ -1656,14 +1524,10 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     async def async_create_group_with_members(self, group_members: list[str]) -> None:
         """Create a new group with specified members (this device as master)."""
-        _LOGGER.info(
-            "[WiiM] %s: Creating group with members: %s", self.entity_id, group_members
-        )
+        _LOGGER.info("[WiiM] %s: Creating group with members: %s", self.entity_id, group_members)
 
         # Ensure we include ourselves as the master
-        all_members = [self.entity_id] + [
-            m for m in group_members if m != self.entity_id
-        ]
+        all_members = [self.entity_id] + [m for m in group_members if m != self.entity_id]
         await self.async_join(all_members)
 
     async def async_add_to_group(self, target_entity: str) -> None:
@@ -1757,9 +1621,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         try:
             async with async_timeout.timeout(10):
                 session = aiohttp.ClientSession()
-                async with session.get(
-                    url, ssl=False
-                ) as resp:  # WiiM certs are self-signed
+                async with session.get(url, ssl=False) as resp:  # WiiM certs are self-signed
                     if resp.status != 200:
                         _LOGGER.debug(
                             "[WiiM] %s: Artwork fetch failed – HTTP %s",
@@ -1773,9 +1635,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     await session.close()
                     return data, mime
         except Exception as err:  # noqa: BLE001 – we simply log & fall back
-            _LOGGER.debug(
-                "[WiiM] %s: async_get_media_image error: %s", self.entity_id, err
-            )
+            _LOGGER.debug("[WiiM] %s: async_get_media_image error: %s", self.entity_id, err)
             return None, None
 
     # --------------------- App / Service name ---------------------------
@@ -1789,9 +1649,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
 def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | None:
     """Return coordinator for the given entity ID."""
-    _LOGGER.debug(
-        "[WiiM] _find_coordinator: Looking up coordinator for entity_id=%s", entity_id
-    )
+    _LOGGER.debug("[WiiM] _find_coordinator: Looking up coordinator for entity_id=%s", entity_id)
 
     # First try: Direct entity ID to host mapping
     for coord in hass.data[DOMAIN].values():
@@ -1814,9 +1672,7 @@ def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | 
 
         if ent_entry and ent_entry.unique_id:
             unique = ent_entry.unique_id
-            _LOGGER.debug(
-                "[WiiM] _find_coordinator: Registry lookup found unique_id=%s", unique
-            )
+            _LOGGER.debug("[WiiM] _find_coordinator: Registry lookup found unique_id=%s", unique)
 
             # Try to match by unique_id (which should be the host IP)
             for coord in hass.data[DOMAIN].values():
@@ -1834,22 +1690,15 @@ def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | 
                     if not hasattr(coord, "client"):
                         continue
                     status = coord.data.get("status", {})
-                    device_name_from_status = status.get("DeviceName") or status.get(
-                        "device_name"
-                    )
-                    if (
-                        device_name_from_status
-                        and device_name_from_status.lower() == device_name.lower()
-                    ):
+                    device_name_from_status = status.get("DeviceName") or status.get("device_name")
+                    if device_name_from_status and device_name_from_status.lower() == device_name.lower():
                         _LOGGER.debug(
                             "[WiiM] _find_coordinator: Match found via device name for host=%s",
                             coord.client.host,
                         )
                         return coord
     except Exception as reg_err:
-        _LOGGER.debug(
-            "[WiiM] _find_coordinator: Entity registry lookup failed: %s", reg_err
-        )
+        _LOGGER.debug("[WiiM] _find_coordinator: Entity registry lookup failed: %s", reg_err)
 
     # Third try: Look for any coordinator with matching entity_id in its data
     for coord in hass.data[DOMAIN].values():
@@ -1862,7 +1711,5 @@ def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | 
             )
             return coord
 
-    _LOGGER.warning(
-        "[WiiM] _find_coordinator: No coordinator found for entity_id=%s", entity_id
-    )
+    _LOGGER.warning("[WiiM] _find_coordinator: No coordinator found for entity_id=%s", entity_id)
     return None

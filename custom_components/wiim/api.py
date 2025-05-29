@@ -19,7 +19,6 @@ WiiM devices primarily use HTTPS on port 443 via the API endpoint at
 ``https://<ip>/httpapi.asp?command=...``. The client will automatically detect
 the correct protocol (HTTPS/HTTP) and handle SSL certificate issues with older devices.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -35,53 +34,51 @@ import async_timeout
 from aiohttp import ClientSession
 from aiohttp.client_exceptions import ClientError
 
-from .const import (
-    API_ENDPOINT_CLEAR_PLAYLIST,
-    API_ENDPOINT_DEVICE_INFO,
-    API_ENDPOINT_EQ_CUSTOM,
-    API_ENDPOINT_EQ_GET,
-    API_ENDPOINT_EQ_PRESET,
-    API_ENDPOINT_FIRMWARE,
-    API_ENDPOINT_GROUP_CREATE,
-    API_ENDPOINT_GROUP_DELETE,
-    API_ENDPOINT_GROUP_EXIT,
-    API_ENDPOINT_GROUP_JOIN,
-    API_ENDPOINT_LED,
-    API_ENDPOINT_LED_BRIGHTNESS,
-    API_ENDPOINT_MAC,
-    API_ENDPOINT_MUTE,
-    API_ENDPOINT_NEXT,
-    API_ENDPOINT_PAUSE,
-    API_ENDPOINT_PLAY,
-    API_ENDPOINT_POWER,
-    API_ENDPOINT_PREV,
-    API_ENDPOINT_PRESET,
-    API_ENDPOINT_REPEAT,
-    API_ENDPOINT_SEEK,
-    API_ENDPOINT_SHUFFLE,
-    API_ENDPOINT_SOURCE,
-    API_ENDPOINT_SOURCES,
-    API_ENDPOINT_STATUS,
-    API_ENDPOINT_STOP,
-    API_ENDPOINT_VOLUME,
-    API_ENDPOINT_PLAY_URL,
-    API_ENDPOINT_PLAY_M3U,
-    DEFAULT_PORT,
-    DEFAULT_TIMEOUT,
-    PLAY_MODE_NORMAL,
-    PLAY_MODE_REPEAT_ALL,
-    PLAY_MODE_REPEAT_ONE,
-    PLAY_MODE_SHUFFLE,
-    PLAY_MODE_SHUFFLE_REPEAT_ALL,
-    API_ENDPOINT_GROUP_SLAVES,
-    API_ENDPOINT_GROUP_KICK,
-    API_ENDPOINT_GROUP_SLAVE_MUTE,
-    EQ_PRESET_MAP,
-    API_ENDPOINT_EQ_ON,
-    API_ENDPOINT_EQ_OFF,
-    API_ENDPOINT_EQ_STATUS,
-    API_ENDPOINT_EQ_LIST,
-)
+from .const import API_ENDPOINT_CLEAR_PLAYLIST
+from .const import API_ENDPOINT_DEVICE_INFO
+from .const import API_ENDPOINT_EQ_CUSTOM
+from .const import API_ENDPOINT_EQ_GET
+from .const import API_ENDPOINT_EQ_LIST
+from .const import API_ENDPOINT_EQ_OFF
+from .const import API_ENDPOINT_EQ_ON
+from .const import API_ENDPOINT_EQ_PRESET
+from .const import API_ENDPOINT_EQ_STATUS
+from .const import API_ENDPOINT_FIRMWARE
+from .const import API_ENDPOINT_GROUP_CREATE
+from .const import API_ENDPOINT_GROUP_DELETE
+from .const import API_ENDPOINT_GROUP_EXIT
+from .const import API_ENDPOINT_GROUP_JOIN
+from .const import API_ENDPOINT_GROUP_KICK
+from .const import API_ENDPOINT_GROUP_SLAVE_MUTE
+from .const import API_ENDPOINT_GROUP_SLAVES
+from .const import API_ENDPOINT_LED
+from .const import API_ENDPOINT_LED_BRIGHTNESS
+from .const import API_ENDPOINT_MAC
+from .const import API_ENDPOINT_MUTE
+from .const import API_ENDPOINT_NEXT
+from .const import API_ENDPOINT_PAUSE
+from .const import API_ENDPOINT_PLAY
+from .const import API_ENDPOINT_PLAY_M3U
+from .const import API_ENDPOINT_PLAY_URL
+from .const import API_ENDPOINT_POWER
+from .const import API_ENDPOINT_PRESET
+from .const import API_ENDPOINT_PREV
+from .const import API_ENDPOINT_REPEAT
+from .const import API_ENDPOINT_SEEK
+from .const import API_ENDPOINT_SHUFFLE
+from .const import API_ENDPOINT_SOURCE
+from .const import API_ENDPOINT_SOURCES
+from .const import API_ENDPOINT_STATUS
+from .const import API_ENDPOINT_STOP
+from .const import API_ENDPOINT_VOLUME
+from .const import DEFAULT_PORT
+from .const import DEFAULT_TIMEOUT
+from .const import EQ_PRESET_MAP
+from .const import PLAY_MODE_NORMAL
+from .const import PLAY_MODE_REPEAT_ALL
+from .const import PLAY_MODE_REPEAT_ONE
+from .const import PLAY_MODE_SHUFFLE
+from .const import PLAY_MODE_SHUFFLE_REPEAT_ALL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -348,9 +345,7 @@ class WiiMClient:
             except RuntimeError as err:
                 # Handle session closed errors gracefully
                 if "session is closed" in str(err).lower():
-                    _LOGGER.debug(
-                        "Session closed for %s, recreating session", self.host
-                    )
+                    _LOGGER.debug("Session closed for %s, recreating session", self.host)
                     try:
                         if self._session and not self._session.closed:
                             await self._session.close()
@@ -368,14 +363,10 @@ class WiiMClient:
                             kwargs.pop("ssl", None)
 
                         async with async_timeout.timeout(self.timeout):
-                            async with self._session.request(
-                                method, url, **kwargs
-                            ) as response:
+                            async with self._session.request(method, url, **kwargs) as response:
                                 response.raise_for_status()
                                 text = await response.text()
-                                _LOGGER.debug(
-                                    "Retry response from %s: %s", url, text[:200]
-                                )
+                                _LOGGER.debug("Retry response from %s: %s", url, text[:200])
 
                                 self._endpoint = f"{scheme}://{self.host}:{port}"
 
@@ -586,9 +577,7 @@ class WiiMClient:
                 # higher-level helpers treat us as master from now on.
                 self._group_master = self.host
                 self._group_slaves = []
-                _LOGGER.debug(
-                    "[WiiM] Group successfully created on %s using %s", self.host, cmd
-                )
+                _LOGGER.debug("[WiiM] Group successfully created on %s using %s", self.host, cmd)
                 return
             except Exception as err:  # noqa: BLE001 – broad on purpose, we'll raise later
                 _LOGGER.debug(
@@ -600,10 +589,7 @@ class WiiMClient:
                 errors.append(f"{cmd} → {err}")
 
         # If we reach this point every attempt failed
-        error_msg = (
-            "Unable to create multi-room group. Tried the following commands: "
-            + "; ".join(errors)
-        )
+        error_msg = "Unable to create multi-room group. Tried the following commands: " + "; ".join(errors)
         raise WiiMError(error_msg)
 
     async def delete_group(self) -> None:
@@ -976,9 +962,7 @@ class WiiMClient:
 
             if cache_key and "?" not in cover:
                 cover = f"{cover}?cache={quote(cache_key)}"
-            _LOGGER.debug(
-                "Setting entity_picture: %s (cache_key: %s)", cover, cache_key
-            )
+            _LOGGER.debug("Setting entity_picture: %s (cache_key: %s)", cover, cache_key)
             data["entity_picture"] = cover
 
         # ---------------------------------------------------------------
@@ -1005,9 +989,7 @@ class WiiMClient:
     async def get_multiroom_info(self) -> dict[str, Any]:
         """Get multiroom status."""
         response = await self._request(API_ENDPOINT_GROUP_SLAVES)
-        _LOGGER.debug(
-            "[WiiM] get_multiroom_info response for %s: %s", self.host, response
-        )
+        _LOGGER.debug("[WiiM] get_multiroom_info response for %s: %s", self.host, response)
         # Try to set group_master for slave
         if "master" in response:
             self._group_master = response["master"]
@@ -1032,9 +1014,7 @@ class WiiMClient:
             )
         else:
             self._group_master = None
-            _LOGGER.debug(
-                "[WiiM] %s: No master info found in group info response.", self.host
-            )
+            _LOGGER.debug("[WiiM] %s: No master info found in group info response.", self.host)
         return response
 
     async def kick_slave(self, slave_ip: str) -> None:
@@ -1049,9 +1029,7 @@ class WiiMClient:
         if not self.is_master:
             raise WiiMError("Not a group master")
         _LOGGER.debug("[WiiM] Setting mute=%s for slave %s", mute, slave_ip)
-        await self._request(
-            f"{API_ENDPOINT_GROUP_SLAVE_MUTE}{slave_ip}:{1 if mute else 0}"
-        )
+        await self._request(f"{API_ENDPOINT_GROUP_SLAVE_MUTE}{slave_ip}:{1 if mute else 0}")
 
     # ---------------------------------------------------------------------
     # Diagnostic / maintenance helpers
@@ -1153,37 +1131,27 @@ async def session_call_api(endpoint: str, session: ClientSession, command: str) 
         raise WiiMRequestError(f"{err} error requesting data from '{url}'") from err
 
     if response.status != HTTPStatus.OK:
-        raise WiiMRequestError(
-            f"Unexpected HTTP status {response.status} received from '{url}'"
-        )
+        raise WiiMRequestError(f"Unexpected HTTP status {response.status} received from '{url}'")
 
     return await response.text()
 
 
-async def session_call_api_json(
-    endpoint: str, session: ClientSession, command: str
-) -> dict[str, str]:
+async def session_call_api_json(endpoint: str, session: ClientSession, command: str) -> dict[str, str]:
     """Call the API and JSON-decode the response."""
 
     raw = await session_call_api(endpoint, session, command)
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise WiiMInvalidDataError(
-            f"Unexpected JSON ({raw[:80]}…) received from '{endpoint}'"
-        ) from exc
+        raise WiiMInvalidDataError(f"Unexpected JSON ({raw[:80]}…) received from '{endpoint}'") from exc
 
 
-async def session_call_api_ok(
-    endpoint: str, session: ClientSession, command: str
-) -> None:
+async def session_call_api_ok(endpoint: str, session: ClientSession, command: str) -> None:
     """Call the API and assert the speaker answers exactly 'OK'."""
 
     result = await session_call_api(endpoint, session, command)
     if result.strip() != "OK":
-        raise WiiMRequestError(
-            f"Didn't receive expected 'OK' from {endpoint} (got {result!r})"
-        )
+        raise WiiMRequestError(f"Didn't receive expected 'OK' from {endpoint} (got {result!r})")
 
 
 def _hex_to_str(val: str | None) -> str | None:

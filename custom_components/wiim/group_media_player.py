@@ -1,11 +1,11 @@
-from homeassistant.components.media_player import (
-    MediaPlayerEntity,
-    MediaPlayerState,
-    MediaPlayerEntityFeature,
-)
-from .const import DOMAIN
 import logging
+
+from homeassistant.components.media_player import MediaPlayerEntity
+from homeassistant.components.media_player import MediaPlayerEntityFeature
+from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.helpers.entity import DeviceInfo
+
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -147,11 +147,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
     @property
     def volume_level(self):
         """Return volume level based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "solo":
             # Solo: return own volume
@@ -179,11 +175,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
     @property
     def is_volume_muted(self):
         """Return mute state based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "solo":
             # Solo: return own mute state
@@ -226,11 +218,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 if not hasattr(coord, "client") or coord.client.host == self.device_ip:
                     continue
                 device_status = coord.data.get("status", {}) if coord.data else {}
-                device_name = (
-                    device_status.get("DeviceName")
-                    or device_status.get("device_name")
-                    or coord.client.host
-                )
+                device_name = device_status.get("DeviceName") or device_status.get("device_name") or coord.client.host
                 available_devices.append(
                     {
                         "name": device_name,
@@ -246,14 +234,8 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             slave_list = multiroom.get("slave_list", [])
 
             if slave_list:
-                slave_names = [
-                    slave.get("name", "Unknown")
-                    for slave in slave_list
-                    if isinstance(slave, dict)
-                ]
-                attrs["group_status"] = (
-                    f"Master of: {', '.join(slave_names)} ({len(slave_list)} slaves)"
-                )
+                slave_names = [slave.get("name", "Unknown") for slave in slave_list if isinstance(slave, dict)]
+                attrs["group_status"] = f"Master of: {', '.join(slave_names)} ({len(slave_list)} slaves)"
 
                 # Detailed slave info
                 slave_details = []
@@ -277,11 +259,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 master_coord = self._find_master_coordinator()
                 if master_coord and master_coord.data:
                     master_status = master_coord.data.get("status", {})
-                    master_name = (
-                        master_status.get("DeviceName")
-                        or master_status.get("device_name")
-                        or master_ip
-                    )
+                    master_name = master_status.get("DeviceName") or master_status.get("device_name") or master_ip
                     attrs["group_status"] = f"Slave of: {master_name}"
                     attrs["master_name"] = master_name
                 else:
@@ -299,11 +277,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
     @property
     def entity_picture(self):
         """Return artwork based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: show master's artwork
@@ -312,20 +286,12 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 return master_coord.data.get("status", {}).get("entity_picture")
 
         # Solo or Master: show own artwork
-        return (
-            self.coordinator.data.get("status", {}).get("entity_picture")
-            if self.coordinator.data
-            else None
-        )
+        return self.coordinator.data.get("status", {}).get("entity_picture") if self.coordinator.data else None
 
     @property
     def media_title(self):
         """Return track title based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: show master's title
@@ -334,20 +300,12 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 return master_coord.data.get("status", {}).get("title")
 
         # Solo or Master: show own title
-        return (
-            self.coordinator.data.get("status", {}).get("title")
-            if self.coordinator.data
-            else None
-        )
+        return self.coordinator.data.get("status", {}).get("title") if self.coordinator.data else None
 
     @property
     def media_artist(self):
         """Return artist based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: show master's artist
@@ -356,20 +314,12 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 return master_coord.data.get("status", {}).get("artist")
 
         # Solo or Master: show own artist
-        return (
-            self.coordinator.data.get("status", {}).get("artist")
-            if self.coordinator.data
-            else None
-        )
+        return self.coordinator.data.get("status", {}).get("artist") if self.coordinator.data else None
 
     @property
     def media_album_name(self):
         """Return album based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: show master's album
@@ -378,20 +328,12 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 return master_coord.data.get("status", {}).get("album")
 
         # Solo or Master: show own album
-        return (
-            self.coordinator.data.get("status", {}).get("album")
-            if self.coordinator.data
-            else None
-        )
+        return self.coordinator.data.get("status", {}).get("album") if self.coordinator.data else None
 
     @property
     def media_position(self):
         """Return playback position based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: show master's position
@@ -400,20 +342,12 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 return master_coord.data.get("status", {}).get("position")
 
         # Solo or Master: show own position
-        return (
-            self.coordinator.data.get("status", {}).get("position")
-            if self.coordinator.data
-            else None
-        )
+        return self.coordinator.data.get("status", {}).get("position") if self.coordinator.data else None
 
     @property
     def media_duration(self):
         """Return track duration based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: show master's duration
@@ -422,20 +356,12 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 return master_coord.data.get("status", {}).get("duration")
 
         # Solo or Master: show own duration
-        return (
-            self.coordinator.data.get("status", {}).get("duration")
-            if self.coordinator.data
-            else None
-        )
+        return self.coordinator.data.get("status", {}).get("duration") if self.coordinator.data else None
 
     @property
     def media_position_updated_at(self):
         """Return position update time based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: show master's position update time
@@ -444,19 +370,11 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 return master_coord.data.get("status", {}).get("position_updated_at")
 
         # Solo or Master: show own position update time
-        return (
-            self.coordinator.data.get("status", {}).get("position_updated_at")
-            if self.coordinator.data
-            else None
-        )
+        return self.coordinator.data.get("status", {}).get("position_updated_at") if self.coordinator.data else None
 
     async def async_set_volume_level(self, volume):
         """Set volume based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "solo":
             # Solo: set own volume
@@ -490,11 +408,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     async def async_mute_volume(self, mute: bool):
         """Mute/unmute based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "solo":
             # Solo: mute/unmute self
@@ -510,9 +424,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                 try:
                     await coord.client.set_mute(mute)
                 except Exception as err:
-                    _LOGGER.debug(
-                        "[WiiMGroup] Failed to set mute=%s on %s: %s", mute, ip, err
-                    )
+                    _LOGGER.debug("[WiiMGroup] Failed to set mute=%s on %s: %s", mute, ip, err)
 
             # Trigger refresh for all coordinators
             for ip in self.group_members:
@@ -532,11 +444,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     async def async_media_play(self):
         """Handle play command based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: propagate to master
@@ -564,11 +472,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     async def async_media_pause(self):
         """Handle pause command based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: propagate to master
@@ -596,11 +500,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     async def async_media_next_track(self):
         """Handle next track command based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: propagate to master
@@ -620,11 +520,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     async def async_media_previous_track(self):
         """Handle previous track command based on role."""
-        role = (
-            self.coordinator.data.get("role", "solo")
-            if self.coordinator.data
-            else "solo"
-        )
+        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
         if role == "slave":
             # Slave: propagate to master
@@ -660,9 +556,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
                     coord.data,
                 )
                 return coord
-        _LOGGER.debug(
-            "[WiiMGroup] No coordinator found for IP %s (likely not yet set up)", ip
-        )
+        _LOGGER.debug("[WiiMGroup] No coordinator found for IP %s (likely not yet set up)", ip)
         return None
 
     def _find_master_coordinator(self):
@@ -698,9 +592,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
         """Return the name of the entity, always using the latest device name from status."""
         if self.coordinator.data:
             status = self.coordinator.data.get("status", {})
-            device_name = (
-                status.get("DeviceName") or status.get("device_name") or self.device_ip
-            )
+            device_name = status.get("DeviceName") or status.get("device_name") or self.device_ip
             return f"{device_name} Master"
         # Fallback to initial name if no coordinator data
         return self._attr_name

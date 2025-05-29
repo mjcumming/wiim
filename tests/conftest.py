@@ -1,10 +1,12 @@
 """Global fixtures for WiiM integration."""
-
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
+from .const import MOCK_DEVICE_DATA
+from .const import MOCK_STATUS_RESPONSE
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 

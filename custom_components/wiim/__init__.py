@@ -1,5 +1,4 @@
 """The WiiM integration."""
-
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
@@ -8,7 +7,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import WiiMClient
-from .const import DOMAIN, CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
+from .const import CONF_POLL_INTERVAL
+from .const import DEFAULT_POLL_INTERVAL
+from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 
 PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SENSOR, Platform.BUTTON, Platform.NUMBER]

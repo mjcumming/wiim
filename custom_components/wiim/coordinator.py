@@ -1,23 +1,22 @@
 """WiiM coordinator for handling device updates and groups."""
-
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
-import asyncio
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .api import WiiMClient, WiiMError
-from .const import (
-    ATTR_GROUP_MEMBERS,
-    ATTR_GROUP_LEADER,
-    CONF_HOST,
-    DEFAULT_POLL_INTERVAL,
-    DOMAIN,
-)
+from .api import WiiMClient
+from .api import WiiMError
+from .const import ATTR_GROUP_LEADER
+from .const import ATTR_GROUP_MEMBERS
+from .const import CONF_HOST
+from .const import DEFAULT_POLL_INTERVAL
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,9 +137,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
             try:
                 player_status = await self.client.get_player_status()
             except WiiMError as err:
-                _LOGGER.debug(
-                    "[WiiM] get_player_status failed on %s: %s", self.client.host, err
-                )
+                _LOGGER.debug("[WiiM] get_player_status failed on %s: %s", self.client.host, err)
                 player_status = {}
 
             # 2) Basic status (getStatusEx) – skip if we previously marked unsupported
@@ -163,9 +160,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
             try:
                 multiroom = await self.client.get_multiroom_info()
             except WiiMError as err:
-                _LOGGER.debug(
-                    "[WiiM] get_multiroom_info failed on %s: %s", self.client.host, err
-                )
+                _LOGGER.debug("[WiiM] get_multiroom_info failed on %s: %s", self.client.host, err)
                 multiroom = {}
 
             # ------------------------------------------------------------------
@@ -192,10 +187,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
             if current_play_state == "play":
                 # Active playback - poll every second
                 self.update_interval = timedelta(seconds=1)
-            elif (
-                self._last_play_time
-                and (now - self._last_play_time) < self._idle_timeout
-            ):
+            elif self._last_play_time and (now - self._last_play_time) < self._idle_timeout:
                 # Recently played - poll every 5 seconds
                 self.update_interval = timedelta(seconds=5)
             else:
@@ -203,9 +195,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 self.update_interval = timedelta(seconds=10)
 
             # Only fetch meta info if supported & title changed
-            if not self._meta_info_unsupported and (
-                current_title != self._last_title or not self._last_meta_info
-            ):
+            if not self._meta_info_unsupported and (current_title != self._last_title or not self._last_meta_info):
                 meta_info = await self.client.get_meta_info()
                 if not meta_info:
                     # Empty dict – very likely unsupported on this device
@@ -266,9 +256,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     if eq_info:
                         mode_raw = eq_info.get("mode")
                         if mode_raw is not None:
-                            preset = self.client._EQ_NUMERIC_MAP.get(
-                                str(mode_raw), mode_raw
-                            )
+                            preset = self.client._EQ_NUMERIC_MAP.get(str(mode_raw), mode_raw)
                             status["eq_preset"] = preset
 
                         # Custom curve – list of 10 integers (-12…+12 dB)
@@ -282,19 +270,14 @@ class WiiMCoordinator(DataUpdateCoordinator):
 
                 except Exception as eq_err:  # noqa: BLE001 – non-fatal
                     # Mark EQ as unsupported after the first explicit "unknown command"
-                    if (
-                        isinstance(eq_err, Exception)
-                        and "unknown command" in str(eq_err).lower()
-                    ):
+                    if isinstance(eq_err, Exception) and "unknown command" in str(eq_err).lower():
                         if self.eq_supported:
                             _LOGGER.info(
                                 "[WiiM] %s: getEQ not supported – hiding EQ selector",
                                 self.client.host,
                             )
                         self.eq_supported = False
-                    _LOGGER.debug(
-                        "[WiiM] get_eq failed on %s: %s", self.client.host, eq_err
-                    )
+                    _LOGGER.debug("[WiiM] get_eq failed on %s: %s", self.client.host, eq_err)
 
             # Parse available sources from plm_support
             plm_support = status.get("plm_support", "0")
@@ -342,11 +325,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     self.update_interval = timedelta(seconds=self._base_poll_interval)
 
             # Update multiroom status & trigger discovery of new slave IPs
-            self._group_members = {
-                entry.get("ip")
-                for entry in multiroom.get("slave_list", [])
-                if entry.get("ip")
-            }
+            self._group_members = {entry.get("ip") for entry in multiroom.get("slave_list", []) if entry.get("ip")}
 
             await self._async_trigger_slave_discovery()
             self._update_ha_group_status()
@@ -383,18 +362,13 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     self._base_poll_interval * (2 ** (self._consecutive_failures - 2)),
                     60,
                 )
-                if (
-                    self.update_interval is None
-                    or new_interval != self.update_interval.total_seconds()
-                ):
+                if self.update_interval is None or new_interval != self.update_interval.total_seconds():
                     self.update_interval = timedelta(seconds=new_interval)
             raise UpdateFailed(f"Error updating WiiM device: {err}")
 
     def _update_group_registry(self, status: dict, multiroom: dict) -> None:
         """Update the group registry with current group info."""
-        _LOGGER.debug(
-            "[WiiM] _update_group_registry: status=%s, multiroom=%s", status, multiroom
-        )
+        _LOGGER.debug("[WiiM] _update_group_registry: status=%s, multiroom=%s", status, multiroom)
 
         # ------------------------------------------------------------------
         # 0) House-keeping – drop *stale* groups this coordinator may still
@@ -405,9 +379,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
         #    entity lingers after a user calls multiroom:Ungroup().
         # ------------------------------------------------------------------
         is_currently_master = multiroom.get("slaves", 0) > 0
-        is_currently_slave = (
-            str(multiroom.get("type")) == "1" or str(status.get("type")) == "1"
-        )
+        is_currently_slave = str(multiroom.get("type")) == "1" or str(status.get("type")) == "1"
 
         if not is_currently_master and not is_currently_slave:
             # Speaker is in *solo* mode → remove any registry that still lists
@@ -426,15 +398,9 @@ class WiiMCoordinator(DataUpdateCoordinator):
         #    stale entry with our own host remains.
         # ------------------------------------------------------------------
         # Try to determine master_ip from own multiroom info
-        master_ip = (
-            self.client.host
-            if multiroom.get("slaves", 0) > 0
-            else multiroom.get("master_uuid")
-        )
+        master_ip = self.client.host if multiroom.get("slaves", 0) > 0 else multiroom.get("master_uuid")
         # If not found and this device is a slave, search all coordinators for a master whose slave_list includes this device
-        if not master_ip and (
-            str(multiroom.get("type")) == "1" or str(status.get("type")) == "1"
-        ):
+        if not master_ip and (str(multiroom.get("type")) == "1" or str(status.get("type")) == "1"):
             my_ip = self.client.host
             my_uuid = status.get("device_id")
             for coord in self.hass.data[DOMAIN].values():
@@ -447,9 +413,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     if isinstance(slave, dict):
                         slave_ip = slave.get("ip")
                         slave_uuid = slave.get("uuid")
-                        if (my_ip and my_ip == slave_ip) or (
-                            my_uuid and my_uuid == slave_uuid
-                        ):
+                        if (my_ip and my_ip == slave_ip) or (my_uuid and my_uuid == slave_uuid):
                             master_ip = coord.client.host
                             _LOGGER.debug(
                                 "[WiiM] _update_group_registry: Found master %s for slave %s by slave_list",
@@ -461,14 +425,10 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     break
         _LOGGER.debug("[WiiM] _update_group_registry: master_ip=%s", master_ip)
         if not master_ip:
-            _LOGGER.debug(
-                "[WiiM] _update_group_registry: No master_ip found, skipping group registry update."
-            )
+            _LOGGER.debug("[WiiM] _update_group_registry: No master_ip found, skipping group registry update.")
             return
         master_name = status.get("device_name") or "WiiM Group"
-        group_info = self._groups.setdefault(
-            master_ip, {"members": {}, "master": master_ip, "name": master_name}
-        )
+        group_info = self._groups.setdefault(master_ip, {"members": {}, "master": master_ip, "name": master_name})
         group_info["name"] = master_name  # Always update name in case it changes
         # Add master
         group_info["members"][self.client.host] = {
@@ -491,13 +451,9 @@ class WiiMCoordinator(DataUpdateCoordinator):
             }
         # Clean up any members no longer present
         current_ips = {self.client.host} | {
-            entry.get("ip")
-            for entry in multiroom.get("slave_list", [])
-            if entry.get("ip")
+            entry.get("ip") for entry in multiroom.get("slave_list", []) if entry.get("ip")
         }
-        group_info["members"] = {
-            ip: v for ip, v in group_info["members"].items() if ip in current_ips
-        }
+        group_info["members"] = {ip: v for ip, v in group_info["members"].items() if ip in current_ips}
         _LOGGER.debug("[WiiM] _update_group_registry: group_info=%s", group_info)
 
     def _update_ha_group_status(self) -> None:
@@ -608,9 +564,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
     async def create_wiim_group(self) -> None:
         """Create a WiiM multiroom group."""
         try:
-            _LOGGER.info(
-                "[WiiM] Coordinator: Creating new WiiM group for %s", self.client.host
-            )
+            _LOGGER.info("[WiiM] Coordinator: Creating new WiiM group for %s", self.client.host)
             await self.client.create_group()
             _LOGGER.info(
                 "[WiiM] Coordinator: Successfully created WiiM group for %s",
@@ -628,9 +582,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
     async def delete_wiim_group(self) -> None:
         """Delete the WiiM multiroom group."""
         try:
-            _LOGGER.info(
-                "[WiiM] Coordinator: Deleting WiiM group for %s", self.client.host
-            )
+            _LOGGER.info("[WiiM] Coordinator: Deleting WiiM group for %s", self.client.host)
             await self.client.delete_group()
             _LOGGER.info(
                 "[WiiM] Coordinator: Successfully deleted WiiM group for %s",
@@ -674,9 +626,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
         try:
             _LOGGER.info("[WiiM] Coordinator: %s leaving WiiM group", self.client.host)
             await self.client.leave_group()
-            _LOGGER.info(
-                "[WiiM] Coordinator: %s successfully left WiiM group", self.client.host
-            )
+            _LOGGER.info("[WiiM] Coordinator: %s successfully left WiiM group", self.client.host)
             await self.async_refresh()
         except WiiMError as err:
             _LOGGER.error(
