@@ -149,23 +149,33 @@ async def async_setup_entry(
         hass.data[DOMAIN]["_group_entities"] = {}
 
     async def update_group_entities():
-        """Create or remove group entities based on coordinator group registry."""
+        """Create or remove group entities based on coordinator group registry and user preferences."""
         group_entities = hass.data[DOMAIN]["_group_entities"]
         all_coordinators = set()
         ent_reg = None
 
-        # Create a group entity for EVERY WiiM device (always-on approach)
-        for coord in hass.data[DOMAIN].values():
+        # Create a group entity only for devices where user has enabled the option
+        for config_entry in hass.config_entries.async_entries(DOMAIN):
+            if config_entry.entry_id not in hass.data[DOMAIN]:
+                continue
+
+            coord = hass.data[DOMAIN][config_entry.entry_id]
             if not hasattr(coord, "client") or coord.data is None:
                 continue
 
             device_ip = coord.client.host
             all_coordinators.add(device_ip)
 
+            # Check if user has enabled group entities for this device
+            enable_group_entity = config_entry.options.get("own_group_entity", False)
+            if not enable_group_entity:
+                # User has disabled group entities for this device
+                continue
+
             if device_ip in group_entities:
                 continue  # already have runtime entity
 
-            # Build unique_id for the always-on group entity
+            # Build unique_id for the group entity
             status = coord.data.get("status", {})
             device_name = (
                 status.get("DeviceName") or status.get("device_name") or device_ip
@@ -191,14 +201,33 @@ async def async_setup_entry(
             if ent_reg.async_get_entity_id("media_player", DOMAIN, unique_id):
                 continue  # entity already registered, will be restored by HA
 
-            # Safe to create new runtime entity - always-on group entity
+            # Safe to create new runtime entity - group entity (user enabled)
             group_entity = WiiMGroupMediaPlayer(hass, coord, device_ip)
             async_add_entities([group_entity])
             group_entities[device_ip] = group_entity
 
-        # Remove group entities for coordinators that no longer exist
+        # Remove group entities for coordinators that no longer exist OR where user disabled option
         for device_ip in list(group_entities.keys()):
+            should_remove = False
+
             if device_ip not in all_coordinators:
+                # Coordinator no longer exists
+                should_remove = True
+            else:
+                # Check if user has disabled group entities for this device
+                for config_entry in hass.config_entries.async_entries(DOMAIN):
+                    if config_entry.entry_id not in hass.data[DOMAIN]:
+                        continue
+                    coord = hass.data[DOMAIN][config_entry.entry_id]
+                    if hasattr(coord, "client") and coord.client.host == device_ip:
+                        enable_group_entity = config_entry.options.get(
+                            "own_group_entity", False
+                        )
+                        if not enable_group_entity:
+                            should_remove = True
+                        break
+
+            if should_remove:
                 group_entity = group_entities.pop(device_ip)
                 await group_entity.async_remove()
 
@@ -211,6 +240,14 @@ async def async_setup_entry(
         hass.async_create_task(_on_coordinator_update())
 
     coordinator.async_add_listener(_listener)
+
+    # Listen for options updates to create/remove group entities when user changes settings
+    async def _on_options_update(hass, config_entry):
+        """Handle options updates to create/remove group entities."""
+        await update_group_entities()
+
+    config_entry.add_update_listener(_on_options_update)
+
     await update_group_entities()
 
 
@@ -584,18 +621,68 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str]:
-        sources = self.coordinator.data.get("status", {}).get("sources", [])
-        _LOGGER.debug("[WiiM] %s source_list raw sources: %s", self.entity_id, sources)
-        mapped_sources = [SOURCE_MAP.get(src, src.title()) for src in sources]
-        _LOGGER.debug(
-            "[WiiM] %s source_list mapped sources: %s", self.entity_id, mapped_sources
+        role = (
+            self.coordinator.data.get("role", "solo")
+            if self.coordinator.data
+            else "solo"
         )
-        return mapped_sources
+
+        if role == "slave":
+            # For slaves, show actual sources plus current master as an option
+            sources = self.coordinator.data.get("status", {}).get("sources", [])
+            mapped_sources = [SOURCE_MAP.get(src, src.title()) for src in sources]
+
+            # Add master device as the first "source" option
+            master_coord = self._find_master_coordinator()
+            if master_coord and master_coord.data:
+                master_status = master_coord.data.get("status", {})
+                master_name = (
+                    master_status.get("DeviceName")
+                    or master_status.get("device_name")
+                    or master_coord.client.host
+                )
+                # Put master first, then separator, then actual sources
+                return [f"🔗 {master_name} (Group)"] + mapped_sources
+            else:
+                return mapped_sources
+        else:
+            # For solo/master devices, show normal sources
+            sources = self.coordinator.data.get("status", {}).get("sources", [])
+            _LOGGER.debug(
+                "[WiiM] %s source_list raw sources: %s", self.entity_id, sources
+            )
+            mapped_sources = [SOURCE_MAP.get(src, src.title()) for src in sources]
+            _LOGGER.debug(
+                "[WiiM] %s source_list mapped sources: %s",
+                self.entity_id,
+                mapped_sources,
+            )
+            return mapped_sources
 
     @property
     def source(self) -> str | None:
-        src = self.coordinator.data.get("status", {}).get("source")
-        return SOURCE_MAP.get(src, src.title()) if src else None
+        if not self.coordinator.data:
+            return None
+
+        role = self.coordinator.data.get("role", "solo")
+
+        if role == "slave":
+            # For slaves, show master device name as current source
+            master_coord = self._find_master_coordinator()
+            if master_coord and master_coord.data:
+                master_status = master_coord.data.get("status", {})
+                master_name = (
+                    master_status.get("DeviceName")
+                    or master_status.get("device_name")
+                    or master_coord.client.host
+                )
+                return f"🔗 {master_name} (Group)"
+            else:
+                return "🔗 Group (Unknown Master)"
+        else:
+            # For solo/master devices, show actual source
+            src = self.coordinator.data.get("status", {}).get("source")
+            return SOURCE_MAP.get(src, src.title()) if src else None
 
     @property
     def group_members(self) -> list[str]:
@@ -616,8 +703,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Return entity specific state attributes."""
         status = self._effective_status() or {}
         attrs = {
-            # Artwork path consumed by frontend via entity_picture
-            "entity_picture": status.get("entity_picture") or status.get("cover"),
+            # Remove entity_picture from attributes since we have the property
             ATTR_DEVICE_MODEL: status.get("device_model"),
             ATTR_DEVICE_NAME: status.get("device_name"),
             ATTR_DEVICE_ID: status.get("device_id"),
@@ -642,6 +728,22 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             HA_ATTR_GROUP_MEMBERS: list(self.coordinator.ha_group_members or []),
             HA_ATTR_GROUP_LEADER: self.group_leader,
             "streaming_service": status.get("streaming_service"),
+            # Enhanced device information
+            "device_model": status.get("hardware")
+            or status.get("project")
+            or "WiiM Device",
+            "mac_address": status.get("MAC"),
+            "wifi_signal": f"{status.get('wifi_rssi', 'Unknown')} dBm"
+            if status.get("wifi_rssi")
+            else None,
+            "wifi_channel": status.get("wifi_channel"),
+            "uptime": status.get("uptime"),
+            # Connection and status info
+            "connection_type": "HTTPS"
+            if "https" in self.coordinator.client._endpoint
+            else "HTTP",
+            "api_endpoint": self.coordinator.client._endpoint,
+            "last_update_success": self.coordinator.last_update_success,
         }
 
         # Enhanced group information display
@@ -653,13 +755,23 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             multiroom = self.coordinator.data.get("multiroom", {})
             slave_list = multiroom.get("slave_list", [])
             slave_details = []
+            total_group_volume = 0
+            group_member_count = 1  # Include master
+
+            # Add master volume to total
+            master_volume = status.get("volume", 0)
+            total_group_volume += master_volume
 
             for slave in slave_list:
                 if isinstance(slave, dict):
+                    slave_volume = slave.get("volume", 0)
+                    total_group_volume += slave_volume
+                    group_member_count += 1
+
                     slave_info = {
                         "name": slave.get("name", "Unknown"),
                         "ip": slave.get("ip"),
-                        "volume": slave.get("volume", 0),
+                        "volume": slave_volume,
                         "muted": bool(slave.get("mute", False)),
                         "channel": slave.get("channel", 0),  # 0=stereo, 1=left, 2=right
                     }
@@ -668,20 +780,39 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             attrs["wiim_slaves"] = slave_details
             attrs["wiim_slave_count"] = len(slave_details)
             attrs["wiim_group_master"] = self.coordinator.client.host
+            attrs["group_total_members"] = group_member_count
+            attrs["group_average_volume"] = (
+                round(total_group_volume / group_member_count)
+                if group_member_count > 0
+                else 0
+            )
+            attrs["group_status"] = (
+                f"Master of {len(slave_details)} device{'s' if len(slave_details) != 1 else ''}"
+            )
 
         elif role == "slave":
             # Show master information for slaves
             master_coord = self._find_master_coordinator()
             if master_coord:
                 master_status = master_coord.data.get("status", {})
-                attrs["wiim_group_master"] = master_coord.client.host
-                attrs["wiim_master_name"] = (
+                master_name = (
                     master_status.get("DeviceName")
                     or master_status.get("device_name")
                     or master_coord.client.host
                 )
+                attrs["wiim_group_master"] = master_coord.client.host
+                attrs["wiim_master_name"] = master_name
+                attrs["group_status"] = f"Grouped with {master_name}"
+
+                # Show if this slave can control group playback
+                attrs["can_control_group"] = "Yes - controls propagate to master"
             else:
                 attrs["wiim_group_master"] = self.coordinator.client.group_master
+                attrs["group_status"] = "Grouped (master not found)"
+
+        else:  # solo
+            attrs["group_status"] = "Not grouped"
+            attrs["can_create_group"] = "Yes - select devices to group"
 
         # Show all available WiiM devices for potential grouping
         available_devices = []
@@ -710,6 +841,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             )
 
         attrs["wiim_available_devices"] = available_devices
+        attrs["available_device_count"] = len(available_devices)
 
         _LOGGER.debug("[WiiM] %s extra_state_attributes: %s", self.entity_id, attrs)
         return attrs
@@ -921,9 +1053,61 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             raise
 
     async def async_select_source(self, source: str) -> None:
+        role = (
+            self.coordinator.data.get("role", "solo")
+            if self.coordinator.data
+            else "solo"
+        )
+
+        if role == "slave":
+            # Check if user is selecting the current group master (do nothing)
+            master_coord = self._find_master_coordinator()
+            if master_coord and master_coord.data:
+                master_status = master_coord.data.get("status", {})
+                master_name = (
+                    master_status.get("DeviceName")
+                    or master_status.get("device_name")
+                    or master_coord.client.host
+                )
+                current_group_source = f"🔗 {master_name} (Group)"
+
+                if source == current_group_source:
+                    # User selected current group master - no action needed
+                    _LOGGER.debug(
+                        "[WiiM] %s: User selected current group master, no action",
+                        self.entity_id,
+                    )
+                    return
+
+            # User selected a different source - leave group first, then switch source
+            _LOGGER.info(
+                "[WiiM] %s: Slave selecting different source '%s', leaving group first",
+                self.entity_id,
+                source,
+            )
+            try:
+                await self.coordinator.leave_wiim_group()
+                await self.coordinator.async_refresh()
+                # Small delay to ensure group leave is processed
+                await asyncio.sleep(0.5)
+            except Exception as leave_err:
+                _LOGGER.warning(
+                    "[WiiM] %s: Failed to leave group before source change: %s",
+                    self.entity_id,
+                    leave_err,
+                )
+                # Continue anyway - device might already be solo
+
+        # Convert user-friendly source back to API source
         src_api = next(
             (k for k, v in SOURCE_MAP.items() if v == source), source.lower()
         )
+
+        # Handle special group source format by extracting just the source part
+        if " (Group)" in source:
+            # This shouldn't happen for slaves anymore, but handle it gracefully
+            return
+
         await self.coordinator.client.set_source(src_api)
         await self.coordinator.async_refresh()
 

@@ -692,3 +692,15 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
     def available(self) -> bool:
         """Always available - this is an always-on entity."""
         return self.coordinator.data is not None
+
+    @property
+    def name(self) -> str:
+        """Return the name of the entity, always using the latest device name from status."""
+        if self.coordinator.data:
+            status = self.coordinator.data.get("status", {})
+            device_name = (
+                status.get("DeviceName") or status.get("device_name") or self.device_ip
+            )
+            return f"{device_name} Master"
+        # Fallback to initial name if no coordinator data
+        return self._attr_name

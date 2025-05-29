@@ -52,7 +52,7 @@
         "data_description": {
           "status_update_interval": "How often to check speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
           "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
-          "enable_group_entity": "Create a virtual group controller when this speaker acts as a multiroom master. Allows unified control of speaker groups.",
+          "enable_group_entity": "Create a dedicated group control entity for this speaker. This entity provides advanced multiroom functionality including group-aware volume control, playback command forwarding for slaves, and unified group management. The '[Device Name] Master' entity allows complete control regardless of the speaker's current role (solo, master, or slave).",
           "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
         }
       }

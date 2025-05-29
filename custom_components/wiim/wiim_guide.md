@@ -403,3 +403,57 @@ Field mapping:
     - **A:** Enable debug logging, reproduce the issue, and check Home Assistant logs for detailed error messages. Report issues with logs attached.
 
 - **Next:** After this phase, the integration will provide a robust, user-friendly, and supportable grouping experience, with clear diagnostics and documentation for both users and developers.
+
+## Multiroom Group Entity Implementation (2024 Update)
+
+### Overview
+
+This integration now supports a **virtual group entity** for WiiM multiroom groups, closely matching the WiiM app's behavior. The group entity appears in Home Assistant and provides group volume, playback, and per-slave controls.
+
+**Important:** Group entities are **optional** and must be enabled per-device in the integration options. This provides users with choice between simple device-only control or advanced group management features.
+
+### Group Entity Behavior
+
+**Always-On Design:**
+
+- Group entities are created per-device when enabled in options
+- Entities persist regardless of current role (solo, master, or slave)
+- Provides stable entity IDs for automations and scripts
+- No confusing entity creation/removal based on group state
+
+**Role-Based Behavior:**
+
+- **Solo Device:** Shows device state, full controls, "Not grouped" status
+- **Master Device:** Shows master state, controls entire group, displays slave information
+- **Slave Device:** Shows master's media info, own volume/mute, forwards playback commands to master
+
+**Smart Control Logic:**
+
+- Slaves can control group playback (commands automatically forward to master)
+- Individual volume control maintained for all devices
+- Group volume changes use relative adjustments (preserves volume relationships)
+- Source selection on slaves automatically leaves group then switches source
+
+### Configuration
+
+**Enable Group Entities:**
+
+1. Go to Settings → Devices & Services → WiiM
+2. Click "Configure" on any WiiM device
+3. Enable "Enable Group Control" option
+4. Group entity appears immediately as "[Device Name] Master"
+5. Repeat for each device where you want group control
+
+**Group Entity Naming:**
+
+- Format: "[Device Name] Master" (e.g., "Main Floor Speakers Master")
+- Clearly distinguishes from regular device entities
+- Updates dynamically if device name changes
+
+### Benefits
+
+- **Intuitive Control:** Any room can control the group
+- **Stable Automations:** Entity IDs never change
+- **Individual Control:** Each device maintains volume/mute control
+- **Clear Status:** Always shows current role and group relationships
+- **Optional Feature:** Only created when explicitly enabled by user
