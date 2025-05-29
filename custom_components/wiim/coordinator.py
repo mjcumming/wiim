@@ -221,7 +221,23 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 status["album"] = meta_info.get("album")
                 status["title"] = meta_info.get("title")
                 status["artist"] = meta_info.get("artist")
-                status["entity_picture"] = meta_info.get("albumArtURI")
+                cover = meta_info.get("albumArtURI")
+                if cover:
+                    # Use a combination of title, artist, and album for cache-busting
+                    title = meta_info.get("title") or ""
+                    artist = meta_info.get("artist") or ""
+                    album = meta_info.get("album") or ""
+                    cache_key = f"{title}-{artist}-{album}"
+                    from urllib.parse import quote
+
+                    if cache_key and "?" not in cover:
+                        cover = f"{cover}?cache={quote(cache_key)}"
+                    _LOGGER.debug(
+                        "[WiiM] Setting entity_picture from meta_info: %s (cache_key: %s)",
+                        cover,
+                        cache_key,
+                    )
+                status["entity_picture"] = cover
 
             # ------------------------------------------------------------------
             # 4) EQ information – poll at 1/3 rate and only if supported
