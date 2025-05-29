@@ -150,6 +150,9 @@ async def async_setup_entry(
 
     async def update_group_entities():
         """Create or remove group entities based on coordinator group registry and user preferences."""
+        # Temporarily disable group entity creation to debug device duplication issue
+        return
+
         group_entities = hass.data[DOMAIN]["_group_entities"]
         all_coordinators = set()
         ent_reg = None

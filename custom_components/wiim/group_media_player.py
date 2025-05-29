@@ -75,15 +75,9 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             | MediaPlayerEntityFeature.GROUPING
         )
 
-        # Always use this device's coordinator for device info
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.client.host)},
-            name=device_name,
-            manufacturer="WiiM",
-            model=status.get("hardware") or status.get("project") or "WiiM Device",
-            sw_version=status.get("firmware"),
-            connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
-        )
+        # Don't set device_info to prevent creating duplicate devices
+        # The group entity will appear as a separate entity in HA
+        self._attr_device_info = None
 
     @property
     def group_info(self):
