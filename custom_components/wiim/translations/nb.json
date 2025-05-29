@@ -1,29 +1,59 @@
 {
+  "title": "WiiM Audio (LinkPlay)",
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "WiiM",
-        "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: https://github.com/mjcumming/wiim",
+        "title": "Legg til WiiM høyttaler",
+        "description": "Sett opp din WiiM eller LinkPlay-kompatible høyttaler.",
         "data": {
-          "username": "Brukernavn",
-          "password": "Passord"
+          "host": "IP-adresse"
+        },
+        "data_description": {
+          "host": "Skriv inn IP-adressen til din WiiM høyttaler (f.eks. 192.168.1.100)"
         }
+      },
+      "upnp": {
+        "title": "Velg WiiM høyttaler",
+        "description": "Velg en høyttaler fra de oppdagede enhetene, eller konfigurer manuelt.",
+        "data": {
+          "host": "Høyttaler"
+        }
+      },
+      "confirm": {
+        "title": "Bekreft oppsett",
+        "description": "Bekreft at denne WiiM høyttaleren skal legges til Home Assistant.",
+        "data": {}
       }
     },
-    "error": {
-      "auth": "Brukernavn/Passord er feil."
-    },
     "abort": {
-      "single_instance_allowed": "Denne integrasjonen kan kun konfigureres en gang."
+      "already_configured": "Denne høyttaleren er allerede konfigurert.",
+      "cannot_connect": "Kan ikke koble til høyttaleren.",
+      "unknown_error_validation": "Ukjent feil under validering av høyttaler."
+    },
+    "error": {
+      "cannot_connect": "Kunne ikke koble til høyttaleren. Sjekk IP-adressen og nettverkstilkoblingen.",
+      "unknown": "Uventet feil oppstod. Vennligst prøv igjen.",
+      "already_configured": "Denne høyttaleren er allerede konfigurert.",
+      "no_host": "Kunne ikke bestemme høyttaler IP-adresse."
     }
   },
   "options": {
     "step": {
-      "user": {
+      "init": {
+        "title": "Konfigurer høyttaler innstillinger",
+        "description": "Juster innstillinger for denne WiiM høyttaleren. Endringer anvendes umiddelbart uten omstart.",
         "data": {
-          "binary_sensor": "Binær sensor aktivert",
-          "sensor": "Sensor aktivert",
-          "switch": "Bryter aktivert"
+          "status_update_interval": "Status oppdateringsfrekvens",
+          "volume_step_percent": "Volumtrinn",
+          "enable_group_entity": "Aktiver gruppekontroll",
+          "debug_logging": "Aktiver feilsøkingslogging"
+        },
+        "data_description": {
+          "status_update_interval": "Hvor ofte høyttaler status skal sjekkes (1-60 sekunder). Lavere verdier gir raskere oppdateringer men bruker mer ressurser.",
+          "volume_step_percent": "Volumendring når du bruker volum opp/ned knapper (1-50%). Mindre trinn gir finere kontroll.",
+          "enable_group_entity": "Opprett en virtuell gruppekontroller når denne høyttaleren fungerer som multirom master. Tillater enhetlig kontroll av høyttaler grupper.",
+          "debug_logging": "Aktiver detaljert logging for feilsøking. Anbefales kun ved problemer."
         }
       }
     }

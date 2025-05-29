@@ -1,29 +1,59 @@
 {
+  "title": "WiiM Audio (LinkPlay)",
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "WiiM",
-        "description": "If you need help with the configuration have a look here: https://github.com/mjcumming/wiim",
+        "title": "Add WiiM Speaker",
+        "description": "Set up your WiiM or LinkPlay-compatible speaker.",
         "data": {
-          "username": "Username",
-          "password": "Password"
+          "host": "IP Address"
+        },
+        "data_description": {
+          "host": "Enter the IP address of your WiiM speaker (e.g., 192.168.1.100)"
         }
+      },
+      "upnp": {
+        "title": "Select WiiM Speaker",
+        "description": "Choose a speaker from the discovered devices, or configure manually.",
+        "data": {
+          "host": "Speaker"
+        }
+      },
+      "confirm": {
+        "title": "Confirm Setup",
+        "description": "Confirm adding this WiiM speaker to Home Assistant.",
+        "data": {}
       }
     },
-    "error": {
-      "auth": "Username/Password is wrong."
-    },
     "abort": {
-      "single_instance_allowed": "Only a single instance is allowed."
+      "already_configured": "This speaker is already configured.",
+      "cannot_connect": "Unable to connect to the speaker.",
+      "unknown_error_validation": "Unknown error during speaker validation."
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the speaker. Check the IP address and network connection.",
+      "unknown": "Unexpected error occurred. Please try again.",
+      "already_configured": "This speaker is already configured.",
+      "no_host": "Could not determine speaker IP address."
     }
   },
   "options": {
     "step": {
-      "user": {
+      "init": {
+        "title": "Configure Speaker Settings",
+        "description": "Adjust settings for this WiiM speaker. Changes apply immediately without restart.",
         "data": {
-          "binary_sensor": "Binary sensor enabled",
-          "sensor": "Sensor enabled",
-          "switch": "Switch enabled"
+          "status_update_interval": "Status Update Frequency",
+          "volume_step_percent": "Volume Button Step",
+          "enable_group_entity": "Enable Group Control",
+          "debug_logging": "Enable Debug Logging"
+        },
+        "data_description": {
+          "status_update_interval": "How often to check speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
+          "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
+          "enable_group_entity": "Create a virtual group controller when this speaker acts as a multiroom master. Allows unified control of speaker groups.",
+          "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
         }
       }
     }

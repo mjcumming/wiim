@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import ssl
 from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
@@ -33,7 +34,6 @@ import aiohttp
 import async_timeout
 from aiohttp import ClientSession
 from aiohttp.client_exceptions import ClientError
-import ssl
 
 from .const import (
     API_ENDPOINT_CLEAR_PLAYLIST,
@@ -184,7 +184,7 @@ class WiiMClient:
     def __init__(
         self,
         host: str,
-        port: int = 443,  # Default to HTTPS like python-linkplay
+        port: int = DEFAULT_PORT,  # Default to HTTPS like python-linkplay
         timeout: float = DEFAULT_TIMEOUT,
         ssl_context: ssl.SSLContext | None = None,
         session: ClientSession | None = None,

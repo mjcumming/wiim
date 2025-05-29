@@ -1,29 +1,59 @@
 {
+  "title": "WiiM Audio (LinkPlay)",
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "WiiM",
-        "description": "Si vous avez besoin d'aide pour la configuration, regardez ici: https://github.com/mjcumming/wiim",
+        "title": "Ajouter un haut-parleur WiiM",
+        "description": "Configurez votre haut-parleur WiiM ou compatible LinkPlay.",
         "data": {
-          "username": "Identifiant",
-          "password": "Mot de Passe"
+          "host": "Adresse IP"
+        },
+        "data_description": {
+          "host": "Entrez l'adresse IP de votre haut-parleur WiiM (par ex. 192.168.1.100)"
         }
+      },
+      "upnp": {
+        "title": "Sélectionner un haut-parleur WiiM",
+        "description": "Choisissez un haut-parleur parmi les appareils découverts, ou configurez manuellement.",
+        "data": {
+          "host": "Haut-parleur"
+        }
+      },
+      "confirm": {
+        "title": "Confirmer la configuration",
+        "description": "Confirmez l'ajout de ce haut-parleur WiiM à Home Assistant.",
+        "data": {}
       }
     },
-    "error": {
-      "auth": "Identifiant ou mot de passe erroné."
-    },
     "abort": {
-      "single_instance_allowed": "Une seule instance est autorisée."
+      "already_configured": "Ce haut-parleur est déjà configuré.",
+      "cannot_connect": "Impossible de se connecter au haut-parleur.",
+      "unknown_error_validation": "Erreur inconnue lors de la validation du haut-parleur."
+    },
+    "error": {
+      "cannot_connect": "Échec de la connexion au haut-parleur. Vérifiez l'adresse IP et la connexion réseau.",
+      "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer.",
+      "already_configured": "Ce haut-parleur est déjà configuré.",
+      "no_host": "Impossible de déterminer l'adresse IP du haut-parleur."
     }
   },
   "options": {
     "step": {
-      "user": {
+      "init": {
+        "title": "Configurer les paramètres du haut-parleur",
+        "description": "Ajustez les paramètres de ce haut-parleur WiiM. Les modifications s'appliquent immédiatement sans redémarrage.",
         "data": {
-          "binary_sensor": "Capteur binaire activé",
-          "sensor": "Capteur activé",
-          "switch": "Interrupteur activé"
+          "status_update_interval": "Fréquence de mise à jour du statut",
+          "volume_step_percent": "Pas de volume",
+          "enable_group_entity": "Activer le contrôle de groupe",
+          "debug_logging": "Activer la journalisation de débogage"
+        },
+        "data_description": {
+          "status_update_interval": "Fréquence de vérification du statut du haut-parleur (1-60 secondes). Des valeurs plus faibles fournissent des mises à jour plus rapides mais utilisent plus de ressources.",
+          "volume_step_percent": "Variation du volume lors de l'utilisation des boutons de volume (1-50%). Des pas plus petits offrent un contrôle plus fin.",
+          "enable_group_entity": "Créer un contrôleur de groupe virtuel lorsque ce haut-parleur agit comme maître multiroom. Permet un contrôle unifié des groupes de haut-parleurs.",
+          "debug_logging": "Activer la journalisation détaillée pour le dépannage. Recommandé uniquement en cas de problèmes."
         }
       }
     }
