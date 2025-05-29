@@ -75,9 +75,14 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             | MediaPlayerEntityFeature.GROUPING
         )
 
-        # Set device_info to match the master device so the group entity is grouped under the master
-        self._attr_device_info = (
-            coordinator.device_info if hasattr(coordinator, "device_info") else None
+        # Set device_info to match the main device so the group entity is grouped under the main device
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.client.host)},
+            name=device_name,
+            manufacturer="WiiM",
+            model=status.get("hardware") or status.get("project"),
+            sw_version=status.get("firmware"),
+            connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
         )
 
     @property

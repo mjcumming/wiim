@@ -962,6 +962,16 @@ class WiiMClient:
             or raw.get("pic_url")
         )
         if cover:
+            # Use a combination of title, artist, and album for cache-busting
+            title = raw.get("title") or ""
+            artist = raw.get("artist") or ""
+            album = raw.get("album") or ""
+            cache_key = f"{title}-{artist}-{album}"
+            from urllib.parse import quote
+
+            if cache_key and "?" not in cover:
+                cover = f"{cover}?cache={quote(cache_key)}"
+            _LOGGER.debug("Setting entity_picture: %s", cover)
             data["entity_picture"] = cover
 
         # ---------------------------------------------------------------
