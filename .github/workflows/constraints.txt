@@ -2,6 +2,6 @@ pip==25.1.1
 pre-commit==4.2.0
 black==25.1.0
 ruff==0.11.11
-pytest==8.3.4
+pytest==8.3.5
 pytest-cov==6.1.1
 coverage==7.6.10
