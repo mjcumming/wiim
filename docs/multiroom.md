@@ -1,144 +1,152 @@
-# Multiroom Guide
+# Multiroom Audio Guide
 
-This guide explains how to set up and manage multiroom audio with WiiM speakers and Home Assistant.
+Complete guide to WiiM multiroom audio setup and management in Home Assistant.
 
-## Understanding Multiroom
+## 🎵 Overview
+
+WiiM speakers use the LinkPlay protocol for synchronized multiroom audio. This integration provides multiple ways to view and manage multiroom groups:
+
+1. **Native HA Grouping** - Built-in grouping button support
+2. **Group Entities** - Optional virtual group controllers
+3. **Enhanced Attributes** - Detailed group status in device info
+4. **Custom Services** - Advanced group management through Developer Tools
+5. **Script Templates** - Pre-made automation scripts
+
+## 🔧 Understanding Multiroom
 
 ### How It Works
 
-WiiM speakers use the LinkPlay protocol for synchronized multiroom audio:
-
 - **Master Speaker**: Streams audio and controls the group
 - **Slave Speakers**: Receive audio from the master speaker
-- **Synchronization**: All speakers play audio in perfect sync
+- **Synchronization**: All speakers play audio in perfect sync (<1ms)
 - **Group Control**: Volume and playback controlled from master or group entity
 
 ### Group Roles
 
-Each speaker has one of three roles:
-
-| Role       | Description         | Control                    | Status                                  |
+| Role       | Description         | Control                    | Status Sensor                           |
 | ---------- | ------------------- | -------------------------- | --------------------------------------- |
 | **Solo**   | Independent speaker | Full control               | `sensor.speaker_multiroom_role: solo`   |
 | **Master** | Group leader        | Controls group playback    | `sensor.speaker_multiroom_role: master` |
 | **Slave**  | Group member        | Limited individual control | `sensor.speaker_multiroom_role: slave`  |
 
----
+## 🚀 Quick Start: Creating Groups
 
-## Creating Groups
+### Method 1: Native HA Grouping (Recommended)
 
-### Method 1: WiiM App (Recommended)
+**Using the UI:**
 
-1. **Open WiiM App**
+1. Open any WiiM device's media player card
+2. Click the **group icon** (chain link)
+3. Select speakers to join the group
 
-   - Use official WiiM or compatible LinkPlay app
-
-2. **Create Group**
-
-   - Select master speaker
-   - Add slave speakers to group
-   - Choose group name
-
-3. **Home Assistant Sync**
-   - Changes automatically detected within 5-10 seconds
-   - Group entities created if enabled for master speaker
-
-### Method 2: Home Assistant
-
-Create groups directly from Home Assistant:
+**Using Services:**
 
 ```yaml
-# Join speakers to create group
+# Create group via Home Assistant service
 service: media_player.join
 target:
-  entity_id: media_player.living_room # Master
+  entity_id: media_player.living_room # Becomes master
 data:
   group_members:
     - media_player.kitchen
     - media_player.bedroom
 ```
 
-**Result**: Living Room becomes master, Kitchen and Bedroom become slaves.
+### Method 2: WiiM App
 
-### Method 3: Lovelace UI
+1. Use official WiiM or compatible LinkPlay app
+2. Create group in the app
+3. Changes automatically sync to Home Assistant within 5-10 seconds
 
-1. **Media Player Card**
+### Method 3: Custom Services
 
-   - Open master speaker card
-   - Click group icon (chain link)
-   - Select speakers to join
+Use these services in **Developer Tools > Services**:
 
-2. **Speaker Selection**
-   - Choose which speakers to include
-   - Master speaker controls group
+```yaml
+# Create new group
+service: wiim.create_group
+target:
+  entity_id: media_player.living_room
+data:
+  group_members:
+    - media_player.kitchen
+    - media_player.dining_room
 
----
+# Add device to existing group
+service: wiim.add_to_group
+target:
+  entity_id: media_player.living_room  # Group master
+data:
+  target_entity: media_player.bedroom
 
-## Group Entities
+# Remove from group
+service: wiim.remove_from_group
+target:
+  entity_id: media_player.living_room
+data:
+  target_entity: media_player.kitchen
+
+# Disband entire group
+service: wiim.disband_group
+target:
+  entity_id: media_player.living_room
+```
+
+## 🎛️ Group Entities (Optional)
 
 ### What Are Group Entities?
 
-Virtual media players that control entire multiroom groups:
+Virtual media players that provide unified control of entire multiroom groups:
 
-- **Purpose**: Unified control of all group members
+- **Purpose**: Single control point for group playback and volume
 - **Creation**: User-enabled per device (not automatic)
 - **Availability**: Only appears when device is master with slaves
+- **Benefits**: Stable entity IDs for automations, group-wide controls
 
 ### Enabling Group Entities
 
-#### Step 1: Choose Master Device
-
-Enable group entity on the speaker you want to control groups:
+**Step 1: Choose Master Device**
 
 1. **Settings** → **Devices & Services** → **WiiM Audio**
-2. Find the device entry for your preferred master
+2. Find your preferred master device
 3. Click **Configure**
 4. Enable **"Enable group control entity"**
 
-#### Step 2: Entity Creation
+**Step 2: Entity Creation**
 
 - Group entity created: `media_player.{device_name}_group`
 - Example: `media_player.living_room_group`
 - Shows as **unavailable** until device becomes master
 
-#### Step 3: Using Group Entity
-
-When the device becomes master of a group:
+**Step 3: Using Group Entity**
+When the device becomes master:
 
 - Group entity becomes **available**
 - Provides unified control of entire group
-- Shows group status and metadata
+- Shows master's metadata with group member details
 
 ### Group Entity Features
 
-#### Unified Controls
+**Unified Controls:**
 
 - **Playback**: Play/pause/stop affects entire group
-- **Volume**: Group volume control with relative adjustments
+- **Volume**: Group volume with relative member adjustments
 - **Navigation**: Next/previous track for whole group
 
-#### Volume Behavior
-
+**Group Volume Behavior:**
 Group volume maintains relative relationships between speakers:
 
-**Example Scenario**:
+**Example:**
 
-- Master: 80% volume
-- Slave 1: 40% volume
-- Slave 2: 60% volume
+- Master: 80%, Slave 1: 40%, Slave 2: 60%
+- Set group volume to 100%
+- Result: Master: 100%, Slave 1: 50%, Slave 2: 75%
 
-**Set Group Volume to 100%**:
-
-- Master: 100% (was 80%, max in group)
-- Slave 1: 50% (was 40%, scaled proportionally)
-- Slave 2: 75% (was 60%, scaled proportionally)
-
-#### Individual Control
-
-Access per-speaker controls via group entity attributes:
+**Individual Member Control:**
+Access per-speaker details via group entity attributes:
 
 ```yaml
-# Group entity attributes show individual speaker status
+# Group entity attributes
 attributes:
   member_192_168_1_10_volume: 75
   member_192_168_1_10_mute: false
@@ -148,15 +156,29 @@ attributes:
   member_192_168_1_20_name: "Bedroom"
 ```
 
----
+## 🎛️ Viewing Group Status
 
-## Managing Groups
+### Method 1: Device Attributes
 
-### Group Status Monitoring
+Click on any WiiM device → click "ℹ️" info button:
 
-Check group status through sensors and attributes:
+**Master devices show:**
 
-#### Role Sensors
+- `wiim_role`: "master"
+- `wiim_slaves`: List with names, IPs, volumes, mute status
+- `wiim_slave_count`: Number of slaves
+
+**Slave devices show:**
+
+- `wiim_role`: "slave"
+- `wiim_group_master`: Master's IP address
+- `wiim_master_name`: Master's friendly name
+
+**All devices show:**
+
+- `wiim_available_devices`: Other WiiM devices available for grouping
+
+### Method 2: Role Sensors
 
 Each speaker has a role sensor:
 
@@ -167,270 +189,228 @@ sensor.bedroom_multiroom_role: "slave"
 sensor.office_multiroom_role: "solo"
 ```
 
-#### Group Attributes
+## 🏠 Dashboard Integration
 
-Master speaker shows group information:
-
-```yaml
-# Master speaker attributes
-group_members: ["192.168.1.20", "192.168.1.30"]
-group_master: "192.168.1.10"
-group_role: "master"
-slave_count: 2
-```
-
-### Modifying Groups
-
-#### Adding Speakers
+### Basic Group Control Buttons
 
 ```yaml
-service: media_player.join
-target:
-  entity_id: media_player.living_room # Existing master
-data:
-  group_members:
-    - media_player.kitchen # Existing slave
-    - media_player.bedroom # Existing slave
-    - media_player.dining_room # New slave
+type: horizontal-stack
+cards:
+  - type: button
+    tap_action:
+      action: call-service
+      service: script.wiim_party_mode
+    name: Party Mode
+    icon: mdi:party-popper
+  - type: button
+    tap_action:
+      action: call-service
+      service: script.wiim_ungroup_all
+    name: Ungroup All
+    icon: mdi:speaker-off
 ```
 
-#### Removing Speakers
+### System Status Display
 
 ```yaml
-# Remove specific speaker from group
-service: media_player.unjoin
-target:
-  entity_id: media_player.bedroom
+type: entities
+title: WiiM System Status
+entities:
+  - entity: sensor.living_room_multiroom_role
+    name: Living Room Role
+  - entity: sensor.kitchen_multiroom_role
+    name: Kitchen Role
+  - entity: sensor.bedroom_multiroom_role
+    name: Bedroom Role
 ```
 
-#### Disbanding Groups
+### Volume Control Grid
 
 ```yaml
-# Master disbands entire group
-service: media_player.unjoin
-target:
-  entity_id: media_player.living_room # Master
+type: grid
+square: false
+columns: 2
+cards:
+  - type: media-control
+    entity: media_player.living_room
+  - type: media-control
+    entity: media_player.kitchen
+  - type: media-control
+    entity: media_player.bedroom
+  - type: media-control
+    entity: media_player.living_room_group
 ```
 
-**Result**: All speakers return to solo mode.
+## 🤖 Automation Examples
 
----
-
-## Advanced Configuration
-
-### Multiple Group Entities
-
-Enable group entities on multiple speakers for flexibility:
-
-```yaml
-# Living Room can control living room groups
-living_room_group_entity: enabled
-
-# Kitchen can control kitchen groups
-kitchen_group_entity: enabled
-
-# Office for work area groups
-office_group_entity: enabled
-```
-
-**Benefit**: Different speakers can act as masters for different scenarios.
-
-### Automation Examples
-
-#### Auto-Group at Night
+### Time-Based Grouping
 
 ```yaml
 automation:
-  - alias: "Nighttime Audio Group"
+  - alias: "Evening Multiroom Setup"
     trigger:
       platform: time
-      at: "22:00:00"
+      at: "18:00:00"
     action:
       - service: media_player.join
         target:
-          entity_id: media_player.bedroom
+          entity_id: media_player.living_room
         data:
           group_members:
-            - media_player.bathroom
-```
-
-#### Volume Sync
-
-```yaml
-automation:
-  - alias: "Sync Living Room Group Volume"
-    trigger:
-      platform: state
-      entity_id: media_player.living_room_group
-      attribute: volume_level
-    action:
-      # Custom logic to adjust individual speakers
-```
-
-#### Group Notifications
-
-```yaml
-automation:
-  - alias: "Announce on Group"
-    trigger:
-      platform: state
-      entity_id: binary_sensor.front_door
-      to: "on"
-    action:
-      - service: tts.speak
+            - media_player.kitchen
+            - media_player.dining_room
+      - service: media_player.volume_set
         target:
           entity_id: media_player.living_room_group
         data:
-          message: "Someone is at the front door"
+          volume_level: 0.4
 ```
 
----
+### Presence-Based Control
 
-## Troubleshooting
+```yaml
+automation:
+  - alias: "Party Mode When Guests Arrive"
+    trigger:
+      platform: state
+      entity_id: input_boolean.party_mode
+      to: "on"
+    action:
+      - service: wiim.create_group
+        target:
+          entity_id: media_player.living_room
+        data:
+          group_members:
+            - media_player.kitchen
+            - media_player.dining_room
+            - media_player.patio
+```
+
+## 🔧 Advanced Configuration
+
+### Group Preset Selector
+
+Add to `configuration.yaml`:
+
+```yaml
+input_select:
+  wiim_group_presets:
+    name: WiiM Group Presets
+    options:
+      - "Solo (No Groups)"
+      - "Kitchen + Dining"
+      - "Upstairs Rooms"
+      - "Party Mode (All)"
+    initial: "Solo (No Groups)"
+    icon: mdi:speaker-multiple
+```
+
+### System Overview Sensor
+
+Add template sensor to monitor entire WiiM system:
+
+```yaml
+template:
+  - sensor:
+      name: "WiiM Group Status"
+      state: >
+        {% set masters = states.sensor
+          | selectattr('entity_id', 'match', '.*multiroom_role$')
+          | selectattr('state', 'equalto', 'master') | list %}
+        {{ masters | length }} groups active
+      attributes:
+        total_devices: >
+          {{ states.sensor
+            | selectattr('entity_id', 'match', '.*multiroom_role$')
+            | list | length }}
+        groups: >
+          {% set groups = [] %}
+          {% for entity in states.sensor
+            | selectattr('entity_id', 'match', '.*multiroom_role$')
+            | selectattr('state', 'equalto', 'master') %}
+            {% set master_name = entity.entity_id.replace('_multiroom_role', '').replace('sensor.', '') %}
+            {% set slaves = states.sensor
+              | selectattr('entity_id', 'match', '.*multiroom_role$')
+              | selectattr('state', 'equalto', 'slave') | list %}
+            {% set group = {
+              'master': master_name,
+              'slaves': slaves | map(attribute='entity_id') |
+                map('replace', '_multiroom_role', '') |
+                map('replace', 'sensor.', '') | list,
+              'total_devices': 1 + slaves | length
+            } %}
+            {% set groups = groups + [group] %}
+          {% endfor %}
+          {{ groups }}
+```
+
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-#### Group Entity Not Appearing
+**Groups not appearing:**
 
-**Problem**: Group entity never shows up
-**Solutions**:
+- Check devices are on same network/VLAN
+- Verify UPnP/SSDP traffic allowed (ports 1900, 8080-8090)
+- Update device firmware to latest version
 
-- Verify group entity is enabled in device options
-- Check that device is actually master (has slaves)
-- Restart Home Assistant integration
-- Check entity registry for disabled entities
+**Service calls failing:**
 
-#### Volume Jumps Unexpectedly
+- Verify entity IDs are correct (check Developer Tools → States)
+- Ensure devices are powered on and responsive
+- Check Home Assistant logs for specific errors
 
-**Problem**: Group volume changes dramatically
-**Explanation**: Group volume is maximum of all members
-**Solutions**:
+**Attributes not showing:**
 
-- Use individual speaker controls for fine-tuning
-- Understand relative volume behavior
-- Check group entity attributes for individual volumes
+- Restart Home Assistant after configuration changes
+- Clear browser cache and refresh
+- Enable debug logging: `custom_components.wiim: debug`
 
-#### Speakers Not Staying in Group
+**Volume jumps unexpectedly:**
 
-**Problem**: Speakers keep leaving groups
-**Solutions**:
-
-- Check network stability between speakers
-- Ensure speakers have latest firmware
-- Verify speakers are on same network segment
-- Check for IP address conflicts
-
-#### Group Commands Not Working
-
-**Problem**: Group controls don't affect all speakers
-**Solutions**:
-
-- Verify master speaker is responding
-- Check slave speaker connectivity
-- Try ungrouping and regrouping speakers
-- Restart speaker firmware if needed
+- Group volume represents maximum member volume
+- Changes apply relatively to maintain speaker balance
+- Check individual device volumes in group entity attributes
 
 ### Debug Information
 
-#### Group Status Logging
+Enable detailed logging:
 
 ```yaml
 logger:
+  default: warning
   logs:
+    custom_components.wiim: debug
     custom_components.wiim.coordinator: debug
     custom_components.wiim.group_media_player: debug
 ```
 
-#### Network Diagnostics
-
-```bash
-# Test connectivity between HA and speakers
-ping 192.168.1.10  # Master
-ping 192.168.1.20  # Slave 1
-ping 192.168.1.30  # Slave 2
-
-# Check UPnP discovery
-nmap -sU -p 1900 192.168.1.0/24
-```
-
-### Advanced Troubleshooting
-
-#### Manual Group Commands
-
-Test group functionality directly:
-
-```yaml
-# Force create group (master becomes master)
-service: wiim.create_group
-target:
-  entity_id: media_player.living_room
-
-# Force join group (speaker becomes slave)
-service: wiim.join_group
-target:
-  entity_id: media_player.kitchen
-data:
-  master_ip: "192.168.1.10"
-```
-
-#### Reset Group State
-
-If groups get confused:
-
-1. **Ungroup All**: Use WiiM app to ungroup all speakers
-2. **Restart Integration**: Remove and re-add integration
-3. **Reboot Speakers**: Power cycle all speakers
-4. **Recreate Groups**: Set up groups again
-
----
-
-## Best Practices
+## 🎯 Best Practices
 
 ### Network Setup
 
-- **Same Subnet**: Keep all speakers on same network segment
-- **Static IPs**: Use DHCP reservations for stable addressing
-- **Quality WiFi**: Ensure strong WiFi signal for all speakers
-- **Bandwidth**: Multiroom needs ~1-2 Mbps per speaker
+- Keep all speakers on same subnet
+- Use DHCP reservations for stable IP addresses
+- Ensure strong WiFi signal for all speakers
+- Allow multicast traffic between devices
 
 ### Home Assistant Configuration
 
-- **Polling Intervals**: Use 5-10 second intervals for grouped speakers
-- **Group Entities**: Only enable on speakers you'll use as masters
-- **Volume Steps**: Use smaller steps (1-5%) for fine control
-- **Automation**: Test group commands manually before automation
+- Use 5-10 second polling intervals for grouped speakers
+- Enable group entities only on devices you'll use as masters
+- Use smaller volume steps (1-5%) for fine control
+- Test group commands manually before adding to automations
 
 ### Group Management
 
-- **Master Selection**: Choose centrally located speaker as master
-- **Group Names**: Use descriptive names in WiiM app
-- **Testing**: Test groups before important events/parties
-- **Backup Plans**: Have individual speaker controls ready
+- Choose centrally located speaker as master
+- Use descriptive names in WiiM app
+- Test groups before important events
+- Have individual speaker controls ready as backup
 
----
+## 📚 Related Documentation
 
-## Comparison with Other Systems
-
-### vs. Sonos
-
-- **Pros**: More affordable, open protocol, Home Assistant integration
-- **Cons**: Less mature ecosystem, fewer streaming services
-
-### vs. Chromecast
-
-- **Pros**: Better Home Assistant integration, physical controls
-- **Cons**: Requires speaker hardware, limited voice control
-
-### vs. Airplay 2
-
-- **Pros**: Works with Android, more device options, local control
-- **Cons**: Apple ecosystem has better integration
-
----
-
-## Next Steps
-
-- **Automation**: [Create automations using groups](../examples/automation.md)
-- **Lovelace**: [Custom group control cards](../examples/lovelace.md)
-- **Troubleshooting**: [Resolve common issues](troubleshooting.md)
-- **Advanced**: [Custom group scenarios](../examples/advanced.md)
+- **[Installation Guide](installation.md)** - Initial setup
+- **[Troubleshooting](troubleshooting.md)** - Common issues
+- **[Examples](../examples/)** - Ready-to-use scripts and cards
+- **[API Reference](api-reference.md)** - Technical details

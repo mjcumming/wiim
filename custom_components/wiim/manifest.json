@@ -4,9 +4,7 @@
   "author": "Michael Cumming (@mjcumming)",
   "dependencies": [],
   "codeowners": ["@mjcumming"],
-  "requirements": [
-    "async-upnp-client>=0.29.0"
-  ],
+  "requirements": [],
   "version": "0.1.1",
   "logotype": "linkplay",
   "config_flow": true,
