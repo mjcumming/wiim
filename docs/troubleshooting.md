@@ -502,7 +502,7 @@ When reporting issues, provide:
 
 ### Community Resources
 
-- **GitHub Issues**: [Report bugs/features](https://github.com/mjcumming/ha-wiim-integration/issues)
+- **GitHub Issues**: [Report bugs/features](https://github.com/mjcumming/wiim/issues)
 - **HA Community**: [Ask questions](https://community.home-assistant.io/)
 - **Documentation**: [Integration guides](../README.md)
 

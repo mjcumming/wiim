@@ -280,6 +280,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and how to con
 
 **Links:**
 
-- [GitHub Repository](https://github.com/mjcumming/ha-wiim-integration)
+- [GitHub Repository](https://github.com/mjcumming/wiim)
 - [Home Assistant Community](https://community.home-assistant.io/)
-- [Issue Tracker](https://github.com/mjcumming/ha-wiim-integration/issues)
+- [Issue Tracker](https://github.com/mjcumming/wiim/issues)

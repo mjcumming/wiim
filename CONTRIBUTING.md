@@ -38,11 +38,11 @@ Thank you for your interest in contributing to the WiiM Audio integration for Ho
 
 ```bash
 # Fork repository on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/ha-wiim-integration.git
-cd ha-wiim-integration
+git clone https://github.com/YOUR_USERNAME/wiim.git
+cd wiim
 
 # Add upstream remote
-git remote add upstream https://github.com/mjcumming/ha-wiim-integration.git
+git remote add upstream https://github.com/mjcumming/wiim.git
 ```
 
 ### 2. Home Assistant Development Environment
@@ -59,7 +59,7 @@ pip install -e .
 
 # Copy integration to development config
 mkdir -p config/custom_components
-ln -s /path/to/ha-wiim-integration/custom_components/wiim config/custom_components/
+ln -s /path/to/wiim/custom_components/wiim config/custom_components/
 ```
 
 #### Option B: Production Home Assistant Testing

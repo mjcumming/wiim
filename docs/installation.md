@@ -69,7 +69,7 @@ If you don't have HACS installed:
 
 1. **Get Latest Release**
 
-   - Visit [GitHub Releases](https://github.com/mjcumming/ha-wiim-integration/releases)
+   - Visit [GitHub Releases](https://github.com/mjcumming/wiim/releases)
    - Download latest `wiim.zip` file
 
 2. **Extract Files**
@@ -269,7 +269,7 @@ If installation issues persist:
 2. **Community Support**
 
    - [Home Assistant Community Forum](https://community.home-assistant.io/)
-   - [GitHub Issues](https://github.com/mjcumming/ha-wiim-integration/issues)
+   - [GitHub Issues](https://github.com/mjcumming/wiim/issues)
 
 3. **Bug Reports**
    - Include Home Assistant version

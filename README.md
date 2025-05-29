@@ -1,8 +1,8 @@
 # WiiM Audio Integration for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/mjcumming/ha-wiim-integration.svg)](https://github.com/mjcumming/ha-wiim-integration/releases)
-[![License](https://img.shields.io/github/license/mjcumming/ha-wiim-integration.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
+[![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](LICENSE)
 
 Transform your WiiM and LinkPlay speakers into powerful Home Assistant `media_player` entities with full multiroom support, no additional dependencies required.
 
@@ -29,7 +29,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant `media_pl
 
    - Open HACS → Integrations
    - Click ⋮ → Custom repositories
-   - Add: `https://github.com/mjcumming/ha-wiim-integration`
+   - Add: `https://github.com/mjcumming/wiim`
    - Category: Integration
 
 2. **Install Integration**
@@ -43,7 +43,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant `media_pl
 
 ### Manual Installation
 
-1. Download latest release from [GitHub](https://github.com/mjcumming/ha-wiim-integration/releases)
+1. Download latest release from [GitHub](https://github.com/mjcumming/wiim/releases)
 2. Extract to `/config/custom_components/wiim/`
 3. Restart Home Assistant
 4. Add integration via Settings → Devices & Services
@@ -122,9 +122,9 @@ automation:
 
 ## 🤝 Community & Support
 
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/mjcumming/ha-wiim-integration/issues)
+- **🐛 Bug Reports**: [GitHub Issues](https://github.com/mjcumming/wiim/issues)
 - **💬 Discussions**: [Home Assistant Community](https://community.home-assistant.io/)
-- **🔄 Feature Requests**: [GitHub Discussions](https://github.com/mjcumming/ha-wiim-integration/discussions)
+- **🔄 Feature Requests**: [GitHub Discussions](https://github.com/mjcumming/wiim/discussions)
 - **📖 Wiki**: [Documentation](docs/)
 
 ## 🙏 Contributing

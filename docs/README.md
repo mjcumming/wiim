@@ -53,7 +53,7 @@ This integration provides:
 
 ## 🤝 Community & Support
 
-- **Issues**: [GitHub Issues](https://github.com/mjcumming/ha-wiim-integration/issues)
+- **Issues**: [GitHub Issues](https://github.com/mjcumming/wiim/issues)
 - **Discussions**: [Home Assistant Community](https://community.home-assistant.io/)
 - **Contributing**: See [CONTRIBUTING.md](../CONTRIBUTING.md)
 
