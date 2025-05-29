@@ -166,3 +166,19 @@ python-linkplay
 python-linkplay
 python-linkplay
 python-linkplay
+
+# Home Assistant specific
+*.log
+.HA_VERSION
+.cloud
+.storage
+deps/
+tts/
+www/
+.google.token
+
+# Development
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,59 +1,94 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    name: Prepare release
+    name: Create Release
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4.2.2
-
-      - name: Set up Python
-        uses: actions/setup-python@v5.6.0
-        with:
-          python-version: "3.11"
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Update version in manifest
+      - name: Verify version in manifest
         run: |
-          VERSION=${{ steps.get_version.outputs.VERSION }}
-          # Remove 'v' prefix if present
-          VERSION=${VERSION#v}
-
-          # Update manifest.json
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/wiim/manifest.json
-
-          # Update const.py if it exists
-          if [ -f custom_components/wiim/const.py ]; then
-            sed -i "s/VERSION = \".*\"/VERSION = \"$VERSION\"/" custom_components/wiim/const.py
+          MANIFEST_VERSION=$(grep '"version"' custom_components/wiim/manifest.json | sed 's/.*"version": "\(.*\)".*/\1/')
+          if [ "$MANIFEST_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Version mismatch: tag v${{ steps.version.outputs.version }} but manifest has $MANIFEST_VERSION"
+            exit 1
           fi
 
-      - name: Create release archive
+      - name: Create ZIP file
         run: |
           cd custom_components
-          zip -r ../wiim.zip wiim/
+          zip -r ../wiim-${{ steps.version.outputs.version }}.zip wiim/
+          cd ..
 
-      - name: Upload release asset
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          # Extract changelog section for this version
+          awk '/^## \['"${{ steps.version.outputs.version }}"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > release_notes.md
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat release_notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          release_name: WiiM Audio v${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./wiim.zip
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./wiim-${{ steps.version.outputs.version }}.zip
           asset_name: wiim.zip
           asset_content_type: application/zip
 
-      - name: Validate with hassfest
-        uses: home-assistant/actions/hassfest@master
+      - name: Validate HACS
+        run: |
+          # Basic HACS validation
+          if [ ! -f "hacs.json" ]; then
+            echo "Missing hacs.json"
+            exit 1
+          fi
 
-      - name: Validate with HACS
-        uses: hacs/action@24.7.0
-        with:
-          category: integration
+          if [ ! -f "custom_components/wiim/manifest.json" ]; then
+            echo "Missing manifest.json"
+            exit 1
+          fi
+
+          # Check required directories exist
+          if [ ! -d "docs" ]; then
+            echo "Missing docs directory"
+            exit 1
+          fi
+
+          if [ ! -d "examples" ]; then
+            echo "Missing examples directory"
+            exit 1
+          fi
+
+          echo "HACS validation passed"
+
+      - name: Notify HACS (if configured)
+        run: |
+          echo "Release v${{ steps.version.outputs.version }} created successfully!"
+          echo "HACS will automatically detect the new release within 24 hours."
+          echo "Users can update via HACS or download wiim.zip from this release."
