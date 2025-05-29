@@ -79,8 +79,10 @@ async def wiim_factory_client(host: str, max_retries: int = 3) -> WiiMClient:
             # Don't close here - return the working client
             return client
         except WiiMError as err:
+            # Always close on error
+            await client.close()
+
             if attempt == max_retries - 1:
-                await client.close()
                 # Provide more specific error message for SSL failures
                 if "ssl" in str(err).lower() or "handshake" in str(err).lower():
                     raise ConfigEntryNotReady(
@@ -97,6 +99,8 @@ async def wiim_factory_client(host: str, max_retries: int = 3) -> WiiMClient:
                 host,
                 err,
             )
+            # Create a new client for the next attempt since we closed the previous one
+            client = WiiMClient(host, port=443)
             await asyncio.sleep(retry_delay)
         except Exception as err:
             await client.close()
@@ -111,12 +115,13 @@ async def wiim_factory_client(host: str, max_retries: int = 3) -> WiiMClient:
 
 async def _async_validate_host(host: str) -> None:
     """Validate we can talk to the WiiM device and always close the session."""
-    client = await wiim_factory_client(host)
+    client = None
     try:
+        client = await wiim_factory_client(host)
         # Client is already validated by wiim_factory_client
-        pass
     finally:
-        await client.close()
+        if client:
+            await client.close()
 
 
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -316,7 +321,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
         try:
-            client = await wiim_factory_client(host)
+            client = await wiim_factory_client(
+                host, max_retries=2
+            )  # Reduce retries for discovery
             try:
                 info = await client.get_player_status()
                 info = await self._ensure_solo(client, info)
@@ -324,18 +331,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             finally:
                 await client.close()
         except ConfigEntryNotReady as err:
-            # Specific error handling for SSL/connection issues
-            if "ssl" in str(err).lower() or "handshake" in str(err).lower():
-                _LOGGER.debug(
-                    "SSL/TLS handshake failed for WiiM device at %s from Zeroconf. "
-                    "This is normal for devices that only support HTTP: %s",
-                    host,
-                    err,
-                )
-            else:
-                _LOGGER.debug(
-                    "Failed to validate WiiM device at %s from Zeroconf: %s", host, err
-                )
+            # Silently abort on connection failures during discovery
+            # These are normal when scanning many devices
+            _LOGGER.debug(
+                "Failed to validate WiiM device at %s from Zeroconf: %s", host, err
+            )
             return self.async_abort(reason="cannot_connect")
         except Exception as e:
             _LOGGER.debug(
@@ -389,7 +389,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Validate device and get info
         try:
-            client = await wiim_factory_client(host)
+            client = await wiim_factory_client(
+                host, max_retries=2
+            )  # Reduce retries for discovery
             try:
                 info = await client.get_player_status()
                 info = await self._ensure_solo(client, info)
@@ -397,7 +399,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 device_name = info.get("device_name") or info.get("DeviceName") or host
             finally:
                 await client.close()
-        except (ConfigEntryNotReady, Exception):
+        except (ConfigEntryNotReady, Exception) as err:
+            _LOGGER.debug(
+                "Failed to validate WiiM device at %s from SSDP: %s", host, err
+            )
             return self.async_abort(reason="cannot_connect")
 
         # Check for duplicates

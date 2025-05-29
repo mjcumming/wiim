@@ -403,8 +403,13 @@ class WiiMClient:
         clean up resources.
         """
         if self._session:
-            await self._session.close()
-            self._session = None
+            try:
+                if not self._session.closed:
+                    await self._session.close()
+            except Exception as e:
+                _LOGGER.debug("Error closing session for %s: %s", self.host, e)
+            finally:
+                self._session = None
 
     async def get_status(self) -> dict[str, Any]:
         """Get the current status of the WiiM device.
