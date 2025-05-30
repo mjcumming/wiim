@@ -49,10 +49,12 @@ jobs:
       - name: Commit and push formatting fixes
         if: ${{ github.event_name == 'push' && failure() }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "mjcumming"
+          git config --global user.email "mike@4831.com"
           git add .
           git diff --cached --quiet || git commit -m "ci: Apply pre-commit formatting fixes"
+          # Pull latest changes before pushing to avoid non-fast-forward error
+          git pull --rebase origin ${{ github.ref_name }}
           git push
 
   hassfest:
