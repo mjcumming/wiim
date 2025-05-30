@@ -1,9 +1,7 @@
 {
   "domain": "wiim",
   "name": "WiiM Audio (LinkPlay)",
-  "codeowners": [
-    "@mjcumming"
-  ],
+  "codeowners": ["@mjcumming"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/mjcumming/wiim",
@@ -30,7 +28,5 @@
     }
   ],
   "version": "0.2.0",
-  "zeroconf": [
-    "_linkplay._tcp.local."
-  ]
+  "zeroconf": ["_linkplay._tcp.local."]
 }
