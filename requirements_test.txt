@@ -3,13 +3,12 @@
 # Testing framework
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0
+pytest-cov==6.0.0
 pytest-timeout>=2.1.0
-pytest-homeassistant-custom-component>=0.13.0
+pytest-homeassistant-custom-component==0.13.205
 
 # Test utilities
 aresponses>=2.1.6
 freezegun>=1.2.2
 
-# Code quality
-coverage>=7.3.0
+# Code quality - coverage version controlled by constraints.txt to match pytest-homeassistant-custom-component
