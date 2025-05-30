@@ -70,7 +70,7 @@ jobs:
     name: Run tests (${{ matrix.python-version }})
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4.2.2
