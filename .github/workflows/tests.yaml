@@ -88,6 +88,7 @@ jobs:
             --cov=custom_components.wiim \
             --cov-report=xml \
             --cov-report=term-missing \
+            --cov-fail-under=15 \
             -v \
             tests
 
