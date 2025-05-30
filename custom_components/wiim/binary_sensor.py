@@ -1,10 +1,8 @@
 """Binary sensor platform for WiiM."""
+
 from homeassistant.components.binary_sensor import BinarySensorEntity
 
-from .const import BINARY_SENSOR
-from .const import BINARY_SENSOR_DEVICE_CLASS
-from .const import DEFAULT_NAME
-from .const import DOMAIN
+from .const import BINARY_SENSOR, BINARY_SENSOR_DEVICE_CLASS, DEFAULT_NAME, DOMAIN
 from .entity import WiiMEntity
 
 

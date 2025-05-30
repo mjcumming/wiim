@@ -1,13 +1,14 @@
 """Tests for WiiM API."""
+
 import asyncio
 from unittest.mock import patch
 
 import aiohttp
 import pytest
+
 from custom_components.wiim.api import WiiMClient
 
-from .const import MOCK_DEVICE_DATA
-from .const import MOCK_STATUS_RESPONSE
+from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
 @pytest.mark.asyncio

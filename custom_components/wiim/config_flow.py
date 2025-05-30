@@ -6,32 +6,34 @@ This module implements a simplified discovery flow optimized for Home Assistant:
 - Automatic device ungrouping during setup for clean HA integration
 - Simplified validation and error handling
 """
+
 from __future__ import annotations
 
 import asyncio
-import logging
 from enum import Enum
+import logging
 from typing import Any
 from urllib.parse import urlparse
 
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import ConfigEntryNotReady
+import voluptuous as vol
 
-from .api import WiiMClient
-from .api import WiiMError
-from .const import CONF_DEBUG_LOGGING
-from .const import CONF_ENABLE_GROUP_ENTITY
-from .const import CONF_POLL_INTERVAL
-from .const import CONF_STATUS_UPDATE_INTERVAL
-from .const import CONF_VOLUME_STEP
-from .const import CONF_VOLUME_STEP_PERCENT
-from .const import DEFAULT_POLL_INTERVAL
-from .const import DEFAULT_VOLUME_STEP
-from .const import DOMAIN
+from .api import WiiMClient, WiiMError
+from .const import (
+    CONF_DEBUG_LOGGING,
+    CONF_ENABLE_GROUP_ENTITY,
+    CONF_POLL_INTERVAL,
+    CONF_STATUS_UPDATE_INTERVAL,
+    CONF_VOLUME_STEP,
+    CONF_VOLUME_STEP_PERCENT,
+    DEFAULT_POLL_INTERVAL,
+    DEFAULT_VOLUME_STEP,
+    DOMAIN,
+)
 
 # --- UPnP/SSDP discovery imports ---
 try:

@@ -1,8 +1,10 @@
 import logging
 
-from homeassistant.components.media_player import MediaPlayerEntity
-from homeassistant.components.media_player import MediaPlayerEntityFeature
-from homeassistant.components.media_player import MediaPlayerState
+from homeassistant.components.media_player import (
+    MediaPlayerEntity,
+    MediaPlayerEntityFeature,
+    MediaPlayerState,
+)
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN

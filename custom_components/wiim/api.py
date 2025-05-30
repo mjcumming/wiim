@@ -19,66 +19,69 @@ WiiM devices primarily use HTTPS on port 443 via the API endpoint at
 ``https://<ip>/httpapi.asp?command=...``. The client will automatically detect
 the correct protocol (HTTPS/HTTP) and handle SSL certificate issues with older devices.
 """
+
 from __future__ import annotations
 
 import asyncio
+from http import HTTPStatus
 import json
 import logging
 import ssl
-from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
 
 import aiohttp
-import async_timeout
 from aiohttp import ClientSession
 from aiohttp.client_exceptions import ClientError
+import async_timeout
 
-from .const import API_ENDPOINT_CLEAR_PLAYLIST
-from .const import API_ENDPOINT_DEVICE_INFO
-from .const import API_ENDPOINT_EQ_CUSTOM
-from .const import API_ENDPOINT_EQ_GET
-from .const import API_ENDPOINT_EQ_LIST
-from .const import API_ENDPOINT_EQ_OFF
-from .const import API_ENDPOINT_EQ_ON
-from .const import API_ENDPOINT_EQ_PRESET
-from .const import API_ENDPOINT_EQ_STATUS
-from .const import API_ENDPOINT_FIRMWARE
-from .const import API_ENDPOINT_GROUP_CREATE
-from .const import API_ENDPOINT_GROUP_DELETE
-from .const import API_ENDPOINT_GROUP_EXIT
-from .const import API_ENDPOINT_GROUP_JOIN
-from .const import API_ENDPOINT_GROUP_KICK
-from .const import API_ENDPOINT_GROUP_SLAVE_MUTE
-from .const import API_ENDPOINT_GROUP_SLAVES
-from .const import API_ENDPOINT_LED
-from .const import API_ENDPOINT_LED_BRIGHTNESS
-from .const import API_ENDPOINT_MAC
-from .const import API_ENDPOINT_MUTE
-from .const import API_ENDPOINT_NEXT
-from .const import API_ENDPOINT_PAUSE
-from .const import API_ENDPOINT_PLAY
-from .const import API_ENDPOINT_PLAY_M3U
-from .const import API_ENDPOINT_PLAY_URL
-from .const import API_ENDPOINT_POWER
-from .const import API_ENDPOINT_PRESET
-from .const import API_ENDPOINT_PREV
-from .const import API_ENDPOINT_REPEAT
-from .const import API_ENDPOINT_SEEK
-from .const import API_ENDPOINT_SHUFFLE
-from .const import API_ENDPOINT_SOURCE
-from .const import API_ENDPOINT_SOURCES
-from .const import API_ENDPOINT_STATUS
-from .const import API_ENDPOINT_STOP
-from .const import API_ENDPOINT_VOLUME
-from .const import DEFAULT_PORT
-from .const import DEFAULT_TIMEOUT
-from .const import EQ_PRESET_MAP
-from .const import PLAY_MODE_NORMAL
-from .const import PLAY_MODE_REPEAT_ALL
-from .const import PLAY_MODE_REPEAT_ONE
-from .const import PLAY_MODE_SHUFFLE
-from .const import PLAY_MODE_SHUFFLE_REPEAT_ALL
+from .const import (
+    API_ENDPOINT_CLEAR_PLAYLIST,
+    API_ENDPOINT_DEVICE_INFO,
+    API_ENDPOINT_EQ_CUSTOM,
+    API_ENDPOINT_EQ_GET,
+    API_ENDPOINT_EQ_LIST,
+    API_ENDPOINT_EQ_OFF,
+    API_ENDPOINT_EQ_ON,
+    API_ENDPOINT_EQ_PRESET,
+    API_ENDPOINT_EQ_STATUS,
+    API_ENDPOINT_FIRMWARE,
+    API_ENDPOINT_GROUP_CREATE,
+    API_ENDPOINT_GROUP_DELETE,
+    API_ENDPOINT_GROUP_EXIT,
+    API_ENDPOINT_GROUP_JOIN,
+    API_ENDPOINT_GROUP_KICK,
+    API_ENDPOINT_GROUP_SLAVE_MUTE,
+    API_ENDPOINT_GROUP_SLAVES,
+    API_ENDPOINT_LED,
+    API_ENDPOINT_LED_BRIGHTNESS,
+    API_ENDPOINT_MAC,
+    API_ENDPOINT_MUTE,
+    API_ENDPOINT_NEXT,
+    API_ENDPOINT_PAUSE,
+    API_ENDPOINT_PLAY,
+    API_ENDPOINT_PLAY_M3U,
+    API_ENDPOINT_PLAY_URL,
+    API_ENDPOINT_POWER,
+    API_ENDPOINT_PRESET,
+    API_ENDPOINT_PREV,
+    API_ENDPOINT_REPEAT,
+    API_ENDPOINT_SEEK,
+    API_ENDPOINT_SHUFFLE,
+    API_ENDPOINT_SOURCE,
+    API_ENDPOINT_SOURCES,
+    API_ENDPOINT_STATUS,
+    API_ENDPOINT_STOP,
+    API_ENDPOINT_VOLUME,
+    DEFAULT_PORT,
+    DEFAULT_TIMEOUT,
+    EQ_PRESET_MAP,
+    PLAY_MODE_NORMAL,
+    PLAY_MODE_REPEAT_ALL,
+    PLAY_MODE_REPEAT_ONE,
+    PLAY_MODE_SHUFFLE,
+    PLAY_MODE_SHUFFLE_REPEAT_ALL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1068,8 +1071,9 @@ class WiiMClient:
 
     async def play_notification(self, url: str) -> None:
         """Play a notification sound (lowers volume, plays, then restores)."""
-        from .const import API_ENDPOINT_PLAY_PROMPT_URL
         from urllib.parse import quote
+
+        from .const import API_ENDPOINT_PLAY_PROMPT_URL
 
         encoded_url = quote(url, safe="")
         await self._request(f"{API_ENDPOINT_PLAY_PROMPT_URL}{encoded_url}")

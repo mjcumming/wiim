@@ -1,4 +1,5 @@
 """Constants for WiiM tests."""
+
 from custom_components.wiim.const import CONF_HOST
 
 MOCK_CONFIG = {CONF_HOST: "192.168.1.100"}

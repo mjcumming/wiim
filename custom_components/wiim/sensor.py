@@ -1,9 +1,9 @@
 """Diagnostic sensors for WiiM speakers."""
+
 from __future__ import annotations
 
 import logging
-from typing import Any
-from typing import Final
+from typing import Any, Final
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -12,8 +12,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ATTR_GROUP_ROLE
-from .const import DOMAIN
+from .const import ATTR_GROUP_ROLE, DOMAIN
 from .coordinator import WiiMCoordinator
 
 _LOGGER = logging.getLogger(__name__)

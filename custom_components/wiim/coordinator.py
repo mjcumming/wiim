@@ -1,22 +1,23 @@
 """WiiM coordinator for handling device updates and groups."""
+
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import timedelta
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import WiiMClient
-from .api import WiiMError
-from .const import ATTR_GROUP_LEADER
-from .const import ATTR_GROUP_MEMBERS
-from .const import CONF_HOST
-from .const import DEFAULT_POLL_INTERVAL
-from .const import DOMAIN
+from .api import WiiMClient, WiiMError
+from .const import (
+    ATTR_GROUP_LEADER,
+    ATTR_GROUP_MEMBERS,
+    CONF_HOST,
+    DEFAULT_POLL_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -27,6 +27,7 @@ API Endpoints:
     - Group management endpoints
     - Device management endpoints
 """
+
 from __future__ import annotations
 
 DOMAIN = "wiim"

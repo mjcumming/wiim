@@ -1,16 +1,17 @@
 """WiiM media player entity."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
 from typing import Any
 
-import voluptuous as vol
-from homeassistant.components.media_player import MediaPlayerEntity
-from homeassistant.components.media_player import MediaPlayerEntityFeature
-from homeassistant.components.media_player import MediaPlayerState
-from homeassistant.components.media_player.browse_media import BrowseMedia
-from homeassistant.components.media_player.browse_media import MediaClass
+from homeassistant.components.media_player import (
+    MediaPlayerEntity,
+    MediaPlayerEntityFeature,
+    MediaPlayerState,
+)
+from homeassistant.components.media_player.browse_media import BrowseMedia, MediaClass
 from homeassistant.components.media_player.const import (
     ATTR_GROUP_MEMBERS as HA_ATTR_GROUP_MEMBERS,
 )
@@ -20,32 +21,35 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+import voluptuous as vol
 
 from .api import WiiMError
-from .const import ATTR_DEVICE_ID
-from .const import ATTR_DEVICE_MODEL
-from .const import ATTR_DEVICE_NAME
-from .const import ATTR_EQ_CUSTOM
-from .const import ATTR_EQ_PRESET
-from .const import ATTR_FIRMWARE
-from .const import ATTR_IP_ADDRESS
-from .const import ATTR_MUTE
-from .const import ATTR_PLAY_MODE
-from .const import ATTR_PRESET
-from .const import ATTR_REPEAT_MODE
-from .const import ATTR_SHUFFLE_MODE
-from .const import ATTR_SOURCE
-from .const import CONF_VOLUME_STEP
-from .const import DEFAULT_VOLUME_STEP
-from .const import DOMAIN
-from .const import EQ_PRESET_CUSTOM
-from .const import EQ_PRESET_MAP
-from .const import PLAY_MODE_NORMAL
-from .const import PLAY_MODE_REPEAT_ALL
-from .const import PLAY_MODE_REPEAT_ONE
-from .const import PLAY_MODE_SHUFFLE
-from .const import PLAY_MODE_SHUFFLE_REPEAT_ALL
-from .const import SOURCE_MAP
+from .const import (
+    ATTR_DEVICE_ID,
+    ATTR_DEVICE_MODEL,
+    ATTR_DEVICE_NAME,
+    ATTR_EQ_CUSTOM,
+    ATTR_EQ_PRESET,
+    ATTR_FIRMWARE,
+    ATTR_IP_ADDRESS,
+    ATTR_MUTE,
+    ATTR_PLAY_MODE,
+    ATTR_PRESET,
+    ATTR_REPEAT_MODE,
+    ATTR_SHUFFLE_MODE,
+    ATTR_SOURCE,
+    CONF_VOLUME_STEP,
+    DEFAULT_VOLUME_STEP,
+    DOMAIN,
+    EQ_PRESET_CUSTOM,
+    EQ_PRESET_MAP,
+    PLAY_MODE_NORMAL,
+    PLAY_MODE_REPEAT_ALL,
+    PLAY_MODE_REPEAT_ONE,
+    PLAY_MODE_SHUFFLE,
+    PLAY_MODE_SHUFFLE_REPEAT_ALL,
+    SOURCE_MAP,
+)
 from .coordinator import WiiMCoordinator
 from .group_media_player import WiiMGroupMediaPlayer
 

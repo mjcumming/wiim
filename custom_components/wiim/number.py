@@ -1,4 +1,5 @@
 """Number entities to adjust polling interval and volume step per WiiM device."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,11 +11,13 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_POLL_INTERVAL
-from .const import CONF_VOLUME_STEP
-from .const import DEFAULT_POLL_INTERVAL
-from .const import DEFAULT_VOLUME_STEP
-from .const import DOMAIN
+from .const import (
+    CONF_POLL_INTERVAL,
+    CONF_VOLUME_STEP,
+    DEFAULT_POLL_INTERVAL,
+    DEFAULT_VOLUME_STEP,
+    DOMAIN,
+)
 from .coordinator import WiiMCoordinator
 
 

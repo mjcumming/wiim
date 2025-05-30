@@ -1,4 +1,5 @@
 """Button entities for WiiM speakers: Reboot and Sync Time."""
+
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
