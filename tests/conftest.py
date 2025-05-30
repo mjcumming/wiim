@@ -59,12 +59,27 @@ def mock_wiim_client_fixture():
 def mock_coordinator_fixture():
     """Mock WiiM coordinator."""
     coordinator = MagicMock()
+    # Create the proper data structure that matches what the real coordinator returns
+    mock_status = MOCK_STATUS_RESPONSE.copy()
+    mock_status["volume_level"] = 0.5  # Add parsed volume_level
+    mock_status["volume"] = 50  # Add volume as integer
+
     coordinator.data = {
-        "status": MOCK_STATUS_RESPONSE,
-        "device_info": MOCK_DEVICE_DATA,
+        "status": mock_status,
+        "multiroom": {"slaves": 0},
+        "role": "solo",
+        "ha_group": {
+            "is_leader": False,
+            "members": [],
+        },
     }
     coordinator.async_request_refresh = AsyncMock()
     coordinator.last_update_success = True
+    # Add the client property
+    coordinator.client = MagicMock()
+    coordinator.client.host = "192.168.1.100"
+    coordinator.client._host = "192.168.1.100"
+    coordinator.ha_group_members = set()
     return coordinator
 
 
@@ -72,6 +87,21 @@ def mock_coordinator_fixture():
 @pytest.fixture(name="bypass_get_data")
 def bypass_get_data_fixture():
     """Skip calls to get data from API."""
+    # Create proper mock data with volume_level included
+    mock_status = MOCK_STATUS_RESPONSE.copy()
+    mock_status["volume_level"] = 0.5  # Add parsed volume_level
+    mock_status["volume"] = 50  # Add volume as integer
+
+    mock_coordinator_data = {
+        "status": mock_status,
+        "multiroom": {"slaves": 0},
+        "role": "solo",
+        "ha_group": {
+            "is_leader": False,
+            "members": [],
+        },
+    }
+
     with (
         patch(
             "custom_components.wiim.api.WiiMClient.get_status",
@@ -92,6 +122,10 @@ def bypass_get_data_fixture():
         patch(
             "custom_components.wiim.api.WiiMClient.reboot",
             return_value=True,
+        ),
+        patch(
+            "custom_components.wiim.coordinator.WiiMCoordinator._async_update_data",
+            return_value=mock_coordinator_data,
         ),
     ):
         yield
