@@ -10,5 +10,6 @@ pytest-homeassistant-custom-component==0.13.205
 # Test utilities
 aresponses>=2.1.6
 freezegun>=1.2.2
+zeroconf
 
 # Code quality - coverage version controlled by constraints.txt to match pytest-homeassistant-custom-component
