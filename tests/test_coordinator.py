@@ -1,12 +1,10 @@
 """Test WiiM coordinator."""
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import UpdateFailed
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.wiim import DOMAIN
 from custom_components.wiim.api import WiiMError
-from custom_components.wiim.const import DOMAIN
 from custom_components.wiim.coordinator import WiiMCoordinator
 
 from .const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
@@ -38,7 +36,7 @@ async def test_coordinator_update_success(hass: HomeAssistant, mock_wiim_client)
     mock_wiim_client.get_device_info.return_value = MOCK_DEVICE_DATA
 
     try:
-        await coordinator._async_update_data()
+        await coordinator.async_refresh()
 
         assert coordinator.last_update_success is True
         assert coordinator.data is not None
@@ -64,8 +62,9 @@ async def test_coordinator_update_failure(hass: HomeAssistant, mock_wiim_client)
     mock_wiim_client.get_multiroom_info.side_effect = WiiMError("Connection error")
 
     try:
-        with pytest.raises(UpdateFailed):
-            await coordinator._async_update_data()
+        await coordinator.async_refresh()
+        # The coordinator should handle the failure gracefully
+        assert coordinator.last_update_success is False
     finally:
         # Clean up the coordinator to prevent lingering timers
         await coordinator.async_shutdown()
@@ -86,7 +85,7 @@ async def test_coordinator_partial_update_failure(hass: HomeAssistant, mock_wiim
 
     try:
         # Should succeed if at least one endpoint works
-        await coordinator._async_update_data()
+        await coordinator.async_refresh()
 
         # Check that status data is available
         assert coordinator.data is not None
@@ -139,8 +138,8 @@ async def test_coordinator_listeners(hass: HomeAssistant, mock_wiim_client) -> N
     coordinator.async_add_listener(mock_listener)
 
     try:
-        # Trigger update
-        await coordinator._async_update_data()
+        # Trigger update using the proper API
+        await coordinator.async_refresh()
 
         # Listener should have been called
         assert listener_called is True
@@ -163,7 +162,7 @@ async def test_coordinator_data_structure(hass: HomeAssistant, mock_wiim_client)
     mock_wiim_client.get_multiroom_info.return_value = {"slaves": 0}
 
     try:
-        await coordinator._async_update_data()
+        await coordinator.async_refresh()
 
         # Check data structure
         assert coordinator.data is not None
@@ -193,9 +192,7 @@ async def test_coordinator_error_recovery(hass: HomeAssistant, mock_wiim_client)
         mock_wiim_client.get_status.side_effect = WiiMError("Connection error")
         mock_wiim_client.get_multiroom_info.side_effect = WiiMError("Connection error")
 
-        with pytest.raises(UpdateFailed):
-            await coordinator._async_update_data()
-
+        await coordinator.async_refresh()
         assert coordinator.last_update_success is False
 
         # Second update succeeds - clear the side effects
@@ -206,7 +203,7 @@ async def test_coordinator_error_recovery(hass: HomeAssistant, mock_wiim_client)
         mock_wiim_client.get_status.return_value = MOCK_STATUS_RESPONSE
         mock_wiim_client.get_multiroom_info.return_value = {"slaves": 0}
 
-        await coordinator._async_update_data()
+        await coordinator.async_refresh()
 
         assert coordinator.last_update_success is True
     finally:

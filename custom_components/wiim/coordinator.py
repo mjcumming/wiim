@@ -72,7 +72,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
         self._is_ha_group_leader = False
         self._ha_group_members: set[str] = set()
         self._base_poll_interval = poll_interval  # seconds
-        self._consecutive_failures = 0
+        self._consecutive_failures = 0  # Initialize failure counter
         self._imported_hosts: set[str] = set()
         # New: group registry
         self._groups: dict[str, dict] = {}  # master_ip -> group info
@@ -132,13 +132,13 @@ class WiiMCoordinator(DataUpdateCoordinator):
         """Update data from WiiM device."""
         try:
             # Fetch endpoints individually so we can gracefully degrade on devices lacking them
-            player_status: dict[str, Any]
-            basic_status: dict[str, Any]
-            multiroom: dict[str, Any]
+            player_status: dict[str, Any] = {}
+            basic_status: dict[str, Any] = {}
+            multiroom: dict[str, Any] = {}
 
             # 1) Player status (getPlayerStatus) - primary source of playback state
             try:
-                player_status = await self.client.get_player_status()
+                player_status = await self.client.get_player_status() or {}
             except WiiMError as err:
                 _LOGGER.debug("[WiiM] get_player_status failed on %s: %s", self.client.host, err)
                 player_status = {}
@@ -149,7 +149,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 basic_status = {}
             else:
                 try:
-                    basic_status = await self.client.get_status()
+                    basic_status = await self.client.get_status() or {}
                 except WiiMError as err:
                     _LOGGER.debug(
                         "[WiiM] get_status unsupported on %s: %s (will not retry)",
@@ -161,7 +161,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
 
             # 3) Multiroom info (always attempted) - required for group management
             try:
-                multiroom = await self.client.get_multiroom_info()
+                multiroom = await self.client.get_multiroom_info() or {}
             except WiiMError as err:
                 _LOGGER.debug("[WiiM] get_multiroom_info failed on %s: %s", self.client.host, err)
                 multiroom = {}
@@ -181,7 +181,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
             # Fetch device info on first update and cache it
             if not self._device_info:
                 try:
-                    self._device_info = await self.client.get_device_info()
+                    self._device_info = await self.client.get_device_info() or {}
                 except WiiMError as err:
                     _LOGGER.debug("[WiiM] get_device_info failed on %s: %s", self.client.host, err)
                     self._device_info = {}
@@ -212,13 +212,17 @@ class WiiMCoordinator(DataUpdateCoordinator):
 
             # Only fetch meta info if supported & title changed
             if not self._meta_info_unsupported and (current_title != self._last_title or not self._last_meta_info):
-                meta_info = await self.client.get_meta_info()
-                if not meta_info:
-                    # Empty dict – very likely unsupported on this device
-                    self._meta_info_unsupported = True
-                else:
-                    self._last_title = current_title
-                    self._last_meta_info = meta_info
+                try:
+                    meta_info = await self.client.get_meta_info()
+                    if not meta_info:
+                        # Empty dict – very likely unsupported on this device
+                        self._meta_info_unsupported = True
+                    else:
+                        self._last_title = current_title
+                        self._last_meta_info = meta_info
+                except WiiMError as meta_err:
+                    _LOGGER.debug("[WiiM] get_meta_info failed on %s: %s", self.client.host, meta_err)
+                    meta_info = self._last_meta_info
             else:
                 meta_info = self._last_meta_info
 
@@ -331,9 +335,11 @@ class WiiMCoordinator(DataUpdateCoordinator):
             # Update group registry
             self._update_group_registry(status, multiroom)
 
-            # If we reach here the poll succeeded – reset failure counter and interval
-            if self._consecutive_failures:
+            # Reset consecutive failures on successful update
+            if self._consecutive_failures > 0:
                 self._consecutive_failures = 0
+                _LOGGER.debug("[WiiM] %s: Reset failure counter after successful update", self.client.host)
+                # Reset update interval to base interval
                 if (
                     self.update_interval is not None
                     and self.update_interval.total_seconds() != self._base_poll_interval
@@ -361,7 +367,8 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 )
                 status["source"] = "wifi"
 
-            return {
+            # Ensure all required keys are present in the returned data structure
+            result = {
                 "status": status,
                 "multiroom": multiroom,
                 "role": role,
@@ -370,9 +377,17 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     "members": list(self._ha_group_members),
                 },
             }
+
+            _LOGGER.debug("[WiiM] %s: Successfully updated data: %s", self.client.host, result)
+            return result
+
         except WiiMError as err:
             # Progressive back-off on consecutive failures to reduce log spam
             self._consecutive_failures += 1
+            _LOGGER.warning(
+                "[WiiM] %s: Update failed (attempt %d): %s", self.client.host, self._consecutive_failures, err
+            )
+
             if self._consecutive_failures >= 3:
                 new_interval = min(
                     self._base_poll_interval * (2 ** (self._consecutive_failures - 2)),
@@ -380,6 +395,13 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 )
                 if self.update_interval is None or new_interval != self.update_interval.total_seconds():
                     self.update_interval = timedelta(seconds=new_interval)
+                    _LOGGER.debug(
+                        "[WiiM] %s: Increased update interval to %d seconds after %d failures",
+                        self.client.host,
+                        new_interval,
+                        self._consecutive_failures,
+                    )
+
             raise UpdateFailed(f"Error updating WiiM device: {err}")
 
     def _update_group_registry(self, status: dict, multiroom: dict) -> None:
