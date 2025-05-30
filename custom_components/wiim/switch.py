@@ -1,15 +1,18 @@
 """Switch platform for WiiM."""
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DEFAULT_NAME, DOMAIN, ICON, SWITCH
+from .const import DOMAIN
 from .entity import WiiMEntity
 
 
-async def async_setup_entry(hass, entry, async_add_devices):
-    """Setup sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_devices([WiiMBinarySwitch(coordinator, entry)])
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    """Set up switch entities."""
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    async_add_entities([WiiMBinarySwitch(coordinator, entry)])
 
 
 class WiiMBinarySwitch(WiiMEntity, SwitchEntity):
@@ -28,12 +31,12 @@ class WiiMBinarySwitch(WiiMEntity, SwitchEntity):
     @property
     def name(self):
         """Return the name of the switch."""
-        return f"{DEFAULT_NAME}_{SWITCH}"
+        return "WiiM_Switch"
 
     @property
     def icon(self):
         """Return the icon of this switch."""
-        return ICON
+        return "mdi:toggle-switch"
 
     @property
     def is_on(self):

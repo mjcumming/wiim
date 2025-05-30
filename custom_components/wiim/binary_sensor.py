@@ -1,15 +1,18 @@
 """Binary sensor platform for WiiM."""
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import BINARY_SENSOR, BINARY_SENSOR_DEVICE_CLASS, DEFAULT_NAME, DOMAIN
+from .const import DOMAIN
 from .entity import WiiMEntity
 
 
-async def async_setup_entry(hass, entry, async_add_devices):
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Setup binary_sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_devices([WiiMBinarySensor(coordinator, entry)])
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    async_add_entities([WiiMBinarySensor(coordinator, entry)])
 
 
 class WiiMBinarySensor(WiiMEntity, BinarySensorEntity):
@@ -18,12 +21,12 @@ class WiiMBinarySensor(WiiMEntity, BinarySensorEntity):
     @property
     def name(self):
         """Return the name of the binary_sensor."""
-        return f"{DEFAULT_NAME}_{BINARY_SENSOR}"
+        return "WiiM_Binary_Sensor"
 
     @property
     def device_class(self):
         """Return the class of this binary_sensor."""
-        return BINARY_SENSOR_DEVICE_CLASS
+        return None
 
     @property
     def is_on(self):

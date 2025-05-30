@@ -23,7 +23,7 @@ async def test_sensor_setup(hass: HomeAssistant, bypass_get_data) -> None:
     await hass.async_block_till_done()
 
     # Verify integration loaded
-    assert entry.state.name == "loaded"
+    assert entry.state.name == "LOADED"
 
     # Check that sensor entities were created
     entity_registry = er.async_get(hass)

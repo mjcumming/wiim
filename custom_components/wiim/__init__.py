@@ -11,7 +11,12 @@ from .api import WiiMClient
 from .const import CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL, DOMAIN
 from .coordinator import WiiMCoordinator
 
-PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SENSOR, Platform.BUTTON, Platform.NUMBER]
+PLATFORMS = [
+    Platform.MEDIA_PLAYER,
+    Platform.SENSOR,
+    Platform.BUTTON,
+    Platform.NUMBER,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
