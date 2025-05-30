@@ -82,7 +82,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             identifiers={(DOMAIN, coordinator.client.host)},
             name=device_name,
             manufacturer="WiiM",
-            model=status.get("hardware") or status.get("project"),
+            model=status.get("project") or status.get("hardware"),
             sw_version=status.get("firmware"),
             connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
         )

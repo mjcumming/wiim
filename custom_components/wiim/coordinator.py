@@ -94,6 +94,8 @@ class WiiMCoordinator(DataUpdateCoordinator):
         self._last_play_time = None
         self._eq_poll_counter = 0
         self._idle_timeout = 600  # 10 minutes in seconds
+        # Cache for device info (fetched once and reused)
+        self._device_info: dict[str, Any] = {}
 
     def _parse_plm_support(self, plm_support: str) -> list[str]:
         """Parse plm_support bitmask into list of available sources."""
@@ -175,6 +177,19 @@ class WiiMCoordinator(DataUpdateCoordinator):
 
             # Merge status data, preferring player_status for playback state
             status = {**basic_status, **player_status}
+
+            # Fetch device info on first update and cache it
+            if not self._device_info:
+                try:
+                    self._device_info = await self.client.get_device_info()
+                except WiiMError as err:
+                    _LOGGER.debug("[WiiM] get_device_info failed on %s: %s", self.client.host, err)
+                    self._device_info = {}
+
+            # Merge device info into status (hardware/project fields needed for device model)
+            if self._device_info:
+                status.update(self._device_info)
+
             current_title = status.get("title")
             current_play_state = status.get("play_status")
 

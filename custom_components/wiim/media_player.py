@@ -341,7 +341,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             identifiers={(DOMAIN, coordinator.client.host)},
             name=device_name,
             manufacturer="WiiM",
-            model=status.get("hardware") or status.get("project"),
+            model=status.get("project") or status.get("hardware"),
             sw_version=status.get("firmware"),
             connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
         )
@@ -728,7 +728,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             HA_ATTR_GROUP_LEADER: self.group_leader,
             "streaming_service": status.get("streaming_service"),
             # Enhanced device information
-            "device_model": status.get("hardware") or status.get("project") or "WiiM Device",
+            "device_model": status.get("project") or status.get("hardware") or "WiiM Device",
             "mac_address": status.get("MAC"),
             "wifi_signal": f"{status.get('wifi_rssi', 'Unknown')} dBm" if status.get("wifi_rssi") else None,
             "wifi_channel": status.get("wifi_channel"),

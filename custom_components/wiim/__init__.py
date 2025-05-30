@@ -7,6 +7,8 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+# Import config_flow to make it available as a module attribute for tests
+from . import config_flow  # noqa: F401
 from .api import WiiMClient
 from .const import CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL, DOMAIN
 from .coordinator import WiiMCoordinator
@@ -26,7 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Validate device is reachable; initial data will be fetched by coordinator
     try:
-        await client.get_status()
+        await client.get_device_info()
     except Exception:
         # For tests, this might fail but that's OK if we have mocked data
         pass

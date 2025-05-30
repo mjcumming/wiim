@@ -40,7 +40,7 @@ class WiiMRebootButton(CoordinatorEntity, ButtonEntity):
             identifiers={(DOMAIN, coordinator.client.host)},
             name=coordinator.friendly_name,
             manufacturer="WiiM",
-            model=status.get("hardware") or status.get("project"),
+            model=status.get("project") or status.get("hardware"),
             sw_version=status.get("firmware"),
             connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
         )
@@ -64,7 +64,7 @@ class WiiMSyncTimeButton(CoordinatorEntity, ButtonEntity):
             identifiers={(DOMAIN, coordinator.client.host)},
             name=coordinator.friendly_name,
             manufacturer="WiiM",
-            model=status.get("hardware") or status.get("project"),
+            model=status.get("project") or status.get("hardware"),
             sw_version=status.get("firmware"),
             connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
         )
