@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: true # Needed for pushing
 
       - name: Set up Python ${{ env.DEFAULT_PYTHON }}
         uses: actions/setup-python@v5.3.0
@@ -40,6 +42,15 @@ jobs:
       - name: Run pre-commit on all files
         run: |
           pre-commit run --all-files --show-diff-on-failure --color=always
+
+      - name: Commit and push formatting fixes
+        if: github.event_name == 'push' && failure()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --cached --quiet || git commit -m "ci: Apply pre-commit formatting fixes"
+          git push
 
   hassfest:
     runs-on: ubuntu-latest
