@@ -9,7 +9,7 @@ from custom_components.wiim.const import DOMAIN
 from .const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 
-async def test_binary_sensor_setup(hass: HomeAssistant, bypass_get_data) -> None:
+async def test_binary_sensor_setup(hass: HomeAssistant, _bypass_get_data) -> None:
     """Test binary sensor setup."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -33,7 +33,7 @@ async def test_binary_sensor_setup(hass: HomeAssistant, bypass_get_data) -> None
     assert len(binary_sensor_entities) >= 0
 
 
-async def test_binary_sensor_states(hass: HomeAssistant, bypass_get_data) -> None:
+async def test_binary_sensor_states(hass: HomeAssistant, _bypass_get_data) -> None:
     """Test binary sensor states."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -55,7 +55,7 @@ async def test_binary_sensor_states(hass: HomeAssistant, bypass_get_data) -> Non
         assert hasattr(state, "attributes")
 
 
-async def test_binary_sensor_device_info(hass: HomeAssistant, bypass_get_data) -> None:
+async def test_binary_sensor_device_info(hass: HomeAssistant, _bypass_get_data) -> None:
     """Test binary sensor device information."""
     entry = MockConfigEntry(
         domain=DOMAIN,

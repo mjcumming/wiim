@@ -13,16 +13,24 @@ from .const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 async def test_coordinator_initialization(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator initialization."""
-    coordinator = WiiMCoordinator(hass, mock_wiim_client, "test_host")
+    # Set up mock client with host property
+    mock_wiim_client.host = "192.168.1.100"
+    mock_wiim_client._host = "192.168.1.100"  # For the coordinator name construction
 
-    assert coordinator.name == "WiiM"
-    assert coordinator._client == mock_wiim_client
-    assert coordinator._host == "test_host"
+    coordinator = WiiMCoordinator(hass, mock_wiim_client)
+
+    assert coordinator.name == "wiim_192.168.1.100"
+    assert coordinator.client == mock_wiim_client
+    assert coordinator.client.host == "192.168.1.100"
 
 
 async def test_coordinator_update_success(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test successful coordinator update."""
-    coordinator = WiiMCoordinator(hass, mock_wiim_client, "test_host")
+    # Set up mock client with host property
+    mock_wiim_client.host = "192.168.1.100"
+    mock_wiim_client._host = "192.168.1.100"
+
+    coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
     # Mock successful API calls
     mock_wiim_client.get_status.return_value = MOCK_STATUS_RESPONSE
@@ -38,7 +46,11 @@ async def test_coordinator_update_success(hass: HomeAssistant, mock_wiim_client)
 
 async def test_coordinator_update_failure(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator update failure."""
-    coordinator = WiiMCoordinator(hass, mock_wiim_client, "test_host")
+    # Set up mock client with host property
+    mock_wiim_client.host = "192.168.1.100"
+    mock_wiim_client._host = "192.168.1.100"
+
+    coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
     # Mock API call failure
     mock_wiim_client.get_status.side_effect = Exception("Connection error")
@@ -49,7 +61,11 @@ async def test_coordinator_update_failure(hass: HomeAssistant, mock_wiim_client)
 
 async def test_coordinator_partial_update_failure(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator handling partial update failures."""
-    coordinator = WiiMCoordinator(hass, mock_wiim_client, "test_host")
+    # Set up mock client with host property
+    mock_wiim_client.host = "192.168.1.100"
+    mock_wiim_client._host = "192.168.1.100"
+
+    coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
     # Mock status success but device info failure
     mock_wiim_client.get_status.return_value = MOCK_STATUS_RESPONSE
@@ -63,7 +79,7 @@ async def test_coordinator_partial_update_failure(hass: HomeAssistant, mock_wiim
     assert "status" in coordinator.data
 
 
-async def test_coordinator_with_integration(hass: HomeAssistant, bypass_get_data) -> None:
+async def test_coordinator_with_integration(hass: HomeAssistant, _bypass_get_data) -> None:
     """Test coordinator working with full integration."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -86,7 +102,11 @@ async def test_coordinator_with_integration(hass: HomeAssistant, bypass_get_data
 
 async def test_coordinator_listeners(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator listener functionality."""
-    coordinator = WiiMCoordinator(hass, mock_wiim_client, "test_host")
+    # Set up mock client with host property
+    mock_wiim_client.host = "192.168.1.100"
+    mock_wiim_client._host = "192.168.1.100"
+
+    coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
     # Mock successful API calls
     mock_wiim_client.get_status.return_value = MOCK_STATUS_RESPONSE
@@ -110,7 +130,11 @@ async def test_coordinator_listeners(hass: HomeAssistant, mock_wiim_client) -> N
 
 async def test_coordinator_data_structure(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator data structure."""
-    coordinator = WiiMCoordinator(hass, mock_wiim_client, "test_host")
+    # Set up mock client with host property
+    mock_wiim_client.host = "192.168.1.100"
+    mock_wiim_client._host = "192.168.1.100"
+
+    coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
     # Mock successful API calls
     mock_wiim_client.get_status.return_value = MOCK_STATUS_RESPONSE
@@ -131,7 +155,11 @@ async def test_coordinator_data_structure(hass: HomeAssistant, mock_wiim_client)
 
 async def test_coordinator_error_recovery(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator error recovery."""
-    coordinator = WiiMCoordinator(hass, mock_wiim_client, "test_host")
+    # Set up mock client with host property
+    mock_wiim_client.host = "192.168.1.100"
+    mock_wiim_client._host = "192.168.1.100"
+
+    coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
     # First update fails
     mock_wiim_client.get_status.side_effect = Exception("Connection error")
