@@ -1,7 +1,7 @@
 {
   "domain": "wiim",
   "name": "WiiM Audio (LinkPlay)",
-  "author": "Michael Cumming (@mjcumming)",
+  "author": ["@mjcumming"],
   "dependencies": [],
   "codeowners": ["@mjcumming"],
   "requirements": [],
