@@ -12,7 +12,7 @@ from custom_components.wiim.const import DOMAIN
 from .const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 
-async def test_button_setup(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_button_setup(hass: HomeAssistant, bypass_get_data) -> None:
     """Test button setup."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -35,7 +35,7 @@ async def test_button_setup(hass: HomeAssistant, _bypass_get_data) -> None:
     assert len(button_entities) >= 0
 
 
-async def test_button_press_service(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_button_press_service(hass: HomeAssistant, bypass_get_data) -> None:
     """Test button press service."""
     entry = MockConfigEntry(
         domain=DOMAIN,

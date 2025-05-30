@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.exceptions import ConfigEntryNotReady
 import voluptuous as vol
 
@@ -165,6 +165,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=device_name, data={CONF_HOST: host})
             except ConfigEntryNotReady:
                 errors["base"] = "cannot_connect"
+            except AbortFlow:
+                # Let abort exceptions pass through (for already_configured, etc.)
+                raise
             except Exception as e:
                 _LOGGER.error("[WiiM] Error during manual config: %s", e)
                 errors["base"] = "unknown"
@@ -390,7 +393,15 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle import from YAML or programmatic flow."""
         return await self.async_step_user(import_config)
 
-    async def _ensure_solo(self, client: "WiiMClient", info: dict[str, Any]) -> dict[str, Any]:
+    async def _test_connection(self, host: str) -> bool:
+        """Test connection to WiiM device."""
+        try:
+            await _async_validate_host(host)
+            return True
+        except (ConfigEntryNotReady, Exception):
+            return False
+
+    async def _ensure_solo(self, client: WiiMClient, device_info: dict[str, Any]) -> dict[str, Any]:
         """If the speaker is in a multi-room group, leave or disband it.
 
         We leave groups when the device is **slave** and delete the whole
@@ -400,7 +411,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
 
         # If device is a slave → leave group
-        if info.get("role") == "slave" or str(info.get("group")) == "1":
+        if device_info.get("role") == "slave" or str(device_info.get("group")) == "1":
             try:
                 await client.leave_group()
             except Exception:
@@ -408,7 +419,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await client.get_player_status()
 
         # If device is master with slaves → disband group
-        multi = info.get("multiroom", {})
+        multi = device_info.get("multiroom", {})
         has_slaves = bool(multi.get("slave_list")) or multi.get("slaves", 0)
         if has_slaves:
             try:
@@ -417,7 +428,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 pass
             return await client.get_player_status()
 
-        return info
+        return device_info
 
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):

@@ -37,7 +37,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up diagnostic sensors for a config entry."""
-    coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[SensorEntity] = []
 
     for key in SENSORS:

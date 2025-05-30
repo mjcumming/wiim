@@ -19,7 +19,7 @@ from custom_components.wiim.const import DOMAIN
 from .const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
-async def test_media_player_setup(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_media_player_setup(hass: HomeAssistant, bypass_get_data) -> None:
     """Test media player setup."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -39,7 +39,7 @@ async def test_media_player_setup(hass: HomeAssistant, _bypass_get_data) -> None
     assert len(media_player_entities) >= 1
 
 
-async def test_media_player_states(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_media_player_states(hass: HomeAssistant, bypass_get_data) -> None:
     """Test media player state management."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -61,7 +61,7 @@ async def test_media_player_states(hass: HomeAssistant, _bypass_get_data) -> Non
     assert ATTR_MEDIA_VOLUME_LEVEL in state.attributes
 
 
-async def test_media_player_play_service(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_media_player_play_service(hass: HomeAssistant, bypass_get_data) -> None:
     """Test media player play service."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -90,7 +90,7 @@ async def test_media_player_play_service(hass: HomeAssistant, _bypass_get_data) 
         mock_play.assert_called_once()
 
 
-async def test_media_player_pause_service(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_media_player_pause_service(hass: HomeAssistant, bypass_get_data) -> None:
     """Test media player pause service."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -119,7 +119,7 @@ async def test_media_player_pause_service(hass: HomeAssistant, _bypass_get_data)
         mock_pause.assert_called_once()
 
 
-async def test_media_player_volume_service(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_media_player_volume_service(hass: HomeAssistant, bypass_get_data) -> None:
     """Test media player volume service."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -148,7 +148,7 @@ async def test_media_player_volume_service(hass: HomeAssistant, _bypass_get_data
         mock_volume.assert_called_once()
 
 
-async def test_media_player_attributes(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_media_player_attributes(hass: HomeAssistant, bypass_get_data) -> None:
     """Test media player attributes."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -175,7 +175,7 @@ async def test_media_player_attributes(hass: HomeAssistant, _bypass_get_data) ->
         assert attr in state.attributes or True  # Some attributes may be optional
 
 
-async def test_media_player_device_info(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_media_player_device_info(hass: HomeAssistant, bypass_get_data) -> None:
     """Test media player device info."""
     entry = MockConfigEntry(
         domain=DOMAIN,

@@ -87,7 +87,7 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
         assert entry.state is ConfigEntryState.NOT_LOADED
 
 
-async def test_device_creation(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_device_creation(hass: HomeAssistant, bypass_get_data) -> None:
     """Test device is created in device registry."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -111,7 +111,7 @@ async def test_device_creation(hass: HomeAssistant, _bypass_get_data) -> None:
     assert device.model == MOCK_DEVICE_DATA["project"]
 
 
-async def test_platforms_setup(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_platforms_setup(hass: HomeAssistant, bypass_get_data) -> None:
     """Test all platforms are set up."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -134,7 +134,7 @@ async def test_platforms_setup(hass: HomeAssistant, _bypass_get_data) -> None:
     assert expected_domains.issubset(domains)
 
 
-async def test_service_registration(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_service_registration(hass: HomeAssistant, bypass_get_data) -> None:
     """Test custom services are registered."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -151,7 +151,7 @@ async def test_service_registration(hass: HomeAssistant, _bypass_get_data) -> No
     assert hass.services.has_service(DOMAIN, "join_group") or len(hass.data[DOMAIN]) > 0
 
 
-async def test_coordinator_creation(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_coordinator_creation(hass: HomeAssistant, bypass_get_data) -> None:
     """Test coordinator is created and working."""
     entry = MockConfigEntry(
         domain=DOMAIN,

@@ -26,7 +26,8 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Set up number entities for a config entry."""
+    coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[NumberEntity] = [
         _PollIntervalNumber(coordinator, entry),
         _VolumeStepNumber(coordinator, entry),

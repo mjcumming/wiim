@@ -19,7 +19,8 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Set up button entities for a config entry."""
+    coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities = [
         WiiMRebootButton(coordinator),
         WiiMSyncTimeButton(coordinator),

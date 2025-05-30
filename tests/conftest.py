@@ -9,6 +9,13 @@ from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 
+# This fixture enables custom integrations in the test environment
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    """Enable custom integrations for all tests."""
+    yield
+
+
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent
 # notifications. These calls would fail without this fixture since the persistent_notification
 # integration is never loaded during a test.
@@ -28,6 +35,11 @@ def mock_wiim_client_fixture():
     client = MagicMock()
     client.get_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
     client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
+    client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    client.get_multiroom_info = AsyncMock(return_value={})
+    client.get_meta_info = AsyncMock(return_value={})
+    client.get_eq_status = AsyncMock(return_value=False)
+    client.get_eq = AsyncMock(return_value={})
     client.play = AsyncMock(return_value=True)
     client.pause = AsyncMock(return_value=True)
     client.stop = AsyncMock(return_value=True)

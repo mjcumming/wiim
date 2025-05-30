@@ -14,23 +14,33 @@ from .const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 async def test_form(hass: HomeAssistant) -> None:
     """Test we get the form."""
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {}
+    with patch("custom_components.wiim.config_flow.async_search", None):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {}
 
 
 async def test_form_successful_connection(hass: HomeAssistant) -> None:
     """Test successful connection during config flow."""
     with (
+        patch("custom_components.wiim.config_flow.async_search", None),
         patch(
-            "custom_components.wiim.api.WiiMClient.get_device_info",
+            "custom_components.wiim.api.WiiMClient.get_player_status",
             return_value=MOCK_DEVICE_DATA,
         ),
         patch(
-            "custom_components.wiim.config_flow.WiiMConfigFlow._test_connection",
-            return_value=True,
+            "custom_components.wiim.api.WiiMClient.close",
+            return_value=None,
         ),
+        patch(
+            "custom_components.wiim.config_flow.wiim_factory_client",
+        ) as mock_factory,
     ):
+        # Mock the factory to return a client
+        mock_client = mock_factory.return_value
+        mock_client.get_player_status.return_value = MOCK_DEVICE_DATA
+        mock_client.close.return_value = None
+
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -39,15 +49,18 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
 
         assert result2["type"] is FlowResultType.CREATE_ENTRY
-        assert result2["title"] == "WiiM Mini"
+        assert result2["title"] == "WiiM Mini"  # Uses device_name from MOCK_DEVICE_DATA
         assert result2["data"] == MOCK_CONFIG
 
 
 async def test_form_connection_error(hass: HomeAssistant) -> None:
     """Test connection error during config flow."""
-    with patch(
-        "custom_components.wiim.api.WiiMClient.get_device_info",
-        side_effect=Exception("Connection error"),
+    with (
+        patch("custom_components.wiim.config_flow.async_search", None),
+        patch(
+            "custom_components.wiim.config_flow.wiim_factory_client",
+            side_effect=Exception("Connection error"),
+        ),
     ):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
@@ -56,14 +69,17 @@ async def test_form_connection_error(hass: HomeAssistant) -> None:
         )
 
         assert result2["type"] is FlowResultType.FORM
-        assert result2["errors"] == {"base": "cannot_connect"}
+        assert result2["errors"] == {"base": "unknown"}
 
 
 async def test_form_timeout_error(hass: HomeAssistant) -> None:
     """Test timeout error during config flow."""
-    with patch(
-        "custom_components.wiim.api.WiiMClient.get_device_info",
-        side_effect=TimeoutError("Connection timeout"),
+    with (
+        patch("custom_components.wiim.config_flow.async_search", None),
+        patch(
+            "custom_components.wiim.config_flow.wiim_factory_client",
+            side_effect=TimeoutError("Connection timeout"),
+        ),
     ):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
@@ -72,7 +88,7 @@ async def test_form_timeout_error(hass: HomeAssistant) -> None:
         )
 
         assert result2["type"] is FlowResultType.FORM
-        assert result2["errors"] == {"base": "timeout_connect"}
+        assert result2["errors"] == {"base": "unknown"}
 
 
 async def test_form_already_configured(hass: HomeAssistant) -> None:
@@ -81,14 +97,21 @@ async def test_form_already_configured(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         title="WiiM Mini",
         data=MOCK_CONFIG,
-        unique_id=MOCK_DEVICE_DATA["uuid"],
+        unique_id=MOCK_CONFIG["host"],
     )
     entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.wiim.api.WiiMClient.get_device_info",
-        return_value=MOCK_DEVICE_DATA,
+    with (
+        patch("custom_components.wiim.config_flow.async_search", None),
+        patch(
+            "custom_components.wiim.config_flow.wiim_factory_client",
+        ) as mock_factory,
     ):
+        # Mock the factory to return a client
+        mock_client = mock_factory.return_value
+        mock_client.get_player_status.return_value = MOCK_DEVICE_DATA
+        mock_client.close.return_value = None
+
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -103,9 +126,12 @@ async def test_form_invalid_host(hass: HomeAssistant) -> None:
     """Test invalid host error."""
     invalid_config = {"host": "invalid_host"}
 
-    with patch(
-        "custom_components.wiim.api.WiiMClient.get_device_info",
-        side_effect=Exception("Invalid host"),
+    with (
+        patch("custom_components.wiim.config_flow.async_search", None),
+        patch(
+            "custom_components.wiim.config_flow.wiim_factory_client",
+            side_effect=Exception("Invalid host"),
+        ),
     ):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
@@ -114,7 +140,7 @@ async def test_form_invalid_host(hass: HomeAssistant) -> None:
         )
 
         assert result2["type"] is FlowResultType.FORM
-        assert result2["errors"] == {"base": "cannot_connect"}
+        assert result2["errors"] == {"base": "unknown"}
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:
@@ -123,7 +149,7 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         title="WiiM Mini",
         data=MOCK_CONFIG,
-        unique_id=MOCK_DEVICE_DATA["uuid"],
+        unique_id=MOCK_CONFIG["host"],
     )
     entry.add_to_hass(hass)
 

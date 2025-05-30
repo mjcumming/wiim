@@ -9,7 +9,7 @@ from custom_components.wiim.const import DOMAIN
 from .const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 
-async def test_sensor_setup(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_sensor_setup(hass: HomeAssistant, bypass_get_data) -> None:
     """Test sensor setup and entity creation."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -33,7 +33,7 @@ async def test_sensor_setup(hass: HomeAssistant, _bypass_get_data) -> None:
     assert len(sensor_entities) > 0, "No sensor entities were created"
 
 
-async def test_sensor_states(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_sensor_states(hass: HomeAssistant, bypass_get_data) -> None:
     """Test sensor states and attributes."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -56,7 +56,7 @@ async def test_sensor_states(hass: HomeAssistant, _bypass_get_data) -> None:
         assert hasattr(state, "attributes")
 
 
-async def test_sensor_device_info(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_sensor_device_info(hass: HomeAssistant, bypass_get_data) -> None:
     """Test sensor device information."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -74,7 +74,7 @@ async def test_sensor_device_info(hass: HomeAssistant, _bypass_get_data) -> None
     assert len(device_registry.devices) > 0, "No devices registered"
 
 
-async def test_sensor_unique_ids(hass: HomeAssistant, _bypass_get_data) -> None:
+async def test_sensor_unique_ids(hass: HomeAssistant, bypass_get_data) -> None:
     """Test sensor unique IDs are properly set."""
     entry = MockConfigEntry(
         domain=DOMAIN,

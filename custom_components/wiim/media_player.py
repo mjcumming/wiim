@@ -65,7 +65,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up WiiM media player from a config entry."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     entity = WiiMMediaPlayer(coordinator)
 
     async_add_entities([entity])
@@ -159,7 +159,7 @@ async def async_setup_entry(
             if config_entry.entry_id not in hass.data[DOMAIN]:
                 continue
 
-            coord = hass.data[DOMAIN][config_entry.entry_id]
+            coord = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
             if not hasattr(coord, "client") or coord.data is None:
                 continue
 
@@ -228,7 +228,8 @@ async def async_setup_entry(
                 for config_entry in hass.config_entries.async_entries(DOMAIN):
                     if config_entry.entry_id not in hass.data[DOMAIN]:
                         continue
-                    coord = hass.data[DOMAIN][config_entry.entry_id]
+
+                    coord = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
                     if hasattr(coord, "client") and coord.client.host == device_ip:
                         enable_group_entity = config_entry.options.get("own_group_entity", False)
                         if not enable_group_entity:

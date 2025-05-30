@@ -8,6 +8,7 @@ MOCK_CONFIG = {CONF_HOST: "192.168.1.100"}
 MOCK_DEVICE_DATA = {
     "uuid": "FF31F09E1A5020113B0A3918",
     "DeviceName": "WiiM Mini",
+    "device_name": "WiiM Mini",
     "firmware": "4.6.328252",
     "hardware": "A31",
     "project": "UP2STREAM_MINI_V3",
