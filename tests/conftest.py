@@ -81,6 +81,18 @@ def bypass_get_data_fixture():
             "custom_components.wiim.api.WiiMClient.get_device_info",
             return_value=MOCK_DEVICE_DATA,
         ),
+        patch(
+            "custom_components.wiim.api.WiiMClient.get_player_status",
+            return_value=MOCK_STATUS_RESPONSE,
+        ),
+        patch(
+            "custom_components.wiim.api.WiiMClient.get_multiroom_info",
+            return_value={"slaves": 0},
+        ),
+        patch(
+            "custom_components.wiim.api.WiiMClient.reboot",
+            return_value=True,
+        ),
     ):
         yield
 
