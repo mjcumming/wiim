@@ -185,32 +185,20 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step - show discovery or manual entry."""
-        errors: dict[str, str] = {}
-
         # If user provided manual input, validate it
         if user_input is not None:
             if user_input.get("discovery_mode") == "manual":
                 # User chose manual entry, show manual form
-                schema = vol.Schema({vol.Required(CONF_HOST): str})
-                return self.async_show_form(
-                    step_id="manual",
-                    data_schema=schema,
-                    errors=errors,
-                )
+                return await self.async_step_manual()
             elif user_input.get("discovery_mode") == "discover":
                 # User chose discovery, proceed to discovery step
                 return await self.async_step_discovery()
 
         # Initial step: let user choose discovery method
-        schema = vol.Schema(
-            {
-                vol.Required("discovery_mode", default="discover"): vol.In(
-                    {"discover": "🔍 Search for WiiM devices automatically", "manual": "📝 Enter IP address manually"}
-                )
-            }
-        )
+        schema = vol.Schema({vol.Required("discovery_mode", default="discover"): vol.In(["discover", "manual"])})
         return self.async_show_form(
-            step_id="user", data_schema=schema, description_placeholders={"info": "Choose how to add your WiiM device"}
+            step_id="user",
+            data_schema=schema,
         )
 
     async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:

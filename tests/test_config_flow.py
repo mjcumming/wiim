@@ -13,11 +13,12 @@ from .const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 
 async def test_form(hass: HomeAssistant) -> None:
-    """Test we get the form."""
+    """Test we get the initial choice form."""
     with patch("custom_components.wiim.config_flow.async_search", None):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         assert result["type"] is FlowResultType.FORM
-        assert result["errors"] == {}
+        assert result["step_id"] == "user"
+        assert result["errors"] is None or result["errors"] == {}
 
 
 async def test_form_successful_connection(hass: HomeAssistant) -> None:
@@ -45,16 +46,23 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
         mock_client.get_player_status.return_value = MOCK_DEVICE_DATA
         mock_client.close.return_value = None
 
+        # First step: choose manual mode
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
+            {"discovery_mode": "manual"},
+        )
+
+        # Second step: provide host configuration
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
             MOCK_CONFIG,
         )
         await hass.async_block_till_done()
 
-        assert result2["type"] is FlowResultType.CREATE_ENTRY
-        assert result2["title"] == "WiiM Mini"  # Uses device_name from enhanced naming
-        assert result2["data"] == MOCK_CONFIG
+        assert result3["type"] is FlowResultType.CREATE_ENTRY
+        assert result3["title"] == "WiiM Mini"  # Uses device_name from enhanced naming
+        assert result3["data"] == MOCK_CONFIG
         # Verify enhanced naming was called
         mock_enhanced_name.assert_called_once()
 
@@ -68,14 +76,21 @@ async def test_form_connection_error(hass: HomeAssistant) -> None:
             side_effect=Exception("Connection error"),
         ),
     ):
+        # First step: choose manual mode
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
+            {"discovery_mode": "manual"},
+        )
+
+        # Second step: provide host configuration that will fail
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
             MOCK_CONFIG,
         )
 
-        assert result2["type"] is FlowResultType.FORM
-        assert result2["errors"] == {"base": "unknown"}
+        assert result3["type"] is FlowResultType.FORM
+        assert result3["errors"] == {"base": "unknown"}
 
 
 async def test_form_timeout_error(hass: HomeAssistant) -> None:
@@ -87,14 +102,21 @@ async def test_form_timeout_error(hass: HomeAssistant) -> None:
             side_effect=TimeoutError("Connection timeout"),
         ),
     ):
+        # First step: choose manual mode
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
+            {"discovery_mode": "manual"},
+        )
+
+        # Second step: provide host configuration that will timeout
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
             MOCK_CONFIG,
         )
 
-        assert result2["type"] is FlowResultType.FORM
-        assert result2["errors"] == {"base": "unknown"}
+        assert result3["type"] is FlowResultType.FORM
+        assert result3["errors"] == {"base": "unknown"}
 
 
 async def test_form_already_configured(hass: HomeAssistant) -> None:
@@ -122,14 +144,21 @@ async def test_form_already_configured(hass: HomeAssistant) -> None:
         mock_client.get_player_status.return_value = MOCK_DEVICE_DATA
         mock_client.close.return_value = None
 
+        # First step: choose manual mode
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
+            {"discovery_mode": "manual"},
+        )
+
+        # Second step: provide host configuration for already configured device
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
             MOCK_CONFIG,
         )
 
-        assert result2["type"] is FlowResultType.ABORT
-        assert result2["reason"] == "already_configured"
+        assert result3["type"] is FlowResultType.ABORT
+        assert result3["reason"] == "already_configured"
 
 
 async def test_form_invalid_host(hass: HomeAssistant) -> None:
@@ -143,14 +172,21 @@ async def test_form_invalid_host(hass: HomeAssistant) -> None:
             side_effect=Exception("Invalid host"),
         ),
     ):
+        # First step: choose manual mode
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
+            {"discovery_mode": "manual"},
+        )
+
+        # Second step: provide invalid host configuration
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
             invalid_config,
         )
 
-        assert result2["type"] is FlowResultType.FORM
-        assert result2["errors"] == {"base": "unknown"}
+        assert result3["type"] is FlowResultType.FORM
+        assert result3["errors"] == {"base": "unknown"}
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:
@@ -188,17 +224,24 @@ async def test_enhanced_device_naming_master(hass: HomeAssistant) -> None:
         }
         mock_client.close.return_value = None
 
+        # First step: choose manual mode
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
+            {"discovery_mode": "manual"},
+        )
+
+        # Second step: provide host configuration
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
             MOCK_CONFIG,
         )
         await hass.async_block_till_done()
 
-        assert result2["type"] is FlowResultType.CREATE_ENTRY
+        assert result3["type"] is FlowResultType.CREATE_ENTRY
         # Should indicate it's a master of 2 devices
-        assert "Master of 2 devices" in result2["title"]
-        assert result2["data"] == MOCK_CONFIG
+        assert "Master of 2 devices" in result3["title"]
+        assert result3["data"] == MOCK_CONFIG
 
 
 async def test_enhanced_device_naming_slave(hass: HomeAssistant) -> None:
@@ -219,14 +262,21 @@ async def test_enhanced_device_naming_slave(hass: HomeAssistant) -> None:
         }
         mock_client.close.return_value = None
 
+        # First step: choose manual mode
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
+            {"discovery_mode": "manual"},
+        )
+
+        # Second step: provide host configuration
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
             MOCK_CONFIG,
         )
         await hass.async_block_till_done()
 
-        assert result2["type"] is FlowResultType.CREATE_ENTRY
+        assert result3["type"] is FlowResultType.CREATE_ENTRY
         # Should indicate it's in a group
-        assert "(In Group)" in result2["title"]
-        assert result2["data"] == MOCK_CONFIG
+        assert "(In Group)" in result3["title"]
+        assert result3["data"] == MOCK_CONFIG

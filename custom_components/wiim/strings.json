@@ -5,7 +5,7 @@
     "step": {
       "user": {
         "title": "Add WiiM Speaker",
-        "description": "Choose how to add your WiiM or LinkPlay-compatible speaker.",
+        "description": "Set up your WiiM or LinkPlay-compatible speaker.",
         "data": {
           "discovery_mode": "Setup Method"
         },
@@ -27,7 +27,12 @@
         "title": "Select WiiM Speaker",
         "description": "Found {count} WiiM speaker(s): {devices}. Choose one to add:",
         "data": {
-          "host": "Speaker"
+          "host": "Speaker",
+          "no_devices_manual": "Proceed with manual IP entry"
+        },
+        "data_description": {
+          "host": "Select the WiiM speaker you want to add to Home Assistant",
+          "no_devices_manual": "Check this to proceed with manual IP address entry since no WiiM speakers were automatically discovered on your network."
         }
       },
       "upnp": {
@@ -72,6 +77,14 @@
           "enable_group_entity": "Create a dedicated group control entity for this speaker. This entity provides advanced multiroom functionality including group-aware volume control, playback command forwarding for slaves, and unified group management. The '[Device Name] Master' entity allows complete control regardless of the speaker's current role (solo, master, or slave).",
           "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
         }
+      }
+    }
+  },
+  "selector": {
+    "discovery_mode": {
+      "options": {
+        "discover": "🔍 Search for WiiM devices automatically",
+        "manual": "🏠 Enter IP address manually"
       }
     }
   },
