@@ -2,6 +2,55 @@
 
 This guide helps resolve common issues with the WiiM Audio integration.
 
+## HACS Download Issues
+
+### Problem: "Got status code 404" Download Error
+
+**Error Message**:
+
+```
+Download failed - Got status code 404 when trying to download
+https://github.com/mjcumming/wiim/releases/download/v0.3.0/wiim.zip
+```
+
+**Root Cause**: HACS is trying to download an older version (v0.3.0) that doesn't have a proper ZIP file attached.
+
+**Solutions**:
+
+1. **Force Latest Version**:
+
+   - HACS → Integrations → WiiM Audio → ⋮ menu → **Redownload**
+   - Select **v0.3.2** or latest version
+   - Restart Home Assistant
+
+2. **Clear HACS Cache**:
+
+   - Settings → System → **Restart Home Assistant**
+   - HACS → Integrations → Try install again
+
+3. **Manual Installation** (if HACS fails):
+
+   - Download latest `wiim.zip` from [GitHub Releases](https://github.com/mjcumming/wiim/releases/latest)
+   - Extract to `/config/custom_components/wiim/`
+   - Restart Home Assistant
+
+4. **Complete Reinstall**:
+   - Remove integration from HACS and Home Assistant
+   - Fresh install from HACS with latest version
+
+### Problem: "Integration 'wiim' not found"
+
+This error occurs when the integration isn't properly loaded:
+
+**Solutions**:
+
+- Verify files are in `/config/custom_components/wiim/`
+- Check manifest.json is valid
+- Restart Home Assistant after installation
+- Clear browser cache (Ctrl+F5)
+
+---
+
 ## Quick Diagnostics
 
 ### Check Integration Status
