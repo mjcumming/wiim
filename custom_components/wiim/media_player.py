@@ -126,6 +126,19 @@ async def async_setup_entry(
         {},
         "async_diagnose_entities",
     )
+    platform.async_register_entity_service(
+        "cleanup_stale_entities",
+        {vol.Optional("dry_run", default=True): bool},
+        "async_cleanup_stale_entities",
+    )
+    platform.async_register_entity_service(
+        "auto_maintain",
+        {
+            vol.Optional("auto_cleanup", default=False): bool,
+            vol.Optional("dry_run", default=True): bool,
+        },
+        "async_auto_maintain",
+    )
 
     # Group management services
     platform.async_register_entity_service(
@@ -1301,6 +1314,62 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             self.entity_id,
             group_members,
         )
+
+        # Pre-validate and filter out stale entities
+        validated_members = []
+        for entity_id in group_members:
+            if entity_id == self.entity_id:
+                validated_members.append(entity_id)
+                continue
+
+            # Check if entity exists and is valid
+            entity_state = self.hass.states.get(entity_id)
+            if entity_state is None:
+                _LOGGER.warning(
+                    "[WiiM] %s: Skipping non-existent entity %s from group members",
+                    self.entity_id,
+                    entity_id,
+                )
+                continue
+
+            # Check if entity is stale (unavailable/unknown/restored)
+            if entity_state.state in ("unavailable", "unknown") or entity_state.attributes.get("restored", False):
+                _LOGGER.warning(
+                    "[WiiM] %s: Skipping stale entity %s (state: %s) from group members",
+                    self.entity_id,
+                    entity_id,
+                    entity_state.state,
+                )
+                continue
+
+            # Check if we can find a coordinator for this entity
+            coord = _find_coordinator(self.hass, entity_id)
+            if coord is None:
+                _LOGGER.warning(
+                    "[WiiM] %s: Skipping entity %s - no WiiM coordinator found (may be non-WiiM device or offline)",
+                    self.entity_id,
+                    entity_id,
+                )
+                continue
+
+            validated_members.append(entity_id)
+
+        if len(validated_members) != len(group_members):
+            _LOGGER.info(
+                "[WiiM] %s: Filtered group members from %d to %d valid entities: %s",
+                self.entity_id,
+                len(group_members),
+                len(validated_members),
+                validated_members,
+            )
+
+        # If no valid members except ourselves, just make sure we're solo
+        if len(validated_members) <= 1:
+            _LOGGER.info("[WiiM] %s: No valid group members found, ensuring device is solo", self.entity_id)
+            if self.coordinator.client.is_slave or self.coordinator.client.is_master:
+                await self.async_unjoin()
+            return
+
         try:
             # ------------------------------------------------------------------
             # 1) Ensure *this* device is ready to become/act as master
@@ -1339,81 +1408,44 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     master_ip,
                 )
 
-            for entity_id in group_members:
+            for entity_id in validated_members:
                 if entity_id == self.entity_id:
                     _LOGGER.debug("[WiiM] %s: Skipping self in group members", self.entity_id)
                     continue
 
+                # We already validated this entity has a coordinator in pre-validation
                 coord = _find_coordinator(self.hass, entity_id)
-                if coord is not None:
-                    member_ip = self._entity_id_to_host(entity_id)
-                    if member_ip is None:
-                        _LOGGER.warning(
-                            "[WiiM] %s: Could not resolve host for entity %s – skipping",
-                            self.entity_id,
-                            entity_id,
-                        )
-                        continue
+                member_ip = self._entity_id_to_host(entity_id)
 
+                if member_ip is None:
+                    _LOGGER.warning(
+                        "[WiiM] %s: Could not resolve host for entity %s – skipping",
+                        self.entity_id,
+                        entity_id,
+                    )
+                    continue
+
+                _LOGGER.info(
+                    "[WiiM] %s: Instructing %s to join master %s",
+                    self.entity_id,
+                    member_ip,
+                    master_ip,
+                )
+                try:
+                    await coord.join_wiim_group(master_ip)
                     _LOGGER.info(
-                        "[WiiM] %s: Instructing %s to join master %s",
+                        "[WiiM] %s: Successfully joined %s to group",
                         self.entity_id,
                         member_ip,
-                        master_ip,
                     )
-                    try:
-                        await coord.join_wiim_group(master_ip)
-                        _LOGGER.info(
-                            "[WiiM] %s: Successfully joined %s to group",
-                            self.entity_id,
-                            member_ip,
-                        )
-                    except Exception as join_err:
-                        _LOGGER.error(
-                            "[WiiM] %s: Failed to join %s to group: %s",
-                            self.entity_id,
-                            member_ip,
-                            join_err,
-                        )
-                        # Don't raise - continue with other members
-                        continue
-                else:
-                    # Check if this entity exists in HA but isn't a WiiM device
-                    entity_exists = self.hass.states.get(entity_id) is not None
-
-                    if entity_exists:
-                        # Entity exists but no coordinator - likely stale or wrong domain
-                        entity_state = self.hass.states.get(entity_id)
-                        entity_domain = entity_state.attributes.get("friendly_name", "Unknown")
-
-                        _LOGGER.warning(
-                            "[WiiM] %s: Entity %s exists (name: %s) but has no WiiM coordinator. "
-                            "This may be a stale WiiM entity or a non-WiiM device. "
-                            "Consider removing it from your group configuration or checking if the device is offline.",
-                            self.entity_id,
-                            entity_id,
-                            entity_domain,
-                        )
-
-                        # Try to determine if this is a WiiM entity by checking attributes
-                        integration = entity_state.attributes.get("integration")
-                        if integration == DOMAIN:
-                            _LOGGER.warning(
-                                "[WiiM] %s: Entity %s appears to be a stale WiiM entity. "
-                                "The device may be offline or the entity may need to be removed from HA.",
-                                self.entity_id,
-                                entity_id,
-                            )
-                    else:
-                        # Entity doesn't exist at all
-                        _LOGGER.warning(
-                            "[WiiM] %s: Entity %s does not exist in Home Assistant. "
-                            "Please check your group configuration and remove invalid entity IDs.",
-                            self.entity_id,
-                            entity_id,
-                        )
-
-                    # Always skip missing entities
+                except Exception as join_err:
+                    _LOGGER.error(
+                        "[WiiM] %s: Failed to join %s to group: %s",
+                        self.entity_id,
+                        member_ip,
+                        join_err,
+                    )
+                    # Don't raise - continue with other members
                     continue
 
             # ------------------------------------------------------------------
@@ -1421,7 +1453,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             #    desired `group_members` list (automatic pruning)
             # ------------------------------------------------------------------
             desired_hosts = set()
-            for eid in group_members:
+            for eid in validated_members:
                 if eid != self.entity_id and _find_coordinator(self.hass, eid) is not None:
                     member_host = self._entity_id_to_host(eid)
                     if member_host is not None:
@@ -1828,6 +1860,123 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Return the name of the current streaming service (Spotify, Tidal…)."""
         service = self.coordinator.data.get("status", {}).get("streaming_service")
         return service
+
+    async def async_cleanup_stale_entities(self, dry_run: bool = True) -> None:
+        """Clean up stale WiiM entities (with optional dry-run mode)."""
+        _LOGGER.info("[WiiM] %s: Starting stale entity cleanup (dry_run=%s)", self.entity_id, dry_run)
+
+        # Get all WiiM entities from entity registry
+        from homeassistant.helpers import entity_registry as er
+
+        ent_reg = er.async_get(self.hass)
+
+        wiim_entities = []
+        stale_entities = []
+        active_coordinators = []
+
+        # Collect all WiiM entities
+        for entry in ent_reg.entities.values():
+            if entry.domain == "media_player" and entry.platform == DOMAIN:
+                wiim_entities.append(entry)
+
+        # Collect active coordinators
+        coordinator_hosts = set()
+        for coord in self.hass.data[DOMAIN].values():
+            if hasattr(coord, "client"):
+                coordinator_hosts.add(coord.client.host)
+                active_coordinators.append(coord)
+
+        # Find stale entities
+        for entity in wiim_entities:
+            if entity.unique_id not in coordinator_hosts:
+                # Additional check: see if entity state exists and is unavailable
+                entity_state = self.hass.states.get(entity.entity_id)
+                is_stale = (
+                    entity_state is None
+                    or entity_state.state in ("unavailable", "unknown")
+                    or entity_state.attributes.get("restored", False)
+                )
+
+                if is_stale:
+                    stale_entities.append(entity)
+
+        if not stale_entities:
+            _LOGGER.info("[WiiM] %s: No stale entities found!", self.entity_id)
+            return
+
+        _LOGGER.info(
+            "[WiiM] %s: Found %d stale entities to %s",
+            self.entity_id,
+            len(stale_entities),
+            "remove" if not dry_run else "potentially remove",
+        )
+
+        removed_count = 0
+        for entity in stale_entities:
+            entity_name = entity.name or entity.original_name or entity.entity_id
+
+            if dry_run:
+                _LOGGER.info(
+                    "[WiiM] %s: [DRY RUN] Would remove stale entity: %s (%s)",
+                    self.entity_id,
+                    entity.entity_id,
+                    entity_name,
+                )
+            else:
+                try:
+                    # Remove the entity from registry
+                    ent_reg.async_remove(entity.entity_id)
+                    removed_count += 1
+                    _LOGGER.info(
+                        "[WiiM] %s: Removed stale entity: %s (%s)",
+                        self.entity_id,
+                        entity.entity_id,
+                        entity_name,
+                    )
+                except Exception as remove_err:
+                    _LOGGER.error(
+                        "[WiiM] %s: Failed to remove stale entity %s: %s",
+                        self.entity_id,
+                        entity.entity_id,
+                        remove_err,
+                    )
+
+        if dry_run:
+            _LOGGER.info(
+                "[WiiM] %s: [DRY RUN] Would remove %d stale entities. "
+                "To actually remove them, call this service with dry_run: false",
+                self.entity_id,
+                len(stale_entities),
+            )
+        else:
+            _LOGGER.info(
+                "[WiiM] %s: Successfully removed %d/%d stale entities",
+                self.entity_id,
+                removed_count,
+                len(stale_entities),
+            )
+
+    async def async_auto_maintain(self, auto_cleanup: bool = False, dry_run: bool = True) -> None:
+        """Run comprehensive maintenance: diagnostics + optional cleanup."""
+        _LOGGER.info(
+            "[WiiM] %s: Starting auto maintenance (auto_cleanup=%s, dry_run=%s)",
+            self.entity_id,
+            auto_cleanup,
+            dry_run,
+        )
+
+        # First run diagnostics
+        await self.async_diagnose_entities()
+
+        # If auto_cleanup is enabled, run cleanup
+        if auto_cleanup:
+            _LOGGER.info("[WiiM] %s: Running automatic cleanup as requested", self.entity_id)
+            await self.async_cleanup_stale_entities(dry_run=dry_run)
+        else:
+            _LOGGER.info(
+                "[WiiM] %s: Auto cleanup disabled. To enable cleanup, set auto_cleanup=true",
+                self.entity_id,
+            )
 
 
 def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | None:

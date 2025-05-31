@@ -1,126 +1,221 @@
+diagnose_entities:
+  name: Diagnose WiiM Entities
+  description: Analyze all WiiM entities and coordinators to identify potential issues
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+
+cleanup_stale_entities:
+  name: Clean Up Stale Entities
+  description: Remove stale WiiM entities from Home Assistant (use dry_run=false to actually remove)
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    dry_run:
+      name: Dry Run
+      description: If true, only show what would be removed without actually removing anything
+      required: false
+      default: true
+      selector:
+        boolean:
+
+auto_maintain:
+  name: Auto Maintenance
+  description: Run comprehensive maintenance including diagnostics and optional cleanup
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    auto_cleanup:
+      name: Auto Cleanup
+      description: Automatically clean up stale entities after diagnosis
+      required: false
+      default: false
+      selector:
+        boolean:
+    dry_run:
+      name: Dry Run
+      description: If true, only show what would be removed without actually removing anything
+      required: false
+      default: true
+      selector:
+        boolean:
+
 play_preset:
   name: Play Preset
-  description: Play a preset on the WiiM device.
+  description: Play a specific preset (1-6)
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
   fields:
-    entity_id:
-      name: Entity
-      description: Name of the WiiM entity to control.
-      selector:
-        entity:
-          domain: media_player
-          integration: wiim
     preset:
-      name: Preset
-      description: Preset number to play (1-6).
+      name: Preset Number
+      description: Preset number to play (1-6)
+      required: true
       selector:
         number:
           min: 1
           max: 6
-          step: 1
 
 toggle_power:
   name: Toggle Power
-  description: Toggle the power state of the WiiM device.
+  description: Toggle device power on/off
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+
+play_url:
+  name: Play URL
+  description: Play media from a URL
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
   fields:
-    entity_id:
-      name: Entity
-      description: Name of the WiiM entity to control.
+    url:
+      name: URL
+      description: URL of the media to play
+      required: true
       selector:
-        entity:
-          domain: media_player
-          integration: wiim
+        text:
+
+play_playlist:
+  name: Play Playlist
+  description: Play an M3U playlist
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    playlist_url:
+      name: Playlist URL
+      description: URL of the M3U playlist
+      required: true
+      selector:
+        text:
+
+set_eq:
+  name: Set EQ
+  description: Set equalizer preset or custom values
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    preset:
+      name: EQ Preset
+      description: EQ preset name
+      required: true
+      selector:
+        select:
+          options:
+            - "flat"
+            - "classical"
+            - "jazz"
+            - "vocal"
+            - "pop"
+            - "rock"
+            - "dance"
+            - "country"
+            - "blues"
+            - "custom"
+    custom_values:
+      name: Custom EQ Values
+      description: Custom EQ values (required when preset is 'custom')
+      required: false
+      selector:
+        object:
+
+play_notification:
+  name: Play Notification
+  description: Play a notification sound
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    url:
+      name: Notification URL
+      description: URL of the notification sound
+      required: true
+      selector:
+        text:
 
 reboot_device:
   name: Reboot Device
-  description: Soft-reboot the WiiM speaker.
-  fields:
-    entity_id:
-      name: Entity
-      description: Name of the WiiM entity to reboot.
-      selector:
-        entity:
-          domain: media_player
-          integration: wiim
+  description: Reboot the WiiM device
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
 
 sync_time:
   name: Sync Time
-  description: Push Home Assistant's current Unix timestamp to the speaker.
-  fields:
-    entity_id:
-      name: Entity
-      description: Name of the WiiM entity to update.
-      selector:
-        entity:
-          domain: media_player
-          integration: wiim
+  description: Synchronize device time with Home Assistant
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
 
-# Group Management Services
 create_group:
   name: Create Group
-  description: Create a new multiroom group with this device as master and specified members.
+  description: Create a new multiroom group with specified members
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
   fields:
-    entity_id:
-      name: Master Entity
-      description: WiiM device that will become the group master.
-      selector:
-        entity:
-          domain: media_player
-          integration: wiim
     group_members:
       name: Group Members
-      description: List of WiiM entities to include in the group.
+      description: List of entity IDs to include in the group
+      required: true
       selector:
         entity:
-          domain: media_player
-          integration: wiim
           multiple: true
+          domain: media_player
 
 add_to_group:
   name: Add to Group
-  description: Add another WiiM device to this device's existing group.
+  description: Add another device to this device's group
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
   fields:
-    entity_id:
-      name: Group Master
-      description: Master device of the group to add to.
-      selector:
-        entity:
-          domain: media_player
-          integration: wiim
     target_entity:
-      name: Device to Add
-      description: WiiM device to add to the group.
+      name: Target Entity
+      description: Entity ID of the device to add to the group
+      required: true
       selector:
         entity:
           domain: media_player
-          integration: wiim
 
 remove_from_group:
   name: Remove from Group
-  description: Remove a device from this device's group.
+  description: Remove a device from this device's group
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
   fields:
-    entity_id:
-      name: Group Master
-      description: Master device of the group to remove from.
-      selector:
-        entity:
-          domain: media_player
-          integration: wiim
     target_entity:
-      name: Device to Remove
-      description: WiiM device to remove from the group.
+      name: Target Entity
+      description: Entity ID of the device to remove from the group
+      required: true
       selector:
         entity:
           domain: media_player
-          integration: wiim
 
 disband_group:
   name: Disband Group
-  description: Completely disband the multiroom group.
-  fields:
-    entity_id:
-      name: Group Device
-      description: Any device in the group to disband.
-      selector:
-        entity:
-          domain: media_player
-          integration: wiim
+  description: Disband the entire multiroom group
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
