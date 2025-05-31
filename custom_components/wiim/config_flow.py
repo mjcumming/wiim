@@ -121,6 +121,49 @@ async def _async_validate_host(host: str) -> None:
             await client.close()
 
 
+async def _get_enhanced_device_name(client: WiiMClient, fallback_host: str) -> str:
+    """Get device name with role information for better identification during setup."""
+    device_name = fallback_host  # fallback to IP/host
+
+    # Try multiple endpoints to get the best device name
+    try:
+        status_info = await client.get_status()
+        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
+
+        # Check if device is a group master and enhance the name accordingly
+        try:
+            multiroom_info = await client.get_multiroom_info()
+            slave_list = multiroom_info.get("slave_list", [])
+
+            # If device has slaves, it's a master - add master indicator
+            if slave_list and len(slave_list) > 0:
+                slave_count = len(slave_list)
+                device_name = f"{device_name} (Master of {slave_count} device{'s' if slave_count != 1 else ''})"
+                _LOGGER.debug(
+                    "Enhanced name for master device %s: %s with %d slaves", fallback_host, device_name, slave_count
+                )
+            # Check for slave status using multiroom type
+            elif str(multiroom_info.get("type")) == "1":
+                # This is a slave device - could enhance with master info but keep it simple for setup
+                device_name = f"{device_name} (In Group)"
+                _LOGGER.debug("Enhanced name for slave device %s: %s", fallback_host, device_name)
+
+        except WiiMError:
+            # Multiroom info not available, use basic name
+            pass
+
+    except WiiMError:
+        # get_status failed, try get_device_info
+        try:
+            device_info = await client.get_device_info()
+            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+        except WiiMError:
+            # Both failed, stick with fallback
+            pass
+
+    return device_name
+
+
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a WiiM config flow."""
 
@@ -150,23 +193,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 client = await wiim_factory_client(host)
                 try:
-                    # Try multiple endpoints to get the best device name
-                    device_name = host  # fallback
-
-                    # Try get_status first (most reliable for device name)
-                    try:
-                        status_info = await client.get_status()
-                        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
-                    except WiiMError:
-                        pass
-
-                    # If still no name, try get_device_info
-                    if device_name == host:
-                        try:
-                            device_info = await client.get_device_info()
-                            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
-                        except WiiMError:
-                            pass
+                    # Get enhanced device name with role information
+                    device_name = await _get_enhanced_device_name(client, host)
 
                     # Use host/IP as unique_id to guarantee one entry per device
                     unique_id = host
@@ -219,23 +247,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 client = await wiim_factory_client(host)
                 try:
-                    # Try multiple endpoints to get the best device name
-                    device_name = host  # fallback
-
-                    # Try get_status first (most reliable for device name)
-                    try:
-                        status_info = await client.get_status()
-                        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
-                    except WiiMError:
-                        pass
-
-                    # If still no name, try get_device_info
-                    if device_name == host:
-                        try:
-                            device_info = await client.get_device_info()
-                            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
-                        except WiiMError:
-                            pass
+                    # Get enhanced device name with role information
+                    device_name = await _get_enhanced_device_name(client, host)
 
                     # Ensure device is ungrouped for clean setup
                     await self._ensure_solo(client, {"device_name": device_name})
@@ -290,23 +303,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Quick validation and get device name
                 client = await wiim_factory_client(host)
                 try:
-                    # Try multiple endpoints to get the best device name
-                    device_name = host  # fallback
-
-                    # Try get_status first (most reliable for device name)
-                    try:
-                        status_info = await client.get_status()
-                        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
-                    except WiiMError:
-                        pass
-
-                    # If still no name, try get_device_info
-                    if device_name == host:
-                        try:
-                            device_info = await client.get_device_info()
-                            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
-                        except WiiMError:
-                            pass
+                    # Get enhanced device name with role information
+                    device_name = await _get_enhanced_device_name(client, host)
 
                     # Ensure device is ungrouped for clean setup
                     await self._ensure_solo(client, {"device_name": device_name})
@@ -354,23 +352,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
             try:
-                # Try multiple endpoints to get the best device name
-                device_name = host  # fallback
-
-                # Try get_status first (most reliable for device name)
-                try:
-                    status_info = await client.get_status()
-                    device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
-                except WiiMError:
-                    pass
-
-                # If still no name, try get_device_info
-                if device_name == host:
-                    try:
-                        device_info = await client.get_device_info()
-                        device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
-                    except WiiMError:
-                        pass
+                # Get enhanced device name with role information
+                device_name = await _get_enhanced_device_name(client, host)
 
                 unique_id = host
                 # Ensure device is ungrouped for clean setup
@@ -431,23 +414,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
             try:
-                # Try multiple endpoints to get the best device name
-                device_name = host  # fallback
-
-                # Try get_status first (most reliable for device name)
-                try:
-                    status_info = await client.get_status()
-                    device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
-                except WiiMError:
-                    pass
-
-                # If still no name, try get_device_info
-                if device_name == host:
-                    try:
-                        device_info = await client.get_device_info()
-                        device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
-                    except WiiMError:
-                        pass
+                # Get enhanced device name with role information
+                device_name = await _get_enhanced_device_name(client, host)
 
                 unique_id = host
                 # Ensure device is ungrouped for clean setup

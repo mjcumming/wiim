@@ -35,6 +35,10 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
         patch(
             "custom_components.wiim.config_flow.wiim_factory_client",
         ) as mock_factory,
+        patch(
+            "custom_components.wiim.config_flow._get_enhanced_device_name",
+            return_value="WiiM Mini",
+        ) as mock_enhanced_name,
     ):
         # Mock the factory to return a client
         mock_client = mock_factory.return_value
@@ -49,8 +53,10 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
 
         assert result2["type"] is FlowResultType.CREATE_ENTRY
-        assert result2["title"] == "WiiM Mini"  # Uses device_name from MOCK_DEVICE_DATA
+        assert result2["title"] == "WiiM Mini"  # Uses device_name from enhanced naming
         assert result2["data"] == MOCK_CONFIG
+        # Verify enhanced naming was called
+        mock_enhanced_name.assert_called_once()
 
 
 async def test_form_connection_error(hass: HomeAssistant) -> None:
@@ -106,6 +112,10 @@ async def test_form_already_configured(hass: HomeAssistant) -> None:
         patch(
             "custom_components.wiim.config_flow.wiim_factory_client",
         ) as mock_factory,
+        patch(
+            "custom_components.wiim.config_flow._get_enhanced_device_name",
+            return_value="WiiM Mini",
+        ),
     ):
         # Mock the factory to return a client
         mock_client = mock_factory.return_value
@@ -156,3 +166,67 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     # Test options flow can be initialized
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM or result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_enhanced_device_naming_master(hass: HomeAssistant) -> None:
+    """Test enhanced device naming for master devices."""
+    with (
+        patch("custom_components.wiim.config_flow.async_search", None),
+        patch(
+            "custom_components.wiim.config_flow.wiim_factory_client",
+        ) as mock_factory,
+    ):
+        # Mock the factory to return a client
+        mock_client = mock_factory.return_value
+        mock_client.get_player_status.return_value = MOCK_DEVICE_DATA
+        mock_client.get_status.return_value = {"DeviceName": "Living Room", "device_name": "Living Room"}
+        mock_client.get_multiroom_info.return_value = {
+            "slave_list": [
+                {"ip": "192.168.1.101", "name": "Kitchen"},
+                {"ip": "192.168.1.102", "name": "Bedroom"},
+            ]
+        }
+        mock_client.close.return_value = None
+
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            MOCK_CONFIG,
+        )
+        await hass.async_block_till_done()
+
+        assert result2["type"] is FlowResultType.CREATE_ENTRY
+        # Should indicate it's a master of 2 devices
+        assert "Master of 2 devices" in result2["title"]
+        assert result2["data"] == MOCK_CONFIG
+
+
+async def test_enhanced_device_naming_slave(hass: HomeAssistant) -> None:
+    """Test enhanced device naming for slave devices."""
+    with (
+        patch("custom_components.wiim.config_flow.async_search", None),
+        patch(
+            "custom_components.wiim.config_flow.wiim_factory_client",
+        ) as mock_factory,
+    ):
+        # Mock the factory to return a client
+        mock_client = mock_factory.return_value
+        mock_client.get_player_status.return_value = MOCK_DEVICE_DATA
+        mock_client.get_status.return_value = {"DeviceName": "Kitchen", "device_name": "Kitchen"}
+        mock_client.get_multiroom_info.return_value = {
+            "type": "1",  # Indicates slave
+            "slave_list": [],
+        }
+        mock_client.close.return_value = None
+
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            MOCK_CONFIG,
+        )
+        await hass.async_block_till_done()
+
+        assert result2["type"] is FlowResultType.CREATE_ENTRY
+        # Should indicate it's in a group
+        assert "(In Group)" in result2["title"]
+        assert result2["data"] == MOCK_CONFIG

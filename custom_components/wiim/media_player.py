@@ -121,6 +121,11 @@ async def async_setup_entry(
         {},
         "async_sync_time",
     )
+    platform.async_register_entity_service(
+        "diagnose_entities",
+        {},
+        "async_diagnose_entities",
+    )
 
     # Group management services
     platform.async_register_entity_service(
@@ -1206,8 +1211,8 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             _LOGGER.error("Failed to toggle power on WiiM device: %s", err)
             raise
 
-    def _entity_id_to_host(self, entity_id: str) -> str:
-        """Map HA entity_id to device IP address (host)."""
+    def _entity_id_to_host(self, entity_id: str) -> str | None:
+        """Map HA entity_id to device IP address (host). Returns None if not found."""
         _LOGGER.debug(
             "[WiiM] %s: _entity_id_to_host() called with entity_id=%s",
             self.entity_id,
@@ -1255,7 +1260,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     for coord in self.hass.data[DOMAIN].values():
                         if not hasattr(coord, "client"):
                             continue
-                        status = coord.data.get("status", {})
+                        status = coord.data.get("status", {}) if coord.data else {}
                         device_name_from_status = status.get("DeviceName") or status.get("device_name")
                         if device_name_from_status and device_name_from_status.lower() == device_name.lower():
                             _LOGGER.debug(
@@ -1277,8 +1282,17 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 )
                 return coord.client.host
 
+        # Fourth try: Use the improved _find_coordinator function and extract host from it
+        coord = _find_coordinator(self.hass, entity_id)
+        if coord and hasattr(coord, "client"):
+            _LOGGER.debug(
+                "[WiiM] _entity_id_to_host: Match found via _find_coordinator for host=%s",
+                coord.client.host,
+            )
+            return coord.client.host
+
         _LOGGER.warning("[WiiM] _entity_id_to_host: No match found for entity_id=%s", entity_id)
-        raise ValueError(f"Unknown entity_id: {entity_id}")
+        return None
 
     async def async_join(self, group_members: list[str]) -> None:
         """Join `group_members` as a group."""
@@ -1329,9 +1343,18 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 if entity_id == self.entity_id:
                     _LOGGER.debug("[WiiM] %s: Skipping self in group members", self.entity_id)
                     continue
+
                 coord = _find_coordinator(self.hass, entity_id)
                 if coord is not None:
                     member_ip = self._entity_id_to_host(entity_id)
+                    if member_ip is None:
+                        _LOGGER.warning(
+                            "[WiiM] %s: Could not resolve host for entity %s – skipping",
+                            self.entity_id,
+                            entity_id,
+                        )
+                        continue
+
                     _LOGGER.info(
                         "[WiiM] %s: Instructing %s to join master %s",
                         self.entity_id,
@@ -1352,24 +1375,58 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                             member_ip,
                             join_err,
                         )
-                        raise
+                        # Don't raise - continue with other members
+                        continue
                 else:
-                    _LOGGER.warning(
-                        "[WiiM] %s: Could not find coordinator for %s – skipping",
-                        self.entity_id,
-                        entity_id,
-                    )
+                    # Check if this entity exists in HA but isn't a WiiM device
+                    entity_exists = self.hass.states.get(entity_id) is not None
+
+                    if entity_exists:
+                        # Entity exists but no coordinator - likely stale or wrong domain
+                        entity_state = self.hass.states.get(entity_id)
+                        entity_domain = entity_state.attributes.get("friendly_name", "Unknown")
+
+                        _LOGGER.warning(
+                            "[WiiM] %s: Entity %s exists (name: %s) but has no WiiM coordinator. "
+                            "This may be a stale WiiM entity or a non-WiiM device. "
+                            "Consider removing it from your group configuration or checking if the device is offline.",
+                            self.entity_id,
+                            entity_id,
+                            entity_domain,
+                        )
+
+                        # Try to determine if this is a WiiM entity by checking attributes
+                        integration = entity_state.attributes.get("integration")
+                        if integration == DOMAIN:
+                            _LOGGER.warning(
+                                "[WiiM] %s: Entity %s appears to be a stale WiiM entity. "
+                                "The device may be offline or the entity may need to be removed from HA.",
+                                self.entity_id,
+                                entity_id,
+                            )
+                    else:
+                        # Entity doesn't exist at all
+                        _LOGGER.warning(
+                            "[WiiM] %s: Entity %s does not exist in Home Assistant. "
+                            "Please check your group configuration and remove invalid entity IDs.",
+                            self.entity_id,
+                            entity_id,
+                        )
+
+                    # Always skip missing entities
                     continue
 
             # ------------------------------------------------------------------
             # 2) Remove slaves that are currently in the group but not in the
             #    desired `group_members` list (automatic pruning)
             # ------------------------------------------------------------------
-            desired_hosts = {
-                self._entity_id_to_host(eid)
-                for eid in group_members
-                if eid != self.entity_id and _find_coordinator(self.hass, eid) is not None
-            }
+            desired_hosts = set()
+            for eid in group_members:
+                if eid != self.entity_id and _find_coordinator(self.hass, eid) is not None:
+                    member_host = self._entity_id_to_host(eid)
+                    if member_host is not None:
+                        desired_hosts.add(member_host)
+
             current_slaves = set(self.coordinator.wiim_group_members)
             _LOGGER.debug(
                 "[WiiM] %s: desired_hosts=%s, current_slaves=%s",
@@ -1456,6 +1513,100 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         except WiiMError as err:
             _LOGGER.error("Failed to sync time on WiiM device: %s", err)
             raise
+
+    async def async_diagnose_entities(self) -> None:
+        """Diagnose WiiM entities and coordinators for troubleshooting."""
+        _LOGGER.info("[WiiM] %s: Starting entity diagnostics", self.entity_id)
+
+        # Get all WiiM entities from entity registry
+        from homeassistant.helpers import entity_registry as er
+
+        ent_reg = er.async_get(self.hass)
+
+        wiim_entities = []
+        stale_entities = []
+        active_coordinators = []
+
+        # Collect all WiiM entities
+        for entry in ent_reg.entities.values():
+            if entry.domain == "media_player" and entry.platform == DOMAIN:
+                wiim_entities.append(
+                    {
+                        "entity_id": entry.entity_id,
+                        "unique_id": entry.unique_id,
+                        "name": entry.name or entry.original_name,
+                        "disabled": entry.disabled_by is not None,
+                    }
+                )
+
+        # Collect active coordinators
+        for coord in self.hass.data[DOMAIN].values():
+            if hasattr(coord, "client"):
+                active_coordinators.append(
+                    {
+                        "host": coord.client.host,
+                        "has_data": coord.data is not None,
+                        "device_name": coord.data.get("status", {}).get("DeviceName") if coord.data else None,
+                        "role": coord.data.get("role") if coord.data else None,
+                    }
+                )
+
+        # Find stale entities (entities without corresponding coordinators)
+        coordinator_hosts = {coord["host"] for coord in active_coordinators}
+
+        for entity in wiim_entities:
+            if entity["unique_id"] not in coordinator_hosts:
+                # Check if entity still exists in HA state
+                entity_state = self.hass.states.get(entity["entity_id"])
+                stale_entities.append(
+                    {
+                        **entity,
+                        "state_exists": entity_state is not None,
+                        "state": entity_state.state if entity_state else None,
+                    }
+                )
+
+        # Log comprehensive diagnostics
+        _LOGGER.info(
+            "[WiiM] %s: Diagnostics Results:\n"
+            "  Total WiiM Entities: %d\n"
+            "  Active Coordinators: %d\n"
+            "  Potentially Stale Entities: %d\n"
+            "\nActive Coordinators:\n%s\n"
+            "\nAll WiiM Entities:\n%s\n"
+            "\nPotentially Stale Entities:\n%s",
+            self.entity_id,
+            len(wiim_entities),
+            len(active_coordinators),
+            len(stale_entities),
+            "\n".join(
+                f"  - {coord['host']}: {coord['device_name']} ({coord['role']})" for coord in active_coordinators
+            ),
+            "\n".join(
+                f"  - {entity['entity_id']}: {entity['name']} (unique_id: {entity['unique_id']}, disabled: {entity['disabled']})"
+                for entity in wiim_entities
+            ),
+            (
+                "\n".join(
+                    f"  - {entity['entity_id']}: {entity['name']} (state_exists: {entity['state_exists']}, state: {entity['state']})"
+                    for entity in stale_entities
+                )
+                if stale_entities
+                else "  None"
+            ),
+        )
+
+        if stale_entities:
+            _LOGGER.warning(
+                "[WiiM] %s: Found %d potentially stale entities. "
+                "These entities exist in the registry but have no active coordinator. "
+                "This usually happens when devices are removed or renamed. "
+                "Consider removing these entities from Home Assistant if they're no longer needed.",
+                self.entity_id,
+                len(stale_entities),
+            )
+        else:
+            _LOGGER.info("[WiiM] %s: All WiiM entities appear to be healthy!", self.entity_id)
 
     def join_players(self, group_members: list[str]) -> None:
         """Synchronous join for HA compatibility (thread-safe)."""
@@ -1683,7 +1834,7 @@ def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | 
     """Return coordinator for the given entity ID."""
     _LOGGER.debug("[WiiM] _find_coordinator: Looking up coordinator for entity_id=%s", entity_id)
 
-    # First try: Direct entity ID to host mapping
+    # First try: Direct entity ID to host mapping (standard WiiM naming pattern)
     for coord in hass.data[DOMAIN].values():
         if not hasattr(coord, "client"):
             continue
@@ -1743,5 +1894,64 @@ def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | 
             )
             return coord
 
+    # Fourth try: Fuzzy matching for entities that might have different naming patterns
+    # Extract the device name part from entity_id (e.g., "master_bedroom" from "media_player.master_bedroom_2")
+    entity_name_part = entity_id.replace("media_player.", "").replace("_", " ").lower()
+    # Remove common suffixes like "_2", "_3" etc. that might indicate duplicates
+    import re
+
+    entity_name_part = re.sub(r"_\d+$", "", entity_name_part.replace(" ", "_")).replace("_", " ")
+
+    if entity_name_part:
+        _LOGGER.debug("[WiiM] _find_coordinator: Trying fuzzy match with name part: %s", entity_name_part)
+        for coord in hass.data[DOMAIN].values():
+            if not hasattr(coord, "client") or not coord.data:
+                continue
+            status = coord.data.get("status", {})
+            device_name_from_status = status.get("DeviceName") or status.get("device_name") or ""
+
+            # Try exact match first
+            if device_name_from_status.lower().replace(" ", "_") == entity_name_part.replace(" ", "_"):
+                _LOGGER.debug(
+                    "[WiiM] _find_coordinator: Fuzzy exact match found for device '%s' -> host=%s",
+                    device_name_from_status,
+                    coord.client.host,
+                )
+                return coord
+
+            # Try partial match if device name contains the entity name part
+            if entity_name_part in device_name_from_status.lower().replace(" ", "_"):
+                _LOGGER.debug(
+                    "[WiiM] _find_coordinator: Fuzzy partial match found for device '%s' -> host=%s",
+                    device_name_from_status,
+                    coord.client.host,
+                )
+                return coord
+
+    # Fifth try: Check all entities in Home Assistant entity registry for WiiM domain
+    try:
+        from homeassistant.helpers import entity_registry as er
+
+        ent_reg = er.async_get(hass)
+
+        # Get all WiiM entities and see if any of them map to our entity_id
+        for entry in ent_reg.entities.values():
+            if entry.domain == "media_player" and entry.platform == DOMAIN:
+                # If the entry's entity_id matches and it has a unique_id, try to find the coordinator
+                if entry.entity_id == entity_id and entry.unique_id:
+                    for coord in hass.data[DOMAIN].values():
+                        if hasattr(coord, "client") and coord.client.host == entry.unique_id:
+                            _LOGGER.debug(
+                                "[WiiM] _find_coordinator: Found via registry scan for host=%s",
+                                coord.client.host,
+                            )
+                            return coord
+    except Exception as scan_err:
+        _LOGGER.debug("[WiiM] _find_coordinator: Registry scan failed: %s", scan_err)
+
     _LOGGER.warning("[WiiM] _find_coordinator: No coordinator found for entity_id=%s", entity_id)
+    _LOGGER.debug(
+        "[WiiM] _find_coordinator: Available coordinators: %s",
+        [f"{coord.client.host if hasattr(coord, 'client') else 'no_client'}" for coord in hass.data[DOMAIN].values()],
+    )
     return None
