@@ -553,3 +553,25 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         )
 
         return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_options(self, user_input=None):
+        """Handle options flow."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        return self.async_show_form(
+            step_id="options",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        "own_group_entity", default=self.config_entry.options.get("own_group_entity", False)
+                    ): bool,
+                    vol.Optional(
+                        "auto_master_mode", default=self.config_entry.options.get("auto_master_mode", False)
+                    ): bool,
+                    vol.Optional(
+                        CONF_VOLUME_STEP, default=self.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.01, max=1.0)),
+                }
+            ),
+        )

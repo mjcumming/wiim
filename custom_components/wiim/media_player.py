@@ -59,6 +59,58 @@ _LOGGER = logging.getLogger(__name__)
 HA_ATTR_GROUP_LEADER = "group_leader"
 
 
+async def _cleanup_conflicting_entities(hass: HomeAssistant, coordinator: WiiMCoordinator) -> None:
+    """Clean up any conflicting entities that might cause _2 suffix issues."""
+    try:
+        from homeassistant.helpers import entity_registry as er
+
+        ent_reg = er.async_get(hass)
+
+        # Generate expected entity ID for this coordinator
+        status = coordinator.data.get("status", {}) if coordinator.data else {}
+        device_name = status.get("DeviceName") or status.get("device_name") or coordinator.client.host
+        safe_name = (
+            device_name.replace(" ", "_")
+            .replace("(", "")
+            .replace(")", "")
+            .replace(",", "")
+            .replace(".", "_")
+            .replace("none", "")
+            .replace("null", "")
+            .lower()
+        )
+
+        # Possible conflicting entity IDs
+        possible_conflicts = [
+            f"media_player.wiim_{coordinator.client.host.replace('.', '_')}",
+            f"media_player.{safe_name}",
+            f"media_player.wiim_{safe_name}",
+        ]
+
+        for conflict_id in possible_conflicts:
+            existing_entry = ent_reg.async_get(conflict_id)
+            if existing_entry and existing_entry.platform == DOMAIN:
+                # Check if this entity is stale (not corresponding to current coordinator)
+                entity_state = hass.states.get(conflict_id)
+                if (
+                    entity_state is None
+                    or entity_state.state in ("unavailable", "unknown")
+                    or entity_state.attributes.get("restored", False)
+                ):
+                    _LOGGER.info(
+                        "[WiiM] Cleaning up conflicting stale entity: %s",
+                        conflict_id,
+                    )
+                    ent_reg.async_remove(conflict_id)
+
+    except Exception as cleanup_err:
+        _LOGGER.debug(
+            "[WiiM] Failed to cleanup conflicting entities for %s: %s",
+            coordinator.client.host,
+            cleanup_err,
+        )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -66,6 +118,10 @@ async def async_setup_entry(
 ) -> None:
     """Set up WiiM media player from a config entry."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+
+    # Automatic cleanup of potential conflicting entities before creating new ones
+    await _cleanup_conflicting_entities(hass, coordinator)
+
     entity = WiiMMediaPlayer(coordinator)
 
     async_add_entities([entity])
@@ -354,7 +410,24 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             .replace("null", "")
             .lower()
         )
-        self._attr_unique_id = f"wiim_{coordinator.client.host.replace('.', '_')}_{safe_name}"
+
+        # Use a more robust unique_id strategy to prevent conflicts
+        device_id = status.get("uuid") or status.get("device_id") or coordinator.client.host
+
+        # Primary unique_id based on device ID/UUID if available
+        if device_id and device_id != coordinator.client.host:
+            self._attr_unique_id = f"wiim_{device_id}_{safe_name}"
+        else:
+            # Fallback to IP-based unique_id
+            self._attr_unique_id = f"wiim_{coordinator.client.host.replace('.', '_')}_{safe_name}"
+
+        _LOGGER.debug(
+            "[WiiM] %s: Created unique_id: %s (device_id: %s, safe_name: %s)",
+            coordinator.client.host,
+            self._attr_unique_id,
+            device_id,
+            safe_name,
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.client.host)},
             name=device_name,
