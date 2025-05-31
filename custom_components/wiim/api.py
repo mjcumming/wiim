@@ -1046,7 +1046,7 @@ class WiiMClient:
         """Synchronise device RTC with Unix timestamp (defaults to *now*)."""
         if ts is None:
             ts = int(asyncio.get_running_loop().time())
-        
+
         retries = 3  # Number of retries
         for attempt in range(retries):
             try:
