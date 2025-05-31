@@ -164,6 +164,7 @@ async def async_setup_entry(
 
     # Register custom entity services
     platform = entity_platform.async_get_current_platform()
+
     platform.async_register_entity_service(
         "play_preset",
         {vol.Required("preset"): vol.All(int, vol.Range(min=1, max=6))},
@@ -455,17 +456,6 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         elif role == "slave":
             device_name = f"{device_name} (Grouped)"
 
-        safe_name = (  # noqa: F841
-            device_name.replace(" ", "_")
-            .replace("(", "")
-            .replace(")", "")
-            .replace(",", "")
-            .replace(".", "_")
-            .replace("none", "")
-            .replace("null", "")
-            .lower()
-        )
-
         # Use UUID-based unique_id if available, otherwise fall back to IP
         if device_uuid and device_uuid != coordinator.client.host:
             # Primary: UUID-based unique_id (most stable)
@@ -512,12 +502,21 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         )
 
         # Add grouping support - check if user prefers HA native or WiiM custom
-        entry_id = getattr(coordinator, "entry_id", None)
-        if entry_id:
-            entry = self.hass.config_entries.async_get_entry(entry_id)
-            use_ha_native_grouping = entry.options.get("use_ha_native_grouping", True) if entry else True
-        else:
-            use_ha_native_grouping = True  # Default to HA native for new setups
+        # NOTE: self.hass is now available after super().__init__()
+        try:
+            entry_id = getattr(coordinator, "entry_id", None)
+            if entry_id and hasattr(self, "hass"):
+                entry = self.hass.config_entries.async_get_entry(entry_id)
+                use_ha_native_grouping = entry.options.get("use_ha_native_grouping", True) if entry else True
+            else:
+                use_ha_native_grouping = True  # Default to HA native for new setups
+        except Exception as config_err:
+            _LOGGER.debug(
+                "[WiiM] %s: Failed to get grouping config, using defaults: %s",
+                coordinator.client.host,
+                config_err,
+            )
+            use_ha_native_grouping = True  # Safe default
 
         if use_ha_native_grouping:
             # Use HA's native grouping (works with new JOIN UI)
