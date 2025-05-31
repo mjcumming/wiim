@@ -51,6 +51,8 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.version-changed == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -66,20 +68,13 @@ jobs:
             echo "Tag v${{ needs.check-version.outputs.version }} does not exist"
           fi
 
-      - name: Create and push tag
-        if: steps.tag-check.outputs.exists == 'false'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ needs.check-version.outputs.version }}" -m "Release v${{ needs.check-version.outputs.version }}"
-          git push origin "v${{ needs.check-version.outputs.version }}"
-
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false'
         run: |
           cd custom_components
-          zip -r ../wiim-${{ needs.check-version.outputs.version }}.zip wiim/
+          zip -r ../wiim.zip wiim/
           cd ..
+          ls -la wiim.zip
 
       - name: Extract changelog for this version
         if: steps.tag-check.outputs.exists == 'false'
@@ -99,28 +94,16 @@ jobs:
             echo "changelog=Release v${{ needs.check-version.outputs.version }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create GitHub Release
+      - name: Create Release with GitHub CLI
         if: steps.tag-check.outputs.exists == 'false'
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ needs.check-version.outputs.version }}
-          release_name: WiiM Audio v${{ needs.check-version.outputs.version }}
-          body: ${{ steps.changelog.outputs.changelog }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset
-        if: steps.tag-check.outputs.exists == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./wiim-${{ needs.check-version.outputs.version }}.zip
-          asset_name: wiim.zip
-          asset_content_type: application/zip
+        run: |
+          gh release create "v${{ needs.check-version.outputs.version }}" \
+            --title "WiiM Audio v${{ needs.check-version.outputs.version }}" \
+            --notes "${{ steps.changelog.outputs.changelog }}" \
+            --latest \
+            wiim.zip
 
       - name: Success notification
         if: steps.tag-check.outputs.exists == 'false'
@@ -128,3 +111,4 @@ jobs:
           echo "🎉 Successfully created release v${{ needs.check-version.outputs.version }}"
           echo "📦 ZIP file uploaded as wiim.zip"
           echo "🏠 HACS will detect this release within 24 hours"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.check-version.outputs.version }}"
