@@ -843,6 +843,7 @@ class WiiMClient:
         "11": "usb",  # local U-Disk playback
         "20": "wifi",  # HTTPAPI initiated play
         "31": "spotify",  # Spotify Connect session active
+        "36": "qobuz",  # Qobuz streaming
         "40": "line_in",
         "41": "bluetooth",
         "43": "optical",
