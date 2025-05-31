@@ -5,7 +5,6 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/mjcumming/wiim",
-  "icon": "mdi:speaker-wireless",
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
@@ -16,8 +15,9 @@
     { "device_type": "urn:schemas-upnp-org:device:MediaRenderer:1" },
     { "st": "urn:schemas-upnp-org:device:MediaRenderer:1" },
     { "st": "urn:schemas-upnp-org:service:AVTransport:1" },
-    { "st": "urn:schemas-upnp-org:service:RenderingControl:1" }
+    { "st": "urn:schemas-upnp-org:service:RenderingControl:1" },
+    { "st": "urn:schemas-upnp-org:service:ConnectionManager:1" }
   ],
-  "version": "0.3.1",
-  "zeroconf": ["_linkplay._tcp.local."]
+  "version": "0.3.0",
+  "zeroconf": [{ "type": "_linkplay._tcp.local." }]
 }
