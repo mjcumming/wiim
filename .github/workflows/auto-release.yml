@@ -71,10 +71,12 @@ jobs:
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false'
         run: |
-          cd custom_components
-          zip -r ../wiim.zip wiim/
-          cd ..
+          cd custom_components/wiim
+          zip -r ../../wiim.zip . --exclude="*/__pycache__/*" --exclude="*.pyc"
+          cd ../..
           ls -la wiim.zip
+          echo "ZIP contents:"
+          unzip -l wiim.zip | head -20
 
       - name: Extract changelog for this version
         if: steps.tag-check.outputs.exists == 'false'
