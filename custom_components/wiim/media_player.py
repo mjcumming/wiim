@@ -446,8 +446,29 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.BROWSE_MEDIA
-            | MediaPlayerEntityFeature.GROUPING
         )
+
+        # Add grouping support - check if user prefers HA native or WiiM custom
+        entry_id = getattr(coordinator, "entry_id", None)
+        if entry_id:
+            entry = self.hass.config_entries.async_get_entry(entry_id)
+            use_ha_native_grouping = entry.options.get("use_ha_native_grouping", True) if entry else True
+        else:
+            use_ha_native_grouping = True  # Default to HA native for new setups
+
+        if use_ha_native_grouping:
+            # Use HA's native grouping (works with new JOIN UI)
+            base_features |= MediaPlayerEntityFeature.GROUPING
+            _LOGGER.debug(
+                "[WiiM] %s: Using HA native grouping (compatible with JOIN UI)",
+                coordinator.client.host,
+            )
+        else:
+            # Use WiiM custom grouping only (advanced users)
+            _LOGGER.debug(
+                "[WiiM] %s: Using WiiM custom grouping only (advanced mode)",
+                coordinator.client.host,
+            )
 
         # Add optional selectors only if the coordinator reports support
         if coordinator.source_supported:
@@ -1381,9 +1402,14 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         return None
 
     async def async_join(self, group_members: list[str]) -> None:
-        """Join `group_members` as a group."""
+        """Join `group_members` as a group.
+
+        This method is called by HA's native grouping UI (JOIN button) as well as
+        our custom services. We translate HA's generic grouping to proper WiiM
+        multiroom protocols while maintaining compatibility.
+        """
         _LOGGER.info(
-            "[WiiM] %s: Starting join operation with group_members=%s",
+            "[WiiM] %s: HA native join called with group_members=%s",
             self.entity_id,
             group_members,
         )
@@ -1443,6 +1469,11 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 await self.async_unjoin()
             return
 
+        # Use WiiM-specific multiroom grouping (better than generic HA grouping)
+        await self._create_wiim_multiroom_group(validated_members)
+
+    async def _create_wiim_multiroom_group(self, group_members: list[str]) -> None:
+        """Create a proper WiiM multiroom group with enhanced features."""
         try:
             # ------------------------------------------------------------------
             # 1) Ensure *this* device is ready to become/act as master
@@ -1465,23 +1496,23 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
             # Ensure there is a master group created (either existing or create new)
             if not self.coordinator.client.group_master:
-                _LOGGER.info("[WiiM] %s: Creating new group as master", self.entity_id)
+                _LOGGER.info("[WiiM] %s: Creating new WiiM multiroom group as master", self.entity_id)
                 await self.coordinator.create_wiim_group()
                 master_ip = self.coordinator.client.host
                 _LOGGER.info(
-                    "[WiiM] %s: Successfully created group as master (%s)",
+                    "[WiiM] %s: Successfully created WiiM group as master (%s)",
                     self.entity_id,
                     master_ip,
                 )
             else:
                 master_ip = self.coordinator.client.group_master
                 _LOGGER.info(
-                    "[WiiM] %s: Using existing group master %s",
+                    "[WiiM] %s: Using existing WiiM group master %s",
                     self.entity_id,
                     master_ip,
                 )
 
-            for entity_id in validated_members:
+            for entity_id in group_members:
                 if entity_id == self.entity_id:
                     _LOGGER.debug("[WiiM] %s: Skipping self in group members", self.entity_id)
                     continue
@@ -1499,7 +1530,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     continue
 
                 _LOGGER.info(
-                    "[WiiM] %s: Instructing %s to join master %s",
+                    "[WiiM] %s: Instructing %s to join WiiM multiroom master %s",
                     self.entity_id,
                     member_ip,
                     master_ip,
@@ -1507,13 +1538,13 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 try:
                     await coord.join_wiim_group(master_ip)
                     _LOGGER.info(
-                        "[WiiM] %s: Successfully joined %s to group",
+                        "[WiiM] %s: Successfully joined %s to WiiM group",
                         self.entity_id,
                         member_ip,
                     )
                 except Exception as join_err:
                     _LOGGER.error(
-                        "[WiiM] %s: Failed to join %s to group: %s",
+                        "[WiiM] %s: Failed to join %s to WiiM group: %s",
                         self.entity_id,
                         member_ip,
                         join_err,
@@ -1526,7 +1557,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             #    desired `group_members` list (automatic pruning)
             # ------------------------------------------------------------------
             desired_hosts = set()
-            for eid in validated_members:
+            for eid in group_members:
                 if eid != self.entity_id and _find_coordinator(self.hass, eid) is not None:
                     member_host = self._entity_id_to_host(eid)
                     if member_host is not None:
@@ -1543,7 +1574,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             extraneous_slaves = current_slaves - desired_hosts
             for slave_ip in extraneous_slaves:
                 _LOGGER.info(
-                    "[WiiM] %s: Removing extraneous slave %s from group",
+                    "[WiiM] %s: Removing extraneous slave %s from WiiM group",
                     self.entity_id,
                     slave_ip,
                 )
@@ -1563,37 +1594,41 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                         )
 
             _LOGGER.info(
-                "[WiiM] %s: Triggering coordinator refresh after join operation",
+                "[WiiM] %s: Triggering coordinator refresh after WiiM multiroom group creation",
                 self.entity_id,
             )
             await self.coordinator.async_request_refresh()
-            _LOGGER.info("[WiiM] %s: Join operation completed successfully", self.entity_id)
+            _LOGGER.info("[WiiM] %s: WiiM multiroom group creation completed successfully", self.entity_id)
         except Exception as err:
-            _LOGGER.error("[WiiM] %s: Failed to complete join operation: %s", self.entity_id, err)
+            _LOGGER.error("[WiiM] %s: Failed to complete WiiM multiroom group creation: %s", self.entity_id, err)
             raise
 
     async def async_unjoin(self) -> None:
-        """Remove this player from any group."""
-        _LOGGER.info("[WiiM] %s: Starting unjoin operation", self.entity_id)
+        """Remove this player from any group.
+
+        This method is called by HA's native grouping UI as well as our custom services.
+        We use proper WiiM multiroom protocols for ungrouping.
+        """
+        _LOGGER.info("[WiiM] %s: HA native unjoin called", self.entity_id)
         try:
             if self.coordinator.client.is_master:
-                _LOGGER.info("[WiiM] %s: Disbanding group as master", self.entity_id)
+                _LOGGER.info("[WiiM] %s: Disbanding WiiM multiroom group as master", self.entity_id)
                 await self.coordinator.delete_wiim_group()
-                _LOGGER.info("[WiiM] %s: Successfully disbanded group", self.entity_id)
+                _LOGGER.info("[WiiM] %s: Successfully disbanded WiiM group", self.entity_id)
             else:
-                _LOGGER.info("[WiiM] %s: Leaving group as member", self.entity_id)
+                _LOGGER.info("[WiiM] %s: Leaving WiiM multiroom group as member", self.entity_id)
                 await self.coordinator.leave_wiim_group()
-                _LOGGER.info("[WiiM] %s: Successfully left group", self.entity_id)
+                _LOGGER.info("[WiiM] %s: Successfully left WiiM group", self.entity_id)
 
             _LOGGER.info(
-                "[WiiM] %s: Triggering coordinator refresh after unjoin operation",
+                "[WiiM] %s: Triggering coordinator refresh after WiiM unjoin operation",
                 self.entity_id,
             )
             await self.coordinator.async_request_refresh()
-            _LOGGER.info("[WiiM] %s: Unjoin operation completed successfully", self.entity_id)
+            _LOGGER.info("[WiiM] %s: WiiM unjoin operation completed successfully", self.entity_id)
         except Exception as err:
             _LOGGER.error(
-                "[WiiM] %s: Failed to complete unjoin operation: %s",
+                "[WiiM] %s: Failed to complete WiiM unjoin operation: %s",
                 self.entity_id,
                 err,
             )

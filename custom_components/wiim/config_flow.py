@@ -520,6 +520,10 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                     blocking=True,
                 )
 
+            # Map grouping preference option
+            if "use_ha_native_grouping" in user_input:
+                options_data["use_ha_native_grouping"] = user_input["use_ha_native_grouping"]
+
             return self.async_create_entry(title="", data=options_data)
 
         # Get current values and convert for display
@@ -548,6 +552,10 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_DEBUG_LOGGING,
                     default=current_debug_logging,
+                ): bool,
+                vol.Optional(
+                    "use_ha_native_grouping",
+                    default=self.entry.options.get("use_ha_native_grouping", True),
                 ): bool,
             }
         )
