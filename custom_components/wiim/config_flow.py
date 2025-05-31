@@ -150,15 +150,31 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 client = await wiim_factory_client(host)
                 try:
-                    info = await client.get_player_status()
-                    info = await self._ensure_solo(client, info)
+                    # Try multiple endpoints to get the best device name
+                    device_name = host  # fallback
+
+                    # Try get_status first (most reliable for device name)
+                    try:
+                        status_info = await client.get_status()
+                        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
+                    except WiiMError:
+                        pass
+
+                    # If still no name, try get_device_info
+                    if device_name == host:
+                        try:
+                            device_info = await client.get_device_info()
+                            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+                        except WiiMError:
+                            pass
 
                     # Use host/IP as unique_id to guarantee one entry per device
                     unique_id = host
                     await self.async_set_unique_id(unique_id)
                     self._abort_if_unique_id_configured()
 
-                    device_name = info.get("device_name") or info.get("DeviceName") or host
+                    # Ensure device is ungrouped for clean setup
+                    await self._ensure_solo(client, {"device_name": device_name})
                 finally:
                     await client.close()
 
@@ -203,9 +219,26 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 client = await wiim_factory_client(host)
                 try:
-                    info = await client.get_player_status()
-                    info = await self._ensure_solo(client, info)
-                    device_name = info.get("device_name") or info.get("DeviceName") or host
+                    # Try multiple endpoints to get the best device name
+                    device_name = host  # fallback
+
+                    # Try get_status first (most reliable for device name)
+                    try:
+                        status_info = await client.get_status()
+                        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
+                    except WiiMError:
+                        pass
+
+                    # If still no name, try get_device_info
+                    if device_name == host:
+                        try:
+                            device_info = await client.get_device_info()
+                            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+                        except WiiMError:
+                            pass
+
+                    # Ensure device is ungrouped for clean setup
+                    await self._ensure_solo(client, {"device_name": device_name})
                 finally:
                     await client.close()
 
@@ -254,12 +287,29 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return
 
             try:
-                # Quick validation - just check if device responds
+                # Quick validation and get device name
                 client = await wiim_factory_client(host)
                 try:
-                    info = await client.get_player_status()
-                    info = await self._ensure_solo(client, info)
-                    device_name = info.get("device_name") or info.get("DeviceName") or host
+                    # Try multiple endpoints to get the best device name
+                    device_name = host  # fallback
+
+                    # Try get_status first (most reliable for device name)
+                    try:
+                        status_info = await client.get_status()
+                        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
+                    except WiiMError:
+                        pass
+
+                    # If still no name, try get_device_info
+                    if device_name == host:
+                        try:
+                            device_info = await client.get_device_info()
+                            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+                        except WiiMError:
+                            pass
+
+                    # Ensure device is ungrouped for clean setup
+                    await self._ensure_solo(client, {"device_name": device_name})
                     discovered[host] = device_name
                 finally:
                     await client.close()
@@ -304,9 +354,27 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
             try:
-                info = await client.get_player_status()
-                info = await self._ensure_solo(client, info)
-                device_name = info.get("device_name") or info.get("DeviceName") or host
+                # Try multiple endpoints to get the best device name
+                device_name = host  # fallback
+
+                # Try get_status first (most reliable for device name)
+                try:
+                    status_info = await client.get_status()
+                    device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
+                except WiiMError:
+                    pass
+
+                # If still no name, try get_device_info
+                if device_name == host:
+                    try:
+                        device_info = await client.get_device_info()
+                        device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+                    except WiiMError:
+                        pass
+
+                unique_id = host
+                # Ensure device is ungrouped for clean setup
+                await self._ensure_solo(client, {"device_name": device_name})
             finally:
                 await client.close()
         except ConfigEntryNotReady as err:
@@ -363,10 +431,27 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
             try:
-                info = await client.get_player_status()
-                info = await self._ensure_solo(client, info)
+                # Try multiple endpoints to get the best device name
+                device_name = host  # fallback
+
+                # Try get_status first (most reliable for device name)
+                try:
+                    status_info = await client.get_status()
+                    device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
+                except WiiMError:
+                    pass
+
+                # If still no name, try get_device_info
+                if device_name == host:
+                    try:
+                        device_info = await client.get_device_info()
+                        device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+                    except WiiMError:
+                        pass
+
                 unique_id = host
-                device_name = info.get("device_name") or info.get("DeviceName") or host
+                # Ensure device is ungrouped for clean setup
+                await self._ensure_solo(client, {"device_name": device_name})
             finally:
                 await client.close()
         except (ConfigEntryNotReady, Exception) as err:
