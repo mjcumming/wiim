@@ -80,28 +80,64 @@ async def _cleanup_conflicting_entities(hass: HomeAssistant, coordinator: WiiMCo
             .lower()
         )
 
-        # Possible conflicting entity IDs
-        possible_conflicts = [
+        # Get device UUID for more reliable unique identification
+        device_id = status.get("uuid") or status.get("device_id") or coordinator.client.host
+
+        # More aggressive cleanup - remove ALL potential conflicts
+        potential_conflicts = [
+            # Legacy patterns
             f"media_player.wiim_{coordinator.client.host.replace('.', '_')}",
             f"media_player.{safe_name}",
             f"media_player.wiim_{safe_name}",
+            # With suffixes that HA might have added
+            f"media_player.{safe_name}_2",
+            f"media_player.{safe_name}_3",
+            f"media_player.{safe_name}_4",
+            f"media_player.wiim_{safe_name}_2",
+            f"media_player.wiim_{safe_name}_3",
+            f"media_player.wiim_{safe_name}_4",
+            # IP-based patterns with suffixes
+            f"media_player.wiim_{coordinator.client.host.replace('.', '_')}_2",
+            f"media_player.wiim_{coordinator.client.host.replace('.', '_')}_3",
+            f"media_player.wiim_{coordinator.client.host.replace('.', '_')}_4",
         ]
 
-        for conflict_id in possible_conflicts:
+        removed_count = 0
+        for conflict_id in potential_conflicts:
             existing_entry = ent_reg.async_get(conflict_id)
             if existing_entry and existing_entry.platform == DOMAIN:
-                # Check if this entity is stale (not corresponding to current coordinator)
-                entity_state = hass.states.get(conflict_id)
-                if (
-                    entity_state is None
-                    or entity_state.state in ("unavailable", "unknown")
-                    or entity_state.attributes.get("restored", False)
-                ):
+                # Check if this entity corresponds to our coordinator
+                if existing_entry.unique_id == coordinator.client.host or existing_entry.unique_id == device_id:
+                    # This is our entity but with wrong name - remove it so we can recreate with proper name
                     _LOGGER.info(
-                        "[WiiM] Cleaning up conflicting stale entity: %s",
+                        "[WiiM] Removing our own entity with conflicting name: %s (unique_id: %s)",
                         conflict_id,
+                        existing_entry.unique_id,
                     )
                     ent_reg.async_remove(conflict_id)
+                    removed_count += 1
+                else:
+                    # Check if this entity is stale (not corresponding to active coordinator)
+                    entity_state = hass.states.get(conflict_id)
+                    if (
+                        entity_state is None
+                        or entity_state.state in ("unavailable", "unknown")
+                        or entity_state.attributes.get("restored", False)
+                    ):
+                        _LOGGER.info(
+                            "[WiiM] Cleaning up conflicting stale entity: %s (unique_id: %s)",
+                            conflict_id,
+                            existing_entry.unique_id,
+                        )
+                        ent_reg.async_remove(conflict_id)
+                        removed_count += 1
+
+        if removed_count > 0:
+            _LOGGER.info(
+                "[WiiM] Cleaned up %d conflicting entities for %s",
+                removed_count,
+                coordinator.client.host,
+            )
 
     except Exception as cleanup_err:
         _LOGGER.debug(
@@ -195,6 +231,11 @@ async def async_setup_entry(
         },
         "async_auto_maintain",
     )
+    platform.async_register_entity_service(
+        "nuclear_reset_entities",
+        {vol.Optional("i_understand_this_removes_all_wiim_entities", default=False): bool},
+        "async_nuclear_reset_entities",
+    )
 
     # Group management services
     platform.async_register_entity_service(
@@ -257,7 +298,7 @@ async def async_setup_entry(
             # Build unique_id for the group entity
             status = coord.data.get("status", {})
             device_name = status.get("DeviceName") or status.get("device_name") or device_ip
-            safe_name = (
+            safe_name = (  # noqa: F841
                 device_name.replace(" ", "_")
                 .replace("(", "")
                 .replace(")", "")
@@ -399,8 +440,22 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Initialize the WiiM media player."""
         super().__init__(coordinator)
         status = coordinator.data.get("status", {})
+
+        # Get device UUID for reliable unique identification
+        device_uuid = status.get("uuid") or status.get("device_id")
         device_name = status.get("DeviceName") or status.get("device_name") or coordinator.client.host
-        safe_name = (
+
+        # Enhanced naming for master devices
+        role = coordinator.data.get("role", "solo") if coordinator.data else "solo"
+        if role == "master":
+            multiroom = coordinator.data.get("multiroom", {})
+            slave_count = len(multiroom.get("slave_list", []))
+            if slave_count > 0:
+                device_name = f"{device_name} (Master of {slave_count})"
+        elif role == "slave":
+            device_name = f"{device_name} (Grouped)"
+
+        safe_name = (  # noqa: F841
             device_name.replace(" ", "_")
             .replace("(", "")
             .replace(")", "")
@@ -411,22 +466,30 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             .lower()
         )
 
-        # Use a more robust unique_id strategy to prevent conflicts
-        device_id = status.get("uuid") or status.get("device_id") or coordinator.client.host
-
-        # Primary unique_id based on device ID/UUID if available
-        if device_id and device_id != coordinator.client.host:
-            self._attr_unique_id = f"wiim_{device_id}_{safe_name}"
+        # Use UUID-based unique_id if available, otherwise fall back to IP
+        if device_uuid and device_uuid != coordinator.client.host:
+            # Primary: UUID-based unique_id (most stable)
+            self._attr_unique_id = f"wiim_{device_uuid}"
+            _LOGGER.debug(
+                "[WiiM] %s: Using UUID-based unique_id: %s",
+                coordinator.client.host,
+                self._attr_unique_id,
+            )
         else:
-            # Fallback to IP-based unique_id
-            self._attr_unique_id = f"wiim_{coordinator.client.host.replace('.', '_')}_{safe_name}"
+            # Fallback: IP-based unique_id (still reliable)
+            self._attr_unique_id = f"wiim_{coordinator.client.host.replace('.', '_')}"
+            _LOGGER.debug(
+                "[WiiM] %s: Using IP-based unique_id: %s (no UUID available)",
+                coordinator.client.host,
+                self._attr_unique_id,
+            )
 
         _LOGGER.debug(
-            "[WiiM] %s: Created unique_id: %s (device_id: %s, safe_name: %s)",
+            "[WiiM] %s: Entity naming - device_name: %s, role: %s, unique_id: %s",
             coordinator.client.host,
+            device_name,
+            role,
             self._attr_unique_id,
-            device_id,
-            safe_name,
         )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.client.host)},
@@ -2085,6 +2148,80 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 "[WiiM] %s: Auto cleanup disabled. To enable cleanup, set auto_cleanup=true",
                 self.entity_id,
             )
+
+    async def async_nuclear_reset_entities(self, i_understand_this_removes_all_wiim_entities: bool = False) -> None:
+        """Nuclear option: Remove ALL WiiM entities from Home Assistant.
+
+        Use this when entity naming gets completely corrupted with _2, _3, etc.
+        """
+        if not i_understand_this_removes_all_wiim_entities:
+            _LOGGER.error(
+                "[WiiM] %s: Nuclear reset cancelled - confirmation required",
+                self.entity_id,
+            )
+            raise ValueError(
+                "You must set 'i_understand_this_removes_all_wiim_entities: true' to confirm this destructive operation"
+            )
+
+        _LOGGER.warning(
+            "[WiiM] %s: NUCLEAR RESET - Removing ALL WiiM entities from Home Assistant",
+            self.entity_id,
+        )
+
+        try:
+            from homeassistant.helpers import entity_registry as er
+
+            ent_reg = er.async_get(self.hass)
+
+            # Find ALL WiiM entities
+            wiim_entities = []
+            for entry in ent_reg.entities.values():
+                if (entry.domain == "media_player" and entry.platform == DOMAIN) or (
+                    entry.platform == DOMAIN
+                ):  # Catch any WiiM entities
+                    wiim_entities.append(entry)
+
+            _LOGGER.warning(
+                "[WiiM] %s: Found %d WiiM entities to remove",
+                self.entity_id,
+                len(wiim_entities),
+            )
+
+            # Remove all WiiM entities
+            removed_count = 0
+            for entity in wiim_entities:
+                try:
+                    _LOGGER.warning(
+                        "[WiiM] %s: REMOVING entity %s (%s)",
+                        self.entity_id,
+                        entity.entity_id,
+                        entity.name or entity.original_name,
+                    )
+                    ent_reg.async_remove(entity.entity_id)
+                    removed_count += 1
+                except Exception as remove_err:
+                    _LOGGER.error(
+                        "[WiiM] %s: Failed to remove entity %s: %s",
+                        self.entity_id,
+                        entity.entity_id,
+                        remove_err,
+                    )
+
+            _LOGGER.warning(
+                "[WiiM] %s: NUCLEAR RESET COMPLETE - Removed %d/%d entities. "
+                "RESTART HOME ASSISTANT and re-add WiiM integration for clean setup.",
+                self.entity_id,
+                removed_count,
+                len(wiim_entities),
+            )
+
+        except Exception as nuclear_err:
+            _LOGGER.error(
+                "[WiiM] %s: Nuclear reset failed: %s",
+                self.entity_id,
+                nuclear_err,
+            )
+            raise
 
 
 def _find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | None:

@@ -184,10 +184,39 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return WiiMOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial step - prioritize discovery methods."""
+        """Handle the initial step - show discovery or manual entry."""
         errors: dict[str, str] = {}
 
         # If user provided manual input, validate it
+        if user_input is not None:
+            if user_input.get("discovery_mode") == "manual":
+                # User chose manual entry, show manual form
+                schema = vol.Schema({vol.Required(CONF_HOST): str})
+                return self.async_show_form(
+                    step_id="manual",
+                    data_schema=schema,
+                    errors=errors,
+                )
+            elif user_input.get("discovery_mode") == "discover":
+                # User chose discovery, proceed to discovery step
+                return await self.async_step_discovery()
+
+        # Initial step: let user choose discovery method
+        schema = vol.Schema(
+            {
+                vol.Required("discovery_mode", default="discover"): vol.In(
+                    {"discover": "🔍 Search for WiiM devices automatically", "manual": "📝 Enter IP address manually"}
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="user", data_schema=schema, description_placeholders={"info": "Choose how to add your WiiM device"}
+        )
+
+    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle manual IP entry."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
             host = user_input[CONF_HOST]
             try:
@@ -216,29 +245,33 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.error("[WiiM] Error during manual config: %s", e)
                 errors["base"] = "unknown"
 
-        # Try discovery methods in priority order: Zeroconf > UPnP > Manual
-        if async_search is not None and not user_input:
-            # UPnP discovery available, try it first
-            return await self.async_step_upnp()
-
-        # Fall back to manual entry
+        # Show manual entry form
         schema = vol.Schema({vol.Required(CONF_HOST): str})
         return self.async_show_form(
-            step_id="user",
+            step_id="manual",
             data_schema=schema,
             errors=errors,
         )
 
-    async def async_step_upnp(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Discover WiiM/LinkPlay devices via UPnP/SSDP."""
+    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle automatic discovery of WiiM devices."""
         errors: dict[str, str] = {}
 
         if not self._discovered_hosts:
-            # Perform UPnP discovery
+            # Perform discovery
             self._discovered_hosts = await self._discover_upnp_hosts()
 
         if user_input is not None:
+            if "no_devices_manual" in user_input:
+                # User wants manual entry after discovery found nothing
+                return await self.async_step_manual()
+
             selected = user_input[CONF_HOST]
+
+            # Check if user selected manual entry from the dropdown
+            if selected == "📝 Enter IP address manually":
+                return await self.async_step_manual()
+
             host = self._options_map.get(selected, selected)
 
             await self.async_set_unique_id(host)
@@ -266,16 +299,31 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Build options for dropdown
             options_map = {f"{name} ({host})": host for host, name in self._discovered_hosts.items()}
             self._options_map = options_map
+
+            # Add manual entry option at the end
+            options_map["📝 Enter IP address manually"] = "manual_entry"
+
             schema = vol.Schema({vol.Required(CONF_HOST): vol.In(list(options_map.keys()))})
             return self.async_show_form(
-                step_id="upnp",
+                step_id="discovery",
                 data_schema=schema,
                 errors=errors,
+                description_placeholders={
+                    "count": str(len(self._discovered_hosts)),
+                    "devices": ", ".join(self._discovered_hosts.values()),
+                },
             )
 
-        # No devices found, fall back to manual
-        schema = vol.Schema({vol.Required(CONF_HOST): str})
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        # No devices found, offer manual entry
+        schema = vol.Schema({vol.Required("no_devices_manual", default=True): bool})
+        return self.async_show_form(
+            step_id="discovery",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "message": "No WiiM devices found automatically. Would you like to enter an IP address manually?"
+            },
+        )
 
     async def _discover_upnp_hosts(self) -> dict[str, str]:
         """Discover devices and return mapping of host→friendly name."""

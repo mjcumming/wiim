@@ -219,3 +219,19 @@ disband_group:
     entity:
       domain: media_player
       integration: wiim
+
+nuclear_reset_entities:
+  name: Nuclear Reset (Emergency)
+  description: EMERGENCY ONLY - Remove ALL WiiM entities when naming gets corrupted with _2, _3, etc. Use ONLY when entity naming is completely broken.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    i_understand_this_removes_all_wiim_entities:
+      name: I Understand This Removes ALL WiiM Entities
+      description: You MUST set this to true to confirm you understand this removes ALL WiiM entities (requires HA restart after)
+      required: true
+      default: false
+      selector:
+        boolean:

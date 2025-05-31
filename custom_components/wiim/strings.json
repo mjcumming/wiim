@@ -5,12 +5,29 @@
     "step": {
       "user": {
         "title": "Add WiiM Speaker",
-        "description": "Set up your WiiM or LinkPlay-compatible speaker.",
+        "description": "Choose how to add your WiiM or LinkPlay-compatible speaker.",
+        "data": {
+          "discovery_mode": "Setup Method"
+        },
+        "data_description": {
+          "discovery_mode": "Select how you want to add your WiiM speaker"
+        }
+      },
+      "manual": {
+        "title": "Enter Speaker IP Address",
+        "description": "Enter the IP address of your WiiM speaker.",
         "data": {
           "host": "IP Address"
         },
         "data_description": {
           "host": "Enter the IP address of your WiiM speaker (e.g., 192.168.1.100)"
+        }
+      },
+      "discovery": {
+        "title": "Select WiiM Speaker",
+        "description": "Found {count} WiiM speaker(s): {devices}. Choose one to add:",
+        "data": {
+          "host": "Speaker"
         }
       },
       "upnp": {
