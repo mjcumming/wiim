@@ -1055,7 +1055,6 @@ class WiiMClient:
             except WiiMConnectionError as err:
                 _LOGGER.warning(f"Sync time attempt {attempt + 1} failed: {err}")
                 await asyncio.sleep(2)  # Wait before retrying
-                
         raise WiiMConnectionError(f"Failed to sync time after {retries} attempts.")
 
     async def get_meta_info(self) -> dict[str, Any]:
