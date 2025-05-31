@@ -1,0 +1,130 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "custom_components/wiim/manifest.json"
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version-changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get current version
+        id: version
+        run: |
+          VERSION=$(grep '"version"' custom_components/wiim/manifest.json | sed 's/.*"version": "\(.*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+
+      - name: Get previous version
+        id: prev-version
+        run: |
+          git checkout HEAD~1
+          PREV_VERSION=$(grep '"version"' custom_components/wiim/manifest.json | sed 's/.*"version": "\(.*\)".*/\1/' || echo "none")
+          echo "prev-version=$PREV_VERSION" >> $GITHUB_OUTPUT
+          echo "Previous version: $PREV_VERSION"
+          git checkout -
+
+      - name: Check if version changed
+        id: check
+        run: |
+          if [ "${{ steps.version.outputs.version }}" != "${{ steps.prev-version.outputs.prev-version }}" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Version changed from ${{ steps.prev-version.outputs.prev-version }} to ${{ steps.version.outputs.version }}"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged"
+          fi
+
+  release:
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if tag already exists
+        id: tag-check
+        run: |
+          if git rev-parse "v${{ needs.check-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag v${{ needs.check-version.outputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag v${{ needs.check-version.outputs.version }} does not exist"
+          fi
+
+      - name: Create and push tag
+        if: steps.tag-check.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ needs.check-version.outputs.version }}" -m "Release v${{ needs.check-version.outputs.version }}"
+          git push origin "v${{ needs.check-version.outputs.version }}"
+
+      - name: Create ZIP file
+        if: steps.tag-check.outputs.exists == 'false'
+        run: |
+          cd custom_components
+          zip -r ../wiim-${{ needs.check-version.outputs.version }}.zip wiim/
+          cd ..
+
+      - name: Extract changelog for this version
+        if: steps.tag-check.outputs.exists == 'false'
+        id: changelog
+        run: |
+          # Extract changelog section for this version
+          if [ -f "CHANGELOG.md" ]; then
+            awk '/^## \['"${{ needs.check-version.outputs.version }}"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > release_notes.md
+            if [ -s release_notes.md ]; then
+              echo "changelog<<EOF" >> $GITHUB_OUTPUT
+              cat release_notes.md >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "changelog=Release v${{ needs.check-version.outputs.version }}" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "changelog=Release v${{ needs.check-version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        if: steps.tag-check.outputs.exists == 'false'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          release_name: WiiM Audio v${{ needs.check-version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        if: steps.tag-check.outputs.exists == 'false'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./wiim-${{ needs.check-version.outputs.version }}.zip
+          asset_name: wiim.zip
+          asset_content_type: application/zip
+
+      - name: Success notification
+        if: steps.tag-check.outputs.exists == 'false'
+        run: |
+          echo "🎉 Successfully created release v${{ needs.check-version.outputs.version }}"
+          echo "📦 ZIP file uploaded as wiim.zip"
+          echo "🏠 HACS will detect this release within 24 hours"
