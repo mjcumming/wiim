@@ -380,6 +380,33 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         return status.get("DeviceName") or status.get("device_name") or self.coordinator.client.host
 
     @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information for the device registry."""
+        status = self.coordinator.data.get("status", {})
+
+        # Get device information from coordinator data
+        device_name = status.get("DeviceName") or status.get("device_name") or "WiiM Device"
+        device_model = status.get("project") or status.get("hardware") or "WiiM"
+        device_id = status.get("uuid") or status.get("device_id")
+        firmware_version = status.get("firmware")
+        mac_address = status.get("MAC") or status.get("mac_address")
+
+        device_info: DeviceInfo = {
+            "identifiers": {(DOMAIN, device_id or self.coordinator.client.host)},
+            "name": device_name,
+            "manufacturer": "WiiM",
+            "model": device_model,
+        }
+
+        if firmware_version:
+            device_info["sw_version"] = firmware_version
+
+        if mac_address:
+            device_info["connections"] = {("mac", mac_address)}
+
+        return device_info
+
+    @property
     def state(self) -> MediaPlayerState:
         """Return the state of the device."""
         status = self._effective_status() or {}
