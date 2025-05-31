@@ -87,10 +87,13 @@ def mock_coordinator_fixture():
 @pytest.fixture(name="bypass_get_data")
 def bypass_get_data_fixture():
     """Skip calls to get data from API."""
-    # Create proper mock data with volume_level included
+    # Create proper mock data with volume_level included and merge device data
     mock_status = MOCK_STATUS_RESPONSE.copy()
     mock_status["volume_level"] = 0.5  # Add parsed volume_level
     mock_status["volume"] = 50  # Add volume as integer
+
+    # Merge device data into status so device info is available
+    mock_status.update(MOCK_DEVICE_DATA)
 
     mock_coordinator_data = {
         "status": mock_status,
@@ -121,6 +124,10 @@ def bypass_get_data_fixture():
         ),
         patch(
             "custom_components.wiim.api.WiiMClient.reboot",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.wiim.api.WiiMClient.sync_time",
             return_value=True,
         ),
         patch(

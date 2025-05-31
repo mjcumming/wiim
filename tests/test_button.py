@@ -48,6 +48,7 @@ async def test_button_press_service(hass: HomeAssistant, bypass_get_data) -> Non
     with (
         patch("custom_components.wiim.api.WiiMClient.play", return_value=True),
         patch("custom_components.wiim.api.WiiMClient.reboot", return_value=True),
+        patch("custom_components.wiim.api.WiiMClient.sync_time", return_value=True),
     ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
