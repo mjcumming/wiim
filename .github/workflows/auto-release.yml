@@ -86,9 +86,10 @@ jobs:
           if [ -f "CHANGELOG.md" ]; then
             awk '/^## \['"${{ needs.check-version.outputs.version }}"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > release_notes.md
             if [ -s release_notes.md ]; then
-              echo "changelog<<EOF" >> $GITHUB_OUTPUT
+              # Use printf with %s to safely output content without shell interpretation
+              printf 'changelog<<EOF\n' >> $GITHUB_OUTPUT
               cat release_notes.md >> $GITHUB_OUTPUT
-              echo "EOF" >> $GITHUB_OUTPUT
+              printf 'EOF\n' >> $GITHUB_OUTPUT
             else
               echo "changelog=Release v${{ needs.check-version.outputs.version }}" >> $GITHUB_OUTPUT
             fi
@@ -100,10 +101,11 @@ jobs:
         if: steps.tag-check.outputs.exists == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.changelog.outputs.changelog }}
         run: |
           gh release create "v${{ needs.check-version.outputs.version }}" \
             --title "WiiM Audio v${{ needs.check-version.outputs.version }}" \
-            --notes "${{ steps.changelog.outputs.changelog }}" \
+            --notes "$RELEASE_NOTES" \
             --latest \
             wiim.zip
 

@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.11] - 2025-01-06
+
+### Fixed
+
+- **Fixed GitHub Actions workflow shell parsing errors**
+- Resolved `MEDIA_SEEK: command not found` and `hass: command not found` errors
+- Fixed issue where backticks in changelog were interpreted as shell commands
+- Improved changelog content escaping in release workflow
+
+### Technical
+
+- Enhanced GitHub Actions workflow to safely handle special characters in changelog
+- Added proper environment variable usage for release notes content
+- Prevented shell interpretation of markdown code blocks during release creation
+
 ## [0.4.10] - 2025-01-06
 
 ### Fixed
