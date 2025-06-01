@@ -290,8 +290,8 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         )
 
     def _setup_supported_features(self) -> None:
-        """Set up the supported features for this media player."""
-        base_features = (
+        """Set up the base supported features for this media player."""
+        self._base_features = (
             MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
@@ -307,21 +307,60 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.REPEAT_SET
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.BROWSE_MEDIA
-            | MediaPlayerEntityFeature.GROUPING  # Always enable HA grouping
-        )
-
-        _LOGGER.debug(
-            "[WiiM] %s: Enabled HA native grouping (JOIN button and service calls)",
-            self.coordinator.client.host,
         )
 
         # Add optional features based on coordinator support
         if self.coordinator.source_supported:
-            base_features |= MediaPlayerEntityFeature.SELECT_SOURCE
+            self._base_features |= MediaPlayerEntityFeature.SELECT_SOURCE
         if self.coordinator.eq_supported:
-            base_features |= MediaPlayerEntityFeature.SELECT_SOUND_MODE
+            self._base_features |= MediaPlayerEntityFeature.SELECT_SOUND_MODE
 
-        self._attr_supported_features = base_features
+    @property
+    def supported_features(self) -> int:
+        """Return supported features, dynamically including GROUPING based on current state."""
+        features = self._base_features
+
+        # Only enable GROUPING for devices that can actually be joined
+        if self._can_be_grouped():
+            features |= MediaPlayerEntityFeature.GROUPING
+            _LOGGER.debug(
+                "[WiiM] %s: GROUPING enabled - device can be joined",
+                self.coordinator.client.host,
+            )
+        else:
+            _LOGGER.debug(
+                "[WiiM] %s: GROUPING disabled - device cannot be joined (role: %s)",
+                self.coordinator.client.host,
+                self.coordinator.data.get("role", "unknown") if self.coordinator.data else "no_data",
+            )
+
+        return features
+
+    def _can_be_grouped(self) -> bool:
+        """Determine if this device can be joined to a group."""
+        if not self.coordinator.data:
+            return False
+
+        role = self.coordinator.data.get("role", "solo")
+
+        # Solo devices can always be joined
+        if role == "solo":
+            return True
+
+        # Slaves cannot be joined (already in a group)
+        if role == "slave":
+            return False
+
+        # Masters with slaves cannot be joined (already managing a group)
+        if role == "master":
+            multiroom = self.coordinator.data.get("multiroom", {})
+            slave_list = multiroom.get("slave_list", [])
+            if slave_list:
+                return False  # Master with slaves cannot be joined
+            else:
+                return True  # Solo master (just became master but no slaves yet)
+
+        return False
 
     # -------------------------------------------------------------------------
     # Core Properties (using StateManager for complex state resolution)

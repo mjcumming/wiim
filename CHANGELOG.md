@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.13] - 2025-01-06
+
+### Fixed
+
+- **Major UX improvement: Intelligent device filtering for join/unjoin lists**
+- Only WiiM devices that can actually be joined now appear in grouping interface
+- Eliminated confusion from non-WiiM devices (HomePod, Sony TV, etc.) in join lists
+- Slaves and active group masters no longer appear as joinable options
+
+### Improved
+
+- **Dynamic grouping feature enablement based on device state**
+- Solo devices: ✅ Can be joined (GROUPING enabled)
+- Slaves: ❌ Cannot be joined (GROUPING disabled)
+- Active masters: ❌ Cannot be joined (GROUPING disabled)
+- Much cleaner and more intuitive grouping interface
+
+### Technical
+
+- Replaced static `GROUPING` feature with dynamic `supported_features` property
+- Implemented intelligent `_can_be_grouped()` logic based on device role and state
+- Enhanced device state awareness for grouping operations
+- Improved logging for grouping feature decisions
+
 ## [0.4.12] - 2025-01-06
 
 ### Improved
