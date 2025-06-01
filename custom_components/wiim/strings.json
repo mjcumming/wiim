@@ -4,35 +4,30 @@
     "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "Add WiiM Speaker",
-        "description": "Set up your WiiM or LinkPlay-compatible speaker.",
+        "title": "WiiM Device Discovery",
+        "description": "Choose how to add your WiiM device",
         "data": {
-          "discovery_mode": "Setup Method"
+          "discovery_mode": "Discovery Method"
         },
         "data_description": {
-          "discovery_mode": "Select how you want to add your WiiM speaker"
+          "discovery_mode": "Select 'Automatic' to discover devices on your network, or 'Manual' to enter an IP address"
         }
       },
       "manual": {
-        "title": "Enter Speaker IP Address",
-        "description": "Enter the IP address of your WiiM speaker.",
+        "title": "Manual Device Setup",
+        "description": "Enter the IP address of your WiiM device",
         "data": {
           "host": "IP Address"
         },
         "data_description": {
-          "host": "Enter the IP address of your WiiM speaker (e.g., 192.168.1.100)"
+          "host": "The IP address of your WiiM device (e.g., 192.168.1.100)"
         }
       },
       "discovery": {
-        "title": "Select WiiM Speaker",
-        "description": "Found {count} WiiM speaker(s): {devices}. Choose one to add:",
+        "title": "Discovered WiiM Devices",
+        "description": "Select a discovered WiiM device from the list below",
         "data": {
-          "host": "Speaker",
-          "no_devices_manual": "Proceed with manual IP entry"
-        },
-        "data_description": {
-          "host": "Select the WiiM speaker you want to add to Home Assistant",
-          "no_devices_manual": "Check this to proceed with manual IP address entry since no WiiM speakers were automatically discovered on your network."
+          "discovered_device": "Device"
         }
       },
       "upnp": {
@@ -43,38 +38,40 @@
         }
       },
       "confirm": {
-        "title": "Confirm Setup",
-        "description": "Confirm adding this WiiM speaker to Home Assistant.",
-        "data": {}
+        "title": "Confirm Device",
+        "description": "Confirm adding this WiiM device to Home Assistant"
       }
     },
     "abort": {
-      "already_configured": "This speaker is already configured.",
-      "cannot_connect": "Unable to connect to the speaker.",
-      "unknown_error_validation": "Unknown error during speaker validation."
+      "already_configured": "This device is already configured.",
+      "cannot_connect": "Could not connect to the device.",
+      "no_host": "No device address provided.",
+      "no_devices": "No devices discovered."
     },
     "error": {
-      "cannot_connect": "Failed to connect to the speaker. Check the IP address and network connection.",
-      "unknown": "Unexpected error occurred. Please try again.",
-      "already_configured": "This speaker is already configured.",
-      "no_host": "Could not determine speaker IP address."
+      "cannot_connect": "Failed to connect to the device. Please check the IP address and ensure the device is powered on.",
+      "already_configured": "This device is already configured.",
+      "no_devices": "No WiiM devices found on your network. Try manual setup instead.",
+      "unknown": "An unexpected error occurred."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Configure Speaker Settings",
-        "description": "Adjust settings for this WiiM speaker. Changes apply immediately without restart.",
+        "title": "WiiM Device Options",
+        "description": "Configure your WiiM device settings",
         "data": {
           "status_update_interval": "Status Update Frequency",
-          "volume_step_percent": "Volume Button Step",
-          "enable_group_entity": "Enable Group Control",
-          "debug_logging": "Enable Debug Logging"
+          "volume_step_percent": "Volume Step Size",
+          "enable_group_entity": "WiiM Group Controls",
+          "use_ha_native_grouping": "Home Assistant Grouping",
+          "debug_logging": "Debug Logging"
         },
         "data_description": {
-          "status_update_interval": "How often to check speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
+          "status_update_interval": "How often to check the speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
           "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
-          "enable_group_entity": "Create a dedicated group control entity for this speaker. This entity provides advanced multiroom functionality including group-aware volume control, playback command forwarding for slaves, and unified group management. The '[Device Name] Master' entity allows complete control regardless of the speaker's current role (solo, master, or slave).",
+          "enable_group_entity": "Create virtual group controller entities when this device acts as a multiroom master. Allows unified control of speaker groups.",
+          "use_ha_native_grouping": "Enable Home Assistant's native media player grouping features. Recommended for consistent UI experience across different speaker brands.",
           "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
         }
       }
@@ -124,6 +121,17 @@
     "sync_time": {
       "name": "Sync Time",
       "description": "Synchronize speaker clock with Home Assistant time."
+    }
+  },
+  "entity": {
+    "select": {
+      "repeat": {
+        "state": {
+          "off": "Off",
+          "all": "All",
+          "one": "One"
+        }
+      }
     }
   }
 }

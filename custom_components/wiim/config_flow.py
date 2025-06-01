@@ -556,7 +556,7 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                     blocking=True,
                 )
 
-            # Map grouping preference option
+            # Map grouping preference option with better internal name
             if "use_ha_native_grouping" in user_input:
                 options_data["use_ha_native_grouping"] = user_input["use_ha_native_grouping"]
 
@@ -567,6 +567,7 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         current_volume_step = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
         current_debug_logging = self.entry.options.get("debug_logging", False)
         current_group_entity = self.entry.options.get("own_group_entity", False)
+        current_ha_grouping = self.entry.options.get("use_ha_native_grouping", True)
 
         # Convert volume step from decimal to percentage for user display
         volume_step_percent = int(current_volume_step * 100)
@@ -576,22 +577,27 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_STATUS_UPDATE_INTERVAL,
                     default=current_poll_interval,
+                    description={"suggested_value": current_poll_interval, "suffix": "seconds"},
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
                 vol.Optional(
                     CONF_VOLUME_STEP_PERCENT,
                     default=volume_step_percent,
+                    description={"suggested_value": volume_step_percent, "suffix": "%"},
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
                 vol.Optional(
                     CONF_ENABLE_GROUP_ENTITY,
                     default=current_group_entity,
+                    description={"suggested_value": current_group_entity, "advanced": True},
+                ): bool,
+                vol.Optional(
+                    "use_ha_native_grouping",
+                    default=current_ha_grouping,
+                    description={"suggested_value": current_ha_grouping},
                 ): bool,
                 vol.Optional(
                     CONF_DEBUG_LOGGING,
                     default=current_debug_logging,
-                ): bool,
-                vol.Optional(
-                    "use_ha_native_grouping",
-                    default=self.entry.options.get("use_ha_native_grouping", True),
+                    description={"suggested_value": current_debug_logging, "advanced": True},
                 ): bool,
             }
         )
