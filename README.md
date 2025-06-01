@@ -262,6 +262,12 @@ If you have duplicate or orphaned entities:
 
 ## Version History
 
+### 0.4.6
+
+- Resolved GitHub release workflow tag conflict issue
+- Fixed version tag mismatch in release process
+- All fixes from 0.4.5 included
+
 ### 0.4.5
 
 - Fixed `join_players` method to prevent NotImplementedError

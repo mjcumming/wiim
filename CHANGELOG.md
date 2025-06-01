@@ -2,7 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.5] - 2025-01-06
+## [0.4.6] - 2025-01-06
+
+### Fixed
+
+- Resolved GitHub release workflow tag conflict issue
+- Fixed version tag mismatch in release process
+
+### Technical
+
+- Updated version to 0.4.6 to resolve tag conflicts
+- Cleaned up existing v0.4.5 tag for proper release workflow
+
+## [0.4.5] - 2025-01-06 (Internal)
 
 ### Fixed
 
