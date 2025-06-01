@@ -996,6 +996,24 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             raise
 
     # -------------------------------------------------------------------------
+    # Synchronous Wrapper Methods (HA Compatibility)
+    # -------------------------------------------------------------------------
+
+    def join_players(self, group_members: list[str]) -> None:
+        """Synchronous join for HA compatibility (thread-safe)."""
+        import asyncio
+
+        future = asyncio.run_coroutine_threadsafe(self.async_join(group_members), self.hass.loop)
+        future.result()
+
+    def unjoin_player(self) -> None:
+        """Synchronous unjoin for HA compatibility (thread-safe)."""
+        import asyncio
+
+        future = asyncio.run_coroutine_threadsafe(self.async_unjoin(), self.hass.loop)
+        future.result()
+
+    # -------------------------------------------------------------------------
     # Service Method Delegations (Clean Architecture)
     # -------------------------------------------------------------------------
 
