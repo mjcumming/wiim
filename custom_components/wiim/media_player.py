@@ -221,14 +221,29 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Initialize the WiiM media player."""
         super().__init__(coordinator)
 
-        # Initialize state manager for complex state resolution
-        self._state_manager = StateManager(coordinator, self.hass)
+        # Initialize state manager lazily to avoid hass being None
+        self._state_manager = None
 
         # Device info and naming setup
         self._setup_device_identity()
 
         # Feature setup
         self._setup_supported_features()
+
+    def _get_state_manager(self) -> StateManager:
+        """Get or create the state manager lazily."""
+        if self._state_manager is None and self.hass is not None:
+            self._state_manager = StateManager(self.coordinator, self.hass)
+        return self._state_manager
+
+    def _get_effective_status(self) -> dict[str, Any]:
+        """Get effective status with fallback when state manager is not available."""
+        state_manager = self._get_state_manager()
+        if state_manager is not None:
+            return state_manager.get_effective_status()
+        else:
+            # Fallback to coordinator data when state manager is not available
+            return self.coordinator.data.get("status", {}) if self.coordinator.data else {}
 
     def _setup_device_identity(self) -> None:
         """Set up device identity and naming."""
@@ -290,7 +305,6 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.CLEAR_PLAYLIST
             | MediaPlayerEntityFeature.SHUFFLE_SET
             | MediaPlayerEntityFeature.REPEAT_SET
-            | MediaPlayerEntityFeature.MEDIA_SEEK
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.BROWSE_MEDIA
             | MediaPlayerEntityFeature.GROUPING  # Always enable HA grouping
@@ -327,7 +341,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState:
         """Return the state of the device."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         play_status = status.get("play_status")
         _LOGGER.debug(
             "[WiiM] %s: state property, play_status=%s",
@@ -391,40 +405,40 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def media_title(self) -> str | None:
         """Return the title of current playing media."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         title = status.get("title")
         return None if title in ("unknow", "unknown", None) else title
 
     @property
     def media_artist(self) -> str | None:
         """Return the artist of current playing media."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         artist = status.get("artist")
         return None if artist in ("unknow", "unknown", None) else artist
 
     @property
     def media_album_name(self) -> str | None:
         """Return the album name of current playing media."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         album = status.get("album")
         return None if album in ("unknow", "unknown", None) else album
 
     @property
     def media_position(self) -> int | None:
         """Position of current playing media in seconds."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         return status.get("position")
 
     @property
     def media_position_updated_at(self) -> float | None:
         """When was the position of the current playing media valid."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         return status.get("position_updated_at")
 
     @property
     def media_duration(self) -> int | None:
         """Duration of current playing media in seconds."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         return status.get("duration")
 
     @property
@@ -507,7 +521,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def entity_picture(self) -> str | None:
         """Return URL to current artwork."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         return status.get("entity_picture") or status.get("cover")
 
     @property
@@ -524,7 +538,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return entity specific state attributes."""
-        status = self._state_manager.get_effective_status()
+        status = self._get_effective_status()
         attrs = {
             ATTR_DEVICE_MODEL: status.get("device_model"),
             ATTR_DEVICE_NAME: status.get("device_name"),
