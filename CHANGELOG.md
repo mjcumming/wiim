@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.10] - 2025-01-06
+
+### Fixed
+
+- **Fixed critical AttributeError during entity initialization**
+- Resolved "NoneType object has no attribute 'data'" error in StateManager
+- Fixed linter error with invalid `MEDIA_SEEK` feature
+
+### Improved
+
+- Added lazy initialization for StateManager to prevent timing issues
+- Added fallback method when StateManager is unavailable during startup
+- Enhanced error handling during entity initialization phase
+- Better robustness during Home Assistant startup sequence
+
+### Technical
+
+- StateManager now initializes safely after `hass` attribute is available
+- Improved entity lifecycle management during coordinator updates
+- Removed invalid MediaPlayerEntityFeature that doesn't exist in current HA
+
 ## [0.4.9] - 2025-01-06
 
 ### Removed
