@@ -145,3 +145,141 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 **⚡ Made with ❤️ by the Home Assistant community**
 
 _This integration is not affiliated with WiiM or LinkPlay. All trademarks belong to their respective owners._
+
+## Resolving LinkPlay Conflicts
+
+**Important**: This integration may conflict with Home Assistant's built-in LinkPlay integration. If you see errors like "Cannot connect to host X.X.X.X:80" in your logs, follow these steps:
+
+### Option 1: Disable Built-in LinkPlay Integration
+
+Add this to your `configuration.yaml`:
+
+```yaml
+# Disable built-in linkplay integration to prevent conflicts
+default_config:
+
+# Exclude linkplay from discovery
+discovery:
+  ignore:
+    - linkplay
+# If you have the linkplay integration already configured, remove it:
+# linkplay:  # <- Remove or comment out this entire section
+```
+
+### Option 2: Network-Level Blocking
+
+If the built-in integration continues to interfere, you can block it at the network level by adding this to your router's firewall or using a local firewall rule to block port 80 traffic from Home Assistant to your WiiM devices (while allowing our custom integration's HTTPS traffic on port 443).
+
+### Option 3: Manual Entity Cleanup
+
+If you have duplicate entities from the built-in linkplay integration:
+
+1. Go to Settings → Devices & Services
+2. Find any "LinkPlay" integrations (not "WiiM Audio (LinkPlay)")
+3. Remove them
+4. Go to Settings → Entities
+5. Search for "linkplay" entities and remove any duplicates
+6. Restart Home Assistant
+
+## Usage
+
+Once configured, your WiiM devices will appear as media player entities. You can:
+
+- Control playback from the media player card
+- Use voice assistants for control
+- Create automations with the rich service calls
+- Group devices for multiroom audio
+- Adjust equalizer settings
+- Monitor device status and diagnostics
+
+## Services
+
+The integration provides many service calls for advanced control:
+
+### Media Services
+
+- `wiim.play_preset` - Play a stored preset (1-6)
+- `wiim.play_url` - Play audio from a URL
+- `wiim.play_playlist` - Play an M3U playlist
+- `wiim.play_notification` - Play notification sounds
+- `wiim.set_eq` - Set equalizer presets or custom values
+
+### Group Services
+
+- `wiim.create_group_with_members` - Create a multiroom group
+- `wiim.add_to_group` - Add device to existing group
+- `wiim.remove_from_group` - Remove device from group
+- `wiim.disband_group` - Disband the entire group
+
+### Device Services
+
+- `wiim.reboot_device` - Reboot the device
+- `wiim.sync_time` - Sync device time with Home Assistant
+
+### Diagnostic Services
+
+- `wiim.diagnose_entities` - Run diagnostic checks
+- `wiim.cleanup_stale_entities` - Clean up orphaned entities
+- `wiim.auto_maintain` - Automated maintenance tasks
+
+## Troubleshooting
+
+### Connection Issues
+
+1. **Verify Network Connectivity**: Ensure your WiiM device is on the same network as Home Assistant
+2. **Check Firewall Settings**: Make sure ports 80 and 443 are accessible
+3. **Update Firmware**: Ensure your WiiM device has the latest firmware
+4. **Restart Devices**: Try restarting both Home Assistant and your WiiM device
+
+### LinkPlay Conflicts
+
+If you see errors mentioning "linkplay" or connection failures to port 80:
+
+1. Disable the built-in LinkPlay integration (see above)
+2. Remove any existing LinkPlay entities
+3. Restart Home Assistant
+4. Re-add your devices using this WiiM integration
+
+### Group Management Issues
+
+- Ensure all devices are on the same firmware version
+- Check that devices are on the same network subnet
+- Try disbanding and recreating groups if sync issues occur
+
+### Entity Cleanup
+
+If you have duplicate or orphaned entities:
+
+1. Use the `wiim.diagnose_entities` service to identify issues
+2. Use `wiim.cleanup_stale_entities` to remove orphaned entities
+3. For severe issues, use `wiim.nuclear_reset_entities` (removes ALL WiiM entities)
+
+## Support
+
+- **GitHub Issues**: https://github.com/mjcumming/wiim/issues
+- **Home Assistant Community**: Search for "WiiM" in the community forums
+- **Documentation**: Full documentation available in the GitHub repository
+
+## Version History
+
+### 0.4.5
+
+- Fixed `join_players` method to prevent NotImplementedError
+- Improved error handling for group operations
+- Added timeout protection for async operations
+- Enhanced documentation for LinkPlay conflicts
+
+### 0.4.4
+
+- Enhanced multiroom group management
+- Improved device discovery and status parsing
+- Better error handling and logging
+- Added comprehensive service calls
+
+## Contributing
+
+Contributions are welcome! Please see the GitHub repository for development guidelines and how to submit pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

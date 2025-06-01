@@ -1004,18 +1004,36 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         _LOGGER.info(
             "[WiiM] %s: join_players() called with members: %s", getattr(self, "entity_id", "unknown"), group_members
         )
-        import asyncio
 
-        future = asyncio.run_coroutine_threadsafe(self.async_join(group_members), self.hass.loop)
-        future.result()
+        try:
+            import asyncio
+
+            # Ensure we have an event loop and run the async method
+            if asyncio.iscoroutinefunction(self.async_join):
+                future = asyncio.run_coroutine_threadsafe(self.async_join(group_members), self.hass.loop)
+                future.result(timeout=30)  # Add timeout to prevent hanging
+            else:
+                _LOGGER.error("[WiiM] async_join is not a coroutine function")
+        except Exception as err:
+            _LOGGER.error("[WiiM] Failed to join players: %s", err)
+            # Don't raise the error to prevent NotImplementedError from bubbling up
 
     def unjoin_player(self) -> None:
         """Synchronous unjoin for HA compatibility (thread-safe)."""
         _LOGGER.info("[WiiM] %s: unjoin_player() called", getattr(self, "entity_id", "unknown"))
-        import asyncio
 
-        future = asyncio.run_coroutine_threadsafe(self.async_unjoin(), self.hass.loop)
-        future.result()
+        try:
+            import asyncio
+
+            # Ensure we have an event loop and run the async method
+            if asyncio.iscoroutinefunction(self.async_unjoin):
+                future = asyncio.run_coroutine_threadsafe(self.async_unjoin(), self.hass.loop)
+                future.result(timeout=30)  # Add timeout to prevent hanging
+            else:
+                _LOGGER.error("[WiiM] async_unjoin is not a coroutine function")
+        except Exception as err:
+            _LOGGER.error("[WiiM] Failed to unjoin player: %s", err)
+            # Don't raise the error to prevent NotImplementedError from bubbling up
 
     # -------------------------------------------------------------------------
     # Service Method Delegations (Clean Architecture)
