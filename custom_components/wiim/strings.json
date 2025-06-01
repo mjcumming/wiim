@@ -64,14 +64,12 @@
           "status_update_interval": "Status Update Frequency",
           "volume_step_percent": "Volume Step Size",
           "enable_group_entity": "WiiM Group Controls",
-          "use_ha_native_grouping": "Home Assistant Grouping",
           "debug_logging": "Debug Logging"
         },
         "data_description": {
           "status_update_interval": "How often to check the speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
           "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
           "enable_group_entity": "Create virtual group controller entities when this device acts as a multiroom master. Allows unified control of speaker groups.",
-          "use_ha_native_grouping": "Enable Home Assistant's native media player grouping features. Recommended for consistent UI experience across different speaker brands.",
           "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
         }
       }

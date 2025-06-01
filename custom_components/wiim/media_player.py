@@ -275,7 +275,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         )
 
     def _setup_supported_features(self) -> None:
-        """Set up supported features based on coordinator capabilities."""
+        """Set up the supported features for this media player."""
         base_features = (
             MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
@@ -284,27 +284,22 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_MUTE
+            | MediaPlayerEntityFeature.VOLUME_STEP
+            | MediaPlayerEntityFeature.TURN_ON
+            | MediaPlayerEntityFeature.TURN_OFF
+            | MediaPlayerEntityFeature.CLEAR_PLAYLIST
+            | MediaPlayerEntityFeature.SHUFFLE_SET
+            | MediaPlayerEntityFeature.REPEAT_SET
+            | MediaPlayerEntityFeature.MEDIA_SEEK
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.BROWSE_MEDIA
+            | MediaPlayerEntityFeature.GROUPING  # Always enable HA grouping
         )
 
-        # Add grouping support based on user preference
-        try:
-            entry_id = getattr(self.coordinator, "entry_id", None)
-            if entry_id and hasattr(self, "hass"):
-                entry = self.hass.config_entries.async_get_entry(entry_id)
-                use_ha_native_grouping = entry.options.get("use_ha_native_grouping", True) if entry else True
-            else:
-                use_ha_native_grouping = True
-        except Exception:
-            use_ha_native_grouping = True
-
-        if use_ha_native_grouping:
-            base_features |= MediaPlayerEntityFeature.GROUPING
-            _LOGGER.debug(
-                "[WiiM] %s: Using HA native grouping (compatible with JOIN UI)",
-                self.coordinator.client.host,
-            )
+        _LOGGER.debug(
+            "[WiiM] %s: Enabled HA native grouping (JOIN button and service calls)",
+            self.coordinator.client.host,
+        )
 
         # Add optional features based on coordinator support
         if self.coordinator.source_supported:
