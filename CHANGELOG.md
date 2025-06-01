@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.12] - 2025-01-06
+
+### Improved
+
+- **Enhanced join/unjoin UX in Home Assistant Actions UI**
+- Virtual master entities no longer appear in join/unjoin device lists
+- Cleaner device selection when creating multiroom groups
+- Virtual masters already have "Master" in their names for clear identification
+
+### Technical
+
+- Removed `MediaPlayerEntityFeature.GROUPING` from virtual master entities
+- Virtual masters represent group coordinators and shouldn't be joinable to other groups
+- Reduces confusion in Home Assistant's native grouping interface
+
 ## [0.4.11] - 2025-01-06
 
 ### Fixed

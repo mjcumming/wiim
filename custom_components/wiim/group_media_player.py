@@ -74,7 +74,6 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_MUTE
-            | MediaPlayerEntityFeature.GROUPING
         )
 
         # Set device_info to match the main device so the group entity is grouped under the main device
