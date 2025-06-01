@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.14] - 2025-01-06
+
+### Improved
+
+- **Enhanced grouping flexibility: All WiiM devices now available for grouping**
+- Solo devices: ✅ Join directly to new groups
+- Slave devices: ✅ Leave current group first, then join new group
+- Master devices: ✅ Disband current group first, then join as slave
+- Smarter integration logic handles all necessary group transitions automatically
+
+### Technical
+
+- Simplified `_can_be_grouped()` logic to be more inclusive
+- Integration now handles complex group state transitions behind the scenes
+- Better utilization of existing group management commands
+- Only non-WiiM devices and virtual masters are excluded from join lists
+
 ## [0.4.13] - 2025-01-06
 
 ### Fixed

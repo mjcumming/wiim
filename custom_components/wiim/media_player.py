@@ -338,29 +338,15 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     def _can_be_grouped(self) -> bool:
         """Determine if this device can be joined to a group."""
+        # All WiiM devices can be grouped since our integration handles:
+        # - Solo devices: join directly
+        # - Slaves: leave current group first, then join new group
+        # - Masters: disband current group first, then join as slave
         if not self.coordinator.data:
             return False
 
-        role = self.coordinator.data.get("role", "solo")
-
-        # Solo devices can always be joined
-        if role == "solo":
-            return True
-
-        # Slaves cannot be joined (already in a group)
-        if role == "slave":
-            return False
-
-        # Masters with slaves cannot be joined (already managing a group)
-        if role == "master":
-            multiroom = self.coordinator.data.get("multiroom", {})
-            slave_list = multiroom.get("slave_list", [])
-            if slave_list:
-                return False  # Master with slaves cannot be joined
-            else:
-                return True  # Solo master (just became master but no slaves yet)
-
-        return False
+        # As long as we have coordinator data, this is a valid WiiM device that can be grouped
+        return True
 
     # -------------------------------------------------------------------------
     # Core Properties (using StateManager for complex state resolution)
