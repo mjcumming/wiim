@@ -1001,6 +1001,9 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     def join_players(self, group_members: list[str]) -> None:
         """Synchronous join for HA compatibility (thread-safe)."""
+        _LOGGER.info(
+            "[WiiM] %s: join_players() called with members: %s", getattr(self, "entity_id", "unknown"), group_members
+        )
         import asyncio
 
         future = asyncio.run_coroutine_threadsafe(self.async_join(group_members), self.hass.loop)
@@ -1008,6 +1011,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     def unjoin_player(self) -> None:
         """Synchronous unjoin for HA compatibility (thread-safe)."""
+        _LOGGER.info("[WiiM] %s: unjoin_player() called", getattr(self, "entity_id", "unknown"))
         import asyncio
 
         future = asyncio.run_coroutine_threadsafe(self.async_unjoin(), self.hass.loop)
