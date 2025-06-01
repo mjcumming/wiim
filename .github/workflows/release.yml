@@ -41,25 +41,17 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
+        id: create_release
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          release_name: WiiM Audio v${{ steps.version.outputs.version }}
+          name: WiiM Audio v${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./wiim-${{ steps.version.outputs.version }}.zip
-          asset_name: wiim.zip
-          asset_content_type: application/zip
+          files: ./wiim-${{ steps.version.outputs.version }}.zip
 
       - name: Validate HACS
         run: |
