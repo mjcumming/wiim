@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.8] - 2025-01-06
+
+### Fixed
+
+- Fixed GitHub workflow: Added missing step ID and modernized actions
+- Resolved "Input required and not supplied: upload_url" error
+- Updated to maintained action (softprops/action-gh-release@v2)
+
+### Technical
+
+- Fixed workflow orchestration issue preventing asset uploads
+- Simplified asset upload process using modern GitHub Actions
+- All previous fixes from 0.4.5-0.4.7 included
+
 ## [0.4.7] - 2025-01-06
 
 ### Fixed
