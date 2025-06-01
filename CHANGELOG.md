@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.9] - 2025-01-06
+
+### Removed
+
+- **Removed unnecessary "Home Assistant Grouping" configuration option**
+- Simplified configuration by always enabling `MediaPlayerEntityFeature.GROUPING`
+
+### Improved
+
+- JOIN button and `media_player.join`/`unjoin` service calls now always available
+- Cleaner configuration UI with less confusing options
+- Better adherence to Home Assistant's grouping design principles
+
+### Technical
+
+- Home Assistant's grouping system is designed to delegate to integration methods
+- No need for users to toggle basic HA functionality on/off
+- Reduced configuration complexity and potential user confusion
+
 ## [0.4.8] - 2025-01-06
 
 ### Fixed
