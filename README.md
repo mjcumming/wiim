@@ -262,6 +262,12 @@ If you have duplicate or orphaned entities:
 
 ## Version History
 
+### 0.4.7
+
+- Resolved GitHub release workflow issue where release already existed
+- Fixed persistent tag conflict in automated release process
+- All fixes from previous versions included
+
 ### 0.4.6
 
 - Resolved GitHub release workflow tag conflict issue
