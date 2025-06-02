@@ -23,17 +23,17 @@ the correct protocol (HTTPS/HTTP) and handle SSL certificate issues with older d
 from __future__ import annotations
 
 import asyncio
-from http import HTTPStatus
 import json
 import logging
 import ssl
+from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
 
 import aiohttp
+import async_timeout
 from aiohttp import ClientSession
 from aiohttp.client_exceptions import ClientError
-import async_timeout
 
 from .const import (
     API_ENDPOINT_CLEAR_PLAYLIST,
@@ -328,11 +328,7 @@ class WiiMClient:
                             return {"raw": text.strip()}
                         return json.loads(text)
 
-            except (
-                aiohttp.ClientError,
-                asyncio.TimeoutError,
-                json.JSONDecodeError,
-            ) as err:
+            except (TimeoutError, aiohttp.ClientError, json.JSONDecodeError) as err:
                 last_error = err
                 _LOGGER.debug("Failed %s request to %s: %s", method, url, err)
 
@@ -984,7 +980,7 @@ class WiiMClient:
         # calls keep working with the usual strings.
         # ---------------------------------------------------------------
         eq_raw = data.get("eq_preset")
-        if isinstance(eq_raw, (int, str)) and str(eq_raw).isdigit():
+        if isinstance(eq_raw, int | str) and str(eq_raw).isdigit():
             data["eq_preset"] = self._EQ_NUMERIC_MAP.get(str(eq_raw), eq_raw)
 
         _LOGGER.debug("Parsed player status: %s", data)
@@ -1141,7 +1137,7 @@ async def session_call_api(endpoint: str, session: ClientSession, command: str) 
     try:
         async with async_timeout.timeout(DEFAULT_TIMEOUT):
             response = await session.get(url, headers=HEADERS)
-    except (asyncio.TimeoutError, ClientError, asyncio.CancelledError) as err:
+    except (TimeoutError, ClientError, asyncio.CancelledError) as err:
         raise WiiMRequestError(f"{err} error requesting data from '{url}'") from err
 
     if response.status != HTTPStatus.OK:

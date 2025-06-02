@@ -10,17 +10,17 @@ This module implements a simplified discovery flow optimized for Home Assistant:
 from __future__ import annotations
 
 import asyncio
-from enum import Enum
 import logging
+from enum import Enum
 from typing import Any
 from urllib.parse import urlparse
 
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.exceptions import ConfigEntryNotReady
-import voluptuous as vol
 
 from .api import WiiMClient, WiiMError
 from .const import (
@@ -179,7 +179,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
-    ) -> "WiiMOptionsFlow":
+    ) -> WiiMOptionsFlow:
         """Return the options flow."""
         return WiiMOptionsFlow(config_entry)
 

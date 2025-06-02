@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -12,7 +12,10 @@ from homeassistant.helpers import entity_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
-from .const import CONF_HOST, DEFAULT_POLL_INTERVAL, DOMAIN
+from .const import DEFAULT_POLL_INTERVAL, DOMAIN
+from .utils.device_registry import find_coordinator_by_ip, get_all_coordinators, update_ip_cache
+from .utils.discovery import async_discover_slaves
+from .utils.state_manager import StateManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,6 +94,8 @@ class WiiMCoordinator(DataUpdateCoordinator):
         self._idle_timeout = 600  # 10 minutes in seconds
         # Cache for device info (fetched once and reused)
         self._device_info: dict[str, Any] = {}
+        self._state_manager = StateManager(client)
+        self.hass = hass
 
     def _parse_plm_support(self, plm_support: str) -> list[str]:
         """Parse plm_support bitmask into list of available sources."""
@@ -412,7 +417,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                         self._consecutive_failures,
                     )
 
-            raise UpdateFailed(f"Error updating WiiM device: {err}")
+            raise UpdateFailed(f"Error updating WiiM device: {err}") from err
 
     def _update_group_registry(self, status: dict, multiroom: dict) -> None:
         """Update the group registry with current group info."""
@@ -440,19 +445,24 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 self._groups.pop(self.client.host, None)
 
         # ------------------------------------------------------------------
-        # 1) Determine if the current poll contains *valid* group info (either
-        #    because we're a master or a slave).  If we cannot identify a
-        #    master_ip we bail out – the above cleanup already made sure no
-        #    stale entry with our own host remains.
+        # Determine which device should be considered the master for this group.
+        # Strategy:
+        #   1. If this device has slaves, it's the master
+        #   2. If this device is a slave, find the master by checking other coordinators
+        #   3. If we can't determine a master_ip we bail out – the above cleanup
+        #      already made sure no stale entry with our own host remains.
         # ------------------------------------------------------------------
         # Try to determine master_ip from own multiroom info
         master_ip = self.client.host if multiroom.get("slaves", 0) > 0 else multiroom.get("master_uuid")
+
         # If not found and this device is a slave, search all coordinators for a master whose slave_list includes this device
         if not master_ip and (str(multiroom.get("type")) == "1" or str(status.get("type")) == "1"):
             my_ip = self.client.host
             my_uuid = status.get("device_id")
-            for coord in self.hass.data[DOMAIN].values():
-                if not hasattr(coord, "client") or coord.data is None:
+
+            # Use the new device registry to get all coordinators
+            for coord in get_all_coordinators(self.hass, DOMAIN):
+                if coord.data is None:
                     continue
                 # Check if this coordinator is a master
                 coord_multiroom = coord.data.get("multiroom", {})
@@ -471,13 +481,16 @@ class WiiMCoordinator(DataUpdateCoordinator):
                             break
                 if master_ip:
                     break
+
         _LOGGER.debug("[WiiM] _update_group_registry: master_ip=%s", master_ip)
         if not master_ip:
             _LOGGER.debug("[WiiM] _update_group_registry: No master_ip found, skipping group registry update.")
             return
+
         master_name = status.get("device_name") or "WiiM Group"
         group_info = self._groups.setdefault(master_ip, {"members": {}, "master": master_ip, "name": master_name})
         group_info["name"] = master_name  # Always update name in case it changes
+
         # Add master
         group_info["members"][self.client.host] = {
             "volume": status.get("volume", 0),
@@ -485,6 +498,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
             "state": status.get("play_status"),
             "name": master_name,
         }
+
         # Add slaves
         for entry in multiroom.get("slave_list", []):
             ip = entry.get("ip")
@@ -497,6 +511,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 "state": None,  # Will be filled in by polling that device
                 "name": slave_name,
             }
+
         # Clean up any members no longer present
         current_ips = {self.client.host} | {
             entry.get("ip") for entry in multiroom.get("slave_list", []) if entry.get("ip")
@@ -555,26 +570,25 @@ class WiiMCoordinator(DataUpdateCoordinator):
                                 group_members.append(candidate)
                                 break
                         else:
-                            # Try to find by searching all WiiM entities
-                            for coord in self.hass.data.get(DOMAIN, {}).values():
-                                if hasattr(coord, "client") and coord.client.host == slave_ip:
-                                    # Found the coordinator, now find its entity
-                                    entity_registry_inst = entity_registry.async_get(self.hass)
-                                    for entity_entry in entity_registry_inst.entities.values():
-                                        if (
-                                            entity_entry.platform == DOMAIN
-                                            and entity_entry.entity_id.startswith("media_player.")
-                                            and slave_ip.replace(".", "_") in entity_entry.entity_id
-                                        ):
-                                            group_members.append(entity_entry.entity_id)
-                                            break
-                                    break
+                            # Try to find by searching all WiiM entities using device registry
+                            coord = find_coordinator_by_ip(self.hass, DOMAIN, slave_ip)
+                            if coord:
+                                # Found the coordinator, now find its entity
+                                entity_registry_inst = entity_registry.async_get(self.hass)
+                                for entity_entry in entity_registry_inst.entities.values():
+                                    if (
+                                        entity_entry.platform == DOMAIN
+                                        and entity_entry.entity_id.startswith("media_player.")
+                                        and slave_ip.replace(".", "_") in entity_entry.entity_id
+                                    ):
+                                        group_members.append(entity_entry.entity_id)
+                                        break
 
         elif role == "slave":
             # For slaves, find master and include all group members
             master_coord = None
-            for coord in self.hass.data.get(DOMAIN, {}).values():
-                if hasattr(coord, "client") and coord.data and coord.data.get("role") == "master":
+            for coord in get_all_coordinators(self.hass, DOMAIN):
+                if coord.data and coord.data.get("role") == "master":
                     # Check if this device is in the master's slave list
                     multiroom = coord.data.get("multiroom", {})
                     slave_list = multiroom.get("slave_list", [])
@@ -642,20 +656,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     if current_group_leader and current_group_leader in group_members:
                         group_leader = current_group_leader
                     elif group_members:
-                        # If no explicit leader, the first member becomes leader
                         group_leader = group_members[0]
-
-                    _LOGGER.debug(
-                        "[WiiM] Coordinator: Solo device %s - preserved group_members=%s, group_leader=%s",
-                        entity_id,
-                        group_members,
-                        group_leader,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "[WiiM] Coordinator: Solo device %s - no existing group state to preserve",
-                        entity_id,
-                    )
 
         # Update our tracking based on WiiM group status
         self._ha_group_members = set(group_members)
@@ -670,141 +671,36 @@ class WiiMCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_trigger_slave_discovery(self) -> None:
-        """Start config flows for new slave IPs that HA doesn't know yet.
+        """Trigger discovery of slave devices."""
+        if not self.data or not self.data.get("multiroom"):
+            return
 
-        Enhanced duplicate detection to prevent slaves from appearing in the
-        Discovered section when they're already part of existing integrations.
-        """
-        for ip in self._group_members:
-            if ip in self._imported_hosts:
-                continue
+        multiroom = self.data["multiroom"]
+        slave_list = multiroom.get("slave_list", [])
 
-            # Enhanced duplicate detection: Check multiple scenarios
+        if not slave_list:
+            return
 
-            # 1. Skip if already present as a coordinator
-            if any(
-                hasattr(coord, "client") and coord.client.host == ip
-                for coord in self.hass.data.get(DOMAIN, {}).values()
-            ):
-                self._imported_hosts.add(ip)
-                _LOGGER.debug("[WiiM] Skipping slave discovery for %s - already has coordinator", ip)
-                continue
+        _LOGGER.debug(
+            "[WiiM] Triggering slave discovery for master %s with %d slaves",
+            self.client.host,
+            len(slave_list),
+        )
 
-            # 2. Check if already exists as a config entry (any state)
-            existing_entry = None
-            for entry in self.hass.config_entries.async_entries(DOMAIN):
-                if entry.data.get(CONF_HOST) == ip:
-                    existing_entry = entry
-                    break
+        # Extract slave IPs
+        slave_ips = []
+        for slave in slave_list:
+            if isinstance(slave, dict) and slave.get("ip"):
+                slave_ips.append(slave["ip"])
 
-            if existing_entry:
-                self._imported_hosts.add(ip)
-                _LOGGER.debug(
-                    "[WiiM] Skipping slave discovery for %s - config entry already exists (%s, state: %s)",
-                    ip,
-                    existing_entry.entry_id,
-                    existing_entry.state.name,
-                )
-                continue
-
-            # 3. Check if there's already a discovery flow in progress for this IP
-            existing_flow = None
-            for flow in self.hass.config_entries.flow.async_progress():
-                if (
-                    flow["handler"] == DOMAIN
-                    and flow.get("context", {}).get("source") == "import"
-                    and flow.get("step_id") == "user"
-                ):
-                    # Check if this flow is for the same IP
-                    flow_data = flow.get("data") or {}
-                    if flow_data.get(CONF_HOST) == ip:
-                        existing_flow = flow
-                        break
-
-            if existing_flow:
-                self._imported_hosts.add(ip)
-                _LOGGER.debug("[WiiM] Skipping slave discovery for %s - discovery flow already in progress", ip)
-                continue
-
-            # 4. Check if device is currently a slave in any other master's group
-            # This prevents slaves from being discovered when they're actively in use
-            is_active_slave = False
-            for coord in self.hass.data.get(DOMAIN, {}).values():
-                if not hasattr(coord, "client") or coord.client.host == ip:
-                    continue  # Skip self or non-coordinators
-
-                if coord.data and coord.data.get("role") == "master":
-                    coord_multiroom = coord.data.get("multiroom", {})
-                    coord_slave_list = coord_multiroom.get("slave_list", [])
-
-                    # Check if our IP is in this master's slave list
-                    for slave in coord_slave_list:
-                        if isinstance(slave, dict) and slave.get("ip") == ip:
-                            is_active_slave = True
-                            _LOGGER.debug(
-                                "[WiiM] Skipping slave discovery for %s - actively slave of master %s",
-                                ip,
-                                coord.client.host,
-                            )
-                            break
-
-                    if is_active_slave:
-                        break
-
-            if is_active_slave:
-                self._imported_hosts.add(ip)
-                continue
-
-            # If we get here, this is a legitimate new slave that should be discovered
-            _LOGGER.info(
-                "[WiiM] Starting discovery for slave device %s (master: %s)",
-                ip,
-                self.client.host,
-            )
-
-            # If we're the master, try to kick the slave for clean HA setup
-            # This ensures the device starts in solo mode for proper HA integration
-            if self.is_wiim_master:
-                try:
-                    _LOGGER.debug(
-                        "[WiiM] Master %s kicking slave %s for clean HA import",
-                        self.client.host,
-                        ip,
-                    )
-                    await self.client.kick_slave(ip)
-                    _LOGGER.debug("[WiiM] Successfully kicked slave %s", ip)
-                except Exception as kick_err:
-                    _LOGGER.debug(
-                        "[WiiM] Failed to kick slave %s: %s (continuing import anyway)",
-                        ip,
-                        kick_err,
-                    )
-
-            # Create discovery flow for this genuinely new device
+        if slave_ips:
             try:
-                await self.hass.config_entries.flow.async_init(
-                    DOMAIN,
-                    context={"source": "import"},
-                    data={CONF_HOST: ip},
-                )
-                _LOGGER.info("[WiiM] Created discovery flow for new slave device %s", ip)
-            except Exception as flow_err:  # noqa: BLE001 – suppress duplicate/unknown flow noise
-                from homeassistant.data_entry_flow import UnknownFlow
+                await async_discover_slaves(self.hass, slave_ips)
+            except Exception as err:
+                _LOGGER.debug("Failed to trigger slave discovery: %s", err)
 
-                if isinstance(flow_err, UnknownFlow):
-                    _LOGGER.debug(
-                        "[WiiM] Import flow for %s suppressed (already in progress)",
-                        ip,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "[WiiM] Unexpected error starting import flow for %s: %s",
-                        ip,
-                        flow_err,
-                    )
-
-            # Mark as processed to avoid future duplicate attempts
-            self._imported_hosts.add(ip)
+        # Update IP cache after potential new device discoveries
+        update_ip_cache(self.hass, DOMAIN)
 
     async def create_wiim_group(self) -> None:
         """Create a WiiM multiroom group."""

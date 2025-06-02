@@ -12,6 +12,7 @@ from . import config_flow  # noqa: F401
 from .api import WiiMClient
 from .const import CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL, DOMAIN
 from .coordinator import WiiMCoordinator
+from .utils.device_registry import initialize_device_registry, register_coordinator, unregister_coordinator
 
 PLATFORMS = [
     Platform.MEDIA_PLAYER,
@@ -23,6 +24,9 @@ PLATFORMS = [
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
+    # Initialize device registry structures
+    initialize_device_registry(hass, DOMAIN)
+
     # Re-use Home Assistant's global aiohttp session to avoid unclosed-session warnings.
     client = WiiMClient(entry.data["host"], session=async_get_clientsession(hass))
 
@@ -37,10 +41,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = WiiMCoordinator(hass, client, poll_interval=poll_interval)
     coordinator.entry_id = entry.entry_id  # type: ignore[attr-defined]
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {"coordinator": coordinator}
-
+    # Perform initial data refresh to get MAC address
     await coordinator.async_config_entry_first_refresh()
+
+    # Register coordinator in the new device registry system
+    register_coordinator(hass, DOMAIN, coordinator, entry.entry_id)
 
     # ------------------------------------------------------------------
     # Update entry title to user-friendly device name on first setup
@@ -63,7 +68,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        # Get coordinator before removing it
+        coordinator = None
+        if DOMAIN in hass.data and entry.entry_id in hass.data[DOMAIN]:
+            coordinator_data = hass.data[DOMAIN][entry.entry_id]
+            if isinstance(coordinator_data, dict) and "coordinator" in coordinator_data:
+                coordinator = coordinator_data["coordinator"]
+
+        # Unregister from device registry
+        if coordinator:
+            unregister_coordinator(hass, DOMAIN, coordinator, entry.entry_id)
 
         # Clean up any dynamic WiiMGroupMediaPlayer entities whose master IP
         # belonged to the coordinator we just unloaded.  This avoids orphaned

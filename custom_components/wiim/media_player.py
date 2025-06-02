@@ -14,6 +14,7 @@ import asyncio
 import logging
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayerEntityFeature, MediaPlayerState
 from homeassistant.components.media_player.browse_media import BrowseMedia, MediaClass
 from homeassistant.components.media_player.const import ATTR_GROUP_MEMBERS as HA_ATTR_GROUP_MEMBERS
@@ -23,7 +24,6 @@ from homeassistant.helpers import device_registry, entity_platform, entity_regis
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-import voluptuous as vol
 
 from .api import WiiMError
 from .const import (
@@ -54,6 +54,7 @@ from .const import (
 from .coordinator import WiiMCoordinator
 from .services import WiiMDeviceServices, WiiMDiagnosticServices, WiiMGroupServices, WiiMMediaServices
 from .utils import StateManager, entity_id_to_host, find_coordinator
+from .utils.device_registry import find_coordinator_by_ip, get_all_coordinators
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1631,14 +1632,9 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 "[WiiM] %s: Searching for master by slave_list (my_ip=%s, my_uuid=%s)", self.entity_id, my_ip, my_uuid
             )
 
-            # Fix: properly access coordinators from hass.data structure
-            for entry_id, entry_data in self.hass.data[DOMAIN].items():
-                if entry_id == "_group_entities":  # Skip group entities storage
-                    continue
-                if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
-                    continue
-                coord = entry_data["coordinator"]
-                if not hasattr(coord, "client") or coord.data is None:
+            # Use new device registry to get all coordinators
+            for coord in get_all_coordinators(self.hass, DOMAIN):
+                if coord.data is None:
                     continue
                 if coord.data.get("role") != "master":
                     continue
@@ -1663,16 +1659,11 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             _LOGGER.debug("[WiiM] %s: no master found by slave_list", self.entity_id)
             return None
 
-        # Search for coordinator with the master IP - fix the iteration
-        for entry_id, entry_data in self.hass.data[DOMAIN].items():
-            if entry_id == "_group_entities":  # Skip group entities storage
-                continue
-            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
-                continue
-            coord = entry_data["coordinator"]
-            if hasattr(coord, "client") and coord.client.host == master_ip:
-                _LOGGER.debug("[WiiM] %s: found master coordinator %s", self.entity_id, master_ip)
-                return coord
+        # Search for coordinator with the master IP using device registry
+        coord = find_coordinator_by_ip(self.hass, DOMAIN, master_ip)
+        if coord:
+            _LOGGER.debug("[WiiM] %s: found master coordinator %s", self.entity_id, master_ip)
+            return coord
 
         _LOGGER.debug("[WiiM] %s: no coordinator found for master_ip %s", self.entity_id, master_ip)
         return None
@@ -1684,19 +1675,12 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         if role == "master":
             # For master, update all slaves
             for ip in self.coordinator.wiim_group_members:
-                # Fix: properly access coordinators from hass.data structure
-                for entry_id, entry_data in self.hass.data[DOMAIN].items():
-                    if entry_id == "_group_entities":  # Skip group entities storage
-                        continue
-                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
-                        continue
-                    coord = entry_data["coordinator"]
-                    if hasattr(coord, "client") and coord.client.host == ip:
-                        try:
-                            await coord.async_request_refresh()
-                        except Exception:
-                            pass
-                        break
+                coord = find_coordinator_by_ip(self.hass, DOMAIN, ip)
+                if coord:
+                    try:
+                        await coord.async_request_refresh()
+                    except Exception:
+                        pass
         elif role == "slave":
             # For slave, update master
             master_coord = self._find_master_coordinator()

@@ -46,10 +46,11 @@ class WiiMRebootButton(CoordinatorEntity, ButtonEntity):
         )
 
     async def async_press(self) -> None:
+        """Reboot the WiiM device."""
         try:
             await self.coordinator.client.reboot()
         except WiiMError as err:
-            raise Exception(f"Failed to reboot WiiM device: {err}")
+            raise Exception(f"Failed to reboot WiiM device: {err}") from err
 
 
 class WiiMSyncTimeButton(CoordinatorEntity, ButtonEntity):
@@ -70,7 +71,8 @@ class WiiMSyncTimeButton(CoordinatorEntity, ButtonEntity):
         )
 
     async def async_press(self) -> None:
+        """Sync time on the WiiM device."""
         try:
             await self.coordinator.client.sync_time()
         except WiiMError as err:
-            raise Exception(f"Failed to sync time on WiiM device: {err}")
+            raise Exception(f"Failed to sync time on WiiM device: {err}") from err

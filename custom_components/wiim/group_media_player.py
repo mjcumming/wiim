@@ -4,6 +4,7 @@ from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayer
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN
+from .utils.device_registry import find_coordinator_by_ip
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -537,22 +538,19 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     def _find_coordinator_by_ip(self, ip):
         # Helper to find coordinator by IP
-        for coord in self.hass.data[DOMAIN].values():
-            # Skip any non-coordinator entries that may have been added to hass.data[DOMAIN]
-            if not hasattr(coord, "client"):
-                continue
-            if coord.client.host == ip:
-                # coord.data may be None before the first successful poll
-                role = coord.data.get("role") if coord.data else None
-                multiroom = coord.data.get("multiroom", {}) if coord.data else {}
-                _LOGGER.debug(
-                    "[WiiMGroup] Found coordinator for %s: role=%s, multiroom=%s, data=%s",
-                    ip,
-                    role,
-                    multiroom,
-                    coord.data,
-                )
-                return coord
+        coord = find_coordinator_by_ip(self.hass, DOMAIN, ip)
+        if coord:
+            # coord.data may be None before the first successful poll
+            role = coord.data.get("role") if coord.data else None
+            multiroom = coord.data.get("multiroom", {}) if coord.data else {}
+            _LOGGER.debug(
+                "[WiiMGroup] Found coordinator for %s: role=%s, multiroom=%s, data=%s",
+                ip,
+                role,
+                multiroom,
+                coord.data,
+            )
+            return coord
         _LOGGER.debug("[WiiMGroup] No coordinator found for IP %s (likely not yet set up)", ip)
         return None
 
@@ -562,10 +560,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
         if not master_ip:
             return None
 
-        for coord in self.hass.data[DOMAIN].values():
-            if hasattr(coord, "client") and coord.client.host == master_ip:
-                return coord
-        return None
+        return find_coordinator_by_ip(self.hass, DOMAIN, master_ip)
 
     # ---------------------------------------------------------------------
     # Helper – centralised guard so we don't repeat None checks everywhere

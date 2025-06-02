@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from homeassistant.core import HomeAssistant
 
 from ..const import DOMAIN
+from .device_registry import find_coordinator_by_ip, get_all_coordinators
 
 if TYPE_CHECKING:
     from ..coordinator import WiiMCoordinator
@@ -20,23 +21,20 @@ _LOGGER = logging.getLogger(__name__)
 
 def find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | None:
     """Return coordinator for the given entity ID."""
-    _LOGGER.debug("[WiiM] find_coordinator: Looking up coordinator for entity_id=%s", entity_id)
+    _LOGGER.debug("[WiiM] find_coordinator: Looking for coordinator for entity_id=%s", entity_id)
 
-    # Method 1: Check all available coordinators and see if any match the entity_id pattern
-    coordinators = []
-    for entry_id, entry_data in hass.data[DOMAIN].items():
-        if isinstance(entry_data, dict) and "coordinator" in entry_data:
-            coord = entry_data["coordinator"]
-            if hasattr(coord, "client"):
-                coordinators.append(coord)
+    # Method 1: Try direct IP extraction from entity_id
+    if entity_id.startswith("media_player.wiim_"):
+        ip_part = entity_id[18:]  # Remove "media_player.wiim_" prefix
+        # Convert back to IP format: "192_168_1_116" -> "192.168.1.116"
+        if "_" in ip_part and ip_part.replace("_", "").isdigit():
+            potential_ip = ip_part.replace("_", ".")
+            coord = find_coordinator_by_ip(hass, DOMAIN, potential_ip)
+            if coord:
+                _LOGGER.debug("[WiiM] find_coordinator: Found by direct IP extraction: %s", potential_ip)
+                return coord
 
-    _LOGGER.debug(
-        "[WiiM] find_coordinator: Found %d coordinators: %s",
-        len(coordinators),
-        [coord.client.host for coord in coordinators],
-    )
-
-    # Method 2: Try direct entity registry lookup
+    # Method 2: Try entity registry lookup
     try:
         from homeassistant.helpers import entity_registry as er
 
@@ -46,20 +44,22 @@ def find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | N
         if ent_entry and ent_entry.platform == DOMAIN:
             _LOGGER.debug("[WiiM] find_coordinator: Found registry entry with unique_id=%s", ent_entry.unique_id)
 
-            # Try to match coordinator by unique_id or host IP
-            for coord in coordinators:
-                # Try matching by host IP
-                if coord.client.host == ent_entry.unique_id:
-                    _LOGGER.debug("[WiiM] find_coordinator: Matched by host IP")
-                    return coord
+            # Try to match coordinator by host IP
+            coord = find_coordinator_by_ip(hass, DOMAIN, ent_entry.unique_id)
+            if coord:
+                _LOGGER.debug("[WiiM] find_coordinator: Matched by host IP")
+                return coord
 
-                # Try matching by formatted IP (unique_id might be formatted)
-                formatted_host = f"wiim_{coord.client.host.replace('.', '_')}"
-                if formatted_host == ent_entry.unique_id:
+            # Try matching by formatted IP (unique_id might be formatted)
+            if "_" in ent_entry.unique_id:
+                potential_ip = ent_entry.unique_id.replace("wiim_", "").replace("_", ".")
+                coord = find_coordinator_by_ip(hass, DOMAIN, potential_ip)
+                if coord:
                     _LOGGER.debug("[WiiM] find_coordinator: Matched by formatted host")
                     return coord
 
-                # Try matching by MAC address (most common case for newer entities)
+            # Try matching by MAC address (most common case for newer entities)
+            for coord in get_all_coordinators(hass, DOMAIN):
                 if coord.data and coord.data.get("status"):
                     mac_address = coord.data["status"].get("MAC")
                     if mac_address and mac_address.lower() != "unknown":
@@ -83,7 +83,7 @@ def find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | N
     if entity_id.startswith("media_player."):
         device_part = entity_id[13:]  # Remove "media_player." prefix
 
-        for coord in coordinators:
+        for coord in get_all_coordinators(hass, DOMAIN):
             if not coord.data or not coord.data.get("status"):
                 continue
 
@@ -107,7 +107,7 @@ def find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | N
         entity_id,
         [
             f"{coord.client.host}({coord.data.get('status', {}).get('DeviceName', 'Unknown') if coord.data else 'No data'})"
-            for coord in coordinators
+            for coord in get_all_coordinators(hass, DOMAIN)
         ],
     )
     return None
@@ -118,7 +118,7 @@ def entity_id_to_host(hass: HomeAssistant, entity_id: str) -> str | None:
     _LOGGER.debug("[WiiM] entity_id_to_host() called with entity_id=%s", entity_id)
 
     # First try: Direct IP-based mapping (legacy scheme)
-    for coord in _get_all_coordinators(hass):
+    for coord in get_all_coordinators(hass, DOMAIN):
         expected = f"media_player.wiim_{coord.client.host.replace('.', '_')}"
         if expected == entity_id:
             _LOGGER.debug("entity_id_to_host: Direct match found for host=%s", coord.client.host)
@@ -136,15 +136,15 @@ def entity_id_to_host(hass: HomeAssistant, entity_id: str) -> str | None:
             _LOGGER.debug("entity_id_to_host: Registry lookup found unique_id=%s", unique)
 
             # Try to match by unique_id (which should be the host IP)
-            for coord in _get_all_coordinators(hass):
-                if coord.client.host == unique:
-                    _LOGGER.debug("entity_id_to_host: Match found via unique_id for host=%s", coord.client.host)
-                    return coord.client.host
+            coord = find_coordinator_by_ip(hass, DOMAIN, unique)
+            if coord:
+                _LOGGER.debug("entity_id_to_host: Match found via unique_id for host=%s", coord.client.host)
+                return coord.client.host
 
             # Try to match by device name
             device_name = ent_entry.name or ent_entry.original_name
             if device_name:
-                for coord in _get_all_coordinators(hass):
+                for coord in get_all_coordinators(hass, DOMAIN):
                     status = coord.data.get("status", {}) if coord.data else {}
                     device_name_from_status = status.get("DeviceName") or status.get("device_name")
                     if device_name_from_status and device_name_from_status.lower() == device_name.lower():
@@ -161,14 +161,3 @@ def entity_id_to_host(hass: HomeAssistant, entity_id: str) -> str | None:
 
     _LOGGER.warning("entity_id_to_host: No match found for entity_id=%s", entity_id)
     return None
-
-
-def _get_all_coordinators(hass: HomeAssistant) -> list:
-    """Get all WiiM coordinators from hass.data."""
-    coordinators = []
-    for entry_data in hass.data.get(DOMAIN, {}).values():
-        if isinstance(entry_data, dict) and "coordinator" in entry_data:
-            coord = entry_data["coordinator"]
-            if hasattr(coord, "client"):
-                coordinators.append(coord)
-    return coordinators
