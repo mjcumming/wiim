@@ -480,7 +480,49 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_import(self, import_config: dict[str, Any]) -> FlowResult:
         """Handle import from YAML or programmatic flow."""
-        return await self.async_step_user(import_config)
+        # Extract host from import config
+        host = import_config.get(CONF_HOST)
+        if not host:
+            return self.async_abort(reason="no_host")
+
+        # Check for duplicates first
+        known_ids = {entry.unique_id for entry in self._async_current_entries()}
+        in_progress_ids = {
+            flow["context"].get("unique_id")
+            for flow in self.hass.config_entries.flow.async_progress()
+            if flow["handler"] == DOMAIN
+        }
+
+        unique_id = host
+        if unique_id in (known_ids | in_progress_ids):
+            _LOGGER.debug("[WiiM] Import for %s aborted - already configured or in progress", host)
+            return self.async_abort(reason="already_configured")
+
+        # Validate device and get info
+        try:
+            client = await wiim_factory_client(host, max_retries=2)
+            try:
+                # Get enhanced device name with role information
+                device_name = await _get_enhanced_device_name(client, host)
+
+                # Ensure device is ungrouped for clean setup
+                await self._ensure_solo(client, {"device_name": device_name})
+            finally:
+                await client.close()
+        except (ConfigEntryNotReady, Exception) as err:
+            _LOGGER.debug("[WiiM] Import validation failed for %s: %s", host, err)
+            return self.async_abort(reason="cannot_connect")
+
+        # Set up for completion
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured()
+
+        # Create entry directly without user interaction
+        _LOGGER.info("[WiiM] Successfully imported device %s (%s)", device_name, host)
+        return self.async_create_entry(
+            title=device_name,
+            data={CONF_HOST: host},
+        )
 
     async def _test_connection(self, host: str) -> bool:
         """Test connection to WiiM device."""

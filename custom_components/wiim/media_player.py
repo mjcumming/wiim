@@ -213,6 +213,11 @@ def _register_services(platform) -> None:
         {},
         "async_refresh_group_states",
     )
+    platform.async_register_entity_service(
+        "cleanup_ghost_discoveries",
+        {vol.Optional("dry_run", default=True): bool},
+        "async_cleanup_ghost_discoveries",
+    )
 
     # Group management services
     platform.async_register_entity_service(
@@ -1642,6 +1647,48 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         except Exception as err:
             _LOGGER.error("[WiiM] %s: Failed to complete WiiM multiroom group creation: %s", self.entity_id, err)
             raise
+
+    async def async_cleanup_ghost_discoveries(self, dry_run: bool = True) -> None:
+        """Clean up ghost discovery flows that are stuck in manual entry mode."""
+        _LOGGER.info("[WiiM] %s: Ghost discovery cleanup requested (dry_run=%s)", self.entity_id, dry_run)
+
+        ghost_flows = []
+
+        # Find discovery flows for WiiM that are stuck in user/manual steps
+        for flow in self.hass.config_entries.flow.async_progress():
+            if (
+                flow["handler"] == DOMAIN
+                and flow.get("context", {}).get("source") == "import"
+                and flow.get("step_id") in ("user", "manual")
+            ):
+                ghost_flows.append(flow["flow_id"])
+
+        _LOGGER.info(
+            "[WiiM] %s: Found %d ghost discovery flows: %s%s",
+            self.entity_id,
+            len(ghost_flows),
+            ghost_flows,
+            " (DRY RUN - no changes made)" if dry_run else "",
+        )
+
+        if not dry_run and ghost_flows:
+            from homeassistant.data_entry_flow import FlowManager
+
+            flow_manager: FlowManager = self.hass.config_entries.flow
+
+            for flow_id in ghost_flows:
+                try:
+                    await flow_manager.async_abort(flow_id)
+                    _LOGGER.info("[WiiM] Aborted ghost discovery flow: %s", flow_id)
+                except Exception as err:
+                    _LOGGER.warning("[WiiM] Failed to abort ghost discovery flow %s: %s", flow_id, err)
+
+        return {
+            "ghost_flows_found": len(ghost_flows),
+            "flows": ghost_flows,
+            "dry_run": dry_run,
+            "action_taken": "aborted" if not dry_run else "none",
+        }
 
 
 # Backward compatibility - import the utility function at module level
