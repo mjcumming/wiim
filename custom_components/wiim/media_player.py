@@ -25,7 +25,7 @@ from homeassistant.components.media_player.const import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_platform
+from homeassistant.helpers import device_registry, entity_platform, entity_registry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -95,16 +95,16 @@ async def async_setup_entry(
 
 async def _cleanup_stale_entities(hass: HomeAssistant, coordinator: WiiMCoordinator) -> None:
     """Clean up stale entities that might cause naming conflicts."""
-    entity_registry = hass.helpers.entity_registry.async_get(hass)
-    device_registry = hass.helpers.device_registry.async_get(hass)
+    entity_registry_inst = entity_registry.async_get(hass)
+    device_registry_inst = device_registry.async_get(hass)
 
     # Find device by host IP
     device_identifiers = {(DOMAIN, coordinator.client.host)}
-    device = device_registry.async_get_device(identifiers=device_identifiers)
+    device = device_registry_inst.async_get_device(identifiers=device_identifiers)
 
     if device:
         # Find all entities for this device
-        entities = hass.helpers.entity_registry.async_entries_for_device(entity_registry, device.id)
+        entities = entity_registry.async_entries_for_device(entity_registry_inst, device.id)
 
         for entity_entry in entities:
             # Check if entity is stale (not available or restored from state)
@@ -122,7 +122,7 @@ async def _cleanup_stale_entities(hass: HomeAssistant, coordinator: WiiMCoordina
                     and ("_2" in entity_entry.entity_id or "_3" in entity_entry.entity_id)
                 ):
                     _LOGGER.info("[WiiM] Removing stale entity %s to prevent naming conflicts", entity_entry.entity_id)
-                    entity_registry.async_remove(entity_entry.entity_id)
+                    entity_registry_inst.async_remove(entity_entry.entity_id)
 
 
 def _register_services(platform) -> None:
@@ -293,8 +293,8 @@ async def _manage_group_entities(
             group_entity = WiiMGroupMediaPlayer(hass, coordinator, device_ip)
 
             # Register the entity with Home Assistant
-            entity_registry = hass.helpers.entity_registry.async_get(hass)
-            entity_registry.async_get_or_create(
+            entity_registry_inst = entity_registry.async_get(hass)
+            entity_registry_inst.async_get_or_create(
                 domain="media_player",
                 platform=DOMAIN,
                 unique_id=group_entity.unique_id,
@@ -319,9 +319,9 @@ async def _manage_group_entities(
             group_entity = group_entities[group_entity_id]
 
             # Remove from entity registry
-            entity_registry = hass.helpers.entity_registry.async_get(hass)
+            entity_registry_inst = entity_registry.async_get(hass)
             if hasattr(group_entity, "entity_id"):
-                entity_registry.async_remove(group_entity.entity_id)
+                entity_registry_inst.async_remove(group_entity.entity_id)
 
             # Remove from our tracking
             del group_entities[group_entity_id]
@@ -701,8 +701,8 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                             for coord in self.hass.data[DOMAIN].values():
                                 if hasattr(coord, "client") and coord.client.host == slave_ip:
                                     # Try to find the actual entity ID
-                                    entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
-                                    for entity_entry in entity_registry.entities.values():
+                                    entity_registry_inst = entity_registry.async_get(self.hass)
+                                    for entity_entry in entity_registry_inst.entities.values():
                                         if (
                                             entity_entry.platform == DOMAIN
                                             and entity_entry.entity_id.startswith("media_player.")
@@ -765,8 +765,8 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     return master_entity_id
                 else:
                     # Try to find the actual entity ID with alternative naming
-                    entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
-                    for entity_entry in entity_registry.entities.values():
+                    entity_registry_inst = entity_registry.async_get(self.hass)
+                    for entity_entry in entity_registry_inst.entities.values():
                         if (
                             entity_entry.platform == DOMAIN
                             and entity_entry.entity_id.startswith("media_player.")
@@ -1387,13 +1387,13 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     async def async_cleanup_entity_naming_conflicts(self, dry_run: bool = True) -> None:
         """Clean up entity naming conflicts like '_2' suffixes."""
-        entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
+        entity_registry_inst = entity_registry.async_get(self.hass)
 
         conflicts_found = []
         entities_to_remove = []
 
         # Find all WiiM entities in the registry
-        for entity_entry in entity_registry.entities.values():
+        for entity_entry in entity_registry_inst.entities.values():
             if entity_entry.platform != DOMAIN:
                 continue
 
@@ -1420,7 +1420,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
         if not dry_run:
             for entity_id in entities_to_remove:
-                entity_registry.async_remove(entity_id)
+                entity_registry_inst.async_remove(entity_id)
                 _LOGGER.info("[WiiM] Removed conflicted entity: %s", entity_id)
 
         # Return summary

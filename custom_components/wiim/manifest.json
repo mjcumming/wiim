@@ -18,6 +18,6 @@
     { "st": "urn:schemas-upnp-org:service:RenderingControl:1" },
     { "st": "urn:schemas-upnp-org:service:ConnectionManager:1" }
   ],
-  "version": "0.4.15",
+  "version": "0.4.16",
   "zeroconf": [{ "type": "_linkplay._tcp.local." }]
 }

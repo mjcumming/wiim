@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
@@ -558,8 +559,8 @@ class WiiMCoordinator(DataUpdateCoordinator):
                             for coord in self.hass.data.get(DOMAIN, {}).values():
                                 if hasattr(coord, "client") and coord.client.host == slave_ip:
                                     # Found the coordinator, now find its entity
-                                    entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
-                                    for entity_entry in entity_registry.entities.values():
+                                    entity_registry_inst = entity_registry.async_get(self.hass)
+                                    for entity_entry in entity_registry_inst.entities.values():
                                         if (
                                             entity_entry.platform == DOMAIN
                                             and entity_entry.entity_id.startswith("media_player.")
@@ -621,18 +622,97 @@ class WiiMCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_trigger_slave_discovery(self) -> None:
-        """Start config flows for new slave IPs that HA doesn't know yet."""
+        """Start config flows for new slave IPs that HA doesn't know yet.
+
+        Enhanced duplicate detection to prevent slaves from appearing in the
+        Discovered section when they're already part of existing integrations.
+        """
         for ip in self._group_members:
             if ip in self._imported_hosts:
                 continue
 
-            # Skip if already present – ensure we only inspect coordinator objects
+            # Enhanced duplicate detection: Check multiple scenarios
+
+            # 1. Skip if already present as a coordinator
             if any(
                 hasattr(coord, "client") and coord.client.host == ip
                 for coord in self.hass.data.get(DOMAIN, {}).values()
             ):
                 self._imported_hosts.add(ip)
+                _LOGGER.debug("[WiiM] Skipping slave discovery for %s - already has coordinator", ip)
                 continue
+
+            # 2. Check if already exists as a config entry (any state)
+            existing_entry = None
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                if entry.data.get(CONF_HOST) == ip:
+                    existing_entry = entry
+                    break
+
+            if existing_entry:
+                self._imported_hosts.add(ip)
+                _LOGGER.debug(
+                    "[WiiM] Skipping slave discovery for %s - config entry already exists (%s, state: %s)",
+                    ip,
+                    existing_entry.entry_id,
+                    existing_entry.state.name,
+                )
+                continue
+
+            # 3. Check if there's already a discovery flow in progress for this IP
+            existing_flow = None
+            for flow in self.hass.config_entries.flow.async_progress():
+                if (
+                    flow["handler"] == DOMAIN
+                    and flow.get("context", {}).get("source") == "import"
+                    and flow.get("step_id") == "user"
+                ):
+                    # Check if this flow is for the same IP
+                    flow_data = flow.get("data") or {}
+                    if flow_data.get(CONF_HOST) == ip:
+                        existing_flow = flow
+                        break
+
+            if existing_flow:
+                self._imported_hosts.add(ip)
+                _LOGGER.debug("[WiiM] Skipping slave discovery for %s - discovery flow already in progress", ip)
+                continue
+
+            # 4. Check if device is currently a slave in any other master's group
+            # This prevents slaves from being discovered when they're actively in use
+            is_active_slave = False
+            for coord in self.hass.data.get(DOMAIN, {}).values():
+                if not hasattr(coord, "client") or coord.client.host == ip:
+                    continue  # Skip self or non-coordinators
+
+                if coord.data and coord.data.get("role") == "master":
+                    coord_multiroom = coord.data.get("multiroom", {})
+                    coord_slave_list = coord_multiroom.get("slave_list", [])
+
+                    # Check if our IP is in this master's slave list
+                    for slave in coord_slave_list:
+                        if isinstance(slave, dict) and slave.get("ip") == ip:
+                            is_active_slave = True
+                            _LOGGER.debug(
+                                "[WiiM] Skipping slave discovery for %s - actively slave of master %s",
+                                ip,
+                                coord.client.host,
+                            )
+                            break
+
+                    if is_active_slave:
+                        break
+
+            if is_active_slave:
+                self._imported_hosts.add(ip)
+                continue
+
+            # If we get here, this is a legitimate new slave that should be discovered
+            _LOGGER.info(
+                "[WiiM] Starting discovery for slave device %s (master: %s)",
+                ip,
+                self.client.host,
+            )
 
             # If we're the master, try to kick the slave for clean HA setup
             # This ensures the device starts in solo mode for proper HA integration
@@ -652,40 +732,28 @@ class WiiMCoordinator(DataUpdateCoordinator):
                         kick_err,
                     )
 
-            # Prevent duplicate config-entries: skip if another entry already
-            # has the same host (even if its unique_id differs for legacy
-            # reasons or the entry is not fully set up yet)
-            for entry in self.hass.config_entries.async_entries(DOMAIN):
-                if entry.data.get(CONF_HOST) == ip:
-                    _LOGGER.debug(
-                        "[WiiM] Config entry for %s already exists (%s). Skipping import.",
-                        ip,
-                        entry.entry_id,
-                    )
-                    self._imported_hosts.add(ip)
-                    break
-            else:
-                # Only start a flow if no existing entry with this host
-                try:
-                    await self.hass.config_entries.flow.async_init(
-                        DOMAIN,
-                        context={"source": "import"},
-                        data={CONF_HOST: ip},
-                    )
-                except Exception as flow_err:  # noqa: BLE001 – suppress duplicate/unknown flow noise
-                    from homeassistant.data_entry_flow import UnknownFlow
+            # Create discovery flow for this genuinely new device
+            try:
+                await self.hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={"source": "import"},
+                    data={CONF_HOST: ip},
+                )
+                _LOGGER.info("[WiiM] Created discovery flow for new slave device %s", ip)
+            except Exception as flow_err:  # noqa: BLE001 – suppress duplicate/unknown flow noise
+                from homeassistant.data_entry_flow import UnknownFlow
 
-                    if isinstance(flow_err, UnknownFlow):
-                        _LOGGER.debug(
-                            "[WiiM] Import flow for %s suppressed (already in progress)",
-                            ip,
-                        )
-                    else:
-                        _LOGGER.debug(
-                            "[WiiM] Unexpected error starting import flow for %s: %s",
-                            ip,
-                            flow_err,
-                        )
+                if isinstance(flow_err, UnknownFlow):
+                    _LOGGER.debug(
+                        "[WiiM] Import flow for %s suppressed (already in progress)",
+                        ip,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "[WiiM] Unexpected error starting import flow for %s: %s",
+                        ip,
+                        flow_err,
+                    )
 
             # Mark as processed to avoid future duplicate attempts
             self._imported_hosts.add(ip)
