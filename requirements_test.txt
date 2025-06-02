@@ -3,7 +3,7 @@
 # Testing framework
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
-pytest-cov==6.0.0
+pytest-cov==6.1.1
 pytest-timeout>=2.1.0
 pytest-homeassistant-custom-component==0.13.205
 
