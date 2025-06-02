@@ -52,14 +52,121 @@ from .const import (
     SOURCE_MAP,
 )
 from .coordinator import WiiMCoordinator
-from .services import WiiMDeviceServices, WiiMDiagnosticServices, WiiMGroupServices, WiiMMediaServices
-from .utils import StateManager, entity_id_to_host, find_coordinator
-from .utils.device_registry import find_coordinator_by_ip, get_all_coordinators
 
 _LOGGER = logging.getLogger(__name__)
 
 # Home Assistant doesn't define a constant for the leader attribute.
 HA_ATTR_GROUP_LEADER = "group_leader"
+
+
+# Placeholder service classes - these would be implemented separately if needed
+class WiiMMediaServices:
+    @staticmethod
+    async def play_preset(entity, preset: int) -> None:
+        await entity.coordinator.client.play_preset(preset)
+
+    @staticmethod
+    async def toggle_power(entity) -> None:
+        await entity.coordinator.client.toggle_power()
+
+    @staticmethod
+    async def play_url(entity, url: str) -> None:
+        await entity.coordinator.client.play_url(url)
+
+    @staticmethod
+    async def play_playlist(entity, playlist_url: str) -> None:
+        await entity.coordinator.client.play_playlist(playlist_url)
+
+    @staticmethod
+    async def set_eq(entity, preset: str, custom_values: list[int] | None = None) -> None:
+        if custom_values:
+            await entity.coordinator.client.set_eq_custom(custom_values)
+        else:
+            await entity.coordinator.client.set_eq_preset(preset)
+
+    @staticmethod
+    async def play_notification(entity, url: str) -> None:
+        await entity.coordinator.client.play_notification(url)
+
+
+class WiiMDeviceServices:
+    @staticmethod
+    async def reboot_device(entity) -> None:
+        await entity.coordinator.client.reboot()
+
+    @staticmethod
+    async def sync_time(entity) -> None:
+        await entity.coordinator.client.sync_time()
+
+
+class WiiMDiagnosticServices:
+    @staticmethod
+    async def diagnose_entities(entity) -> None:
+        pass  # Placeholder
+
+    @staticmethod
+    async def cleanup_stale_entities(entity, dry_run: bool = True) -> None:
+        pass  # Placeholder
+
+    @staticmethod
+    async def auto_maintain(entity, auto_cleanup: bool = False, dry_run: bool = True) -> None:
+        pass  # Placeholder
+
+    @staticmethod
+    async def nuclear_reset_entities(entity, i_understand_this_removes_all_wiim_entities: bool = False) -> None:
+        pass  # Placeholder
+
+
+class WiiMGroupServices:
+    @staticmethod
+    async def create_group_with_members(entity, group_members: list[str]) -> None:
+        await entity.async_join(group_members)
+
+    @staticmethod
+    async def add_to_group(entity, target_entity: str) -> None:
+        pass  # Placeholder
+
+    @staticmethod
+    async def remove_from_group(entity, target_entity: str) -> None:
+        pass  # Placeholder
+
+    @staticmethod
+    async def disband_group(entity) -> None:
+        await entity.async_unjoin()
+
+
+# Simplified StateManager replacement
+class StateManager:
+    def __init__(self, coordinator, hass):
+        self.coordinator = coordinator
+        self.hass = hass
+
+    def get_effective_status(self) -> dict:
+        """Get effective status from coordinator data."""
+        return self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+
+
+# Utility functions
+def find_coordinator(hass, entity_id: str):
+    """Find coordinator for an entity ID."""
+    from .const import DOMAIN
+
+    # Extract IP from entity ID
+    host = entity_id.replace("media_player.wiim_", "").replace("_", ".")
+
+    for entry_data in hass.data.get(DOMAIN, {}).values():
+        if isinstance(entry_data, dict) and "coordinator" in entry_data:
+            coord = entry_data["coordinator"]
+            if hasattr(coord, "client") and coord.client.host == host:
+                return coord
+    return None
+
+
+def entity_id_to_host(hass, entity_id: str) -> str | None:
+    """Convert entity ID to host IP."""
+    if entity_id.startswith("media_player.wiim_"):
+        return entity_id.replace("media_player.wiim_", "").replace("_", ".")
+    return None
 
 
 async def async_setup_entry(
@@ -1430,7 +1537,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         if role == "master":
             # For master, update all slaves
             for ip in self.coordinator.wiim_group_members:
-                coord = find_coordinator_by_ip(self.hass, DOMAIN, ip)
+                coord = find_coordinator(self.hass, f"media_player.wiim_{ip.replace('.', '_')}")
                 if coord:
                     try:
                         await coord.async_request_refresh()

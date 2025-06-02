@@ -23,18 +23,21 @@ PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
+    # Use the shared session for better performance
+    session = async_get_clientsession(hass)
+
+    # Create client with only supported parameters
     client = WiiMClient(
         host=entry.data["host"],
-        port=entry.data.get("port", 80),
+        port=entry.data.get("port", 443),  # Default to HTTPS port
         timeout=entry.data.get("timeout", 10),
-        max_volume=entry.data.get("max_volume", 100),
-        https=entry.data.get("https", False),
+        session=session,
     )
 
     coordinator = WiiMCoordinator(
         hass,
         client,
-        poll_interval=entry.data.get("poll_interval", 10),
+        poll_interval=entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
     )
 
     # Register device in the device registry
