@@ -485,16 +485,6 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         device_uuid = status.get("uuid") or status.get("device_id")
         device_name = status.get("DeviceName") or status.get("device_name") or self.coordinator.client.host
 
-        # Enhanced naming for master devices
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-        if role == "master":
-            multiroom = self.coordinator.data.get("multiroom", {}) if self.coordinator.data else {}
-            slave_count = len(multiroom.get("slave_list", []))
-            if slave_count > 0:
-                device_name = f"{device_name} (Master of {slave_count})"
-        elif role == "slave":
-            device_name = f"{device_name} (Grouped)"
-
         # Use MAC address for unique_id if available (most stable), otherwise UUID, then IP
         device_mac = status.get("MAC")
         if device_mac and device_mac.lower() != "unknown":
