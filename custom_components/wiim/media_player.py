@@ -384,10 +384,10 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             device_name = f"{device_name} (Grouped)"
 
         # Use MAC address for unique_id if available (most stable), otherwise UUID, then IP
-        mac_address = status.get("MAC")
-        if mac_address and mac_address.lower() != "unknown":
+        device_mac = status.get("MAC")
+        if device_mac and device_mac.lower() != "unknown":
             # MAC address is the most stable identifier
-            self._attr_unique_id = f"wiim_{mac_address.replace(':', '').lower()}"
+            self._attr_unique_id = f"wiim_{device_mac.replace(':', '').lower()}"
             _LOGGER.debug(
                 "[WiiM] %s: Using MAC-based unique_id: %s",
                 self.coordinator.client.host,
@@ -410,14 +410,21 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 self._attr_unique_id,
             )
 
-        # Device info setup
+        # Device info setup - use MAC address as primary identifier to prevent duplicate devices
+        device_identifiers = set()
+        if device_mac and device_mac.lower() != "unknown":
+            # MAC address is the primary identifier (same as group media player)
+            device_identifiers.add((DOMAIN, device_mac.lower().replace(":", "")))
+        # Always include IP as fallback identifier
+        device_identifiers.add((DOMAIN, self.coordinator.client.host))
+
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.client.host)},
+            identifiers=device_identifiers,
             name=device_name,
             manufacturer="WiiM",
             model=status.get("project") or status.get("hardware"),
             sw_version=status.get("firmware"),
-            connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
+            connections={("mac", device_mac)} if device_mac else set(),
         )
 
     def _setup_supported_features(self) -> None:

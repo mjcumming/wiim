@@ -323,14 +323,62 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 vendor_clean = vendor_raw.split(":", 1)[0]
                 status["streaming_service"] = vendor_clean.title()
 
-            # Determine role
+            # Determine role with improved slave detection
             role = "solo"
+
+            # Method 1: Check multiroom type field (most reliable for slaves)
             if str(multiroom.get("type")) == "1":
                 role = "slave"
-            elif str(status.get("group")) == "1":  # Fallback flag many firmwares use
+                _LOGGER.debug("[WiiM] %s: Detected as slave via multiroom.type=1", self.client.host)
+
+            # Method 2: Check status group field (fallback)
+            elif str(status.get("group")) == "1":
                 role = "slave"
+                _LOGGER.debug("[WiiM] %s: Detected as slave via status.group=1", self.client.host)
+
+            # Method 3: Check status type field (another fallback)
+            elif str(status.get("type")) == "1":
+                role = "slave"
+                _LOGGER.debug("[WiiM] %s: Detected as slave via status.type=1", self.client.host)
+
+            # Method 4: Check if we have slaves (we're the master)
             elif multiroom.get("slave_list"):
                 role = "master"
+                _LOGGER.debug("[WiiM] %s: Detected as master via slave_list presence", self.client.host)
+
+            # Method 5: Advanced slave detection - check if other masters list us as a slave
+            # This handles the case where WiiM API doesn't immediately update slave status
+            else:
+                my_ip = self.client.host
+                my_uuid = status.get("uuid")
+
+                # Search all coordinators for a master that has us in their slave list
+                for coord in get_all_coordinators(self.hass, DOMAIN):
+                    if coord == self or coord.data is None:  # Skip self and unavailable coordinators
+                        continue
+
+                    coord_multiroom = coord.data.get("multiroom", {})
+                    coord_slave_list = coord_multiroom.get("slave_list", [])
+
+                    # Check if this coordinator's slave list contains our device
+                    for slave in coord_slave_list:
+                        if isinstance(slave, dict):
+                            slave_ip = slave.get("ip")
+                            slave_uuid = slave.get("uuid")
+
+                            if (my_ip and my_ip == slave_ip) or (my_uuid and my_uuid == slave_uuid):
+                                role = "slave"
+                                _LOGGER.debug(
+                                    "[WiiM] %s: Detected as slave via master %s slave_list lookup",
+                                    self.client.host,
+                                    coord.client.host,
+                                )
+                                # Also store the master IP for later use
+                                status["master_ip"] = coord.client.host
+                                break
+
+                    if role == "slave":
+                        break
 
             # Check for role changes and trigger group entity management
             previous_role = None
@@ -599,29 +647,26 @@ class WiiMCoordinator(DataUpdateCoordinator):
                             break
 
                     if master_coord:
-                        break
+                        # Found our master, build the group
+                        master_entity_id = f"media_player.wiim_{master_coord.client.host.replace('.', '_')}"
+                        if self.hass.states.get(master_entity_id):
+                            group_members.append(master_entity_id)
+                            group_leader = master_entity_id
 
-            if master_coord:
-                # Found our master, build the group
-                master_entity_id = f"media_player.wiim_{master_coord.client.host.replace('.', '_')}"
-                if self.hass.states.get(master_entity_id):
-                    group_members.append(master_entity_id)
-                    group_leader = master_entity_id
+                        # Add self
+                        group_members.append(entity_id)
 
-                # Add self
-                group_members.append(entity_id)
+                        # Add other slaves
+                        multiroom = master_coord.data.get("multiroom", {})
+                        slave_list = multiroom.get("slave_list", [])
 
-                # Add other slaves
-                multiroom = master_coord.data.get("multiroom", {})
-                slave_list = multiroom.get("slave_list", [])
-
-                for slave in slave_list:
-                    if isinstance(slave, dict):
-                        slave_ip = slave.get("ip")
-                        if slave_ip and slave_ip != self.client.host:
-                            slave_entity_id = f"media_player.wiim_{slave_ip.replace('.', '_')}"
-                            if self.hass.states.get(slave_entity_id):
-                                group_members.append(slave_entity_id)
+                        for slave in slave_list:
+                            if isinstance(slave, dict):
+                                slave_ip = slave.get("ip")
+                                if slave_ip and slave_ip != self.client.host:
+                                    slave_entity_id = f"media_player.wiim_{slave_ip.replace('.', '_')}"
+                                    if self.hass.states.get(slave_entity_id):
+                                        group_members.append(slave_entity_id)
 
         # Handle solo devices - preserve any existing HA group memberships
         elif role == "solo":

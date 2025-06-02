@@ -74,13 +74,22 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
         )
 
         # Set device_info to match the main device so the group entity is grouped under the main device
+        # Use the MAC address as the primary identifier to match the main media player
+        device_mac = status.get("MAC")
+        device_identifiers = set()
+        if device_mac:
+            # Use MAC as primary identifier (same as main media player)
+            device_identifiers.add((DOMAIN, device_mac.lower().replace(":", "")))
+        # Always include IP as fallback identifier
+        device_identifiers.add((DOMAIN, coordinator.client.host))
+
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.client.host)},
+            identifiers=device_identifiers,
             name=device_name,
             manufacturer="WiiM",
             model=status.get("project") or status.get("hardware"),
             sw_version=status.get("firmware"),
-            connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
+            connections={("mac", device_mac)} if device_mac else set(),
         )
 
     @property
