@@ -235,32 +235,37 @@ def _register_services(platform) -> None:
 async def _setup_group_entities(
     hass: HomeAssistant, async_add_entities: AddEntitiesCallback, config_entry: ConfigEntry
 ) -> None:
-    """Set up group entities management (preserved from original)."""
-    # This preserves the existing group entity logic - could be further refactored later
+    """Set up group entities management (updated for new UUID scheme)."""
+    # This preserves the existing group entity logic but uses the new UUID scheme
     if not hasattr(hass.data[DOMAIN], "_group_entities"):
         hass.data[DOMAIN]["_group_entities"] = {}
 
     # Import the group media player class
-    from .group_media_player import WiiMGroupMediaPlayer
+    from .group_media_player import WiiMGroupMediaPlayer, should_create_group_master, get_group_master_uuid
 
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
-    # Create group entity only if this device is a master with slaves
-    if coordinator.data and coordinator.data.get("role") == "master":
-        multiroom = coordinator.data.get("multiroom", {})
-        slave_list = multiroom.get("slave_list", [])
-
-        if slave_list:  # Only create group entity if there are actual slaves
-            device_ip = coordinator.client.host
-            group_entity_id = f"wiim_group_{device_ip.replace('.', '_')}"
+    # Only create group entity if this device is actually a master with slaves
+    if should_create_group_master(coordinator):
+        master_uuid = get_group_master_uuid(coordinator)
+        if master_uuid:
+            # Use UUID-based identifier for group entities
+            group_entity_id = f"wiim_group_{master_uuid.lower()}"
 
             # Avoid duplicate group entities
             if group_entity_id not in hass.data[DOMAIN]["_group_entities"]:
-                group_entity = WiiMGroupMediaPlayer(hass, coordinator, device_ip)
+                group_entity = WiiMGroupMediaPlayer(hass, coordinator, master_uuid)
                 async_add_entities([group_entity])
                 hass.data[DOMAIN]["_group_entities"][group_entity_id] = group_entity
 
-                _LOGGER.info("[WiiM] Created group entity for master %s with %d slaves", device_ip, len(slave_list))
+                multiroom = coordinator.data.get("multiroom", {}) if coordinator.data else {}
+                slave_count = len(multiroom.get("slave_list", []))
+                _LOGGER.info(
+                    "[WiiM] Created group master entity for %s with %d slaves (UUID: %s)",
+                    coordinator.client.host,
+                    slave_count,
+                    master_uuid,
+                )
 
 
 async def _manage_group_entities(
@@ -476,14 +481,22 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     def _can_be_grouped(self) -> bool:
         """Determine if this device can be joined to a group."""
-        # All WiiM devices can be grouped since our integration handles:
-        # - Solo devices: join directly
-        # - Slaves: leave current group first, then join new group
-        # - Masters: disband current group first, then join as slave
+        # Check if we have coordinator data
         if not self.coordinator.data:
+            _LOGGER.debug("[WiiM] %s: GROUPING disabled - no coordinator data", self.coordinator.client.host)
             return False
 
-        # As long as we have coordinator data, this is a valid WiiM device that can be grouped
+        # Physical WiiM devices can always be grouped (they can join/leave/create groups)
+        # This excludes virtual group master entities which shouldn't have GROUPING feature
+        status = self.coordinator.data.get("status", {})
+        device_uuid = status.get("uuid")
+
+        if not device_uuid:
+            _LOGGER.debug("[WiiM] %s: GROUPING disabled - no device UUID", self.coordinator.client.host)
+            return False
+
+        # This is a physical WiiM device with valid UUID - can be grouped
+        _LOGGER.debug("[WiiM] %s: GROUPING enabled - physical device with UUID", self.coordinator.client.host)
         return True
 
     # -------------------------------------------------------------------------
@@ -1165,6 +1178,11 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 filtered_out.append(f"{entity_id} (already in group)")
                 continue
 
+            # Filter out group master entities (virtual entities that can't be joined)
+            if "group_" in entity_id and "master" in entity_id.lower():
+                filtered_out.append(f"{entity_id} (group master - virtual entity)")
+                continue
+
             # Check if entity exists and is valid
             entity_state = self.hass.states.get(entity_id)
             if entity_state is None:
@@ -1174,6 +1192,12 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             # Check if entity is stale
             if entity_state.state in ("unavailable", "unknown") or entity_state.attributes.get("restored", False):
                 filtered_out.append(f"{entity_id} (stale/unavailable)")
+                continue
+
+            # Check if this is actually a WiiM group master by checking attributes
+            entity_attrs = entity_state.attributes
+            if entity_attrs.get("group_type") == "wiim_master":
+                filtered_out.append(f"{entity_id} (WiiM group master - virtual entity)")
                 continue
 
             # Strict WiiM-only filtering: Check entity domain and integration
@@ -1220,6 +1244,9 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
         # Use WiiM-specific multiroom grouping
         await self._create_wiim_multiroom_group(validated_members)
+
+        # Force refresh of all affected devices to update UI
+        await self._refresh_all_group_members_after_join(validated_members)
 
     async def async_unjoin(self) -> None:
         """Remove this player from any group."""
@@ -1658,6 +1685,38 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             "dry_run": dry_run,
             "action_taken": "aborted" if not dry_run else "none",
         }
+
+    async def _refresh_all_group_members_after_join(self, group_members: list[str]) -> None:
+        """Refresh all group members after a successful join operation."""
+        _LOGGER.info("[WiiM] %s: Refreshing all group members after join", self.entity_id)
+
+        # Refresh all WiiM coordinators
+        refreshed_devices = []
+        for entry_id, entry_data in self.hass.data[DOMAIN].items():
+            if entry_id == "_group_entities":  # Skip group entities storage
+                continue
+            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                continue
+            coord = entry_data["coordinator"]
+            if hasattr(coord, "client"):
+                try:
+                    await coord.async_request_refresh()
+                    refreshed_devices.append(coord.client.host)
+                except Exception as err:
+                    _LOGGER.warning("[WiiM] Failed to refresh coordinator %s: %s", coord.client.host, err)
+
+        # Force immediate state update for all group member entities
+        for entity_id in group_members:
+            if self.hass.states.get(entity_id):
+                # Force the entity to update its state immediately
+                self.hass.async_create_task(self.hass.helpers.entity_component.async_update_entity(entity_id))
+
+        # Force update all group member states
+        await self._update_all_group_member_states()
+
+        _LOGGER.info("[WiiM] %s: Refreshed %d devices: %s", self.entity_id, len(refreshed_devices), refreshed_devices)
+
+        return {"refreshed_devices": len(refreshed_devices), "devices": refreshed_devices}
 
 
 # Backward compatibility - import the utility function at module level

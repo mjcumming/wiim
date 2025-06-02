@@ -267,7 +267,13 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("[WiiM] %s: Group state changed, new role: %s", self.client.host, role)
 
                 # Register/update device in registry after first successful data fetch
-                if role != "solo":  # Only register when we have full status data
+                self.device_registry.register_device(self)
+
+                # Trigger state updates for all group members when group composition changes
+                await self._propagate_group_state_changes(role, multiroom)
+            else:
+                # Even if role didn't change, ensure device is registered
+                if not self.device_registry.get_device_by_ip(self.client.host):
                     self.device_registry.register_device(self)
 
             # Reset consecutive failures on successful update
@@ -453,3 +459,37 @@ class WiiMCoordinator(DataUpdateCoordinator):
         except WiiMError as err:
             _LOGGER.error("[WiiM] Failed to leave WiiM group: %s", err)
             raise
+
+    async def _propagate_group_state_changes(self, role: str, multiroom: dict[str, Any]) -> None:
+        """Propagate group state changes to all group members to ensure UI updates."""
+        _LOGGER.debug("[WiiM] %s: Propagating group state changes for role=%s", self.client.host, role)
+
+        # Get all affected IPs (both current slaves and potentially previous slaves)
+        affected_ips = set()
+
+        # Add current slaves
+        if role == "master":
+            for slave in multiroom.get("slave_list", []):
+                if isinstance(slave, dict) and slave.get("ip"):
+                    affected_ips.add(slave["ip"])
+
+        # Add self
+        affected_ips.add(self.client.host)
+
+        # For slaves, also try to update the master
+        if role == "slave":
+            master_ip = self.data.get("status", {}).get("master_ip") if self.data else None
+            if master_ip:
+                affected_ips.add(master_ip)
+
+        # Trigger async refresh for all affected coordinators
+        for ip in affected_ips:
+            if ip != self.client.host:  # Don't refresh self again
+                coord = self.device_registry.get_device_by_ip(ip)
+                if coord:
+                    try:
+                        # Schedule async refresh instead of blocking
+                        self.hass.async_create_task(coord.async_request_refresh())
+                        _LOGGER.debug("[WiiM] %s: Triggered refresh for group member %s", self.client.host, ip)
+                    except Exception as err:
+                        _LOGGER.debug("[WiiM] %s: Failed to trigger refresh for %s: %s", self.client.host, ip, err)

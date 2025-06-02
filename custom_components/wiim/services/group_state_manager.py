@@ -48,7 +48,7 @@ class GroupStateManager:
         if self._current_state is None:
             # First time - initialize state
             self._current_state = GroupState(role=new_role, master_uuid=new_master_uuid)
-            self._update_cached_members(new_role, multiroom)
+            self._update_cached_members(new_role, multiroom, status)
             self._cache_state()
             return True
 
@@ -66,9 +66,38 @@ class GroupStateManager:
             # Update state and recalculate members
             self._current_state.role = new_role
             self._current_state.master_uuid = new_master_uuid
-            self._update_cached_members(new_role, multiroom)
+            self._update_cached_members(new_role, multiroom, status)
             self._cache_state()
             return True
+
+        # Even if role didn't change, check if group membership changed (for masters)
+        if new_role == "master":
+            current_slaves = set()
+            for slave in multiroom.get("slave_list", []):
+                if isinstance(slave, dict) and slave.get("ip"):
+                    current_slaves.add(slave["ip"])
+
+            # Get previous slaves from cached members
+            previous_slaves = set()
+            for member_entity_id in self._current_state.group_members:
+                if member_entity_id != self._get_own_entity_id():
+                    # Extract IP from entity ID
+                    if "wiim_" in member_entity_id:
+                        ip_part = member_entity_id.split("wiim_", 1)[1]
+                        if "_" in ip_part:
+                            ip = ip_part.replace("_", ".")
+                            previous_slaves.add(ip)
+
+            if current_slaves != previous_slaves:
+                _LOGGER.debug(
+                    "[WiiM] %s: Master slave list changed: %s -> %s",
+                    self.coordinator.client.host,
+                    previous_slaves,
+                    current_slaves,
+                )
+                self._update_cached_members(new_role, multiroom, status)
+                self._cache_state()
+                return True
 
         return False
 
@@ -103,7 +132,7 @@ class GroupStateManager:
         # Default to solo
         return "solo"
 
-    def _update_cached_members(self, role: str, multiroom: dict) -> None:
+    def _update_cached_members(self, role: str, multiroom: dict, status: dict) -> None:
         """Update cached group members based on role."""
         if role == "solo":
             self._current_state.group_members = []
@@ -126,29 +155,66 @@ class GroupStateManager:
             self._current_state.group_leader = leader
 
         elif role == "slave":
-            # For slaves, find master and get full group
-            master_uuid = self._current_state.master_uuid
+            # For slaves, find master and get full group from master's perspective
+            master_uuid = status.get("master_uuid")
+            master_ip = status.get("master_ip")
+
+            _LOGGER.debug(
+                "[WiiM] %s: Slave looking for master - master_uuid=%s, master_ip=%s",
+                self.coordinator.client.host,
+                master_uuid,
+                master_ip,
+            )
+
+            master_coord = None
+
+            # Try UUID lookup first (most reliable)
             if master_uuid:
                 master_coord = self.device_registry.get_device_by_uuid(master_uuid)
-                if master_coord and master_coord.data:
-                    master_multiroom = master_coord.data.get("multiroom", {})
-                    members = [self._find_entity_id_by_ip(master_coord.client.host)]
-                    leader = self._find_entity_id_by_ip(master_coord.client.host)
+                if master_coord:
+                    _LOGGER.debug("[WiiM] %s: Found master by UUID: %s", self.coordinator.client.host, master_uuid)
 
-                    # Add all slaves from master's list
-                    slave_list = master_multiroom.get("slave_list", [])
-                    for slave in slave_list:
-                        if isinstance(slave, dict) and slave.get("ip"):
-                            slave_entity_id = self._find_entity_id_by_ip(slave["ip"])
-                            if slave_entity_id:
-                                members.append(slave_entity_id)
+            # Fallback to IP lookup
+            if not master_coord and master_ip:
+                master_coord = self.device_registry.get_device_by_ip(master_ip)
+                if master_coord:
+                    _LOGGER.debug("[WiiM] %s: Found master by IP: %s", self.coordinator.client.host, master_ip)
 
-                    self._current_state.group_members = [m for m in members if m]  # Filter None values
-                    self._current_state.group_leader = leader
-                else:
-                    # Fallback if master not found
-                    self._current_state.group_members = [self._get_own_entity_id()]
-                    self._current_state.group_leader = None
+            if master_coord and master_coord.data:
+                master_multiroom = master_coord.data.get("multiroom", {})
+                master_ip_actual = master_coord.client.host
+
+                # Build complete member list from master's perspective
+                members = [self._find_entity_id_by_ip(master_ip_actual)]  # Master first
+                leader = self._find_entity_id_by_ip(master_ip_actual)
+
+                # Add all slaves from master's list (including self)
+                slave_list = master_multiroom.get("slave_list", [])
+                for slave in slave_list:
+                    if isinstance(slave, dict) and slave.get("ip"):
+                        slave_entity_id = self._find_entity_id_by_ip(slave["ip"])
+                        if slave_entity_id and slave_entity_id not in members:
+                            members.append(slave_entity_id)
+
+                self._current_state.group_members = [m for m in members if m]  # Filter None values
+                self._current_state.group_leader = leader
+
+                _LOGGER.debug(
+                    "[WiiM] %s: Slave found complete group: members=%s, leader=%s",
+                    self.coordinator.client.host,
+                    self._current_state.group_members,
+                    leader,
+                )
+            else:
+                # Fallback if master not found - just include self
+                _LOGGER.warning(
+                    "[WiiM] %s: Slave could not find master coordinator (UUID=%s, IP=%s)",
+                    self.coordinator.client.host,
+                    master_uuid,
+                    master_ip,
+                )
+                self._current_state.group_members = [self._get_own_entity_id()]
+                self._current_state.group_leader = None
 
     def _get_own_entity_id(self) -> str:
         """Get this device's entity ID."""

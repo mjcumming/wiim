@@ -64,7 +64,7 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             sw_version=status.get("firmware", "Unknown"),
         )
 
-        # Supported features for group control
+        # Supported features for group control (removed GROUPING - group masters can't join other groups)
         self._attr_supported_features = (
             MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
@@ -73,7 +73,6 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.VOLUME_SET
-            | MediaPlayerEntityFeature.GROUPING
         )
 
         _LOGGER.debug("[WiiMGroup] Initialized group master entity: %s", self._attr_name)
@@ -171,6 +170,8 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
             "master_uuid": self._master_uuid,
             "member_count": len(self.group_members),
             "group_members": self.group_members,
+            "is_virtual_entity": True,
+            "joinable": False,  # Virtual entities can't be joined to other groups
         }
 
         if self.coordinator.data:
