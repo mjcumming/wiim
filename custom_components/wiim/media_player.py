@@ -685,44 +685,21 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def group_members(self) -> list[str]:
-        """List of all member entity IDs in this group (cached for performance)."""
-        # Use cached group members from coordinator's state manager
-        cached_members = self.coordinator.get_cached_group_members()
-        if cached_members:
-            _LOGGER.debug("[WiiM] %s: Returning cached group_members: %s", self.entity_id, cached_members)
-            return cached_members
+        """Return list of entity IDs that are currently grouped together."""
+        # Use device registry for O(1) lookup instead of expensive discovery
+        from .device_registry import get_device_registry
 
-        # Fallback for backward compatibility (should rarely be used)
-        role = self.coordinator.get_current_role()
-        if role == "solo":
-            return []
-
-        _LOGGER.debug("[WiiM] %s: No cached members, role=%s", self.entity_id, role)
-        return [self.entity_id]
+        registry = get_device_registry(self.hass)
+        return registry.get_group_members_for_device(self.coordinator.client.host)
 
     @property
     def group_leader(self) -> str | None:
-        """Entity ID of the group leader (cached for performance)."""
-        # Use cached group leader from coordinator's state manager
-        cached_leader = self.coordinator.get_cached_group_leader()
-        if cached_leader:
-            _LOGGER.debug("[WiiM] %s: Returning cached group_leader: %s", self.entity_id, cached_leader)
-            return cached_leader
+        """Return the entity ID of the group leader."""
+        # Use device registry for O(1) lookup instead of expensive discovery
+        from .device_registry import get_device_registry
 
-        # Fallback for backward compatibility
-        role = self.coordinator.get_current_role()
-        if role == "master":
-            return self.entity_id
-        elif role == "slave":
-            # Try to find master entity
-            status = self._get_effective_status()
-            master_uuid = status.get("master_uuid")
-            if master_uuid:
-                master_coord = self.coordinator.device_registry.get_device_by_uuid(master_uuid)
-                if master_coord:
-                    return f"media_player.wiim_{master_coord.client.host.replace('.', '_')}"
-
-        return None
+        registry = get_device_registry(self.hass)
+        return registry.get_group_leader_for_device(self.coordinator.client.host)
 
     @property
     def entity_picture(self) -> str | None:
@@ -743,130 +720,60 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return entity specific state attributes."""
+        """Return additional state attributes."""
+        attrs = super().extra_state_attributes or {}
+
         status = self._get_effective_status()
-        attrs = {
-            ATTR_DEVICE_MODEL: status.get("device_model"),
-            ATTR_DEVICE_NAME: status.get("device_name"),
-            ATTR_DEVICE_ID: status.get("device_id"),
-            ATTR_IP_ADDRESS: self.coordinator.client.host,
-            ATTR_FIRMWARE: status.get("firmware"),
-            ATTR_PRESET: status.get("preset"),
-            ATTR_PLAY_MODE: status.get("play_mode"),
-            ATTR_REPEAT_MODE: status.get("repeat_mode"),
-            ATTR_SHUFFLE_MODE: status.get("shuffle_mode"),
-            ATTR_SOURCE: SOURCE_MAP.get(status.get("source"), status.get("source")),
-            ATTR_MUTE: status.get("mute"),
-            ATTR_EQ_PRESET: EQ_PRESET_MAP.get(status.get("eq_preset"), status.get("eq_preset")),
-            ATTR_EQ_CUSTOM: status.get("eq_custom"),
-            "eq_enabled": status.get("eq_enabled", False),
-            "eq_presets": status.get("eq_presets", []),
-            HA_ATTR_GROUP_MEMBERS: list(self.coordinator.ha_group_members or []),
-            HA_ATTR_GROUP_LEADER: self.group_leader,
-            "streaming_service": status.get("streaming_service"),
-            "device_model": status.get("project") or status.get("hardware") or "WiiM Device",
-            "mac_address": status.get("MAC"),
-            "wifi_signal": f"{status.get('wifi_rssi', 'Unknown')} dBm" if status.get("wifi_rssi") else None,
-            "wifi_channel": status.get("wifi_channel"),
-            "uptime": status.get("uptime"),
-            "connection_type": "HTTPS" if "https" in self.coordinator.client._endpoint else "HTTP",
-            "api_endpoint": self.coordinator.client._endpoint,
-            "last_update_success": self.coordinator.last_update_success,
-        }
+        multiroom = self.coordinator.data.get("multiroom", {}) if self.coordinator.data else {}
 
-        # Enhanced group information display
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-        attrs["wiim_role"] = role
+        # Basic device info
+        if mac := status.get("MAC"):
+            attrs["mac_address"] = mac
+        if uuid := status.get("uuid"):
+            attrs["uuid"] = uuid
 
-        # Add group-specific attributes (existing logic preserved)
-        self._add_group_attributes(attrs, role)
+        # Current role from device registry (no expensive discovery)
+        from .device_registry import get_device_registry
+
+        registry = get_device_registry(self.hass)
+        role = registry.get_device_role(self.coordinator.client.host)
+        attrs["role"] = role
+
+        # Multiroom info
+        if slaves_count := multiroom.get("slaves", 0):
+            attrs["slaves_count"] = slaves_count
+        if wmrm_version := multiroom.get("wmrm_version"):
+            attrs["wmrm_version"] = wmrm_version
+
+        # Only add group info for devices actually in groups (no expensive discovery)
+        if role in ["master", "slave"]:
+            group_members = registry.get_group_members_for_device(self.coordinator.client.host)
+            if group_members:
+                attrs["group_members"] = group_members
+                attrs["group_count"] = len(group_members)
+
+            group_leader = registry.get_group_leader_for_device(self.coordinator.client.host)
+            if group_leader:
+                attrs["group_leader"] = group_leader
+
+        # EQ information
+        attrs["eq_supported"] = self.coordinator.eq_supported
+        if self.coordinator.eq_supported:
+            attrs["eq_enabled"] = status.get("eq_enabled", False)
+            if eq_preset := status.get("eq_preset"):
+                attrs["eq_preset"] = eq_preset
+            if eq_custom := status.get("eq_custom"):
+                attrs["eq_custom"] = eq_custom
+            if self.coordinator.eq_presets:
+                attrs["eq_presets"] = self.coordinator.eq_presets
+
+        # Source information
+        if sources := status.get("sources"):
+            attrs["available_sources"] = sources
+        if streaming_service := status.get("streaming_service"):
+            attrs["streaming_service"] = streaming_service
 
         return attrs
-
-    def _add_group_attributes(self, attrs: dict[str, Any], role: str) -> None:
-        """Add group-specific attributes to the state attributes."""
-        if role == "master":
-            # Show detailed slave information for masters
-            multiroom = self.coordinator.data.get("multiroom", {}) if self.coordinator.data else {}
-            slave_list = multiroom.get("slave_list", [])
-            slave_details = []
-            total_group_volume = 0
-            group_member_count = 1  # Include master
-
-            # Add master volume to total
-            master_volume = self.coordinator.data.get("status", {}).get("volume", 0) if self.coordinator.data else 0
-            total_group_volume += master_volume
-
-            for slave in slave_list:
-                if isinstance(slave, dict):
-                    slave_volume = slave.get("volume", 0)
-                    total_group_volume += slave_volume
-                    group_member_count += 1
-
-                    slave_info = {
-                        "name": slave.get("name", "Unknown"),
-                        "ip": slave.get("ip"),
-                        "volume": slave_volume,
-                        "muted": bool(slave.get("mute", False)),
-                        "channel": slave.get("channel", 0),
-                    }
-                    slave_details.append(slave_info)
-
-            attrs["wiim_slaves"] = slave_details
-            attrs["wiim_slave_count"] = len(slave_details)
-            attrs["wiim_group_master"] = self.coordinator.client.host
-            attrs["group_total_members"] = group_member_count
-            attrs["group_average_volume"] = (
-                round(total_group_volume / group_member_count) if group_member_count > 0 else 0
-            )
-            attrs["group_status"] = f"Master of {len(slave_details)} device{'s' if len(slave_details) != 1 else ''}"
-
-        elif role == "slave":
-            # Show master information for slaves
-            master_coord = self._find_master_coordinator()
-            if master_coord:
-                master_status = master_coord.data.get("status", {}) if master_coord.data else {}
-                master_name = (
-                    master_status.get("DeviceName") or master_status.get("device_name") or master_coord.client.host
-                )
-                attrs["wiim_group_master"] = master_coord.client.host
-                attrs["wiim_master_name"] = master_name
-                attrs["group_status"] = f"Grouped with {master_name}"
-                attrs["can_control_group"] = "Yes - controls propagate to master"
-            else:
-                attrs["wiim_group_master"] = self.coordinator.client.group_master
-                attrs["group_status"] = "Grouped (master not found)"
-
-        else:  # solo
-            attrs["group_status"] = "Not grouped"
-            attrs["can_create_group"] = "Yes - select devices to group"
-
-        # Show all available WiiM devices for potential grouping
-        available_devices = []
-        for entry_id, entry_data in self.hass.data[DOMAIN].items():
-            if entry_id == "_group_entities":  # Skip group entities storage
-                continue
-            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
-                continue
-            coord = entry_data["coordinator"]
-            if not hasattr(coord, "client") or coord.client.host == self.coordinator.client.host:
-                continue
-
-            device_status = coord.data.get("status", {}) if coord.data else {}
-            device_name = device_status.get("DeviceName") or device_status.get("device_name") or coord.client.host
-            device_role = coord.data.get("role", "solo") if coord.data else "unknown"
-
-            available_devices.append(
-                {
-                    "name": device_name,
-                    "ip": coord.client.host,
-                    "role": device_role,
-                    "entity_id": f"media_player.wiim_{coord.client.host.replace('.', '_')}",
-                }
-            )
-
-        attrs["wiim_available_devices"] = available_devices
-        attrs["available_device_count"] = len(available_devices)
 
     # -------------------------------------------------------------------------
     # Core Control Methods
@@ -1504,59 +1411,17 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     def _find_master_coordinator(self):
         """Find the master coordinator for this slave device."""
-        # First try the group_master property
-        master_ip = self.coordinator.client.group_master
+        from .device_registry import get_device_registry
 
-        # If not found, try the status data where it's actually stored for slaves
-        if not master_ip and self.coordinator.data:
-            status = self.coordinator.data.get("status", {})
-            master_ip = status.get("master_ip")
-            _LOGGER.debug("[WiiM] %s: Found master_ip in status: %s", self.entity_id, master_ip)
+        registry = get_device_registry(self.hass)
 
+        # Get master IP from registry
+        master_ip = registry.get_master_ip(self.coordinator.client.host)
         if not master_ip:
-            # Fallback: search for master by slave_list
-            my_ip = self.coordinator.client.host
-            my_uuid = self.coordinator.data.get("status", {}).get("uuid") if self.coordinator.data else None
-
-            _LOGGER.debug(
-                "[WiiM] %s: Searching for master by slave_list (my_ip=%s, my_uuid=%s)", self.entity_id, my_ip, my_uuid
-            )
-
-            # Use new device registry to get all coordinators
-            for coord in get_all_coordinators(self.hass, DOMAIN):
-                if coord.data is None:
-                    continue
-                if coord.data.get("role") != "master":
-                    continue
-                multiroom = coord.data.get("multiroom", {})
-                slave_list = multiroom.get("slave_list", [])
-
-                _LOGGER.debug(
-                    "[WiiM] %s: checking master %s slave_list=%s", self.entity_id, coord.client.host, slave_list
-                )
-
-                for slave in slave_list:
-                    if isinstance(slave, dict):
-                        slave_ip = slave.get("ip")
-                        slave_uuid = slave.get("uuid")
-                        _LOGGER.debug(
-                            "[WiiM] %s: comparing to slave_ip=%s, slave_uuid=%s", self.entity_id, slave_ip, slave_uuid
-                        )
-
-                        if (my_ip and my_ip == slave_ip) or (my_uuid and my_uuid == slave_uuid):
-                            _LOGGER.debug("[WiiM] %s: found master %s by slave_list", self.entity_id, coord.client.host)
-                            return coord
-            _LOGGER.debug("[WiiM] %s: no master found by slave_list", self.entity_id)
             return None
 
-        # Search for coordinator with the master IP using device registry
-        coord = find_coordinator_by_ip(self.hass, DOMAIN, master_ip)
-        if coord:
-            _LOGGER.debug("[WiiM] %s: found master coordinator %s", self.entity_id, master_ip)
-            return coord
-
-        _LOGGER.debug("[WiiM] %s: no coordinator found for master_ip %s", self.entity_id, master_ip)
-        return None
+        # Get coordinator from registry
+        return registry.get_coordinator(master_ip)
 
     async def _trigger_group_updates(self) -> None:
         """Trigger updates for all players in the group."""

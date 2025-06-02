@@ -12,10 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import WiiMClient, WiiMError
 from .const import DEFAULT_POLL_INTERVAL, DOMAIN
-from .services.device_registry import get_device_registry
-from .services.group_state_manager import create_group_state_manager
-from .utils.discovery import async_discover_slaves
-from .utils.state_manager import StateManager
+from .device_registry import get_device_registry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,8 +21,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
     """WiiM coordinator with efficient group management.
 
     This class now uses:
-    - Device registry for O(1) device lookups
-    - Group state manager for cached group memberships
+    - Device registry for O(1) device lookups and role tracking
     - Event-driven updates only when state changes
 
     Performance improvements:
@@ -50,12 +46,8 @@ class WiiMCoordinator(DataUpdateCoordinator):
         self.client = client
         self.hass = hass
 
-        # High-performance services
+        # High-performance device registry
         self.device_registry = get_device_registry(hass)
-        self.group_state_manager = create_group_state_manager(self, hass)
-
-        # Legacy state manager (for backward compatibility)
-        self._state_manager = StateManager(self, hass)
 
         # Legacy group tracking (gradually being phased out)
         self._group_members: set[str] = set()
@@ -116,6 +108,32 @@ class WiiMCoordinator(DataUpdateCoordinator):
             multiroom = self.data.get("multiroom", {})
             return multiroom.get("slaves", 0) > 0
         return False
+
+    def _detect_role_from_status(self, status: dict, multiroom: dict) -> str:
+        """Detect device role from status data."""
+        # Device is slave if group field > 0
+        if status.get("group", "0") != "0":
+            return "slave"
+
+        # Device is master if it has slaves
+        if multiroom.get("slaves", 0) > 0:
+            return "master"
+
+        # Default to solo
+        return "solo"
+
+    def _extract_master_info_for_slave(self, status: dict, multiroom: dict) -> dict:
+        """Extract master information when device is a slave."""
+        # Add master information to status for registry
+        if status.get("group", "0") != "0":
+            # Try to extract master info from various fields
+            if "master_ip" not in status:
+                # Look for master_uuid and try to match with known devices
+                master_uuid = status.get("master_uuid")
+                if master_uuid:
+                    status["master_uuid"] = master_uuid
+                    # The registry will handle IP lookup by UUID
+        return status
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data from WiiM device with efficient group management."""
@@ -256,25 +274,28 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 vendor_clean = vendor_raw.split(":", 1)[0]
                 status["streaming_service"] = vendor_clean.title()
 
-            # ** NEW: Efficient group state management **
-            # Use the new group state manager to detect changes
-            group_state_changed = self.group_state_manager.update_from_status(status, multiroom)
+            # ** NEW: Efficient role change detection and registry update **
+            old_role = self.device_registry.get_device_role(self.client.host)
+            new_role = self._detect_role_from_status(status, multiroom)
 
-            # Get the detected role from the state manager
-            role = self.group_state_manager.get_current_role()
+            # Extract master info for slaves
+            if new_role == "slave":
+                status = self._extract_master_info_for_slave(status, multiroom)
 
-            if group_state_changed:
-                _LOGGER.debug("[WiiM] %s: Group state changed, new role: %s", self.client.host, role)
+            # Register device in registry on first update
+            self.device_registry.register_device(self)
 
-                # Register/update device in registry after first successful data fetch
-                self.device_registry.register_device(self)
+            # Handle role changes
+            role_changed = False
+            if old_role != new_role:
+                role_changed = await self.device_registry.handle_role_change(
+                    self.client.host, old_role, new_role, status
+                )
 
-                # Trigger state updates for all group members when group composition changes
-                await self._propagate_group_state_changes(role, multiroom)
-            else:
-                # Even if role didn't change, ensure device is registered
-                if not self.device_registry.get_device_by_ip(self.client.host):
-                    self.device_registry.register_device(self)
+                if role_changed:
+                    _LOGGER.debug("[WiiM] %s: Role changed %s -> %s", self.client.host, old_role, new_role)
+                    # Trigger state updates for affected devices
+                    await self._propagate_group_state_changes(new_role, multiroom)
 
             # Reset consecutive failures on successful update
             if self._consecutive_failures > 0:
@@ -290,9 +311,9 @@ class WiiMCoordinator(DataUpdateCoordinator):
             await self._async_trigger_slave_discovery()
 
             # Override source for non-slaves showing 'follower'
-            if role != "slave" and status.get("source") == "follower":
+            if new_role != "slave" and status.get("source") == "follower":
                 _LOGGER.debug(
-                    "[WiiM] %s: Overriding stray 'follower' source with 'wifi' (role=%s)", self.client.host, role
+                    "[WiiM] %s: Overriding stray 'follower' source with 'wifi' (role=%s)", self.client.host, new_role
                 )
                 status["source"] = "wifi"
 
@@ -300,14 +321,14 @@ class WiiMCoordinator(DataUpdateCoordinator):
             result = {
                 "status": status,
                 "multiroom": multiroom,
-                "role": role,
+                "role": new_role,
                 "ha_group": {
                     "is_leader": self._is_ha_group_leader,
                     "members": list(self._ha_group_members),
                 },
             }
 
-            _LOGGER.debug("[WiiM] %s: Successfully updated data, role=%s", self.client.host, role)
+            _LOGGER.debug("[WiiM] %s: Successfully updated data, role=%s", self.client.host, new_role)
             return result
 
         except WiiMError as err:
@@ -326,15 +347,15 @@ class WiiMCoordinator(DataUpdateCoordinator):
     # ** NEW: High-performance group member access **
     def get_cached_group_members(self) -> list[str]:
         """Get cached group members with O(1) performance."""
-        return self.group_state_manager.get_cached_group_members()
+        return self.device_registry.get_group_members_for_device(self.client.host)
 
     def get_cached_group_leader(self) -> str | None:
         """Get cached group leader with O(1) performance."""
-        return self.group_state_manager.get_cached_group_leader()
+        return self.device_registry.get_group_leader_for_device(self.client.host)
 
     def get_current_role(self) -> str:
         """Get current device role with O(1) performance."""
-        return self.group_state_manager.get_current_role()
+        return self.device_registry.get_device_role(self.client.host)
 
     # Legacy methods (keeping for backward compatibility)
     def _parse_plm_support(self, plm_support: str) -> list[str]:
@@ -365,119 +386,100 @@ class WiiMCoordinator(DataUpdateCoordinator):
             return []
 
     async def _async_trigger_slave_discovery(self) -> None:
-        """Trigger discovery of slave devices."""
-        if not self.data or not self.data.get("multiroom"):
-            return
-
-        multiroom = self.data["multiroom"]
-        slave_list = multiroom.get("slave_list", [])
-
-        if not slave_list:
-            return
-
-        slave_ips = []
-        for slave in slave_list:
-            if isinstance(slave, dict) and slave.get("ip"):
-                slave_ips.append(slave["ip"])
-
-        if slave_ips:
-            try:
-                await async_discover_slaves(self.hass, slave_ips)
-            except Exception as err:
-                _LOGGER.debug("Failed to trigger slave discovery: %s", err)
+        """Trigger discovery of slave devices - DEPRECATED."""
+        # This method is kept for backward compatibility but does nothing
+        # as the device registry handles device discovery automatically
+        pass
 
     # Legacy properties and methods (keeping for backward compatibility)
     @property
     def is_wiim_master(self) -> bool:
         """Return whether this device is a WiiM multiroom master."""
-        return self.client.is_master
+        return self.device_registry.get_device_role(self.client.host) == "master"
 
     @property
     def is_wiim_slave(self) -> bool:
         """Return whether this device is a WiiM multiroom slave."""
-        return self.client.is_slave
+        return self.device_registry.get_device_role(self.client.host) == "slave"
 
     @property
     def wiim_group_members(self) -> set[str]:
-        """Return set of WiiM group member IPs."""
-        return self._group_members
+        """Return set of slave IPs if this device is a master."""
+        if self.device_registry.get_device_role(self.client.host) == "master":
+            return self.device_registry.get_slave_ips(self.client.host)
+        return set()
 
     @property
     def is_ha_group_leader(self) -> bool:
-        """Return whether this device is a HA media player group leader."""
+        """Return whether this device is a Home Assistant group leader."""
         return self._is_ha_group_leader
 
     @property
     def ha_group_members(self) -> set[str]:
-        """Return set of HA group member entity IDs."""
+        """Return Home Assistant group members."""
         return self._ha_group_members
 
     @property
     def groups(self) -> dict:
-        """Return the current group registry."""
+        """Return groups."""
         return self._groups
 
     @property
     def friendly_name(self) -> str:
-        """Return a human-friendly name for the device."""
-        status = self.data.get("status", {}) if isinstance(self.data, dict) else {}
-        return status.get("device_name") or status.get("DeviceName") or self.client.host
+        """Return friendly name for this device."""
+        if self.data and isinstance(self.data, dict):
+            status = self.data.get("status", {})
+            return status.get("DeviceName") or status.get("device_name") or self.client.host
+        return self.client.host
 
-    # Group management methods (legacy compatibility)
     async def create_wiim_group(self) -> None:
-        """Create a WiiM multiroom group."""
+        """Create a new WiiM multiroom group."""
         try:
             await self.client.create_group()
-            await self.async_refresh()
+            await self.async_request_refresh()
         except WiiMError as err:
-            _LOGGER.error("[WiiM] Failed to create WiiM group for %s: %s", self.client.host, err)
+            _LOGGER.error("[WiiM] Failed to create group: %s", err)
             raise
 
     async def delete_wiim_group(self) -> None:
-        """Delete the WiiM multiroom group."""
+        """Delete WiiM multiroom group."""
         try:
             await self.client.delete_group()
-            await self.async_refresh()
+            await self.async_request_refresh()
         except WiiMError as err:
-            _LOGGER.error("[WiiM] Failed to delete WiiM group for %s: %s", self.client.host, err)
+            _LOGGER.error("[WiiM] Failed to delete group: %s", err)
             raise
 
     async def join_wiim_group(self, master_ip: str) -> None:
         """Join a WiiM multiroom group."""
         try:
             await self.client.join_group(master_ip)
-            await self.async_refresh()
+            await self.async_request_refresh()
         except WiiMError as err:
-            _LOGGER.error("[WiiM] Failed to join WiiM group: %s", err)
+            _LOGGER.error("[WiiM] Failed to join group: %s", err)
             raise
 
     async def leave_wiim_group(self) -> None:
-        """Leave the WiiM multiroom group."""
+        """Leave WiiM multiroom group."""
         try:
             await self.client.leave_group()
-            await self.async_refresh()
+            await self.async_request_refresh()
         except WiiMError as err:
-            _LOGGER.error("[WiiM] Failed to leave WiiM group: %s", err)
+            _LOGGER.error("[WiiM] Failed to leave group: %s", err)
             raise
 
     async def _propagate_group_state_changes(self, role: str, multiroom: dict[str, Any]) -> None:
-        """Propagate group state changes to all group members to ensure UI updates."""
-        _LOGGER.debug("[WiiM] %s: Propagating group state changes for role=%s", self.client.host, role)
-
-        # Get all affected IPs (both current slaves and potentially previous slaves)
+        """Propagate group state changes to affected devices."""
         affected_ips = set()
-
-        # Add current slaves
-        if role == "master":
-            for slave in multiroom.get("slave_list", []):
-                if isinstance(slave, dict) and slave.get("ip"):
-                    affected_ips.add(slave["ip"])
-
-        # Add self
         affected_ips.add(self.client.host)
 
-        # For slaves, also try to update the master
-        if role == "slave":
+        # Add all devices in current or former groups
+        if role == "master":
+            slave_list = multiroom.get("slave_list", [])
+            for slave in slave_list:
+                if isinstance(slave, dict) and slave.get("ip"):
+                    affected_ips.add(slave["ip"])
+        elif role == "slave":
             master_ip = self.data.get("status", {}).get("master_ip") if self.data else None
             if master_ip:
                 affected_ips.add(master_ip)
@@ -489,18 +491,13 @@ class WiiMCoordinator(DataUpdateCoordinator):
             list(affected_ips),
         )
 
-        # Trigger async refresh for all affected coordinators
+        # Trigger refresh for all affected coordinators
         for ip in affected_ips:
-            coord = self.device_registry.get_device_by_ip(ip)
-            if coord:
+            coordinator = self.device_registry.get_coordinator(ip)
+            if coordinator and coordinator != self:
+                _LOGGER.debug("[WiiM] %s: Cleared cached group state for %s", self.client.host, ip)
                 try:
-                    # Force clear cached group state to ensure fresh calculation
-                    coord.group_state_manager._current_state = None
-                    _LOGGER.debug("[WiiM] %s: Cleared cached group state for %s", self.client.host, ip)
-
-                    # Always trigger refresh for group members to recalculate group state
-                    # Even for self, since cache was cleared and needs recalculation
-                    self.hass.async_create_task(coord.async_request_refresh())
                     _LOGGER.debug("[WiiM] %s: Triggered refresh for group member %s", self.client.host, ip)
+                    await coordinator.async_request_refresh()
                 except Exception as err:
-                    _LOGGER.debug("[WiiM] %s: Failed to trigger refresh for %s: %s", self.client.host, ip, err)
+                    _LOGGER.debug("[WiiM] %s: Failed to refresh %s: %s", self.client.host, ip, err)
