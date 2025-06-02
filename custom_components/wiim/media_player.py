@@ -741,10 +741,15 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                             if self.hass.states.get(slave_entity_id):
                                 members.append(slave_entity_id)
         else:
-            # Solo device - only return self if explicitly added to an HA group
+            # Solo device - check both HA groups and any persisted grouping state
             ha_members = list(self.coordinator.ha_group_members) if self.coordinator.ha_group_members else []
             if ha_members:
+                # Already part of an HA group - return the group members
                 members = ha_members
+            else:
+                # Not in any group - return empty list unless we're the target of a join operation
+                # This ensures the join dialog shows the correct state
+                members = []
 
         _LOGGER.debug("[WiiM] %s (role=%s): group_members = %s", self.entity_id, role, members)
 

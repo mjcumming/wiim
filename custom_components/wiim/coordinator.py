@@ -609,6 +609,30 @@ class WiiMCoordinator(DataUpdateCoordinator):
                             if self.hass.states.get(slave_entity_id):
                                 group_members.append(slave_entity_id)
 
+        # Handle solo devices - preserve any existing HA group memberships
+        elif role == "solo":
+            # For solo devices, check if they're still part of an existing HA group
+            # This preserves group state when devices temporarily show as solo due to
+            # network issues or state sync delays
+            entity_state = self.hass.states.get(entity_id)
+            if entity_state:
+                current_group_members = entity_state.attributes.get("group_members", [])
+                current_group_leader = entity_state.attributes.get("group_leader")
+
+                # If the entity has group attributes, preserve them
+                if current_group_members:
+                    group_members = list(current_group_members)
+                    # Ensure self is in the group
+                    if entity_id not in group_members:
+                        group_members.append(entity_id)
+
+                    # Set group leader if available
+                    if current_group_leader and current_group_leader in group_members:
+                        group_leader = current_group_leader
+                    elif group_members:
+                        # If no explicit leader, the first member becomes leader
+                        group_leader = group_members[0]
+
         # Update our tracking based on WiiM group status
         self._ha_group_members = set(group_members)
         self._is_ha_group_leader = group_leader == entity_id
