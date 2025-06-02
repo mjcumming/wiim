@@ -59,8 +59,16 @@ def find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | N
                     _LOGGER.debug("[WiiM] find_coordinator: Matched by formatted host")
                     return coord
 
-                # Try matching by device UUID if available
+                # Try matching by MAC address (most common case for newer entities)
                 if coord.data and coord.data.get("status"):
+                    mac_address = coord.data["status"].get("MAC")
+                    if mac_address and mac_address.lower() != "unknown":
+                        mac_based_unique_id = f"wiim_{mac_address.replace(':', '').lower()}"
+                        if mac_based_unique_id == ent_entry.unique_id:
+                            _LOGGER.debug("[WiiM] find_coordinator: Matched by MAC address")
+                            return coord
+
+                    # Try matching by device UUID if available
                     device_uuid = coord.data["status"].get("uuid") or coord.data["status"].get("device_id")
                     if device_uuid:
                         uuid_based_unique_id = f"wiim_{device_uuid}"
@@ -84,13 +92,13 @@ def find_coordinator(hass: HomeAssistant, entity_id: str) -> WiiMCoordinator | N
 
             # Try exact match with device name (converted to entity format)
             normalized_device_name = device_name.lower().replace(" ", "_").replace("-", "_")
-            if normalized_device_name == device_part:
-                _LOGGER.debug("[WiiM] find_coordinator: Matched by device name pattern")
+            if normalized_device_name == device_part.replace("_2", "").replace("_3", ""):  # Handle _2, _3 suffixes
+                _LOGGER.debug("[WiiM] find_coordinator: Matched by device name pattern (ignoring suffix)")
                 return coord
 
             # Try matching with formatted host
             formatted_host = f"wiim_{coord.client.host.replace('.', '_')}"
-            if formatted_host == entity_id:
+            if formatted_host == device_part:
                 _LOGGER.debug("[WiiM] find_coordinator: Matched by formatted host pattern")
                 return coord
 
