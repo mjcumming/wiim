@@ -797,7 +797,11 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         from .device_registry import get_device_registry
 
         registry = get_device_registry(self.hass)
-        return registry.get_group_members_for_device(self.coordinator.client.host)
+        members = registry.get_group_members_for_device(self.coordinator.client.host)
+
+        _LOGGER.debug("[WiiM] %s: group_members property returns: %s", self.coordinator.client.host, members)
+
+        return members
 
     @property
     def group_leader(self) -> str | None:
