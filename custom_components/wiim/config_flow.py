@@ -199,6 +199,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=schema,
+            description_placeholders={
+                "message": "Choose how you'd like to find your WiiM speaker. Automatic discovery works for most setups!"
+            },
         )
 
     async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -206,39 +209,54 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            host = user_input[CONF_HOST]
-            try:
-                client = await wiim_factory_client(host)
+            host = user_input[CONF_HOST].strip()
+
+            # Basic IP validation
+            if not host:
+                errors["base"] = "no_host"
+            else:
                 try:
-                    # Get enhanced device name with role information
-                    device_name = await _get_enhanced_device_name(client, host)
+                    _LOGGER.debug("[WiiM] Manual setup: Attempting to connect to %s", host)
+                    client = await wiim_factory_client(host)
+                    try:
+                        # Get enhanced device name with role information
+                        device_name = await _get_enhanced_device_name(client, host)
 
-                    # Use host/IP as unique_id to guarantee one entry per device
-                    unique_id = host
-                    await self.async_set_unique_id(unique_id)
-                    self._abort_if_unique_id_configured()
+                        # Use host/IP as unique_id to guarantee one entry per device
+                        unique_id = host
+                        await self.async_set_unique_id(unique_id)
+                        self._abort_if_unique_id_configured()
 
-                    # Ensure device is ungrouped for clean setup
-                    await self._ensure_solo(client, {"device_name": device_name})
-                finally:
-                    await client.close()
+                        # Ensure device is ungrouped for clean setup
+                        await self._ensure_solo(client, {"device_name": device_name})
 
-                return self.async_create_entry(title=device_name, data={CONF_HOST: host})
-            except ConfigEntryNotReady:
-                errors["base"] = "cannot_connect"
-            except AbortFlow:
-                # Let abort exceptions pass through (for already_configured, etc.)
-                raise
-            except Exception as e:
-                _LOGGER.error("[WiiM] Error during manual config: %s", e)
-                errors["base"] = "unknown"
+                        _LOGGER.info("[WiiM] Successfully connected to device '%s' at %s", device_name, host)
+                    finally:
+                        await client.close()
+
+                    return self.async_create_entry(title=device_name, data={CONF_HOST: host})
+                except ConfigEntryNotReady as e:
+                    _LOGGER.warning("[WiiM] Failed to connect to %s: %s", host, e)
+                    errors["base"] = "cannot_connect"
+                except AbortFlow:
+                    # Let abort exceptions pass through (for already_configured, etc.)
+                    raise
+                except Exception as e:
+                    _LOGGER.error("[WiiM] Unexpected error during manual config for %s: %s", host, e)
+                    errors["base"] = "unknown"
 
         # Show manual entry form
-        schema = vol.Schema({vol.Required(CONF_HOST): str})
+        schema = vol.Schema(
+            {vol.Required(CONF_HOST, default="" if not user_input else user_input.get(CONF_HOST, "")): str}
+        )
         return self.async_show_form(
             step_id="manual",
             data_schema=schema,
             errors=errors,
+            description_placeholders={
+                "example": "192.168.1.100",
+                "tip": "💡 Tip: Check your router's device list or use the WiiM Home app to find your device's IP address",
+            },
         )
 
     async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -246,8 +264,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if not self._discovered_hosts:
-            # Perform discovery
+            # Perform discovery with better logging
+            _LOGGER.debug("[WiiM] Starting device discovery...")
             self._discovered_hosts = await self._discover_upnp_hosts()
+            _LOGGER.info(
+                "[WiiM] Discovery completed. Found %d device(s): %s",
+                len(self._discovered_hosts),
+                list(self._discovered_hosts.values()),
+            )
 
         if user_input is not None:
             if "no_devices_manual" in user_input:
@@ -266,6 +290,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
 
             try:
+                _LOGGER.debug("[WiiM] Setting up discovered device at %s", host)
                 client = await wiim_factory_client(host)
                 try:
                     # Get enhanced device name with role information
@@ -273,6 +298,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                     # Ensure device is ungrouped for clean setup
                     await self._ensure_solo(client, {"device_name": device_name})
+
+                    _LOGGER.info("[WiiM] Successfully set up discovered device '%s' at %s", device_name, host)
                 finally:
                     await client.close()
 
@@ -280,15 +307,21 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     title=device_name,
                     data={CONF_HOST: host},
                 )
-            except ConfigEntryNotReady:
+            except ConfigEntryNotReady as e:
+                _LOGGER.warning("[WiiM] Failed to connect to discovered device %s: %s", host, e)
                 errors["base"] = "cannot_connect"
 
         if self._discovered_hosts:
-            # Build options for dropdown
-            options_map = {f"{name} ({host})": host for host, name in self._discovered_hosts.items()}
+            # Build options for dropdown with better formatting
+            options_map = {}
+            for host, name in self._discovered_hosts.items():
+                # Create user-friendly display names
+                display_name = f"🎵 {name} ({host})"
+                options_map[display_name] = host
+
             self._options_map = options_map
 
-            # Add manual entry option at the end
+            # Add manual entry option at the end with clear separation
             options_map["📝 Enter IP address manually"] = "manual_entry"
 
             schema = vol.Schema({vol.Required(CONF_HOST): vol.In(list(options_map.keys()))})
@@ -299,19 +332,31 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 description_placeholders={
                     "count": str(len(self._discovered_hosts)),
                     "devices": ", ".join(self._discovered_hosts.values()),
+                    "tip": "💡 If your device isn't listed, make sure it's powered on and try manual setup",
                 },
             )
 
-        # No devices found, offer manual entry
+        # No devices found, offer manual entry with helpful guidance
         schema = vol.Schema({vol.Required("no_devices_manual", default=True): bool})
         return self.async_show_form(
-            step_id="discovery",
+            step_id="no_devices_found",
             data_schema=schema,
             errors=errors,
             description_placeholders={
-                "message": "No WiiM devices found automatically. Would you like to enter an IP address manually?"
+                "message": "🔍 No WiiM devices found automatically",
+                "reasons": "This might happen if your devices are on a different network or discovery is blocked",
+                "suggestion": "Let's try manual setup instead — you'll just need your device's IP address",
             },
         )
+
+    async def async_step_no_devices_found(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle no devices found during discovery."""
+        if user_input is not None and user_input.get("no_devices_manual"):
+            # User wants to continue with manual setup
+            return await self.async_step_manual()
+
+        # Shouldn't reach here, but fallback to manual setup
+        return await self.async_step_manual()
 
     async def _discover_upnp_hosts(self) -> dict[str, str]:
         """Discover devices and return mapping of host→friendly name."""

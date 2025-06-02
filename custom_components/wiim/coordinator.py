@@ -482,14 +482,25 @@ class WiiMCoordinator(DataUpdateCoordinator):
             if master_ip:
                 affected_ips.add(master_ip)
 
+        _LOGGER.info(
+            "[WiiM] %s: Group state change affects %d devices: %s",
+            self.client.host,
+            len(affected_ips),
+            list(affected_ips),
+        )
+
         # Trigger async refresh for all affected coordinators
         for ip in affected_ips:
-            if ip != self.client.host:  # Don't refresh self again
-                coord = self.device_registry.get_device_by_ip(ip)
-                if coord:
-                    try:
-                        # Schedule async refresh instead of blocking
+            coord = self.device_registry.get_device_by_ip(ip)
+            if coord:
+                try:
+                    # Force clear cached group state to ensure fresh calculation
+                    coord.group_state_manager._current_state = None
+                    _LOGGER.debug("[WiiM] %s: Cleared cached group state for %s", self.client.host, ip)
+
+                    # Schedule async refresh to recalculate group state
+                    if ip != self.client.host:  # Don't refresh self again
                         self.hass.async_create_task(coord.async_request_refresh())
                         _LOGGER.debug("[WiiM] %s: Triggered refresh for group member %s", self.client.host, ip)
-                    except Exception as err:
-                        _LOGGER.debug("[WiiM] %s: Failed to trigger refresh for %s: %s", self.client.host, ip, err)
+                except Exception as err:
+                    _LOGGER.debug("[WiiM] %s: Failed to trigger refresh for %s: %s", self.client.host, ip, err)

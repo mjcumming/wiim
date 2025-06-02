@@ -1,76 +1,86 @@
 {
   "title": "WiiM Audio (LinkPlay)",
   "config": {
-    "flow_title": "{name}",
+    "flow_title": "Add WiiM Speaker",
     "step": {
       "user": {
-        "title": "WiiM Device Discovery",
-        "description": "Choose how to add your WiiM device",
+        "title": "🎵 Add WiiM Speaker",
+        "description": "Let's set up your WiiM audio device! Choose how you'd like to find your speaker:\n\n{message}",
         "data": {
-          "discovery_mode": "Discovery Method"
+          "discovery_mode": "Setup Method"
         },
         "data_description": {
-          "discovery_mode": "Select 'Automatic' to discover devices on your network, or 'Manual' to enter an IP address"
+          "discovery_mode": "Automatic discovery will scan your network for WiiM devices. Manual setup requires you to know your device's IP address."
         }
       },
       "manual": {
-        "title": "Manual Device Setup",
-        "description": "Enter the IP address of your WiiM device",
+        "title": "🏠 Manual Device Setup",
+        "description": "Enter your WiiM device's IP address. You can find this in your router's admin panel or the WiiM Home app under Device Settings → Network Info.\n\n{tip}",
         "data": {
-          "host": "IP Address"
+          "host": "Device IP Address"
         },
         "data_description": {
-          "host": "The IP address of your WiiM device (e.g., 192.168.1.100)"
+          "host": "Example: {example} — Make sure your device is powered on and connected to the same network as Home Assistant"
         }
       },
       "discovery": {
-        "title": "Discovered WiiM Devices",
-        "description": "Select a discovered WiiM device from the list below",
+        "title": "🔍 Found {count} WiiM Device(s)",
+        "description": "Great! We found these WiiM devices on your network. Select the one you want to add:\n\n{tip}",
         "data": {
-          "discovered_device": "Device"
+          "host": "Select Your Device"
+        }
+      },
+      "no_devices_found": {
+        "title": "🔍 No Devices Found",
+        "description": "{message}\n\n{reasons}\n\n{suggestion}",
+        "data": {
+          "no_devices_manual": "Continue with manual setup"
+        },
+        "data_description": {
+          "no_devices_manual": "Click continue to enter your device's IP address manually"
         }
       },
       "upnp": {
-        "title": "Select WiiM Speaker",
-        "description": "Choose a speaker from the discovered devices, or configure manually.",
+        "title": "🎶 Select Your WiiM Speaker",
+        "description": "Choose a speaker from the discovered devices, or set up manually if yours isn't listed.",
         "data": {
-          "host": "Speaker"
+          "host": "Available Devices"
         }
       },
       "confirm": {
-        "title": "Confirm Device",
-        "description": "Confirm adding this WiiM device to Home Assistant"
+        "title": "✅ Ready to Add Device",
+        "description": "Perfect! We'll now add your WiiM device to Home Assistant. It will appear in your Media tab and can be controlled through automations."
       }
     },
     "abort": {
-      "already_configured": "This device is already configured.",
-      "cannot_connect": "Could not connect to the device.",
-      "no_host": "No device address provided.",
-      "no_devices": "No devices discovered."
+      "already_configured": "🔄 This WiiM device is already set up in Home Assistant.",
+      "cannot_connect": "❌ Could not connect to your WiiM device.",
+      "no_host": "⚠️ Please provide a device IP address.",
+      "no_devices": "🔍 No WiiM devices found on your network."
     },
     "error": {
-      "cannot_connect": "Failed to connect to the device. Please check the IP address and ensure the device is powered on.",
-      "already_configured": "This device is already configured.",
-      "no_devices": "No WiiM devices found on your network. Try manual setup instead.",
-      "unknown": "An unexpected error occurred."
+      "cannot_connect": "❌ Connection failed. Please check:\n• The IP address is correct\n• Your WiiM device is powered on\n• Both devices are on the same network\n• No firewall is blocking the connection",
+      "already_configured": "This WiiM device is already configured in Home Assistant. Check your Media tab or Devices & Services page.",
+      "no_devices": "🔍 No WiiM devices found automatically. This can happen if:\n• Devices are on a different network segment\n• Network discovery is disabled\n• Firewall is blocking discovery\n\nTry manual setup instead!",
+      "unknown": "An unexpected error occurred. Please try again or check the Home Assistant logs for details."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "WiiM Device Options",
-        "description": "Configure your WiiM device settings",
+        "title": "⚙️ WiiM Device Settings",
+        "description": "Fine-tune how your WiiM device works with Home Assistant:",
         "data": {
-          "status_update_interval": "Status Update Frequency",
-          "volume_step_percent": "Volume Step Size",
-          "enable_group_entity": "WiiM Group Controls",
-          "debug_logging": "Debug Logging"
+          "status_update_interval": "🔄 Update Frequency",
+          "volume_step_percent": "🔊 Volume Step Size",
+          "enable_group_entity": "👥 Group Controls",
+          "debug_logging": "🐛 Debug Mode"
         },
         "data_description": {
-          "status_update_interval": "How often to check the speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
-          "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
-          "enable_group_entity": "Create virtual group controller entities when this device acts as a multiroom master. Allows unified control of speaker groups.",
-          "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
+          "status_update_interval": "How often to check speaker status (1-60 seconds). Lower = faster updates but more network traffic.",
+          "volume_step_percent": "Volume change when using +/- buttons (1-50%). Smaller steps = finer control.",
+          "enable_group_entity": "Create virtual group controller for multiroom setups. Enables controlling all grouped speakers together.",
+          "debug_logging": "Enable detailed logging for troubleshooting. Turn off after solving issues to reduce log size."
         }
       }
     }
@@ -78,8 +88,8 @@
   "selector": {
     "discovery_mode": {
       "options": {
-        "discover": "🔍 Search for WiiM devices automatically",
-        "manual": "🏠 Enter IP address manually"
+        "discover": "🔍 Automatic — Find devices on my network",
+        "manual": "✍️ Manual — I know the IP address"
       }
     }
   },

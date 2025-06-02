@@ -185,22 +185,49 @@ class GroupStateManager:
                 master_ip_actual = master_coord.client.host
 
                 # Build complete member list from master's perspective
-                members = [self._find_entity_id_by_ip(master_ip_actual)]  # Master first
+                members = []
                 leader = self._find_entity_id_by_ip(master_ip_actual)
 
-                # Add all slaves from master's list (including self)
+                # Always add master first
+                if leader:
+                    members.append(leader)
+
+                # Add all slaves from master's list
                 slave_list = master_multiroom.get("slave_list", [])
+                _LOGGER.debug(
+                    "[WiiM] %s: Master %s has slave_list: %s",
+                    self.coordinator.client.host,
+                    master_ip_actual,
+                    slave_list,
+                )
+
                 for slave in slave_list:
                     if isinstance(slave, dict) and slave.get("ip"):
                         slave_entity_id = self._find_entity_id_by_ip(slave["ip"])
                         if slave_entity_id and slave_entity_id not in members:
                             members.append(slave_entity_id)
+                            _LOGGER.debug(
+                                "[WiiM] %s: Added slave to group: %s (IP: %s)",
+                                self.coordinator.client.host,
+                                slave_entity_id,
+                                slave["ip"],
+                            )
 
-                self._current_state.group_members = [m for m in members if m]  # Filter None values
+                # Ensure this slave is in the member list (safety check)
+                own_entity_id = self._get_own_entity_id()
+                if own_entity_id not in members:
+                    members.append(own_entity_id)
+                    _LOGGER.debug(
+                        "[WiiM] %s: Added self to group as safety check: %s",
+                        self.coordinator.client.host,
+                        own_entity_id,
+                    )
+
+                self._current_state.group_members = members
                 self._current_state.group_leader = leader
 
-                _LOGGER.debug(
-                    "[WiiM] %s: Slave found complete group: members=%s, leader=%s",
+                _LOGGER.info(
+                    "[WiiM] %s: Slave group update complete - members=%s, leader=%s",
                     self.coordinator.client.host,
                     self._current_state.group_members,
                     leader,
