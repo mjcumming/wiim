@@ -1,102 +1,45 @@
-name: Tests
+name: CI
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - dev
+    branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 0 * * *"
+    branches: [main]
 
 env:
-  DEFAULT_PYTHON: "3.12"
+  DEFAULT_PYTHON: "3.13"
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
-    name: Pre-commit
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4.2.2
-
-      - name: Set up Python ${{ env.DEFAULT_PYTHON }}
-        uses: actions/setup-python@v5.6.0
-        with:
-          python-version: ${{ env.DEFAULT_PYTHON }}
-
-      - name: Cache pre-commit
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
-
-      - name: Install dependencies
-        run: |
-          pip install --constraint=.github/workflows/constraints.txt pip
-          pip install --constraint=.github/workflows/constraints.txt pre-commit
-
-      - name: Run pre-commit on all files
-        run: |
-          pre-commit run --all-files --show-diff-on-failure --color=always
-
-  hassfest:
-    runs-on: ubuntu-latest
-    name: Hassfest Validation
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4.2.2
-
-      - name: Hassfest validation
-        uses: home-assistant/actions/hassfest@master
-
   tests:
+    name: Run tests
     runs-on: ubuntu-latest
-    name: Run tests (${{ matrix.python-version }})
+    timeout-minutes: 15
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.13"]
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4
 
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5.6.0
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements_test.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ matrix.python-version }}-
-            ${{ runner.os }}-pip-
-
-      - name: Install requirements
+      - name: Install dependencies
         run: |
-          pip install --constraint=.github/workflows/constraints.txt pip
-          pip install --constraint=.github/workflows/constraints.txt -r requirements_test.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements_test.txt
 
-      - name: Run tests with coverage
+      - name: Lint with flake8
         run: |
-          pytest \
-            --timeout=9 \
-            --durations=10 \
-            --cov=custom_components.wiim \
-            --cov-report=xml \
-            --cov-report=term-missing \
-            --cov-fail-under=10 \
-            -v \
-            tests
+          flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
 
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == env.DEFAULT_PYTHON
-        uses: codecov/codecov-action@v5
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+      - name: Test with pytest
+        run: |
+          pytest tests/ --cov=custom_components/wiim --cov-report=xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

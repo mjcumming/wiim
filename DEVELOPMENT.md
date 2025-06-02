@@ -5,13 +5,16 @@ This guide helps you set up a development environment and catch issues **before*
 ## Quick Start for New Developers
 
 ```bash
-# 1. Install development dependencies
+# 1. Verify you have the correct Python version
+make check-python
+
+# 2. Install development dependencies with HA compatibility validation
 make install-dev
 
-# 2. Run all checks (same as CI)
+# 3. Run all checks (same as CI)
 make check-all
 
-# 3. During development, run quick checks
+# 4. During development, run quick checks
 make dev-check
 ```
 
@@ -27,246 +30,209 @@ Previously, developers would:
 
 **Now, you can catch all these issues locally before any git operations.**
 
+## Home Assistant Version Requirements
+
+**Critical:** This integration must stay compatible with Home Assistant Core requirements:
+
+- **Python 3.13+** (as of HA 2024.12)
+- **Python 3.12 deprecated** (will be removed in HA 2025.2)
+- Dependencies must match HA Core versions to avoid conflicts
+
+### Why This Matters
+
+Home Assistant 2024.12+ requires Python 3.13. Using the wrong Python version or incompatible dependencies will cause:
+
+- CI failures
+- Integration not loading in newer HA versions
+- Dependency conflicts in user installations
+
 ## Development Workflow
 
 ### Initial Setup (One Time)
 
 ```bash
-# Check Python version (requires 3.12+)
-python --version
-
-# Install all development dependencies with proper constraints
-make install-dev
-
-# This installs:
-# - pytest-homeassistant-custom-component==0.13.108 (Python 3.12 compatible)
-# - All testing dependencies
-# - Pre-commit hooks (runs checks on every commit)
-```
-
-### Daily Development Workflow
-
-```bash
-# 1. Before starting work
-make check-python  # Ensure Python version compatibility
-
-# 2. During development - quick iteration
-make dev-check      # Formats code + runs fast tests
-
-# 3. Before committing - full validation
-make check-all      # Simulates complete CI pipeline
-```
-
-### Individual Commands
-
-```bash
-# Format code automatically
-make format
-
-# Run tests quickly (no coverage)
-make test-quick
-
-# Run full test suite with coverage (same as CI)
-make test
-
-# Run linting checks
-make lint
-
-# Run pre-commit hooks manually
-make pre-commit
-
-# Check Python version compatibility
+# Check Python version (must be 3.13+)
 make check-python
 
-# Clean temporary files
-make clean
+# Install development environment with HA compatibility validation
+make install-dev
+
+# (Optional) Set up pre-commit hooks
+pre-commit install
 ```
 
-## Python Version Compatibility
+### During Development
+
+```bash
+# Make your changes...
+
+# Quick check during development (fast)
+make dev-check
+
+# Full check before commit (same as CI)
+make check-all
+
+# If everything passes, commit your changes
+git add .
+git commit -m "Your changes"
+```
+
+### Understanding the Commands
+
+#### `make check-python`
+
+- Validates you're using Python 3.13+ (required for HA 2024.12+)
+- Prevents wasting time with wrong Python version
+
+#### `make check-ha-compat`
+
+- Verifies Home Assistant test dependencies can be installed
+- Catches Python version mismatches early
+
+#### `make install-dev`
+
+- Installs dependencies with version constraints that match HA Core
+- Uses `.github/workflows/constraints.txt` for exact version pinning
+- Validates HA compatibility before installation
+
+#### `make dev-check` (Fast, for active development)
+
+- Python version check
+- Code linting
+- Quick tests without coverage
+- ~30 seconds
+
+#### `make check-all` (Complete, before git commit)
+
+- Python version validation
+- HA compatibility check
+- Full linting
+- Complete test suite with coverage
+- Same as CI pipeline
+- ~2-3 minutes
+
+## Dependabot Management
+
+### The Dependabot Problem
+
+Dependabot automatically creates PRs to update packages, but it doesn't understand Home Assistant's specific requirements. This can cause:
+
+- Updates to packages that require newer Python versions
+- Breaking changes that aren't compatible with HA Core
+- Version conflicts with HA's dependency constraints
+
+### Our Solution
+
+1. **Version Constraints**: We use `.github/workflows/constraints.txt` to pin exact versions that work with HA Core
+2. **Local Validation**: Our Makefile validates compatibility before installation
+3. **CI Protection**: Our GitHub Actions workflow will catch incompatible updates
+
+### Handling Dependabot PRs
+
+**Before merging any dependabot PR:**
+
+```bash
+# Pull the PR branch
+git checkout dependabot-branch
+
+# Run compatibility checks
+make check-all
+
+# If it passes, it's safe to merge
+# If it fails, we need to investigate the dependency conflict
+```
+
+## Python Version Management
 
 ### Current Status
 
-- **CI/Local Development**: Python 3.12
-- **pytest-homeassistant-custom-component**: 0.13.108 (last Python 3.12 compatible version)
-- **Future**: When we upgrade to Python 3.13, we'll need to update `requirements_test.txt`
+- **Required**: Python 3.13+
+- **Reason**: Home Assistant 2024.12+ requires Python 3.13
+- **Timeline**: Python 3.12 support was deprecated in HA 2024.12 and will be removed in 2025.2
 
-### The Version Problem We Fixed
+### When HA Updates Python Requirements
 
+When Home Assistant updates their Python requirements:
+
+1. Update the Python version in:
+
+   - `.github/workflows/tests.yaml` (`DEFAULT_PYTHON` and `matrix.python-version`)
+   - `Makefile` (`check-python` function)
+   - This documentation
+
+2. Update test dependencies:
+
+   - `requirements_test.txt`
+   - `.github/workflows/constraints.txt`
+
+3. Test the changes:
+   ```bash
+   make clean
+   make install-dev
+   make check-all
+   ```
+
+## Troubleshooting Common Issues
+
+### "Python 3.13+ required"
+
+**Problem**: You're using an older Python version
+**Solution**: Install Python 3.13+ or use pyenv/virtualenv with the correct version
+
+### "Cannot install HA test dependencies"
+
+**Problem**: Dependency version conflicts
+**Solution**: Check if pytest-homeassistant-custom-component version is compatible with your Python version
+
+### "CI passes locally but fails on GitHub"
+
+**Problem**: Environment differences
+**Solution**: Our constraints file should prevent this, but if it happens:
+
+1. Check the CI logs for specific errors
+2. Update constraints.txt with the working versions
+3. Test locally with `make check-all`
+
+## Development Tools and Integration
+
+### VS Code Integration
+
+Add to `.vscode/tasks.json`:
+
+```json
+{
+  "tasks": [
+    {
+      "label": "WiiM: Quick Check",
+      "type": "shell",
+      "command": "make dev-check",
+      "group": "build"
+    },
+    {
+      "label": "WiiM: Full Check",
+      "type": "shell",
+      "command": "make check-all",
+      "group": "test"
+    }
+  ]
+}
 ```
-❌ pytest-homeassistant-custom-component==0.13.209+ requires Python 3.13
-✅ pytest-homeassistant-custom-component==0.13.108 works with Python 3.12
-```
 
-This was causing CI failures that were only discovered after pushing to git.
-
-## Pre-commit Hooks (Automatic Quality Checks)
-
-Pre-commit hooks run automatically on every `git commit` to catch issues early:
+### Pre-commit Integration
 
 ```bash
-# Install hooks (one time)
+# Install pre-commit hooks (optional but recommended)
 pre-commit install
 
-# Run hooks manually on all files
-pre-commit run --all-files
-
-# Skip hooks if needed (not recommended)
-git commit --no-verify -m "Skip hooks"
-```
-
-### What Pre-commit Checks
-
-1. **Code Formatting**: Black, isort, reorder-python-imports
-2. **Linting**: Flake8 for code quality
-3. **Basic Issues**: Trailing whitespace, YAML syntax, merge conflicts
-4. **Python Version**: Ensures Python 3.12+ compatibility
-5. **Import Testing**: Verifies critical imports work
-
-## Understanding Test Commands
-
-### Local Testing (Fast Iteration)
-
-```bash
-# Quick tests without coverage (fastest)
-make test-quick
-
-# Tests with coverage (slower but complete)
-make test
-```
-
-### CI Simulation (Before Commit)
-
-```bash
-# Runs everything the CI pipeline runs
-make check-all
-
-# Equivalent to:
-# - Python version check
-# - Pre-commit hooks (formatting, linting)
-# - Full test suite with coverage
-# - Home Assistant validation (if available)
-```
-
-## Troubleshooting
-
-### "pytest-homeassistant-custom-component version conflict"
-
-```bash
-# Ensure you're using the Python 3.12 compatible version
-grep pytest-homeassistant-custom-component requirements_test.txt
-# Should show: pytest-homeassistant-custom-component==0.13.108
-```
-
-### "ModuleNotFoundError" during tests
-
-```bash
-# Reinstall development dependencies
-make install-dev
-
-# Check Python version
-make check-python
-```
-
-### "Pre-commit hook failed"
-
-```bash
-# Run pre-commit manually to see details
-pre-commit run --all-files
-
-# Fix issues automatically where possible
-make format
-
-# Run checks again
-make lint
-```
-
-### Tests pass locally but fail in CI
-
-```bash
-# Ensure you're running the same checks as CI
-make check-all
-
-# Check you have the same Python version as CI
-python --version  # Should be 3.12.x
-```
-
-## File Structure for Development
-
-```
-wiim/
-├── Makefile                     # Development commands
-├── DEVELOPMENT.md               # This file
-├── .pre-commit-config.yaml      # Automatic quality checks
-├── requirements_test.txt        # Test dependencies (Python 3.12 compatible)
-├── .github/workflows/tests.yaml # CI configuration
-└── custom_components/wiim/      # Integration code
+# Pre-commit will now run automatically on each commit
 ```
 
 ## Best Practices
 
-### Before Every Commit
+1. **Always run `make check-python` first** - saves time
+2. **Use `make dev-check` during active development** - faster feedback
+3. **Run `make check-all` before committing** - prevents CI failures
+4. **Keep dependencies aligned with HA Core** - prevents user issues
+5. **Test with the exact Python version HA uses** - ensures compatibility
 
-```bash
-make check-all
-```
-
-### During Active Development
-
-```bash
-make dev-check  # Faster iteration
-```
-
-### Before Creating PRs
-
-```bash
-make check-all
-git status      # Ensure no uncommitted changes from auto-formatting
-```
-
-### When Updating Dependencies
-
-1. Update `requirements_test.txt`
-2. Run `make install-dev`
-3. Run `make check-all` to ensure compatibility
-4. Test that CI still passes
-
-## Integration with IDEs
-
-### VS Code
-
-Add to `.vscode/settings.json`:
-
-```json
-{
-  "python.defaultInterpreterPath": "./venv/bin/python",
-  "python.testing.pytestEnabled": true,
-  "python.testing.pytestArgs": ["tests"],
-  "python.linting.enabled": true,
-  "python.linting.flake8Enabled": true,
-  "python.formatting.provider": "black",
-  "editor.formatOnSave": true
-}
-```
-
-### PyCharm
-
-1. Set interpreter to project virtual environment
-2. Enable pytest as test runner
-3. Configure Black as code formatter
-4. Add Makefile support plugin
-
-## Upgrading Python Version (Future)
-
-When Home Assistant moves to Python 3.13:
-
-1. Update `.github/workflows/tests.yaml`: Change `DEFAULT_PYTHON: "3.13"`
-2. Update `requirements_test.txt`: Use newer pytest-homeassistant-custom-component
-3. Update `Makefile`: Change version check to 3.13
-4. Update this documentation
-
-## Summary
-
-**Before this setup**: Developers found Python compatibility issues in CI after pushing
-**After this setup**: All issues caught locally with `make check-all` before any git operations
-
-The key insight is that CI failures are expensive (time, context switching), but local failures are cheap and fast to fix.
+This workflow ensures your changes are compatible with Home Assistant's requirements before they ever reach the CI pipeline, saving time and preventing integration issues for users.

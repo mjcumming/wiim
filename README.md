@@ -118,7 +118,6 @@ automation:
 | Equalizer        | ✅     | 10-band EQ + presets           |
 | Auto Discovery   | ✅     | UPnP/SSDP + Zeroconf           |
 | Group Entities   | ✅     | Virtual group controllers      |
-| Media Browser    | 🚧     | Coming soon                    |
 
 ## 🤝 Community & Support
 

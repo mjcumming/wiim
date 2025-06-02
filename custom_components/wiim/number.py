@@ -11,13 +11,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    CONF_POLL_INTERVAL,
-    CONF_VOLUME_STEP,
-    DEFAULT_POLL_INTERVAL,
-    DEFAULT_VOLUME_STEP,
-    DOMAIN,
-)
+from .const import CONF_POLL_INTERVAL, CONF_VOLUME_STEP, DEFAULT_POLL_INTERVAL, DEFAULT_VOLUME_STEP, DOMAIN
 from .coordinator import WiiMCoordinator
 
 

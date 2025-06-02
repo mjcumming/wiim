@@ -1,12 +1,14 @@
 -r requirements_dev.txt
 
+# Home Assistant Core compatible test dependencies
+# These versions are aligned with HA Core 2024.12+ requirements
+
 # Testing framework
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
-pytest-cov
+pytest-cov>=4.1.0
 pytest-timeout>=2.1.0
-# Using latest version since Python 3.13.3 is available
-# This provides the most recent bug fixes and HA compatibility
+# Using the version required by HA Core for Python 3.13 compatibility
 pytest-homeassistant-custom-component>=0.13.240
 
 # Test utilities
@@ -14,4 +16,5 @@ aresponses>=2.1.6
 freezegun>=1.2.2
 zeroconf
 
-# Code quality - coverage version controlled by constraints.txt to match pytest-homeassistant-custom-component
+# Code quality
+flake8>=6.0.0

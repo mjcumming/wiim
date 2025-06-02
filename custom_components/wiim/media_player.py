@@ -14,15 +14,9 @@ import asyncio
 import logging
 from typing import Any
 
-from homeassistant.components.media_player import (
-    MediaPlayerEntity,
-    MediaPlayerEntityFeature,
-    MediaPlayerState,
-)
+from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayerEntityFeature, MediaPlayerState
 from homeassistant.components.media_player.browse_media import BrowseMedia, MediaClass
-from homeassistant.components.media_player.const import (
-    ATTR_GROUP_MEMBERS as HA_ATTR_GROUP_MEMBERS,
-)
+from homeassistant.components.media_player.const import ATTR_GROUP_MEMBERS as HA_ATTR_GROUP_MEMBERS
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_platform, entity_registry
@@ -58,12 +52,7 @@ from .const import (
     SOURCE_MAP,
 )
 from .coordinator import WiiMCoordinator
-from .services import (
-    WiiMDeviceServices,
-    WiiMDiagnosticServices,
-    WiiMGroupServices,
-    WiiMMediaServices,
-)
+from .services import WiiMDeviceServices, WiiMDiagnosticServices, WiiMGroupServices, WiiMMediaServices
 from .utils import StateManager, entity_id_to_host, find_coordinator
 
 _LOGGER = logging.getLogger(__name__)
