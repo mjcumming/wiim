@@ -141,44 +141,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 
 ---
 
-**⚡ Made with ❤️ by the Home Assistant community**
-
 _This integration is not affiliated with WiiM or LinkPlay. All trademarks belong to their respective owners._
-
-## Resolving LinkPlay Conflicts
-
-**Important**: This integration may conflict with Home Assistant's built-in LinkPlay integration. If you see errors like "Cannot connect to host X.X.X.X:80" in your logs, follow these steps:
-
-### Option 1: Disable Built-in LinkPlay Integration
-
-Add this to your `configuration.yaml`:
-
-```yaml
-# Disable built-in linkplay integration to prevent conflicts
-default_config:
-
-# Exclude linkplay from discovery
-discovery:
-  ignore:
-    - linkplay
-# If you have the linkplay integration already configured, remove it:
-# linkplay:  # <- Remove or comment out this entire section
-```
-
-### Option 2: Network-Level Blocking
-
-If the built-in integration continues to interfere, you can block it at the network level by adding this to your router's firewall or using a local firewall rule to block port 80 traffic from Home Assistant to your WiiM devices (while allowing our custom integration's HTTPS traffic on port 443).
-
-### Option 3: Manual Entity Cleanup
-
-If you have duplicate entities from the built-in linkplay integration:
-
-1. Go to Settings → Devices & Services
-2. Find any "LinkPlay" integrations (not "WiiM Audio (LinkPlay)")
-3. Remove them
-4. Go to Settings → Entities
-5. Search for "linkplay" entities and remove any duplicates
-6. Restart Home Assistant
 
 ## Usage
 
