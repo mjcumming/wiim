@@ -94,7 +94,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
         self._idle_timeout = 600  # 10 minutes in seconds
         # Cache for device info (fetched once and reused)
         self._device_info: dict[str, Any] = {}
-        self._state_manager = StateManager(client)
+        self._state_manager = StateManager(self, hass)
         self.hass = hass
 
     def _parse_plm_support(self, plm_support: str) -> list[str]:

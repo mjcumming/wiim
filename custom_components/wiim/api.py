@@ -61,7 +61,9 @@ from .const import (
     API_ENDPOINT_PAUSE,
     API_ENDPOINT_PLAY,
     API_ENDPOINT_PLAY_M3U,
+    API_ENDPOINT_PLAY_PROMPT_URL,
     API_ENDPOINT_PLAY_URL,
+    API_ENDPOINT_PLAYER_STATUS,
     API_ENDPOINT_POWER,
     API_ENDPOINT_PRESET,
     API_ENDPOINT_PREV,
@@ -794,8 +796,6 @@ class WiiMClient:
             - source: Current audio source
             - play_mode: Current play mode (normal/repeat/shuffle)
         """
-        from .const import API_ENDPOINT_PLAYER_STATUS
-
         try:
             raw: dict[str, Any] = await self._request(API_ENDPOINT_PLAYER_STATUS)
         except WiiMError:
@@ -1078,8 +1078,6 @@ class WiiMClient:
     async def play_notification(self, url: str) -> None:
         """Play a notification sound (lowers volume, plays, then restores)."""
         from urllib.parse import quote
-
-        from .const import API_ENDPOINT_PLAY_PROMPT_URL
 
         encoded_url = quote(url, safe="")
         await self._request(f"{API_ENDPOINT_PLAY_PROMPT_URL}{encoded_url}")
