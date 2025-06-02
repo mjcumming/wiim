@@ -18,9 +18,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN
-from .services.device_registry import create_master_device_uuid
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def create_master_device_uuid(master_uuid: str) -> str:
+    """Create a stable UUID for group master entities."""
+    # Simple implementation - just use the master UUID with a prefix
+    return f"group_{master_uuid.lower()}"
 
 
 class WiiMGroupMediaPlayer(MediaPlayerEntity):
