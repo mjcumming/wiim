@@ -1218,9 +1218,12 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         validated_members = []
         filtered_out = []
 
+        # Always include self in the group (HA's interface sometimes excludes the calling entity)
+        validated_members.append(self.entity_id)
+
         for entity_id in group_members:
             if entity_id == self.entity_id:
-                validated_members.append(entity_id)
+                # Already added above, skip to avoid duplicates
                 continue
 
             # Skip if already in the current group
@@ -1276,7 +1279,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         )
 
         if len(validated_members) <= 1:
-            _LOGGER.info("[WiiM] %s: No valid new WiiM group members found, ensuring device is solo", self.entity_id)
+            _LOGGER.info("[WiiM] %s: Only self in group, ensuring device is solo", self.entity_id)
             if self.coordinator.client.is_slave or self.coordinator.client.is_master:
                 await self.async_unjoin()
             return
