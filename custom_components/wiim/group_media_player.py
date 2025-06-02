@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN
+from .device_registry import get_device_registry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -156,16 +157,25 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
 
     @property
     def group_members(self) -> list[str]:
-        """Return list of group member entity IDs (cached for performance)."""
-        # Use the coordinator's cached group members
-        return self.coordinator.get_cached_group_members()
+        """Return list of group member entity IDs."""
+        # Use device registry to get group members
+        try:
+            registry = get_device_registry(self.hass)
+            return registry.get_group_members_for_device(self.coordinator.client.host)
+        except Exception as err:
+            _LOGGER.warning("[WiiMGroup] %s: Failed to get group members: %s", self._attr_name, err)
+            return []
 
     @property
     def group_leader(self) -> str | None:
         """Return the group leader entity ID."""
-        # The group master entity doesn't have a leader (it IS the leader conceptually)
-        # But for compatibility, return the actual device entity that's the real leader
-        return self.coordinator.get_cached_group_leader()
+        # Use device registry to get group leader
+        try:
+            registry = get_device_registry(self.hass)
+            return registry.get_group_leader_for_device(self.coordinator.client.host)
+        except Exception as err:
+            _LOGGER.warning("[WiiMGroup] %s: Failed to get group leader: %s", self._attr_name, err)
+            return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

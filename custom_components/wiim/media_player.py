@@ -315,6 +315,11 @@ def _register_services(platform) -> None:
         {vol.Optional("dry_run", default=True): bool},
         "async_cleanup_ghost_discoveries",
     )
+    platform.async_register_entity_service(
+        "cleanup_stale_group_entities",
+        {vol.Optional("dry_run", default=True): bool},
+        "async_cleanup_stale_group_entities",
+    )
 
     # Group management services
     platform.async_register_entity_service(
@@ -373,67 +378,6 @@ async def _setup_group_entities(
                     slave_count,
                     master_uuid,
                 )
-
-
-async def _manage_group_entities(
-    hass: HomeAssistant, coordinator: WiiMCoordinator, previous_role: str | None, new_role: str
-) -> None:
-    """Manage group entities based on role changes."""
-    from .group_media_player import WiiMGroupMediaPlayer
-
-    device_ip = coordinator.client.host
-    group_entity_id = f"wiim_group_{device_ip.replace('.', '_')}"
-
-    # Initialize the group entities registry if needed
-    if "_group_entities" not in hass.data[DOMAIN]:
-        hass.data[DOMAIN]["_group_entities"] = {}
-
-    group_entities = hass.data[DOMAIN]["_group_entities"]
-
-    if new_role == "master":
-        # Device became a master - check if it has slaves
-        multiroom = coordinator.data.get("multiroom", {}) if coordinator.data else {}
-        slave_list = multiroom.get("slave_list", [])
-
-        if slave_list and group_entity_id not in group_entities:
-            # Create new group entity
-            group_entity = WiiMGroupMediaPlayer(hass, coordinator, device_ip)
-
-            # Register the entity with Home Assistant
-            entity_registry_inst = entity_registry.async_get(hass)
-            entity_registry_inst.async_get_or_create(
-                domain="media_player",
-                platform=DOMAIN,
-                unique_id=group_entity.unique_id,
-                suggested_object_id=f"wiim_group_{device_ip.replace('.', '_')}",
-                config_entry=None,  # Will be filled automatically
-                device_id=None,  # Will be filled automatically
-            )
-
-            # Add to our tracking
-            group_entities[group_entity_id] = group_entity
-
-            _LOGGER.info(
-                "[WiiM] Created group entity %s for master %s with %d slaves",
-                group_entity.entity_id if hasattr(group_entity, "entity_id") else group_entity_id,
-                device_ip,
-                len(slave_list),
-            )
-
-    elif previous_role == "master" and new_role != "master":
-        # Device is no longer a master - remove group entity if it exists
-        if group_entity_id in group_entities:
-            group_entity = group_entities[group_entity_id]
-
-            # Remove from entity registry
-            entity_registry_inst = entity_registry.async_get(hass)
-            if hasattr(group_entity, "entity_id"):
-                entity_registry_inst.async_remove(group_entity.entity_id)
-
-            # Remove from our tracking
-            del group_entities[group_entity_id]
-
-            _LOGGER.info("[WiiM] Removed group entity for %s (no longer master)", device_ip)
 
 
 class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
@@ -1708,6 +1652,51 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             "flows": ghost_flows,
             "dry_run": dry_run,
             "action_taken": "aborted" if not dry_run else "none",
+        }
+
+    async def async_cleanup_stale_group_entities(self, dry_run: bool = True) -> None:
+        """Clean up stale group entities created by the old IP-based system."""
+        _LOGGER.info("[WiiM] %s: Stale group entity cleanup requested (dry_run=%s)", self.entity_id, dry_run)
+
+        entity_registry_inst = entity_registry.async_get(self.hass)
+        stale_entities = []
+
+        # Find group entities created by the old IP-based system
+        for entity_entry in entity_registry_inst.entities.values():
+            if (
+                entity_entry.platform == DOMAIN
+                and entity_entry.entity_id.startswith("media_player.wiim_group_")
+                and not entity_entry.entity_id.startswith(
+                    "media_player.wiim_group_f"
+                )  # UUID-based entities start with hex
+                and "_" in entity_entry.entity_id.replace("media_player.wiim_group_", "")
+            ):
+                # This looks like an old IP-based group entity (e.g., wiim_group_192_168_1_116)
+                entity_state = self.hass.states.get(entity_entry.entity_id)
+                if entity_state is None or entity_state.state == "unavailable":
+                    stale_entities.append(entity_entry.entity_id)
+
+        _LOGGER.info(
+            "[WiiM] %s: Found %d stale group entities: %s%s",
+            self.entity_id,
+            len(stale_entities),
+            stale_entities,
+            " (DRY RUN - no changes made)" if dry_run else "",
+        )
+
+        if not dry_run:
+            for entity_id in stale_entities:
+                try:
+                    entity_registry_inst.async_remove(entity_id)
+                    _LOGGER.info("[WiiM] Removed stale group entity: %s", entity_id)
+                except Exception as err:
+                    _LOGGER.warning("[WiiM] Failed to remove stale group entity %s: %s", entity_id, err)
+
+        return {
+            "stale_entities_found": len(stale_entities),
+            "entities": stale_entities,
+            "dry_run": dry_run,
+            "action_taken": "removed" if not dry_run else "none",
         }
 
     async def _refresh_all_group_members_after_join(self, group_members: list[str]) -> None:
