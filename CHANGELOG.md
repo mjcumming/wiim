@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.15] - 2025-01-06
+
+### Fixed
+
+- **Enhanced non-WiiM device filtering in group operations**
+- More aggressive validation removes non-WiiM devices from group member lists
+- Better logging shows exactly which entities are filtered out and why
+- Stricter entity validation prevents accidental inclusion of incompatible devices
+
+### Technical
+
+- Enhanced `async_join` method with stricter WiiM-only filtering
+- Added comprehensive logging for group member validation process
+- Improved entity identification using entity ID patterns and coordinator lookup
+- Better error messages for troubleshooting group operations
+
+### Known Limitation
+
+- Home Assistant's native grouping UI may still show all media players in the selection list
+- This is a Home Assistant UI behavior we cannot control from our integration
+- However, our integration will automatically filter out non-WiiM devices when processing the group
+- Check the logs to see which entities were filtered out during group operations
+
 ## [0.4.14] - 2025-01-06
 
 ### Improved

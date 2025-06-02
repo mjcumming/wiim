@@ -967,8 +967,10 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             group_members,
         )
 
-        # Pre-validate and filter out stale entities
+        # Pre-validate and aggressively filter out non-WiiM entities
         validated_members = []
+        filtered_out = []
+
         for entity_id in group_members:
             if entity_id == self.entity_id:
                 validated_members.append(entity_id)
@@ -977,37 +979,52 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             # Check if entity exists and is valid
             entity_state = self.hass.states.get(entity_id)
             if entity_state is None:
-                _LOGGER.warning(
-                    "[WiiM] %s: Skipping non-existent entity %s from group members",
-                    self.entity_id,
-                    entity_id,
-                )
+                filtered_out.append(f"{entity_id} (non-existent)")
                 continue
 
             # Check if entity is stale
             if entity_state.state in ("unavailable", "unknown") or entity_state.attributes.get("restored", False):
-                _LOGGER.warning(
-                    "[WiiM] %s: Skipping stale entity %s (state: %s) from group members",
-                    self.entity_id,
-                    entity_id,
-                    entity_state.state,
-                )
+                filtered_out.append(f"{entity_id} (stale/unavailable)")
                 continue
 
-            # Check if we can find a coordinator for this entity
+            # Strict WiiM-only filtering: Check entity domain and integration
+            if not entity_id.startswith("media_player."):
+                filtered_out.append(f"{entity_id} (not media player)")
+                continue
+
+            # Check if this is explicitly a WiiM entity by checking entity registry or coordinator
             coord = find_coordinator(self.hass, entity_id)
             if coord is None:
-                _LOGGER.info(
-                    "[WiiM] %s: Skipping entity %s - no WiiM coordinator found (may be non-WiiM device or offline)",
-                    self.entity_id,
-                    entity_id,
-                )
-                continue
+                # Additional check: see if entity_id contains wiim pattern
+                if "wiim" not in entity_id.lower() and "linkplay" not in entity_id.lower():
+                    filtered_out.append(f"{entity_id} (not WiiM device)")
+                    continue
+                else:
+                    # Might be a WiiM device that's not fully online yet
+                    _LOGGER.warning(
+                        "[WiiM] %s: Including %s despite no coordinator (might be WiiM device coming online)",
+                        self.entity_id,
+                        entity_id,
+                    )
 
             validated_members.append(entity_id)
 
+        # Log what was filtered out for user awareness
+        if filtered_out:
+            _LOGGER.info(
+                "[WiiM] %s: Filtered out non-WiiM entities: %s",
+                self.entity_id,
+                filtered_out,
+            )
+
+        _LOGGER.info(
+            "[WiiM] %s: Valid WiiM group members after filtering: %s",
+            self.entity_id,
+            validated_members,
+        )
+
         if len(validated_members) <= 1:
-            _LOGGER.info("[WiiM] %s: No valid group members found, ensuring device is solo", self.entity_id)
+            _LOGGER.info("[WiiM] %s: No valid WiiM group members found, ensuring device is solo", self.entity_id)
             if self.coordinator.client.is_slave or self.coordinator.client.is_master:
                 await self.async_unjoin()
             return
