@@ -1,604 +1,273 @@
-import logging
+"""WiiM Group Media Player Entity.
 
-from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayerEntityFeature, MediaPlayerState
-from homeassistant.helpers.entity import DeviceInfo
+Provides a virtual master entity for controlling multiroom groups.
+Uses cached state and UUID-based identification for high performance.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from homeassistant.components.media_player import (
+    MediaPlayerEntity,
+    MediaPlayerEntityFeature,
+    MediaPlayerState,
+)
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN
-from .utils.device_registry import find_coordinator_by_ip
+from .services.device_registry import create_master_device_uuid
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class WiiMGroupMediaPlayer(MediaPlayerEntity):
-    """Representation of a WiiM group media player entity.
+    """Virtual master media player for WiiM multiroom groups.
 
-    This class implements a virtual media player entity that represents a group of WiiM devices
-    working together in a multiroom setup. It provides unified control over the group while
-    maintaining individual device control capabilities.
-
-    Key Features:
-    - Unified group control (playback, volume, mute)
-    - Individual device control within the group
-    - Automatic group state synchronization
-    - Real-time status updates
-    - Group membership management
-
-    State Management:
-    - Aggregates state from all group members
-    - Maintains group volume and mute state
-    - Tracks media playback information
-    - Monitors group membership changes
-
-    Volume Control:
-    - Implements relative volume changes across group
-    - Maintains volume relationships between devices
-    - Supports individual device volume control
-    - Handles volume synchronization
-
-    Error Handling:
-    - Graceful handling of device disconnections
-    - Automatic group state recovery
-    - Detailed error logging
-    - Maintains group consistency during errors
+    This entity represents the entire group and allows users to control
+    all speakers in the group simultaneously. Uses efficient caching
+    and the new UUID scheme for optimal performance.
     """
 
-    def __init__(self, hass, coordinator, device_ip):
+    def __init__(self, hass: HomeAssistant, coordinator, master_uuid: str) -> None:
+        """Initialize the group media player."""
         self.hass = hass
         self.coordinator = coordinator
-        self.device_ip = device_ip  # This device's IP (not necessarily master)
+        self._master_uuid = master_uuid
 
-        # Get device name for this specific device
+        # Create stable unique_id and entity_id based on UUID scheme
+        group_uuid = create_master_device_uuid(master_uuid)
+        self._attr_unique_id = f"wiim_group_{group_uuid}"
+        self._entity_id = f"media_player.wiim_group_{master_uuid.lower()}"
+
+        # Get master device info for naming
         status = coordinator.data.get("status", {}) if coordinator.data else {}
-        device_name = status.get("DeviceName") or status.get("device_name") or device_ip
+        device_name = status.get("device_name") or status.get("DeviceName") or "WiiM Group"
 
-        safe_name = (
-            device_name.replace(" ", "_")
-            .replace("(", "")
-            .replace(")", "")
-            .replace(",", "")
-            .replace(".", "_")
-            .replace("none", "")
-            .replace("null", "")
-            .lower()
-        )
-        self._attr_unique_id = f"wiim_master_{device_ip.replace('.', '_')}_{safe_name}"
-        self._attr_name = f"{device_name} Master"
-        self._attr_supported_features = (
-            MediaPlayerEntityFeature.PLAY
-            | MediaPlayerEntityFeature.PAUSE
-            | MediaPlayerEntityFeature.STOP
-            | MediaPlayerEntityFeature.NEXT_TRACK
-            | MediaPlayerEntityFeature.PREVIOUS_TRACK
-            | MediaPlayerEntityFeature.VOLUME_SET
-            | MediaPlayerEntityFeature.VOLUME_MUTE
-        )
+        # Group entity gets " (Group Master)" suffix for clarity
+        self._attr_name = f"{device_name} (Group Master)"
 
-        # Set device_info to match the main device so the group entity is grouped under the main device
-        # Use the MAC address as the primary identifier to match the main media player
+        # Use same device as the physical master to group entities together
         device_mac = status.get("MAC")
         device_identifiers = set()
         if device_mac:
-            # Use MAC as primary identifier (same as main media player)
             device_identifiers.add((DOMAIN, device_mac.lower().replace(":", "")))
-        # Always include IP as fallback identifier
         device_identifiers.add((DOMAIN, coordinator.client.host))
 
         self._attr_device_info = DeviceInfo(
             identifiers=device_identifiers,
             name=device_name,
             manufacturer="WiiM",
-            model=status.get("project") or status.get("hardware"),
-            sw_version=status.get("firmware"),
-            connections={("mac", device_mac)} if device_mac else set(),
+            model=status.get("project", "WiiM Speaker"),
+            sw_version=status.get("firmware", "Unknown"),
         )
 
-    @property
-    def group_info(self):
-        info = self.coordinator.get_group_by_master(self.device_ip) or {}
-        _LOGGER.debug("[WiiMGroup] Group info for master %s: %s", self.device_ip, info)
-        return info
+        # Supported features for group control
+        self._attr_supported_features = (
+            MediaPlayerEntityFeature.PLAY
+            | MediaPlayerEntityFeature.PAUSE
+            | MediaPlayerEntityFeature.STOP
+            | MediaPlayerEntityFeature.NEXT_TRACK
+            | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            | MediaPlayerEntityFeature.VOLUME_MUTE
+            | MediaPlayerEntityFeature.VOLUME_SET
+            | MediaPlayerEntityFeature.GROUPING
+        )
+
+        _LOGGER.debug("[WiiMGroup] Initialized group master entity: %s", self._attr_name)
 
     @property
-    def group_members(self):
-        return list(self.group_info.get("members", {}).keys())
+    def entity_id(self) -> str:
+        """Return the entity ID."""
+        return self._entity_id
 
     @property
-    def group_leader(self):
-        return self.device_ip
+    def state(self) -> MediaPlayerState:
+        """Return the state of the group (based on master device)."""
+        if not self.coordinator.data:
+            return MediaPlayerState.OFF
 
-    @property
-    def state(self):
-        """Return state based on this device's role."""
-        if self.coordinator.data is None:
-            return MediaPlayerState.IDLE
+        status = self.coordinator.data.get("status", {})
+        play_status = status.get("play_status", "stop")
+        power = status.get("power", False)
 
-        role = self.coordinator.data.get("role", "solo")
-
-        if role == "solo":
-            # Solo device - show its own state
-            status = self.coordinator.data.get("status", {})
-            if not status.get("power"):
-                return MediaPlayerState.OFF
-            if status.get("play_status") == "play":
-                return MediaPlayerState.PLAYING
-            if status.get("play_status") == "pause":
-                return MediaPlayerState.PAUSED
-            return MediaPlayerState.IDLE
-
-        elif role == "master":
-            # Master device - show its own state (controls group)
-            status = self.coordinator.data.get("status", {})
-            if not status.get("power"):
-                return MediaPlayerState.OFF
-            if status.get("play_status") == "play":
-                return MediaPlayerState.PLAYING
-            if status.get("play_status") == "pause":
-                return MediaPlayerState.PAUSED
-            return MediaPlayerState.IDLE
-
-        else:  # slave
-            # Slave device - mirror master's state
-            master_coord = self._find_master_coordinator()
-            if not master_coord or master_coord.data is None:
-                return MediaPlayerState.IDLE
-
-            master_status = master_coord.data.get("status", {})
-            if not master_status.get("power"):
-                return MediaPlayerState.OFF
-            if master_status.get("play_status") == "play":
-                return MediaPlayerState.PLAYING
-            if master_status.get("play_status") == "pause":
-                return MediaPlayerState.PAUSED
+        if not power:
+            return MediaPlayerState.OFF
+        elif play_status == "play":
+            return MediaPlayerState.PLAYING
+        elif play_status == "pause":
+            return MediaPlayerState.PAUSED
+        else:
             return MediaPlayerState.IDLE
 
     @property
-    def volume_level(self):
-        """Return volume level based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "solo":
-            # Solo: return own volume
-            status = self.coordinator.data.get("status", {})
-            volume = status.get("volume")
-            return float(volume) / 100 if volume is not None else None
-
-        elif role == "master":
-            # Master: return group max volume (existing behavior)
-            max_vol = 0
-            for ip in self.group_members:
-                coord = self._find_coordinator_by_ip(ip)
-                if coord and coord.data and "status" in coord.data:
-                    vol = coord.data["status"].get("volume", 0)
-                    if vol > max_vol:
-                        max_vol = vol
-            return float(max_vol) / 100
-
-        else:  # slave
-            # Slave: return own volume only
-            status = self.coordinator.data.get("status", {})
-            volume = status.get("volume")
-            return float(volume) / 100 if volume is not None else None
+    def volume_level(self) -> float | None:
+        """Return volume level of the master device."""
+        if not self.coordinator.data:
+            return None
+        status = self.coordinator.data.get("status", {})
+        return status.get("volume_level")
 
     @property
-    def is_volume_muted(self):
-        """Return mute state based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "solo":
-            # Solo: return own mute state
-            return self.coordinator.data.get("status", {}).get("mute")
-
-        elif role == "master":
-            # Master: return aggregate group mute state (existing behavior)
-            any_unmuted = False
-            any_known = False
-            for ip in self.group_members:
-                coord = self._find_coordinator_by_ip(ip)
-                if not coord or not coord.data or "status" not in coord.data:
-                    continue
-                any_known = True
-                if not coord.data["status"].get("mute", False):
-                    any_unmuted = True
-                    break
-            if not any_known:
-                return None  # Unknown
-            return not any_unmuted
-
-        else:  # slave
-            # Slave: return own mute state only
-            return self.coordinator.data.get("status", {}).get("mute")
+    def is_volume_muted(self) -> bool:
+        """Return if volume is muted."""
+        if not self.coordinator.data:
+            return False
+        status = self.coordinator.data.get("status", {})
+        return status.get("mute", False)
 
     @property
-    def extra_state_attributes(self):
-        """Show group status and members based on current role."""
-        if self.coordinator.data is None:
-            return {}
+    def media_title(self) -> str | None:
+        """Return the current media title."""
+        if not self.coordinator.data:
+            return None
+        status = self.coordinator.data.get("status", {})
+        return status.get("title")
 
-        role = self.coordinator.data.get("role", "solo")
-        attrs = {"wiim_role": role}
+    @property
+    def media_artist(self) -> str | None:
+        """Return the current media artist."""
+        if not self.coordinator.data:
+            return None
+        status = self.coordinator.data.get("status", {})
+        return status.get("artist")
 
-        if role == "solo":
-            attrs["group_status"] = "Not grouped"
-            # Show available devices for potential grouping
-            available_devices = []
-            for coord in self.hass.data[DOMAIN].values():
-                if not hasattr(coord, "client") or coord.client.host == self.device_ip:
-                    continue
-                device_status = coord.data.get("status", {}) if coord.data else {}
-                device_name = device_status.get("DeviceName") or device_status.get("device_name") or coord.client.host
-                available_devices.append(
-                    {
-                        "name": device_name,
-                        "ip": coord.client.host,
-                        "entity_id": f"media_player.wiim_{coord.client.host.replace('.', '_')}",
-                    }
-                )
-            attrs["available_devices"] = available_devices
+    @property
+    def media_album_name(self) -> str | None:
+        """Return the current media album."""
+        if not self.coordinator.data:
+            return None
+        status = self.coordinator.data.get("status", {})
+        return status.get("album")
 
-        elif role == "master":
-            # Show slave information for masters
+    @property
+    def entity_picture(self) -> str | None:
+        """Return the entity picture URL."""
+        if not self.coordinator.data:
+            return None
+        status = self.coordinator.data.get("status", {})
+        return status.get("entity_picture")
+
+    @property
+    def group_members(self) -> list[str]:
+        """Return list of group member entity IDs (cached for performance)."""
+        # Use the coordinator's cached group members
+        return self.coordinator.get_cached_group_members()
+
+    @property
+    def group_leader(self) -> str | None:
+        """Return the group leader entity ID."""
+        # The group master entity doesn't have a leader (it IS the leader conceptually)
+        # But for compatibility, return the actual device entity that's the real leader
+        return self.coordinator.get_cached_group_leader()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        attrs = {
+            "group_type": "wiim_master",
+            "master_uuid": self._master_uuid,
+            "member_count": len(self.group_members),
+            "group_members": self.group_members,
+        }
+
+        if self.coordinator.data:
             multiroom = self.coordinator.data.get("multiroom", {})
-            slave_list = multiroom.get("slave_list", [])
-
-            if slave_list:
-                slave_names = [slave.get("name", "Unknown") for slave in slave_list if isinstance(slave, dict)]
-                attrs["group_status"] = f"Master of: {', '.join(slave_names)} ({len(slave_list)} slaves)"
-
-                # Detailed slave info
-                slave_details = []
-                for slave in slave_list:
-                    if isinstance(slave, dict):
-                        slave_info = {
-                            "name": slave.get("name", "Unknown"),
-                            "ip": slave.get("ip"),
-                            "volume": slave.get("volume", 0),
-                            "muted": bool(slave.get("mute", False)),
-                        }
-                        slave_details.append(slave_info)
-                attrs["slaves"] = slave_details
-            else:
-                attrs["group_status"] = "Master (no slaves)"
-
-        else:  # slave
-            master_ip = self.coordinator.client.group_master
-            if master_ip:
-                # Try to find master name
-                master_coord = self._find_master_coordinator()
-                if master_coord and master_coord.data:
-                    master_status = master_coord.data.get("status", {})
-                    master_name = master_status.get("DeviceName") or master_status.get("device_name") or master_ip
-                    attrs["group_status"] = f"Slave of: {master_name}"
-                    attrs["master_name"] = master_name
-                else:
-                    attrs["group_status"] = f"Slave of: {master_ip}"
-                attrs["master_ip"] = master_ip
-            else:
-                attrs["group_status"] = "Slave (unknown master)"
+            attrs["slave_count"] = multiroom.get("slaves", 0)
 
         return attrs
 
-    @property
-    def supported_features(self):
-        return self._attr_supported_features
+    # Media control methods (delegate to master coordinator)
+    async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
+        """Play media on the group."""
+        await self.coordinator.client.play_url(media_id)
 
-    @property
-    def entity_picture(self):
-        """Return artwork based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
+    async def async_media_play(self) -> None:
+        """Send play command."""
+        await self.coordinator.client.play()
 
-        if role == "slave":
-            # Slave: show master's artwork
-            master_coord = self._find_master_coordinator()
-            if master_coord and master_coord.data:
-                return master_coord.data.get("status", {}).get("entity_picture")
+    async def async_media_pause(self) -> None:
+        """Send pause command."""
+        await self.coordinator.client.pause()
 
-        # Solo or Master: show own artwork
-        return self.coordinator.data.get("status", {}).get("entity_picture") if self.coordinator.data else None
+    async def async_media_stop(self) -> None:
+        """Send stop command."""
+        await self.coordinator.client.stop()
 
-    @property
-    def media_title(self):
-        """Return track title based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
+    async def async_media_next_track(self) -> None:
+        """Send next track command."""
+        await self.coordinator.client.next()
 
-        if role == "slave":
-            # Slave: show master's title
-            master_coord = self._find_master_coordinator()
-            if master_coord and master_coord.data:
-                return master_coord.data.get("status", {}).get("title")
+    async def async_media_previous_track(self) -> None:
+        """Send previous track command."""
+        await self.coordinator.client.previous()
 
-        # Solo or Master: show own title
-        return self.coordinator.data.get("status", {}).get("title") if self.coordinator.data else None
+    async def async_set_volume_level(self, volume: float) -> None:
+        """Set volume level for the group."""
+        await self.coordinator.client.set_volume(int(volume * 100))
 
-    @property
-    def media_artist(self):
-        """Return artist based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
+    async def async_mute_volume(self, mute: bool) -> None:
+        """Mute or unmute the group."""
+        await self.coordinator.client.set_mute(mute)
 
-        if role == "slave":
-            # Slave: show master's artist
-            master_coord = self._find_master_coordinator()
-            if master_coord and master_coord.data:
-                return master_coord.data.get("status", {}).get("artist")
+    # Group management methods
+    async def async_join_players(self, group_members: list[str]) -> None:
+        """Add players to this group."""
+        # Find coordinators for the entity IDs to join
+        for entity_id in group_members:
+            if entity_id == self.entity_id:
+                continue  # Skip self
 
-        # Solo or Master: show own artist
-        return self.coordinator.data.get("status", {}).get("artist") if self.coordinator.data else None
-
-    @property
-    def media_album_name(self):
-        """Return album based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "slave":
-            # Slave: show master's album
-            master_coord = self._find_master_coordinator()
-            if master_coord and master_coord.data:
-                return master_coord.data.get("status", {}).get("album")
-
-        # Solo or Master: show own album
-        return self.coordinator.data.get("status", {}).get("album") if self.coordinator.data else None
-
-    @property
-    def media_position(self):
-        """Return playback position based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "slave":
-            # Slave: show master's position
-            master_coord = self._find_master_coordinator()
-            if master_coord and master_coord.data:
-                return master_coord.data.get("status", {}).get("position")
-
-        # Solo or Master: show own position
-        return self.coordinator.data.get("status", {}).get("position") if self.coordinator.data else None
-
-    @property
-    def media_duration(self):
-        """Return track duration based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "slave":
-            # Slave: show master's duration
-            master_coord = self._find_master_coordinator()
-            if master_coord and master_coord.data:
-                return master_coord.data.get("status", {}).get("duration")
-
-        # Solo or Master: show own duration
-        return self.coordinator.data.get("status", {}).get("duration") if self.coordinator.data else None
-
-    @property
-    def media_position_updated_at(self):
-        """Return position update time based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "slave":
-            # Slave: show master's position update time
-            master_coord = self._find_master_coordinator()
-            if master_coord and master_coord.data:
-                return master_coord.data.get("status", {}).get("position_updated_at")
-
-        # Solo or Master: show own position update time
-        return self.coordinator.data.get("status", {}).get("position_updated_at") if self.coordinator.data else None
-
-    async def async_set_volume_level(self, volume):
-        """Set volume based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "solo":
-            # Solo: set own volume
-            await self.coordinator.client.set_volume(volume)
-            await self.coordinator.async_refresh()
-
-        elif role == "master":
-            # Master: set group volume with relative changes (existing behavior)
-            member_vols = {}
-            for ip in self.group_members:
-                coord = self._find_coordinator_by_ip(ip)
-                if coord and coord.data and "status" in coord.data:
-                    member_vols[ip] = coord.data["status"].get("volume", 0)
-                else:
-                    member_vols[ip] = 0
-            if not member_vols:
-                return
-            current_max = max(member_vols.values())
-            new_max = int(volume * 100)
-            delta = new_max - current_max
-            for ip, cur in member_vols.items():
-                new_vol = max(0, min(100, cur + delta))
-                coord = self._find_coordinator_by_ip(ip)
-                if coord:
-                    await coord.client.set_volume(new_vol / 100)
-
-        else:  # slave
-            # Slave: set only own volume
-            await self.coordinator.client.set_volume(volume)
-            await self.coordinator.async_refresh()
-
-    async def async_mute_volume(self, mute: bool):
-        """Mute/unmute based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "solo":
-            # Solo: mute/unmute self
-            await self.coordinator.client.set_mute(mute)
-            await self.coordinator.async_refresh()
-
-        elif role == "master":
-            # Master: mute/unmute entire group (existing behavior)
-            for ip in self.group_members:
-                coord = self._find_coordinator_by_ip(ip)
-                if not coord:
-                    continue
-                try:
-                    await coord.client.set_mute(mute)
-                except Exception as err:
-                    _LOGGER.debug("[WiiMGroup] Failed to set mute=%s on %s: %s", mute, ip, err)
-
-            # Trigger refresh for all coordinators
-            for ip in self.group_members:
-                coord = self._find_coordinator_by_ip(ip)
-                if coord:
+            # Extract IP from entity ID and find coordinator
+            if "wiim_" in entity_id:
+                ip_part = entity_id.split("wiim_", 1)[1].replace("_", ".")
+                target_coord = self.coordinator.device_registry.get_device_by_ip(ip_part)
+                if target_coord:
                     try:
-                        await coord.async_request_refresh()
-                    except Exception:
-                        pass
+                        await target_coord.join_wiim_group(self.coordinator.client.host)
+                        _LOGGER.debug("[WiiMGroup] %s joined group via %s", entity_id, ip_part)
+                    except Exception as err:
+                        _LOGGER.error("[WiiMGroup] Failed to join %s to group: %s", entity_id, err)
 
-            self.async_write_ha_state()
+    async def async_unjoin_player(self) -> None:
+        """Remove this group (dissolve it)."""
+        try:
+            await self.coordinator.delete_wiim_group()
+            _LOGGER.debug("[WiiMGroup] Group dissolved")
+        except Exception as err:
+            _LOGGER.error("[WiiMGroup] Failed to dissolve group: %s", err)
 
-        else:  # slave
-            # Slave: mute/unmute only self
-            await self.coordinator.client.set_mute(mute)
-            await self.coordinator.async_refresh()
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle coordinator updates."""
+        self.async_write_ha_state()
 
-    async def async_media_play(self):
-        """Handle play command based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
 
-        if role == "slave":
-            # Slave: propagate to master
-            master_coord = self._find_master_coordinator()
-            if master_coord:
-                await master_coord.client.play()
-                await master_coord.async_refresh()
-                await self.coordinator.async_refresh()
-            else:
-                _LOGGER.warning(
-                    "[WiiMGroup] Slave %s cannot find master to send play command",
-                    self.device_ip,
-                )
-        else:
-            # Solo or Master: control directly (solo) or all members (master)
-            if role == "master":
-                # Master: play on all members
-                for ip in self.group_members:
-                    coord = self._find_coordinator_by_ip(ip)
-                    if coord:
-                        await coord.client.play()
-            else:
-                # Solo: play on self
-                await self.coordinator.client.play()
+    async def async_will_remove_from_hass(self) -> None:
+        """When entity will be removed from hass."""
+        # Clean up any listeners here if needed
+        pass
 
-    async def async_media_pause(self):
-        """Handle pause command based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
-        if role == "slave":
-            # Slave: propagate to master
-            master_coord = self._find_master_coordinator()
-            if master_coord:
-                await master_coord.client.pause()
-                await master_coord.async_refresh()
-                await self.coordinator.async_refresh()
-            else:
-                _LOGGER.warning(
-                    "[WiiMGroup] Slave %s cannot find master to send pause command",
-                    self.device_ip,
-                )
-        else:
-            # Solo or Master: control directly (solo) or all members (master)
-            if role == "master":
-                # Master: pause on all members
-                for ip in self.group_members:
-                    coord = self._find_coordinator_by_ip(ip)
-                    if coord:
-                        await coord.client.pause()
-            else:
-                # Solo: pause on self
-                await self.coordinator.client.pause()
+def should_create_group_master(coordinator) -> bool:
+    """Determine if we should create a group master entity."""
+    # Only create for actual masters with slaves
+    if not coordinator.data:
+        return False
 
-    async def async_media_next_track(self):
-        """Handle next track command based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
+    role = coordinator.get_current_role()
+    return role == "master"
 
-        if role == "slave":
-            # Slave: propagate to master
-            master_coord = self._find_master_coordinator()
-            if master_coord:
-                await master_coord.client.next_track()
-                await master_coord.async_refresh()
-                await self.coordinator.async_refresh()
-            else:
-                _LOGGER.warning(
-                    "[WiiMGroup] Slave %s cannot find master to send next_track command",
-                    self.device_ip,
-                )
-        else:
-            # Solo or Master: send command
-            await self.coordinator.client.next_track()
 
-    async def async_media_previous_track(self):
-        """Handle previous track command based on role."""
-        role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
-
-        if role == "slave":
-            # Slave: propagate to master
-            master_coord = self._find_master_coordinator()
-            if master_coord:
-                await master_coord.client.previous_track()
-                await master_coord.async_refresh()
-                await self.coordinator.async_refresh()
-            else:
-                _LOGGER.warning(
-                    "[WiiMGroup] Slave %s cannot find master to send previous_track command",
-                    self.device_ip,
-                )
-        else:
-            # Solo or Master: send command
-            await self.coordinator.client.previous_track()
-
-    def _find_coordinator_by_ip(self, ip):
-        # Helper to find coordinator by IP
-        coord = find_coordinator_by_ip(self.hass, DOMAIN, ip)
-        if coord:
-            # coord.data may be None before the first successful poll
-            role = coord.data.get("role") if coord.data else None
-            multiroom = coord.data.get("multiroom", {}) if coord.data else {}
-            _LOGGER.debug(
-                "[WiiMGroup] Found coordinator for %s: role=%s, multiroom=%s, data=%s",
-                ip,
-                role,
-                multiroom,
-                coord.data,
-            )
-            return coord
-        _LOGGER.debug("[WiiMGroup] No coordinator found for IP %s (likely not yet set up)", ip)
+def get_group_master_uuid(coordinator) -> str | None:
+    """Get the UUID for the group master entity."""
+    if not coordinator.data:
         return None
 
-    def _find_master_coordinator(self):
-        """Find the coordinator for the master of this device's group."""
-        master_ip = self.coordinator.client.group_master
-        if not master_ip:
-            return None
-
-        return find_coordinator_by_ip(self.hass, DOMAIN, master_ip)
-
-    # ---------------------------------------------------------------------
-    # Helper – centralised guard so we don't repeat None checks everywhere
-    # ---------------------------------------------------------------------
-
-    def _master_status(self) -> dict:
-        """Return master's status dict or an empty one when unavailable."""
-
-        coord = self._find_coordinator_by_ip(self.device_ip)
-        if not coord or coord.data is None:
-            return {}
-        return coord.data.get("status", {})
-
-    @property
-    def available(self) -> bool:
-        """Always available - this is an always-on entity."""
-        return self.coordinator.data is not None
-
-    @property
-    def unique_id(self) -> str:
-        """Return the unique_id for this entity."""
-        return self._attr_unique_id
-
-    @property
-    def name(self) -> str:
-        """Return the name of the entity, always using the latest device name from status."""
-        if self.coordinator.data:
-            status = self.coordinator.data.get("status", {})
-            device_name = status.get("DeviceName") or status.get("device_name") or self.device_ip
-            return f"{device_name} Master"
-        # Fallback to initial name if no coordinator data
-        return self._attr_name
+    status = coordinator.data.get("status", {})
+    return status.get("uuid")

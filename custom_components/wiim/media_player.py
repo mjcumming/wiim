@@ -672,187 +672,43 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def group_members(self) -> list[str]:
-        """Return list of group member entity IDs."""
-        # Return the actual WiiM multiroom group members converted to entity IDs
-        members = []
+        """List of all member entity IDs in this group (cached for performance)."""
+        # Use cached group members from coordinator's state manager
+        cached_members = self.coordinator.get_cached_group_members()
+        if cached_members:
+            _LOGGER.debug("[WiiM] %s: Returning cached group_members: %s", self.entity_id, cached_members)
+            return cached_members
 
-        if not self.coordinator.data:
-            _LOGGER.debug("[WiiM] %s: group_members - no coordinator data", self.entity_id)
-            return members
+        # Fallback for backward compatibility (should rarely be used)
+        role = self.coordinator.get_current_role()
+        if role == "solo":
+            return []
 
-        role = self.coordinator.data.get("role", "solo")
-        _LOGGER.debug("[WiiM] %s: group_members - role=%s", self.entity_id, role)
-
-        if role == "master":
-            # For masters, include self and all slaves
-            members.append(self.entity_id)
-
-            # Add slaves
-            multiroom = self.coordinator.data.get("multiroom", {})
-            slave_list = multiroom.get("slave_list", [])
-
-            for slave in slave_list:
-                if isinstance(slave, dict):
-                    slave_ip = slave.get("ip")
-                    if slave_ip:
-                        # Find entity ID by IP address
-                        entity_id = self._find_entity_id_by_ip(slave_ip)
-                        if entity_id:
-                            members.append(entity_id)
-
-        elif role == "slave":
-            # For slaves, include self and master plus other slaves
-            master_coord = self._find_master_coordinator()
-            _LOGGER.debug(
-                "[WiiM] %s: group_members - found master_coord=%s",
-                self.entity_id,
-                master_coord.client.host if master_coord else None,
-            )
-
-            if master_coord:
-                # Add master
-                master_entity_id = self._find_entity_id_by_ip(master_coord.client.host)
-                _LOGGER.debug("[WiiM] %s: group_members - master_entity_id=%s", self.entity_id, master_entity_id)
-                if master_entity_id:
-                    members.append(master_entity_id)
-
-                # Add self
-                members.append(self.entity_id)
-
-                # Add other slaves
-                multiroom = master_coord.data.get("multiroom", {}) if master_coord.data else {}
-                slave_list = multiroom.get("slave_list", [])
-                _LOGGER.debug("[WiiM] %s: group_members - slave_list=%s", self.entity_id, slave_list)
-
-                for slave in slave_list:
-                    if isinstance(slave, dict):
-                        slave_ip = slave.get("ip")
-                        if slave_ip and slave_ip != self.coordinator.client.host:
-                            slave_entity_id = self._find_entity_id_by_ip(slave_ip)
-                            if slave_entity_id:
-                                members.append(slave_entity_id)
-            else:
-                _LOGGER.debug("[WiiM] %s: group_members - no master coordinator found", self.entity_id)
-        else:
-            # Solo device - check both HA groups and any persisted grouping state
-            ha_members = list(self.coordinator.ha_group_members) if self.coordinator.ha_group_members else []
-            _LOGGER.debug("[WiiM] %s: group_members - solo device, ha_group_members=%s", self.entity_id, ha_members)
-
-            # Also check current entity state for group_members attribute
-            entity_state = self.hass.states.get(self.entity_id)
-            if entity_state:
-                current_group_members = entity_state.attributes.get("group_members", [])
-                _LOGGER.debug(
-                    "[WiiM] %s: group_members - current entity group_members attr=%s",
-                    self.entity_id,
-                    current_group_members,
-                )
-
-                # Use the entity state group_members if available and non-empty
-                if current_group_members:
-                    members = list(current_group_members)
-                elif ha_members:
-                    # Fall back to coordinator tracking
-                    members = ha_members
-                else:
-                    # Not in any group
-                    members = []
-            elif ha_members:
-                # Entity state not available but coordinator has tracking
-                members = ha_members
-            else:
-                # Not in any group - return empty list unless we're the target of a join operation
-                # This ensures the join dialog shows the correct state
-                members = []
-
-        _LOGGER.debug("[WiiM] %s (role=%s): group_members = %s", self.entity_id, role, members)
-
-        return members
-
-    def _find_entity_id_by_ip(self, ip_address: str) -> str | None:
-        """Find the actual entity ID for a given IP address."""
-        _LOGGER.debug("[WiiM] %s: Searching for entity ID for IP %s", self.entity_id, ip_address)
-
-        # First try the standard format
-        standard_entity_id = f"media_player.wiim_{ip_address.replace('.', '_')}"
-        if self.hass.states.get(standard_entity_id):
-            _LOGGER.debug("[WiiM] %s: Found standard entity ID: %s", self.entity_id, standard_entity_id)
-            return standard_entity_id
-
-        # Try alternative naming patterns with suffixes first (common due to naming conflicts)
-        for suffix in ["_2", "_3", "_4", ""]:
-            entity_id = f"media_player.{ip_address.replace('.', '_')}{suffix}"
-            if self.hass.states.get(entity_id):
-                _LOGGER.debug("[WiiM] %s: Found entity ID with IP pattern: %s", self.entity_id, entity_id)
-                return entity_id
-
-        # Search through all WiiM entities to find the one with this IP
-        entity_registry_inst = entity_registry.async_get(self.hass)
-        for entity_entry in entity_registry_inst.entities.values():
-            if entity_entry.platform == DOMAIN and entity_entry.entity_id.startswith("media_player."):
-                entity_state = self.hass.states.get(entity_entry.entity_id)
-                if entity_state:
-                    # Check the ip_address attribute
-                    if entity_state.attributes.get("ip_address") == ip_address:
-                        _LOGGER.debug(
-                            "[WiiM] %s: Found entity by ip_address attribute: %s",
-                            self.entity_id,
-                            entity_entry.entity_id,
-                        )
-                        return entity_entry.entity_id
-
-        # Try to find by coordinator IP
-        for entry_id, entry_data in self.hass.data[DOMAIN].items():
-            if entry_id == "_group_entities":  # Skip group entities storage
-                continue
-            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
-                continue
-            coord = entry_data["coordinator"]
-            if hasattr(coord, "client") and coord.client.host == ip_address and coord.data:
-                status = coord.data.get("status", {})
-                device_name = status.get("DeviceName") or status.get("device_name") or ""
-
-                if device_name:
-                    # Convert device name to entity ID format and try various suffixes
-                    entity_id_base = f"media_player.{device_name.lower().replace(' ', '_').replace('-', '_')}"
-                    for suffix in ["", "_2", "_3", "_4"]:
-                        entity_id = f"{entity_id_base}{suffix}"
-                        if self.hass.states.get(entity_id):
-                            # Verify this entity actually corresponds to this IP
-                            entity_state = self.hass.states.get(entity_id)
-                            if entity_state and entity_state.attributes.get("ip_address") == ip_address:
-                                _LOGGER.debug("[WiiM] %s: Found entity by device name: %s", self.entity_id, entity_id)
-                                return entity_id
-
-        # Final fallback: search all media_player entities for matching IP
-        for entity_id in self.hass.states.async_entity_ids("media_player"):
-            if entity_id.startswith("media_player.") and DOMAIN in entity_id:
-                entity_state = self.hass.states.get(entity_id)
-                if entity_state and entity_state.attributes.get("ip_address") == ip_address:
-                    _LOGGER.debug("[WiiM] %s: Found entity by brute force search: %s", self.entity_id, entity_id)
-                    return entity_id
-
-        _LOGGER.debug("[WiiM] %s: No entity found for IP %s", self.entity_id, ip_address)
-        return None
+        _LOGGER.debug("[WiiM] %s: No cached members, role=%s", self.entity_id, role)
+        return [self.entity_id]
 
     @property
     def group_leader(self) -> str | None:
-        """Return the entity ID of the group leader."""
-        if not self.coordinator.data:
-            return None
+        """Entity ID of the group leader (cached for performance)."""
+        # Use cached group leader from coordinator's state manager
+        cached_leader = self.coordinator.get_cached_group_leader()
+        if cached_leader:
+            _LOGGER.debug("[WiiM] %s: Returning cached group_leader: %s", self.entity_id, cached_leader)
+            return cached_leader
 
-        role = self.coordinator.data.get("role", "solo")
-
+        # Fallback for backward compatibility
+        role = self.coordinator.get_current_role()
         if role == "master":
-            # Master device is the group leader
             return self.entity_id
         elif role == "slave":
-            # Find the master entity ID
-            master_coord = self._find_master_coordinator()
-            if master_coord:
-                return self._find_entity_id_by_ip(master_coord.client.host)
+            # Try to find master entity
+            status = self._get_effective_status()
+            master_uuid = status.get("master_uuid")
+            if master_uuid:
+                master_coord = self.coordinator.device_registry.get_device_by_uuid(master_uuid)
+                if master_coord:
+                    return f"media_player.wiim_{master_coord.client.host.replace('.', '_')}"
 
-        # Solo device or no group
         return None
 
     @property
