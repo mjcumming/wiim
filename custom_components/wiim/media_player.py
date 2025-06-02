@@ -793,15 +793,20 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def group_members(self) -> list[str]:
         """Return list of entity IDs that are currently grouped together."""
-        # Use device registry for O(1) lookup instead of expensive discovery
-        from .device_registry import get_device_registry
+        try:
+            # Use device registry for O(1) lookup instead of expensive discovery
+            from .device_registry import get_device_registry
 
-        registry = get_device_registry(self.hass)
-        members = registry.get_group_members_for_device(self.coordinator.client.host)
+            registry = get_device_registry(self.hass)
+            members = registry.get_group_members_for_device(self.coordinator.client.host)
 
-        _LOGGER.debug("[WiiM] %s: group_members property returns: %s", self.coordinator.client.host, members)
+            _LOGGER.debug("[WiiM] %s: group_members property returns: %s", self.coordinator.client.host, members)
 
-        return members
+            return members
+        except Exception as err:
+            _LOGGER.warning("[WiiM] %s: Failed to get group members: %s", self.coordinator.client.host, err)
+            # Fallback to empty list if registry access fails
+            return []
 
     @property
     def group_leader(self) -> str | None:
@@ -1164,22 +1169,33 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     # -------------------------------------------------------------------------
 
     async def async_join(self, group_members: list[str]) -> None:
-        """Join `group_members` as a group."""
+        """Join `group_members` as a group.
+
+        This method handles the Home Assistant media_player.join service.
+        The group_members parameter represents the FINAL desired group composition,
+        NOT just entities to add. This means:
+
+        - If an entity is in the current group but NOT in group_members, it will be unjoined
+        - If an entity is NOT in the current group but IS in group_members, it will be joined
+        - If group_members is empty or contains only self, the device becomes solo
+
+        This aligns with the standard HA media player grouping behavior.
+        """
         _LOGGER.info(
             "[WiiM] %s: HA native join called with group_members=%s",
             self.entity_id,
             group_members,
         )
 
-        # Get current group members to avoid adding already-grouped devices
-        current_group_members = set(self.group_members)
-        _LOGGER.debug(
+        # Get current group members to compare with desired composition
+        current_group_members = set(self.group_members) if self.group_members else set()
+        _LOGGER.info(
             "[WiiM] %s: Current group members: %s",
             self.entity_id,
-            current_group_members,
+            list(current_group_members),
         )
 
-        # Pre-validate and aggressively filter out non-WiiM entities and already-grouped devices
+        # Pre-validate and filter the requested group members
         validated_members = []
         filtered_out = []
 
@@ -1189,11 +1205,6 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         for entity_id in group_members:
             if entity_id == self.entity_id:
                 # Already added above, skip to avoid duplicates
-                continue
-
-            # Skip if already in the current group
-            if entity_id in current_group_members:
-                filtered_out.append(f"{entity_id} (already in group)")
                 continue
 
             # Filter out group master entities (virtual entities that can't be joined)
@@ -1248,23 +1259,70 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 filtered_out,
             )
 
+        # Convert to sets for comparison
+        desired_group_members = set(validated_members)
+
         _LOGGER.info(
-            "[WiiM] %s: Valid WiiM group members after filtering: %s",
+            "[WiiM] %s: Desired group members: %s",
             self.entity_id,
-            validated_members,
+            list(desired_group_members),
         )
 
-        if len(validated_members) <= 1:
-            _LOGGER.info("[WiiM] %s: Only self in group, ensuring device is solo", self.entity_id)
+        # Determine which entities need to be unjoined (in current group but not in desired group)
+        entities_to_unjoin = current_group_members - desired_group_members
+        if entities_to_unjoin:
+            _LOGGER.info(
+                "[WiiM] %s: Entities to unjoin (no longer selected): %s",
+                self.entity_id,
+                list(entities_to_unjoin),
+            )
+
+            # Unjoin entities that should no longer be in the group
+            await self._unjoin_entities(entities_to_unjoin)
+
+        # Check if we should create a new group or go solo
+        if len(desired_group_members) <= 1:
+            _LOGGER.info("[WiiM] %s: Only self in desired group, ensuring device is solo", self.entity_id)
             if self.coordinator.client.is_slave or self.coordinator.client.is_master:
                 await self.async_unjoin()
             return
 
-        # Use WiiM-specific multiroom grouping
-        await self._create_wiim_multiroom_group(validated_members)
+        # Determine which entities need to be added (not in current group but in desired group)
+        entities_to_add = desired_group_members - current_group_members
+        if entities_to_add:
+            _LOGGER.info(
+                "[WiiM] %s: Entities to add to group: %s",
+                self.entity_id,
+                list(entities_to_add),
+            )
+
+        # Create/modify the WiiM multiroom group with all desired members
+        await self._create_wiim_multiroom_group(list(desired_group_members))
 
         # Force refresh of all affected devices to update UI
-        await self._refresh_all_group_members_after_join(validated_members)
+        await self._refresh_all_group_members_after_join(list(desired_group_members))
+
+    async def _unjoin_entities(self, entities_to_unjoin: set[str]) -> None:
+        """Unjoin specific entities from their current group."""
+        for entity_id in entities_to_unjoin:
+            # Skip self - we'll handle our own state in the main flow
+            if entity_id == self.entity_id:
+                continue
+
+            coord = find_coordinator(self.hass, entity_id)
+            if coord is None:
+                _LOGGER.warning("[WiiM] %s: Cannot find coordinator to unjoin %s", self.entity_id, entity_id)
+                continue
+
+            try:
+                _LOGGER.info("[WiiM] %s: Unjoining %s from group", self.entity_id, entity_id)
+                if coord.client.is_master:
+                    await coord.delete_wiim_group()
+                else:
+                    await coord.leave_wiim_group()
+                await coord.async_request_refresh()
+            except Exception as err:
+                _LOGGER.error("[WiiM] %s: Failed to unjoin %s: %s", self.entity_id, entity_id, err)
 
     async def async_unjoin(self) -> None:
         """Remove this player from any group."""
