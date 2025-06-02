@@ -589,6 +589,11 @@ class WiiMGroupMediaPlayer(MediaPlayerEntity):
         return self.coordinator.data is not None
 
     @property
+    def unique_id(self) -> str:
+        """Return the unique_id for this entity."""
+        return self._attr_unique_id
+
+    @property
     def name(self) -> str:
         """Return the name of the entity, always using the latest device name from status."""
         if self.coordinator.data:

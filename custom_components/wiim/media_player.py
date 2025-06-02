@@ -80,6 +80,9 @@ async def async_setup_entry(
     """Set up WiiM media player from a config entry."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
+    # Check for and clean up stale entities to prevent "_2" suffix issues
+    await _cleanup_stale_entities(hass, coordinator)
+
     entity = WiiMMediaPlayer(coordinator)
     async_add_entities([entity])
 
@@ -88,6 +91,38 @@ async def async_setup_entry(
 
     # Group entity management (existing logic preserved)
     await _setup_group_entities(hass, async_add_entities, config_entry)
+
+
+async def _cleanup_stale_entities(hass: HomeAssistant, coordinator: WiiMCoordinator) -> None:
+    """Clean up stale entities that might cause naming conflicts."""
+    entity_registry = hass.helpers.entity_registry.async_get(hass)
+    device_registry = hass.helpers.device_registry.async_get(hass)
+
+    # Find device by host IP
+    device_identifiers = {(DOMAIN, coordinator.client.host)}
+    device = device_registry.async_get_device(identifiers=device_identifiers)
+
+    if device:
+        # Find all entities for this device
+        entities = hass.helpers.entity_registry.async_entries_for_device(entity_registry, device.id)
+
+        for entity_entry in entities:
+            # Check if entity is stale (not available or restored from state)
+            entity_state = hass.states.get(entity_entry.entity_id)
+
+            if (
+                entity_state is None
+                or entity_state.state in ("unavailable", "unknown")
+                or entity_state.attributes.get("restored", False)
+            ):
+                # Check if this is a WiiM media player entity that looks stale
+                if (
+                    entity_entry.entity_id.startswith("media_player.")
+                    and entity_entry.platform == DOMAIN
+                    and ("_2" in entity_entry.entity_id or "_3" in entity_entry.entity_id)
+                ):
+                    _LOGGER.info("[WiiM] Removing stale entity %s to prevent naming conflicts", entity_entry.entity_id)
+                    entity_registry.async_remove(entity_entry.entity_id)
 
 
 def _register_services(platform) -> None:
@@ -168,6 +203,16 @@ def _register_services(platform) -> None:
         {vol.Optional("i_understand_this_removes_all_wiim_entities", default=False): bool},
         "async_nuclear_reset_entities",
     )
+    platform.async_register_entity_service(
+        "cleanup_entity_naming_conflicts",
+        {vol.Optional("dry_run", default=True): bool},
+        "async_cleanup_entity_naming_conflicts",
+    )
+    platform.async_register_entity_service(
+        "refresh_group_states",
+        {},
+        "async_refresh_group_states",
+    )
 
     # Group management services
     platform.async_register_entity_service(
@@ -200,8 +245,88 @@ async def _setup_group_entities(
     if not hasattr(hass.data[DOMAIN], "_group_entities"):
         hass.data[DOMAIN]["_group_entities"] = {}
 
-    # ... (group entity management logic would go here)
-    # For now, keeping this as a TODO to focus on the main refactoring
+    # Import the group media player class
+    from .group_media_player import WiiMGroupMediaPlayer
+
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+
+    # Create group entity only if this device is a master with slaves
+    if coordinator.data and coordinator.data.get("role") == "master":
+        multiroom = coordinator.data.get("multiroom", {})
+        slave_list = multiroom.get("slave_list", [])
+
+        if slave_list:  # Only create group entity if there are actual slaves
+            device_ip = coordinator.client.host
+            group_entity_id = f"wiim_group_{device_ip.replace('.', '_')}"
+
+            # Avoid duplicate group entities
+            if group_entity_id not in hass.data[DOMAIN]["_group_entities"]:
+                group_entity = WiiMGroupMediaPlayer(hass, coordinator, device_ip)
+                async_add_entities([group_entity])
+                hass.data[DOMAIN]["_group_entities"][group_entity_id] = group_entity
+
+                _LOGGER.info("[WiiM] Created group entity for master %s with %d slaves", device_ip, len(slave_list))
+
+
+async def _manage_group_entities(
+    hass: HomeAssistant, coordinator: WiiMCoordinator, previous_role: str | None, new_role: str
+) -> None:
+    """Manage group entities based on role changes."""
+    from .group_media_player import WiiMGroupMediaPlayer
+
+    device_ip = coordinator.client.host
+    group_entity_id = f"wiim_group_{device_ip.replace('.', '_')}"
+
+    # Initialize the group entities registry if needed
+    if "_group_entities" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["_group_entities"] = {}
+
+    group_entities = hass.data[DOMAIN]["_group_entities"]
+
+    if new_role == "master":
+        # Device became a master - check if it has slaves
+        multiroom = coordinator.data.get("multiroom", {}) if coordinator.data else {}
+        slave_list = multiroom.get("slave_list", [])
+
+        if slave_list and group_entity_id not in group_entities:
+            # Create new group entity
+            group_entity = WiiMGroupMediaPlayer(hass, coordinator, device_ip)
+
+            # Register the entity with Home Assistant
+            entity_registry = hass.helpers.entity_registry.async_get(hass)
+            entity_registry.async_get_or_create(
+                domain="media_player",
+                platform=DOMAIN,
+                unique_id=group_entity.unique_id,
+                suggested_object_id=f"wiim_group_{device_ip.replace('.', '_')}",
+                config_entry=None,  # Will be filled automatically
+                device_id=None,  # Will be filled automatically
+            )
+
+            # Add to our tracking
+            group_entities[group_entity_id] = group_entity
+
+            _LOGGER.info(
+                "[WiiM] Created group entity %s for master %s with %d slaves",
+                group_entity.entity_id if hasattr(group_entity, "entity_id") else group_entity_id,
+                device_ip,
+                len(slave_list),
+            )
+
+    elif previous_role == "master" and new_role != "master":
+        # Device is no longer a master - remove group entity if it exists
+        if group_entity_id in group_entities:
+            group_entity = group_entities[group_entity_id]
+
+            # Remove from entity registry
+            entity_registry = hass.helpers.entity_registry.async_get(hass)
+            if hasattr(group_entity, "entity_id"):
+                entity_registry.async_remove(group_entity.entity_id)
+
+            # Remove from our tracking
+            del group_entities[group_entity_id]
+
+            _LOGGER.info("[WiiM] Removed group entity for %s (no longer master)", device_ip)
 
 
 class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
@@ -263,8 +388,18 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         elif role == "slave":
             device_name = f"{device_name} (Grouped)"
 
-        # Use UUID-based unique_id if available, otherwise fall back to IP
-        if device_uuid and device_uuid != self.coordinator.client.host:
+        # Use MAC address for unique_id if available (most stable), otherwise UUID, then IP
+        mac_address = status.get("MAC")
+        if mac_address and mac_address.lower() != "unknown":
+            # MAC address is the most stable identifier
+            self._attr_unique_id = f"wiim_{mac_address.replace(':', '').lower()}"
+            _LOGGER.debug(
+                "[WiiM] %s: Using MAC-based unique_id: %s",
+                self.coordinator.client.host,
+                self._attr_unique_id,
+            )
+        elif device_uuid and device_uuid != self.coordinator.client.host:
+            # UUID is second choice
             self._attr_unique_id = f"wiim_{device_uuid}"
             _LOGGER.debug(
                 "[WiiM] %s: Using UUID-based unique_id: %s",
@@ -272,9 +407,10 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 self._attr_unique_id,
             )
         else:
+            # IP address is fallback
             self._attr_unique_id = f"wiim_{self.coordinator.client.host.replace('.', '_')}"
             _LOGGER.debug(
-                "[WiiM] %s: Using IP-based unique_id: %s (no UUID available)",
+                "[WiiM] %s: Using IP-based unique_id: %s (no MAC/UUID available)",
                 self.coordinator.client.host,
                 self._attr_unique_id,
             )
@@ -535,13 +671,111 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def group_members(self) -> list[str]:
         """Return list of group member entity IDs."""
-        members = list(self.coordinator.ha_group_members) if self.coordinator.ha_group_members else []
+        # Return the actual WiiM multiroom group members converted to entity IDs
+        members = []
+
+        if not self.coordinator.data:
+            return members
+
+        role = self.coordinator.data.get("role", "solo")
+
+        if role == "master":
+            # For masters, include self and all slaves
+            members.append(self.entity_id)
+
+            # Add slaves
+            multiroom = self.coordinator.data.get("multiroom", {})
+            slave_list = multiroom.get("slave_list", [])
+
+            for slave in slave_list:
+                if isinstance(slave, dict):
+                    slave_ip = slave.get("ip")
+                    if slave_ip:
+                        # Convert IP to entity ID
+                        slave_entity_id = f"media_player.wiim_{slave_ip.replace('.', '_')}"
+                        # Check if entity actually exists
+                        if self.hass.states.get(slave_entity_id):
+                            members.append(slave_entity_id)
+                        else:
+                            # Try alternative naming patterns
+                            for coord in self.hass.data[DOMAIN].values():
+                                if hasattr(coord, "client") and coord.client.host == slave_ip:
+                                    # Try to find the actual entity ID
+                                    entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
+                                    for entity_entry in entity_registry.entities.values():
+                                        if (
+                                            entity_entry.platform == DOMAIN
+                                            and entity_entry.entity_id.startswith("media_player.")
+                                            and slave_ip.replace(".", "_") in entity_entry.entity_id
+                                        ):
+                                            members.append(entity_entry.entity_id)
+                                            break
+                                    break
+
+        elif role == "slave":
+            # For slaves, include self and master plus other slaves
+            master_coord = self._find_master_coordinator()
+            if master_coord:
+                # Add master
+                master_entity_id = f"media_player.wiim_{master_coord.client.host.replace('.', '_')}"
+                if self.hass.states.get(master_entity_id):
+                    members.append(master_entity_id)
+
+                # Add self
+                members.append(self.entity_id)
+
+                # Add other slaves
+                multiroom = master_coord.data.get("multiroom", {}) if master_coord.data else {}
+                slave_list = multiroom.get("slave_list", [])
+
+                for slave in slave_list:
+                    if isinstance(slave, dict):
+                        slave_ip = slave.get("ip")
+                        if slave_ip and slave_ip != self.coordinator.client.host:
+                            slave_entity_id = f"media_player.wiim_{slave_ip.replace('.', '_')}"
+                            if self.hass.states.get(slave_entity_id):
+                                members.append(slave_entity_id)
+        else:
+            # Solo device - only return self if explicitly added to an HA group
+            ha_members = list(self.coordinator.ha_group_members) if self.coordinator.ha_group_members else []
+            if ha_members:
+                members = ha_members
+
+        _LOGGER.debug("[WiiM] %s (role=%s): group_members = %s", self.entity_id, role, members)
+
         return members
 
     @property
     def group_leader(self) -> str | None:
         """Return the entity ID of the group leader."""
-        return self.entity_id if self.coordinator.is_ha_group_leader else None
+        if not self.coordinator.data:
+            return None
+
+        role = self.coordinator.data.get("role", "solo")
+
+        if role == "master":
+            # Master device is the group leader
+            return self.entity_id
+        elif role == "slave":
+            # Find the master entity ID
+            master_coord = self._find_master_coordinator()
+            if master_coord:
+                master_entity_id = f"media_player.wiim_{master_coord.client.host.replace('.', '_')}"
+                if self.hass.states.get(master_entity_id):
+                    return master_entity_id
+                else:
+                    # Try to find the actual entity ID with alternative naming
+                    entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
+                    for entity_entry in entity_registry.entities.values():
+                        if (
+                            entity_entry.platform == DOMAIN
+                            and entity_entry.entity_id.startswith("media_player.")
+                            and master_coord.client.host.replace(".", "_") in entity_entry.entity_id
+                        ):
+                            return entity_entry.entity_id
+
+        # Solo device or no group
+        return None
 
     @property
     def entity_picture(self) -> str | None:
@@ -967,13 +1201,26 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             group_members,
         )
 
-        # Pre-validate and aggressively filter out non-WiiM entities
+        # Get current group members to avoid adding already-grouped devices
+        current_group_members = set(self.group_members)
+        _LOGGER.debug(
+            "[WiiM] %s: Current group members: %s",
+            self.entity_id,
+            current_group_members,
+        )
+
+        # Pre-validate and aggressively filter out non-WiiM entities and already-grouped devices
         validated_members = []
         filtered_out = []
 
         for entity_id in group_members:
             if entity_id == self.entity_id:
                 validated_members.append(entity_id)
+                continue
+
+            # Skip if already in the current group
+            if entity_id in current_group_members:
+                filtered_out.append(f"{entity_id} (already in group)")
                 continue
 
             # Check if entity exists and is valid
@@ -1012,7 +1259,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         # Log what was filtered out for user awareness
         if filtered_out:
             _LOGGER.info(
-                "[WiiM] %s: Filtered out non-WiiM entities: %s",
+                "[WiiM] %s: Filtered out entities: %s",
                 self.entity_id,
                 filtered_out,
             )
@@ -1024,7 +1271,7 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         )
 
         if len(validated_members) <= 1:
-            _LOGGER.info("[WiiM] %s: No valid WiiM group members found, ensuring device is solo", self.entity_id)
+            _LOGGER.info("[WiiM] %s: No valid new WiiM group members found, ensuring device is solo", self.entity_id)
             if self.coordinator.client.is_slave or self.coordinator.client.is_master:
                 await self.async_unjoin()
             return
@@ -1137,6 +1384,73 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     async def async_nuclear_reset_entities(self, i_understand_this_removes_all_wiim_entities: bool = False) -> None:
         """Delegate to diagnostic service."""
         await WiiMDiagnosticServices.nuclear_reset_entities(self, i_understand_this_removes_all_wiim_entities)
+
+    async def async_cleanup_entity_naming_conflicts(self, dry_run: bool = True) -> None:
+        """Clean up entity naming conflicts like '_2' suffixes."""
+        entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
+
+        conflicts_found = []
+        entities_to_remove = []
+
+        # Find all WiiM entities in the registry
+        for entity_entry in entity_registry.entities.values():
+            if entity_entry.platform != DOMAIN:
+                continue
+
+            if entity_entry.entity_id.startswith("media_player.") and (
+                "_2" in entity_entry.entity_id or "_3" in entity_entry.entity_id
+            ):
+                # Check if entity is stale
+                entity_state = self.hass.states.get(entity_entry.entity_id)
+
+                if (
+                    entity_state is None
+                    or entity_state.state in ("unavailable", "unknown")
+                    or entity_state.attributes.get("restored", False)
+                ):
+                    conflicts_found.append(entity_entry.entity_id)
+                    entities_to_remove.append(entity_entry.entity_id)
+
+        _LOGGER.info(
+            "[WiiM] Entity naming conflict cleanup - Found %d conflicted entities: %s%s",
+            len(conflicts_found),
+            conflicts_found,
+            " (DRY RUN - no changes made)" if dry_run else "",
+        )
+
+        if not dry_run:
+            for entity_id in entities_to_remove:
+                entity_registry.async_remove(entity_id)
+                _LOGGER.info("[WiiM] Removed conflicted entity: %s", entity_id)
+
+        # Return summary
+        return {
+            "conflicts_found": len(conflicts_found),
+            "entities": conflicts_found,
+            "dry_run": dry_run,
+            "action_taken": "removed" if not dry_run else "none",
+        }
+
+    async def async_refresh_group_states(self) -> None:
+        """Refresh group states for all WiiM devices to fix grouping issues."""
+        _LOGGER.info("[WiiM] %s: Manual group state refresh requested", self.entity_id)
+
+        # Refresh all WiiM coordinators
+        refreshed_devices = []
+        for coord in self.hass.data[DOMAIN].values():
+            if hasattr(coord, "client"):
+                try:
+                    await coord.async_request_refresh()
+                    refreshed_devices.append(coord.client.host)
+                except Exception as err:
+                    _LOGGER.warning("[WiiM] Failed to refresh coordinator %s: %s", coord.client.host, err)
+
+        # Force update all group member states
+        await self._update_all_group_member_states()
+
+        _LOGGER.info("[WiiM] %s: Refreshed %d devices: %s", self.entity_id, len(refreshed_devices), refreshed_devices)
+
+        return {"refreshed_devices": len(refreshed_devices), "devices": refreshed_devices}
 
     async def async_create_group_with_members(self, group_members: list[str]) -> None:
         """Delegate to group service."""
@@ -1264,6 +1578,32 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     await master_coord.async_request_refresh()
                 except Exception:
                     pass
+
+        # Always update all coordinators to ensure group state consistency
+        await self._update_all_group_member_states()
+
+    async def _update_all_group_member_states(self) -> None:
+        """Update state for all members of the current group to ensure UI consistency."""
+        group_members = self.group_members
+
+        for member_entity_id in group_members:
+            # Find the coordinator for this entity
+            member_coord = find_coordinator(self.hass, member_entity_id)
+            if member_coord:
+                try:
+                    # Trigger coordinator refresh and state update
+                    await member_coord.async_request_refresh()
+                    # Also trigger entity state update
+                    entity = self.hass.states.get(member_entity_id)
+                    if entity:
+                        # Force entity to update its state attributes
+                        self.hass.async_create_task(
+                            self.hass.states.async_set(
+                                member_entity_id, entity.state, entity.attributes, force_update=True
+                            )
+                        )
+                except Exception as err:
+                    _LOGGER.debug("[WiiM] Failed to update group member %s: %s", member_entity_id, err)
 
     async def _create_wiim_multiroom_group(self, group_members: list[str]) -> None:
         """Create a proper WiiM multiroom group."""

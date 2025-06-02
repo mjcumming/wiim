@@ -11,13 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
-from .const import (
-    ATTR_GROUP_LEADER,
-    ATTR_GROUP_MEMBERS,
-    CONF_HOST,
-    DEFAULT_POLL_INTERVAL,
-    DOMAIN,
-)
+from .const import CONF_HOST, DEFAULT_POLL_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -332,6 +326,21 @@ class WiiMCoordinator(DataUpdateCoordinator):
             elif multiroom.get("slave_list"):
                 role = "master"
 
+            # Check for role changes and trigger group entity management
+            previous_role = None
+            if self.data and isinstance(self.data, dict):
+                previous_role = self.data.get("role")
+
+            if previous_role != role:
+                _LOGGER.debug(
+                    "[WiiM] %s: Role changed from %s to %s - triggering group entity update",
+                    self.client.host,
+                    previous_role,
+                    role,
+                )
+                # Schedule group entity update on next HA loop iteration
+                self.hass.async_create_task(self._handle_role_change(previous_role, role))
+
             # Update group registry
             self._update_group_registry(status, multiroom)
 
@@ -495,7 +504,7 @@ class WiiMCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("[WiiM] _update_group_registry: group_info=%s", group_info)
 
     def _update_ha_group_status(self) -> None:
-        """Update Home Assistant group status."""
+        """Update Home Assistant group status to reflect WiiM multiroom groups."""
         entity_id = f"media_player.wiim_{self.client._host.replace('.', '_')}"
         entity = self.hass.states.get(entity_id)
 
@@ -516,18 +525,100 @@ class WiiMCoordinator(DataUpdateCoordinator):
         # If entity is found, reset the flag so it would log again if it disappears later
         self._logged_entity_not_found_for_ha_group = False
 
-        group_members = entity.attributes.get(ATTR_GROUP_MEMBERS, [])
-        group_leader = entity.attributes.get(ATTR_GROUP_LEADER)
+        # Determine group status based on WiiM multiroom data
+        role = self.data.get("role", "solo") if self.data else "solo"
+        group_members = []
+        group_leader = None
+
+        if role == "master":
+            # For masters, include self and all slaves
+            group_members.append(entity_id)
+            group_leader = entity_id
+
+            # Add slaves
+            multiroom = self.data.get("multiroom", {}) if self.data else {}
+            slave_list = multiroom.get("slave_list", [])
+
+            for slave in slave_list:
+                if isinstance(slave, dict):
+                    slave_ip = slave.get("ip")
+                    if slave_ip:
+                        # Convert IP to entity ID (try different patterns)
+                        slave_entity_candidates = [
+                            f"media_player.wiim_{slave_ip.replace('.', '_')}",
+                            f"media_player.{slave_ip.replace('.', '_')}",
+                        ]
+
+                        for candidate in slave_entity_candidates:
+                            if self.hass.states.get(candidate):
+                                group_members.append(candidate)
+                                break
+                        else:
+                            # Try to find by searching all WiiM entities
+                            for coord in self.hass.data.get(DOMAIN, {}).values():
+                                if hasattr(coord, "client") and coord.client.host == slave_ip:
+                                    # Found the coordinator, now find its entity
+                                    entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
+                                    for entity_entry in entity_registry.entities.values():
+                                        if (
+                                            entity_entry.platform == DOMAIN
+                                            and entity_entry.entity_id.startswith("media_player.")
+                                            and slave_ip.replace(".", "_") in entity_entry.entity_id
+                                        ):
+                                            group_members.append(entity_entry.entity_id)
+                                            break
+                                    break
+
+        elif role == "slave":
+            # For slaves, find master and include all group members
+            master_coord = None
+            for coord in self.hass.data.get(DOMAIN, {}).values():
+                if hasattr(coord, "client") and coord.data and coord.data.get("role") == "master":
+                    # Check if this device is in the master's slave list
+                    multiroom = coord.data.get("multiroom", {})
+                    slave_list = multiroom.get("slave_list", [])
+
+                    for slave in slave_list:
+                        if isinstance(slave, dict) and slave.get("ip") == self.client.host:
+                            master_coord = coord
+                            break
+
+                    if master_coord:
+                        break
+
+            if master_coord:
+                # Found our master, build the group
+                master_entity_id = f"media_player.wiim_{master_coord.client.host.replace('.', '_')}"
+                if self.hass.states.get(master_entity_id):
+                    group_members.append(master_entity_id)
+                    group_leader = master_entity_id
+
+                # Add self
+                group_members.append(entity_id)
+
+                # Add other slaves
+                multiroom = master_coord.data.get("multiroom", {})
+                slave_list = multiroom.get("slave_list", [])
+
+                for slave in slave_list:
+                    if isinstance(slave, dict):
+                        slave_ip = slave.get("ip")
+                        if slave_ip and slave_ip != self.client.host:
+                            slave_entity_id = f"media_player.wiim_{slave_ip.replace('.', '_')}"
+                            if self.hass.states.get(slave_entity_id):
+                                group_members.append(slave_entity_id)
+
+        # Update our tracking based on WiiM group status
+        self._ha_group_members = set(group_members)
+        self._is_ha_group_leader = group_leader == entity_id
 
         _LOGGER.debug(
-            "[WiiM] Coordinator: Entity %s group_members: %s, group_leader: %s",
+            "[WiiM] Coordinator: Entity %s (role=%s) WiiM-based group_members: %s, group_leader: %s",
             entity_id,
+            role,
             group_members,
             group_leader,
         )
-
-        self._ha_group_members = set(group_members)
-        self._is_ha_group_leader = group_leader == entity_id
 
     async def _async_trigger_slave_discovery(self) -> None:
         """Start config flows for new slave IPs that HA doesn't know yet."""
@@ -764,3 +855,19 @@ class WiiMCoordinator(DataUpdateCoordinator):
             self._schedule_refresh()  # type: ignore[attr-defined]
         # Trigger an immediate refresh so listeners get up-to-date data
         await self.async_refresh()
+
+    async def _handle_role_change(self, previous_role: str | None, new_role: str) -> None:
+        """Handle role changes and trigger group entity management."""
+        try:
+            # Import here to avoid circular import
+            from .media_player import _manage_group_entities
+
+            await _manage_group_entities(self.hass, self, previous_role, new_role)
+        except Exception as err:
+            _LOGGER.warning(
+                "[WiiM] %s: Failed to handle role change from %s to %s: %s",
+                self.client.host,
+                previous_role,
+                new_role,
+                err,
+            )
