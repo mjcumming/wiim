@@ -44,9 +44,17 @@ class GroupStateManager:
         new_role = self._detect_role(status, multiroom)
         new_master_uuid = status.get("master_uuid") if new_role == "slave" else None
 
+        _LOGGER.debug(
+            "[WiiM] %s: GroupStateManager.update_from_status - detected role=%s, slaves=%s",
+            self.coordinator.client.host,
+            new_role,
+            multiroom.get("slaves", 0),
+        )
+
         # Check if state changed
         if self._current_state is None:
             # First time - initialize state
+            _LOGGER.debug("[WiiM] %s: First time state initialization", self.coordinator.client.host)
             self._current_state = GroupState(role=new_role, master_uuid=new_master_uuid)
             self._update_cached_members(new_role, multiroom, status)
             self._cache_state()
@@ -88,6 +96,13 @@ class GroupStateManager:
                             ip = ip_part.replace("_", ".")
                             previous_slaves.add(ip)
 
+            _LOGGER.debug(
+                "[WiiM] %s: Master slave comparison - current=%s, previous=%s",
+                self.coordinator.client.host,
+                current_slaves,
+                previous_slaves,
+            )
+
             if current_slaves != previous_slaves:
                 _LOGGER.debug(
                     "[WiiM] %s: Master slave list changed: %s -> %s",
@@ -98,7 +113,16 @@ class GroupStateManager:
                 self._update_cached_members(new_role, multiroom, status)
                 self._cache_state()
                 return True
+            else:
+                _LOGGER.debug(
+                    "[WiiM] %s: Master slave list unchanged, no group update needed",
+                    self.coordinator.client.host,
+                )
 
+        _LOGGER.debug(
+            "[WiiM] %s: No group state changes detected",
+            self.coordinator.client.host,
+        )
         return False
 
     def get_cached_group_members(self) -> list[str]:
@@ -145,14 +169,33 @@ class GroupStateManager:
 
             # Add slave entity IDs
             slave_list = multiroom.get("slave_list", [])
+            _LOGGER.debug(
+                "[WiiM] %s: Master building group - slave_list=%s",
+                self.coordinator.client.host,
+                slave_list,
+            )
+
             for slave in slave_list:
                 if isinstance(slave, dict) and slave.get("ip"):
                     slave_entity_id = self._find_entity_id_by_ip(slave["ip"])
                     if slave_entity_id:
                         members.append(slave_entity_id)
+                        _LOGGER.debug(
+                            "[WiiM] %s: Master added slave to group: %s (IP: %s)",
+                            self.coordinator.client.host,
+                            slave_entity_id,
+                            slave["ip"],
+                        )
 
             self._current_state.group_members = members
             self._current_state.group_leader = leader
+
+            _LOGGER.info(
+                "[WiiM] %s: Master group update complete - members=%s, leader=%s",
+                self.coordinator.client.host,
+                self._current_state.group_members,
+                leader,
+            )
 
         elif role == "slave":
             # For slaves, find master and get full group from master's perspective

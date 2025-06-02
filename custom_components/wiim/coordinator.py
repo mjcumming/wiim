@@ -498,9 +498,9 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     coord.group_state_manager._current_state = None
                     _LOGGER.debug("[WiiM] %s: Cleared cached group state for %s", self.client.host, ip)
 
-                    # Schedule async refresh to recalculate group state
-                    if ip != self.client.host:  # Don't refresh self again
-                        self.hass.async_create_task(coord.async_request_refresh())
-                        _LOGGER.debug("[WiiM] %s: Triggered refresh for group member %s", self.client.host, ip)
+                    # Always trigger refresh for group members to recalculate group state
+                    # Even for self, since cache was cleared and needs recalculation
+                    self.hass.async_create_task(coord.async_request_refresh())
+                    _LOGGER.debug("[WiiM] %s: Triggered refresh for group member %s", self.client.host, ip)
                 except Exception as err:
                     _LOGGER.debug("[WiiM] %s: Failed to trigger refresh for %s: %s", self.client.host, ip, err)
