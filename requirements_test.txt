@@ -5,7 +5,7 @@ pytest>=7.4.0
 pytest-asyncio>=0.21.0
 pytest-cov
 pytest-timeout>=2.1.0
-pytest-homeassistant-custom-component>=0.13.240
+pytest-homeassistant-custom-component==0.13.209
 
 # Test utilities
 aresponses>=2.1.6
