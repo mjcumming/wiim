@@ -794,7 +794,12 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                         return entity_entry.entity_id
 
         # Try to find by coordinator IP
-        for coord in self.hass.data[DOMAIN].values():
+        for entry_id, entry_data in self.hass.data[DOMAIN].items():
+            if entry_id == "_group_entities":  # Skip group entities storage
+                continue
+            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                continue
+            coord = entry_data["coordinator"]
             if hasattr(coord, "client") and coord.client.host == ip_address and coord.data:
                 status = coord.data.get("status", {})
                 device_name = status.get("DeviceName") or status.get("device_name") or ""
@@ -961,7 +966,12 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
         # Show all available WiiM devices for potential grouping
         available_devices = []
-        for coord in self.hass.data[DOMAIN].values():
+        for entry_id, entry_data in self.hass.data[DOMAIN].items():
+            if entry_id == "_group_entities":  # Skip group entities storage
+                continue
+            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                continue
+            coord = entry_data["coordinator"]
             if not hasattr(coord, "client") or coord.client.host == self.coordinator.client.host:
                 continue
 
@@ -1505,7 +1515,12 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
         # Refresh all WiiM coordinators
         refreshed_devices = []
-        for coord in self.hass.data[DOMAIN].values():
+        for entry_id, entry_data in self.hass.data[DOMAIN].items():
+            if entry_id == "_group_entities":  # Skip group entities storage
+                continue
+            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                continue
+            coord = entry_data["coordinator"]
             if hasattr(coord, "client"):
                 try:
                     await coord.async_request_refresh()
@@ -1616,7 +1631,13 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 "[WiiM] %s: Searching for master by slave_list (my_ip=%s, my_uuid=%s)", self.entity_id, my_ip, my_uuid
             )
 
-            for coord in self.hass.data[DOMAIN].values():
+            # Fix: properly access coordinators from hass.data structure
+            for entry_id, entry_data in self.hass.data[DOMAIN].items():
+                if entry_id == "_group_entities":  # Skip group entities storage
+                    continue
+                if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                    continue
+                coord = entry_data["coordinator"]
                 if not hasattr(coord, "client") or coord.data is None:
                     continue
                 if coord.data.get("role") != "master":
@@ -1642,8 +1663,13 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             _LOGGER.debug("[WiiM] %s: no master found by slave_list", self.entity_id)
             return None
 
-        # Search for coordinator with the master IP
-        for coord in self.hass.data[DOMAIN].values():
+        # Search for coordinator with the master IP - fix the iteration
+        for entry_id, entry_data in self.hass.data[DOMAIN].items():
+            if entry_id == "_group_entities":  # Skip group entities storage
+                continue
+            if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                continue
+            coord = entry_data["coordinator"]
             if hasattr(coord, "client") and coord.client.host == master_ip:
                 _LOGGER.debug("[WiiM] %s: found master coordinator %s", self.entity_id, master_ip)
                 return coord
@@ -1658,15 +1684,19 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         if role == "master":
             # For master, update all slaves
             for ip in self.coordinator.wiim_group_members:
-                coord = next(
-                    (c for c in self.hass.data[DOMAIN].values() if hasattr(c, "client") and c.client.host == ip),
-                    None,
-                )
-                if coord:
-                    try:
-                        await coord.async_request_refresh()
-                    except Exception:
-                        pass
+                # Fix: properly access coordinators from hass.data structure
+                for entry_id, entry_data in self.hass.data[DOMAIN].items():
+                    if entry_id == "_group_entities":  # Skip group entities storage
+                        continue
+                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                        continue
+                    coord = entry_data["coordinator"]
+                    if hasattr(coord, "client") and coord.client.host == ip:
+                        try:
+                            await coord.async_request_refresh()
+                        except Exception:
+                            pass
+                        break
         elif role == "slave":
             # For slave, update master
             master_coord = self._find_master_coordinator()
