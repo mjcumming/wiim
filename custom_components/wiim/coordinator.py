@@ -615,9 +615,21 @@ class WiiMCoordinator(DataUpdateCoordinator):
             # This preserves group state when devices temporarily show as solo due to
             # network issues or state sync delays
             entity_state = self.hass.states.get(entity_id)
+            _LOGGER.debug(
+                "[WiiM] Coordinator: Solo device %s - checking for existing group state",
+                entity_id,
+            )
+
             if entity_state:
                 current_group_members = entity_state.attributes.get("group_members", [])
                 current_group_leader = entity_state.attributes.get("group_leader")
+
+                _LOGGER.debug(
+                    "[WiiM] Coordinator: Solo device %s - current_group_members=%s, current_group_leader=%s",
+                    entity_id,
+                    current_group_members,
+                    current_group_leader,
+                )
 
                 # If the entity has group attributes, preserve them
                 if current_group_members:
@@ -632,6 +644,18 @@ class WiiMCoordinator(DataUpdateCoordinator):
                     elif group_members:
                         # If no explicit leader, the first member becomes leader
                         group_leader = group_members[0]
+
+                    _LOGGER.debug(
+                        "[WiiM] Coordinator: Solo device %s - preserved group_members=%s, group_leader=%s",
+                        entity_id,
+                        group_members,
+                        group_leader,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "[WiiM] Coordinator: Solo device %s - no existing group state to preserve",
+                        entity_id,
+                    )
 
         # Update our tracking based on WiiM group status
         self._ha_group_members = set(group_members)

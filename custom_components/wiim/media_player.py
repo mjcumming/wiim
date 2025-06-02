@@ -680,9 +680,11 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         members = []
 
         if not self.coordinator.data:
+            _LOGGER.debug("[WiiM] %s: group_members - no coordinator data", self.entity_id)
             return members
 
         role = self.coordinator.data.get("role", "solo")
+        _LOGGER.debug("[WiiM] %s: group_members - role=%s", self.entity_id, role)
 
         if role == "master":
             # For masters, include self and all slaves
@@ -743,8 +745,29 @@ class WiiMMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         else:
             # Solo device - check both HA groups and any persisted grouping state
             ha_members = list(self.coordinator.ha_group_members) if self.coordinator.ha_group_members else []
-            if ha_members:
-                # Already part of an HA group - return the group members
+            _LOGGER.debug("[WiiM] %s: group_members - solo device, ha_group_members=%s", self.entity_id, ha_members)
+
+            # Also check current entity state for group_members attribute
+            entity_state = self.hass.states.get(self.entity_id)
+            if entity_state:
+                current_group_members = entity_state.attributes.get("group_members", [])
+                _LOGGER.debug(
+                    "[WiiM] %s: group_members - current entity group_members attr=%s",
+                    self.entity_id,
+                    current_group_members,
+                )
+
+                # Use the entity state group_members if available and non-empty
+                if current_group_members:
+                    members = list(current_group_members)
+                elif ha_members:
+                    # Fall back to coordinator tracking
+                    members = ha_members
+                else:
+                    # Not in any group
+                    members = []
+            elif ha_members:
+                # Entity state not available but coordinator has tracking
                 members = ha_members
             else:
                 # Not in any group - return empty list unless we're the target of a join operation
