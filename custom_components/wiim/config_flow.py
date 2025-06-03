@@ -19,15 +19,11 @@ from .api import WiiMClient, WiiMError
 from .const import (
     CONF_DEBUG_LOGGING,
     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
-    CONF_ENABLE_EQ_CONTROLS,
-    CONF_ENABLE_GROUP_ENTITY,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
-    CONF_ENABLE_NETWORK_MONITORING,
-    CONF_POLL_INTERVAL,
-    CONF_STATUS_UPDATE_INTERVAL,
+    CONF_IDLE_UPDATE_RATE,
+    CONF_PLAYING_UPDATE_RATE,
     CONF_VOLUME_STEP,
     CONF_VOLUME_STEP_PERCENT,
-    DEFAULT_POLL_INTERVAL,
     DEFAULT_VOLUME_STEP,
     DOMAIN,
 )
@@ -132,48 +128,41 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
             # Convert user-friendly names back to internal names
             options_data = {}
 
-            # Map user-friendly field names to internal names
-            if CONF_STATUS_UPDATE_INTERVAL in user_input:
-                options_data[CONF_POLL_INTERVAL] = user_input[CONF_STATUS_UPDATE_INTERVAL]
+            # NEW: Defensive two-state polling configuration
+            if CONF_PLAYING_UPDATE_RATE in user_input:
+                options_data[CONF_PLAYING_UPDATE_RATE] = user_input[CONF_PLAYING_UPDATE_RATE]
+
+            if CONF_IDLE_UPDATE_RATE in user_input:
+                options_data[CONF_IDLE_UPDATE_RATE] = user_input[CONF_IDLE_UPDATE_RATE]
 
             # Convert volume step from percentage back to decimal
             if CONF_VOLUME_STEP_PERCENT in user_input:
                 options_data[CONF_VOLUME_STEP] = user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
 
-            # Map group entity option (keep existing internal key for compatibility)
-            if CONF_ENABLE_GROUP_ENTITY in user_input:
-                options_data["own_group_entity"] = user_input[CONF_ENABLE_GROUP_ENTITY]
-
             # Map debug logging option
             if CONF_DEBUG_LOGGING in user_input:
                 options_data["debug_logging"] = user_input[CONF_DEBUG_LOGGING]
 
-            # Map entity filtering options
+            # Essential entity filtering options only
             if CONF_ENABLE_DIAGNOSTIC_ENTITIES in user_input:
                 options_data[CONF_ENABLE_DIAGNOSTIC_ENTITIES] = user_input[CONF_ENABLE_DIAGNOSTIC_ENTITIES]
 
             if CONF_ENABLE_MAINTENANCE_BUTTONS in user_input:
                 options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[CONF_ENABLE_MAINTENANCE_BUTTONS]
 
-            if CONF_ENABLE_NETWORK_MONITORING in user_input:
-                options_data[CONF_ENABLE_NETWORK_MONITORING] = user_input[CONF_ENABLE_NETWORK_MONITORING]
-
-            if CONF_ENABLE_EQ_CONTROLS in user_input:
-                options_data[CONF_ENABLE_EQ_CONTROLS] = user_input[CONF_ENABLE_EQ_CONTROLS]
-
             return self.async_create_entry(title="", data=options_data)
 
         # Get current values and convert for display
-        current_poll_interval = self.entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
         current_volume_step = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
         current_debug_logging = self.entry.options.get("debug_logging", False)
-        current_group_entity = self.entry.options.get("own_group_entity", False)
 
-        # Entity filtering options (default most to False to reduce clutter)
-        current_diagnostic_entities = self.entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False)
+        # Defensive two-state polling options (CORE feature we just implemented)
+        current_playing_rate = self.entry.options.get(CONF_PLAYING_UPDATE_RATE, 1)
+        current_idle_rate = self.entry.options.get(CONF_IDLE_UPDATE_RATE, 5)
+
+        # Essential entity filtering (keep minimal)
         current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, True)
-        current_network_monitoring = self.entry.options.get(CONF_ENABLE_NETWORK_MONITORING, False)
-        current_eq_controls = self.entry.options.get(CONF_ENABLE_EQ_CONTROLS, False)
+        current_diagnostic_entities = self.entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False)
 
         # Convert volume step from decimal to percentage for user display
         volume_step_percent = int(current_volume_step * 100)
@@ -181,17 +170,17 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Optional(
-                    CONF_STATUS_UPDATE_INTERVAL,
-                    default=current_poll_interval,
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
+                    CONF_PLAYING_UPDATE_RATE,
+                    default=current_playing_rate,
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=5)),
+                vol.Optional(
+                    CONF_IDLE_UPDATE_RATE,
+                    default=current_idle_rate,
+                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
                 vol.Optional(
                     CONF_VOLUME_STEP_PERCENT,
                     default=volume_step_percent,
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
-                vol.Optional(
-                    CONF_ENABLE_GROUP_ENTITY,
-                    default=current_group_entity,
-                ): bool,
                 vol.Optional(
                     CONF_ENABLE_MAINTENANCE_BUTTONS,
                     default=current_maintenance_buttons,
@@ -199,14 +188,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
                     default=current_diagnostic_entities,
-                ): bool,
-                vol.Optional(
-                    CONF_ENABLE_NETWORK_MONITORING,
-                    default=current_network_monitoring,
-                ): bool,
-                vol.Optional(
-                    CONF_ENABLE_EQ_CONTROLS,
-                    default=current_eq_controls,
                 ): bool,
                 vol.Optional(
                     CONF_DEBUG_LOGGING,

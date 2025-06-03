@@ -1,18 +1,18 @@
-from __future__ import annotations
-
 """Core data layer for WiiM integration."""
+
+from __future__ import annotations
 
 import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant
+from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.components.media_player import MediaPlayerState
 
 from .const import DOMAIN
 
@@ -24,8 +24,8 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = [
     "WiimData",
     "Speaker",
-    "async_get_or_create_data",
-    "async_get_or_create_speaker",
+    "get_wiim_data",
+    "get_or_create_speaker",
 ]
 
 
@@ -96,7 +96,7 @@ class Speaker:
         dev_reg = dr.async_get(self.hass)
         identifiers = {(DOMAIN, self.uuid)}
 
-        device_entry = dev_reg.async_get_or_create(
+        dev_reg.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers=identifiers,
             manufacturer="WiiM",
@@ -179,7 +179,6 @@ class Speaker:
         Returns list with master first (HA convention), then all slaves.
         Returns empty list if not in a group.
         """
-        data = get_wiim_data(self.hass)
         entity_ids = []
 
         if self.role == "master":

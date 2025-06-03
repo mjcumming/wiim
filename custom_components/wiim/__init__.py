@@ -14,9 +14,7 @@ from . import config_flow  # noqa: F401
 from .api import WiiMClient
 from .const import (
     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
-    CONF_ENABLE_EQ_CONTROLS,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
-    CONF_ENABLE_NETWORK_MONITORING,
     CONF_POLL_INTERVAL,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
@@ -29,15 +27,12 @@ _LOGGER = logging.getLogger(__name__)
 # Core platforms that are always enabled
 CORE_PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,  # Always enabled - core functionality
-    Platform.NUMBER,  # Always enabled - volume step configuration
+    Platform.SENSOR,  # Always enabled - role sensor is essential for multiroom
 ]
 
-# Optional platforms based on user configuration
+# Essential optional platforms based on user configuration
 OPTIONAL_PLATFORMS: dict[str, Platform] = {
     CONF_ENABLE_MAINTENANCE_BUTTONS: Platform.BUTTON,
-    CONF_ENABLE_DIAGNOSTIC_ENTITIES: Platform.SENSOR,
-    CONF_ENABLE_NETWORK_MONITORING: Platform.BINARY_SENSOR,
-    CONF_ENABLE_EQ_CONTROLS: Platform.SWITCH,
 }
 
 
@@ -77,6 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = WiiMCoordinator(
         hass,
         client,
+        entry=entry,
         poll_interval=entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
     )
 

@@ -773,28 +773,24 @@ This cleanup work represents the final step in achieving a completely clean, Son
 
 ### **Overview**
 
-The WiiM integration implements smart entity filtering to avoid overwhelming users with unnecessary diagnostic entities while still providing advanced functionality when needed.
+The WiiM integration implements **essential-only entity filtering** to avoid overwhelming users while providing necessary functionality.
 
 ### **Platform Categories**
 
-| Category        | Default   | Description              | Platforms                      |
-| --------------- | --------- | ------------------------ | ------------------------------ |
-| **Core**        | Always On | Essential functionality  | `media_player`, `number`       |
-| **Maintenance** | On        | Device management        | `button`                       |
-| **Diagnostic**  | Off       | Advanced troubleshooting | `sensor` (advanced)            |
-| **Network**     | Off       | Network monitoring       | `sensor` (IP), `binary_sensor` |
-| **Audio**       | Off       | Audio feature controls   | `switch` (EQ)                  |
+| Category        | Default   | Description              | Platforms                 |
+| --------------- | --------- | ------------------------ | ------------------------- |
+| **Core**        | Always On | Essential functionality  | `media_player`, `number`  |
+| **Maintenance** | On        | Device management        | `button`                  |
+| **Diagnostic**  | Off       | Advanced troubleshooting | `sensor` (essential only) |
 
 ### **Configuration Options**
 
 Users control entity creation through **Settings → Configure** for each device:
 
 ```python
-# Configuration constants
+# Essential configuration constants
 CONF_ENABLE_MAINTENANCE_BUTTONS = "enable_maintenance_buttons"    # Default: True
 CONF_ENABLE_DIAGNOSTIC_ENTITIES = "enable_diagnostic_entities"    # Default: False
-CONF_ENABLE_NETWORK_MONITORING = "enable_network_monitoring"      # Default: False
-CONF_ENABLE_EQ_CONTROLS = "enable_eq_controls"                    # Default: False
 ```
 
 ### **Platform Implementation**
@@ -812,26 +808,23 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     # Always create essential sensors
     entities.append(WiiMRoleSensor(speaker))  # Most useful for users
 
-    # Optional sensors based on user preferences
-    if entry.options.get(CONF_ENABLE_NETWORK_MONITORING, False):
-        entities.append(WiiMIPSensor(speaker))
-
+    # Optional diagnostic sensors based on user preferences
     if entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False):
         entities.extend([
-            WiiMActivitySensor(speaker),
+            WiiMPollingStateSensor(speaker),
             WiiMPollingIntervalSensor(speaker),
         ])
 ```
 
 ### **Entity Reduction Results**
 
-| **Before**                                | **After**                        |
-| ----------------------------------------- | -------------------------------- |
-| 15 entities per device                    | 3 entities by default            |
-| All diagnostic entities visible           | Hidden by default                |
-| Internal polling controls exposed         | Removed entirely                 |
-| Redundant sensors (playing, group active) | Removed                          |
-| Manual refresh button                     | Removed (internal functionality) |
+| **Before**                               | **After**                         |
+| ---------------------------------------- | --------------------------------- |
+| 15+ entities per device                  | 3 entities by default             |
+| Complex entity filtering with 5+ options | 2 simple options                  |
+| Network monitoring entities              | Removed (specialized use case)    |
+| EQ control entities                      | Removed (device inconsistent)     |
+| Group control entities                   | Removed (handled by media_player) |
 
 ### **Integration Setup with Filtering**
 
@@ -844,8 +837,6 @@ CORE_PLATFORMS = [Platform.MEDIA_PLAYER, Platform.NUMBER]
 OPTIONAL_PLATFORMS = {
     CONF_ENABLE_MAINTENANCE_BUTTONS: Platform.BUTTON,
     CONF_ENABLE_DIAGNOSTIC_ENTITIES: Platform.SENSOR,
-    CONF_ENABLE_NETWORK_MONITORING: Platform.BINARY_SENSOR,
-    CONF_ENABLE_EQ_CONTROLS: Platform.SWITCH,
 }
 
 def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
@@ -856,4 +847,4 @@ def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
     return platforms
 ```
 
-This approach ensures only needed platforms are loaded, reducing resource usage and entity clutter.
+This approach ensures only essential platforms are loaded, reducing resource usage and entity clutter.

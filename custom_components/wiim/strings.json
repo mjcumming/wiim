@@ -24,15 +24,13 @@
     "step": {
       "init": {
         "title": "⚙️ WiiM Device Settings",
-        "description": "Fine-tune how your WiiM device works with Home Assistant:",
+        "description": "Configure essential device settings:",
         "data": {
-          "status_update_interval": "🔄 Update Frequency (seconds)",
+          "playing_update_rate": "🎵 Playing Update Rate (seconds)",
+          "idle_update_rate": "💤 Idle Update Rate (seconds)",
           "volume_step_percent": "🔊 Volume Step Size (%)",
-          "enable_group_entity": "👥 Group Controls",
           "enable_maintenance_buttons": "🔧 Maintenance Buttons",
           "enable_diagnostic_entities": "📊 Diagnostic Sensors",
-          "enable_network_monitoring": "🌐 Network Monitoring",
-          "enable_eq_controls": "🎚️ Equalizer Controls",
           "debug_logging": "🐛 Debug Mode"
         }
       }

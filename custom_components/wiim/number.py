@@ -14,8 +14,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .entity import WiimEntity
 from .data import Speaker
+from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,20 +27,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up WiiM number entities from a config entry.
 
-    Creates configurable numeric controls for device settings and performance
-    optimization. All entities integrate with the Speaker architecture for
-    consistent state management.
+    Currently no number entities are created - volume step is handled
+    in the device configuration menu only to avoid duplication.
     """
     speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
 
-    # Only create Volume Step - polling interval is handled in options menu
-    entities = [
-        WiiMVolumeStepNumber(speaker),
-        # Removed WiiMPollingIntervalNumber - redundant with options menu
-    ]
+    # NO entities created - volume step is config-only
+    entities = []
 
     async_add_entities(entities)
-    _LOGGER.info("Created %d number entities for %s", len(entities), speaker.name)
+    _LOGGER.info("Number platform setup complete for %s (no entities - config-only)", speaker.name)
 
 
 class WiiMVolumeStepNumber(WiimEntity, NumberEntity):

@@ -36,6 +36,7 @@ async def async_setup_entry(
 class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     """WiiM media player - thin wrapper around Speaker."""
 
+    _attr_has_entity_name = True  # Use device name for clean entity IDs
     _attr_supported_features = (
         MediaPlayerEntityFeature.PLAY
         | MediaPlayerEntityFeature.PAUSE
@@ -51,8 +52,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def __init__(self, speaker: Speaker) -> None:
         """Initialize the media player."""
         super().__init__(speaker)
-        self._attr_unique_id = speaker.uuid
-        self._attr_name = speaker.name
+        self._attr_unique_id = speaker.uuid  # Internal tracking
+        # Don't set _attr_name - let HA use device name for entity_id
 
     # State properties (delegate to speaker)
     @property
@@ -233,13 +234,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             "coordinator_ip": self.speaker.coordinator.client.host,
         }
 
-        # Add smart polling info if available
-        smart_polling = self.speaker.coordinator.data.get("smart_polling", {})
-        if smart_polling:
+        # Add defensive polling info if available
+        polling_info = self.speaker.coordinator.data.get("polling", {})
+        if polling_info:
             attrs.update(
                 {
-                    "activity_level": smart_polling.get("activity_level"),
-                    "polling_interval": smart_polling.get("polling_interval"),
+                    "is_playing": polling_info.get("is_playing"),
+                    "polling_interval": polling_info.get("interval"),
+                    "api_capabilities": polling_info.get("api_capabilities", {}),
                 }
             )
 

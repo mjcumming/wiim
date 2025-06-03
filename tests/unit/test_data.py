@@ -65,15 +65,17 @@ class TestSpeaker:
         assert wiim_speaker.available is True
 
     @pytest.mark.asyncio
-    async def test_populate_device_info(self, wiim_speaker, mock_wiim_device_registry):
+    async def test_populate_device_info(self, wiim_speaker):
         """Test device info population."""
-        with patch("custom_components.wiim.data.DeviceInfo") as mock_device_info:
-            mock_device_info.return_value = {"test": "device_info"}
+        # Test that device properties are populated from coordinator data
+        await wiim_speaker._populate_device_info()
 
-            await wiim_speaker._populate_device_info()
-
-            assert wiim_speaker.device_info == {"test": "device_info"}
-            mock_device_info.assert_called_once()
+        assert wiim_speaker.name == "Test WiiM"
+        assert wiim_speaker.model == "WiiM Mini"
+        assert wiim_speaker.ip == "192.168.1.100"
+        assert wiim_speaker.mac == "aa:bb:cc:dd:ee:ff".replace(":", "")
+        assert wiim_speaker.firmware == "1.0.0"
+        assert wiim_speaker.role == "solo"
 
     def test_get_playback_state(self, wiim_speaker):
         """Test playback state calculation."""

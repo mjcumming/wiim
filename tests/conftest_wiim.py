@@ -63,7 +63,16 @@ def wiim_coordinator(wiim_client):
             "status": "stop",
         },
         "multiroom": {"role": "solo", "slaves": 0},
-        "smart_polling": {"activity_level": "IDLE", "polling_interval": 30},
+        "role": "solo",
+        "polling": {
+            "interval": 5,
+            "is_playing": False,
+            "api_capabilities": {
+                "statusex_supported": True,
+                "metadata_supported": True,
+                "eq_supported": True,
+            },
+        },
     }
     coordinator.last_update_success = True
     coordinator.async_request_refresh = AsyncMock()

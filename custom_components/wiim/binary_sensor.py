@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorEntity,
     BinarySensorDeviceClass,
+    BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -71,18 +71,18 @@ class WiiMConnectivityBinarySensor(WiimEntity, BinarySensorEntity):
     def extra_state_attributes(self) -> dict[str, any]:
         """Return connectivity and health diagnostics."""
         attrs = {
-            "coordinator_available": self.speaker.coordinator.last_update_success,
-            "device_ip": self.speaker.ip,
-            "last_update_success": self.speaker.coordinator.last_update_success,
+            "ip_address": self.speaker.ip,
+            "device_uuid": self.speaker.uuid,
         }
 
-        # Add basic polling health information
-        if self.speaker.coordinator.data:
-            smart_polling = self.speaker.coordinator.data.get("smart_polling", {})
+        # Add defensive polling info if available
+        polling_info = self.speaker.coordinator.data.get("polling", {})
+        if polling_info:
             attrs.update(
                 {
-                    "activity_level": smart_polling.get("activity_level", "UNKNOWN"),
-                    "polling_interval": smart_polling.get("polling_interval"),
+                    "is_playing": polling_info.get("is_playing"),
+                    "polling_interval": polling_info.get("interval"),
+                    "api_capabilities": polling_info.get("api_capabilities", {}),
                 }
             )
 

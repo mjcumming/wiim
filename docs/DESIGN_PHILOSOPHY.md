@@ -212,49 +212,46 @@ class WiimData:
 
 ### **Configuration vs Entity Controls Philosophy**
 
-**PROBLEM**: Users confused by redundant controls in both options menu and as entities:
+**PROBLEM**: Users confused by too many complex controls and raw field names in options menu.
+
+**SOLUTION**: **Essential-only configuration** with clear user-friendly labels:
 
 ```python
-# BEFORE: Confusing duplication
-Options Menu: "Status Update Frequency" (1-60 seconds)
-Entity: "Base Polling Interval" (1-300 seconds)
-# → Users don't know which one to use!
-
-Options Menu: "enable_maintenance_buttons"
-# → Raw field names instead of user-friendly labels
-```
-
-**SOLUTION**: Clear separation of configuration vs runtime controls:
-
-```python
-# AFTER: Clean separation
+# SIMPLIFIED: Essential configuration only
 ✅ OPTIONS MENU (Device Configuration):
-- "🔄 Update Frequency" - Sets base polling interval
-- "🔊 Volume Step Size" - Sets volume increment percentage
-- "👥 Group Controls" - Enable/disable group management
-- "🔧 Maintenance Buttons" - Show/hide maintenance entities
-- "📊 Diagnostic Sensors" - Show/hide advanced debugging
+- "🎵 Playing Update Rate" - Defensive polling when music playing (1-5s)
+- "💤 Idle Update Rate" - Defensive polling when idle (5-60s)
+- "🔊 Volume Step Size" - Volume increment percentage (1-50%)
+- "🔧 Maintenance Buttons" - Show/hide device maintenance entities
+- "📊 Diagnostic Sensors" - Show/hide advanced debugging entities
+- "🐛 Debug Mode" - Enable detailed logging for troubleshooting
 
 ✅ ENTITIES (Runtime Controls):
 - Volume Step (number) - Quick runtime adjustment of volume steps
 - Reboot (button) - Device maintenance actions
 - Sync Time (button) - Device maintenance actions
-# NO polling interval entity - handled in options only
 ```
+
+**REMOVED BLOAT**:
+
+- ❌ Group entity controls (handled by media_player)
+- ❌ Network monitoring entities (specialized use case)
+- ❌ EQ control entities (device inconsistent, unreliable)
+- ❌ Complex smart polling options (replaced with simple defensive polling)
 
 **DESIGN PRINCIPLES**:
 
-1. **Options Menu** = Device configuration (requires restart to take effect)
-2. **Entities** = Runtime controls (immediate effect, frequently used)
-3. **No Duplication** = Each setting has ONE place to control it
-4. **User-Friendly Labels** = No raw field names like "enable_maintenance_buttons"
+1. **Essential Only** = Only include features most users need
+2. **No Duplication** = Each setting has ONE place to control it
+3. **User-Friendly Labels** = No raw field names, always descriptive with emoji
+4. **Defensive by Default** = Handle API inconsistencies gracefully
 
 **BENEFITS**:
 
 - ✅ **Eliminates confusion** about which control to use
-- ✅ **Reduces entity clutter** (removed redundant polling entity)
-- ✅ **Clear mental model** for users
-- ✅ **Better UX** with proper translations and labels
+- ✅ **Reduces cognitive load** (6 essential vs 8+ complex options)
+- ✅ **Better device compatibility** (defensive polling handles API failures)
+- ✅ **Professional UX** with proper translations and emoji labels
 
 ### **Polling Strategy: Simple & Reliable vs Complex & Optimized**
 
@@ -354,6 +351,139 @@ Different WiiM API endpoints have different update requirements:
 - **Track metadata**: Only when track changes
 
 This approach provides smooth user experience during playback while being efficient during idle periods.
+
+### **WiiM/LinkPlay API Inconsistencies & Polling Strategy**
+
+**CRITICAL IMPLEMENTATION DETAIL**: WiiM and LinkPlay protocols diverge significantly, requiring defensive polling strategies.
+
+**API RELIABILITY ANALYSIS**:
+
+Based on [WiiM API documentation](https://www.wiimhome.com/pdf/HTTP%20API%20for%20WiiM%20Products.pdf) vs [Arylic LinkPlay API](https://developer.arylic.com/httpapi/#multiroom-multizone):
+
+#### **Unreliable Endpoints (Handle with Graceful Fallbacks)**
+
+1. **`getMetaInfo` - INCONSISTENT ACROSS DEVICES**
+
+   ```python
+   # WiiM API shows this endpoint, but many LinkPlay devices don't support it
+   # PROBLEM: Track metadata may not be available
+   # SOLUTION: Always have fallback to basic title/artist from getPlayerStatus
+
+   async def _get_track_metadata(self):
+       try:
+           # Try WiiM-style metadata first
+           metadata = await self.client.get_meta_info()
+           if metadata and metadata.get("metaData"):
+               return metadata["metaData"]
+       except WiiMError:
+           pass  # Fall back to basic status
+
+       # Fallback: Use basic info from getPlayerStatus
+       status = await self.client.get_player_status()
+       return {
+           "title": status.get("title", "Unknown"),
+           "artist": status.get("artist", "Unknown"),
+           # No album art - not available in basic status
+       }
+   ```
+
+2. **EQ Controls - HIGHLY INCONSISTENT**
+
+   ```python
+   # EQ endpoints work differently across LinkPlay implementations
+   # Some devices: getEQ, setEQ work
+   # Other devices: No EQ support at all
+   # WiiM devices: Mix of both
+
+   # SOLUTION: Probe capability on first connection
+   async def _probe_eq_support(self):
+       try:
+           await self.client.get_eq_status()
+           self._eq_supported = True
+       except WiiMError:
+           self._eq_supported = False
+           # Never poll EQ endpoints again for this device
+   ```
+
+#### **Reliable Endpoints (Safe to Poll)**
+
+1. **`getPlayerStatus` - UNIVERSAL**
+
+   - Works across all LinkPlay devices
+   - Core playback info: play/pause/stop, volume, position
+   - **Always available** - foundation of our polling
+
+2. **`getStatusEx` - WiiM SPECIFIC**
+   - WiiM enhancement of basic LinkPlay `getStatus`
+   - Device info, group status, network details
+   - **WiiM devices only** - fallback to basic `getStatus` for pure LinkPlay
+
+#### **Protocol Divergence Examples**
+
+| Feature         | WiiM API                       | LinkPlay API             | Our Strategy                          |
+| --------------- | ------------------------------ | ------------------------ | ------------------------------------- |
+| **Metadata**    | `getMetaInfo` with rich JSON   | May not exist            | Try WiiM, fallback to status fields   |
+| **EQ Controls** | `EQLoad`, `EQOn`/`EQOff`       | Device-dependent         | Probe capability first                |
+| **Group Info**  | `getStatusEx` has group fields | `multiroom:getSlaveList` | Use WiiM method, fallback to LinkPlay |
+| **Device Info** | `getStatusEx` comprehensive    | Basic `getStatus`        | Try comprehensive, fallback to basic  |
+
+#### **Defensive Polling Implementation**
+
+```python
+# Two-state polling with API capability awareness
+class WiiMCoordinator:
+    async def _async_update_data(self):
+        # ALWAYS AVAILABLE: Core playback status
+        status = await self.client.get_player_status()
+
+        # Adjust polling based on playback state
+        if status.get("status") == "play":
+            self.update_interval = timedelta(seconds=1)  # Fast when playing
+        else:
+            self.update_interval = timedelta(seconds=5)  # Slower when idle
+
+        # CONDITIONAL: Device info (try WiiM, fallback to LinkPlay)
+        if self._should_update_device_info():
+            try:
+                device_info = await self.client.get_status_ex()  # WiiM enhanced
+            except WiiMError:
+                device_info = await self.client.get_status()     # LinkPlay basic
+
+        # CONDITIONAL: Metadata (may not exist on device)
+        if self._track_changed(status) and self._metadata_supported:
+            try:
+                metadata = await self.client.get_meta_info()
+            except WiiMError:
+                self._metadata_supported = False  # Disable future attempts
+                metadata = None
+
+        # CONDITIONAL: EQ info (highly device dependent)
+        if self._eq_supported and self._should_update_eq():
+            try:
+                eq_info = await self.client.get_eq_status()
+            except WiiMError:
+                self._eq_supported = False  # Disable forever
+
+        return {"status": status, "device_info": device_info}
+```
+
+**DESIGN PRINCIPLES FOR API INCONSISTENCIES**:
+
+1. **Probe Once, Remember Forever** - Test endpoint support on first connection
+2. **Graceful Degradation** - Always have fallbacks for unreliable endpoints
+3. **Never Fail Hard** - Missing metadata/EQ shouldn't break core functionality
+4. **User Communication** - Log capability limitations for troubleshooting
+
+**DOCUMENTED LIMITATIONS**:
+
+- **Track metadata**: May not be available on pure LinkPlay devices
+- **Album artwork**: Depends on `getMetaInfo` support
+- **EQ controls**: Highly variable across device manufacturers
+- **Advanced device info**: WiiM-specific enhancements may not exist
+
+**NOTE**: Our current `api.py` already implements excellent defensive programming for these inconsistencies (see [`API_COMPATIBILITY.md`](docs/API_COMPATIBILITY.md#real-world-examples-from-our-codebase) for examples). The defensive two-state polling builds on this foundation.
+
+This approach ensures our integration works reliably across the entire LinkPlay ecosystem while taking advantage of WiiM-specific enhancements when available.
 
 ---
 

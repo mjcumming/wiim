@@ -1,16 +1,13 @@
 {
   "title": "WiiM Audio (LinkPlay)",
   "config": {
-    "flow_title": "{name}",
+    "flow_title": "Add WiiM Speaker",
     "step": {
       "user": {
-        "title": "Add WiiM Speaker",
-        "description": "Set up your WiiM or LinkPlay-compatible speaker.",
+        "title": "🎵 Add WiiM Speaker",
+        "description": "Enter your WiiM device's IP address. You can find this in your router's admin panel or the WiiM Home app under Device Settings → Network Info.",
         "data": {
-          "host": "IP Address"
-        },
-        "data_description": {
-          "host": "Enter the IP address of your WiiM speaker (e.g., 192.168.1.100)"
+          "host": "Device IP Address"
         }
       },
       "upnp": {
@@ -27,32 +24,33 @@
       }
     },
     "abort": {
-      "already_configured": "This speaker is already configured.",
-      "cannot_connect": "Unable to connect to the speaker.",
-      "unknown_error_validation": "Unknown error during speaker validation."
+      "already_configured": "This WiiM device is already configured in Home Assistant"
     },
     "error": {
-      "cannot_connect": "Failed to connect to the speaker. Check the IP address and network connection.",
-      "unknown": "Unexpected error occurred. Please try again.",
-      "already_configured": "This speaker is already configured.",
-      "no_host": "Could not determine speaker IP address."
+      "no_host": "Please enter a valid IP address",
+      "cannot_connect": "❌ Connection failed. Please check that the IP address is correct and your WiiM device is powered on and connected to the same network as Home Assistant.",
+      "unknown": "An unexpected error occurred. Please try again or check the Home Assistant logs for details."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Configure Speaker Settings",
-        "description": "Adjust settings for this WiiM speaker. Changes apply immediately without restart.",
+        "title": "⚙️ WiiM Device Settings",
+        "description": "Configure essential device settings:",
         "data": {
-          "status_update_interval": "Status Update Frequency",
-          "volume_step_percent": "Volume Button Step",
-          "enable_group_entity": "Enable Group Control",
-          "debug_logging": "Enable Debug Logging"
+          "playing_update_rate": "🎵 Playing Update Rate (seconds)",
+          "idle_update_rate": "💤 Idle Update Rate (seconds)",
+          "volume_step_percent": "🔊 Volume Step Size (%)",
+          "enable_maintenance_buttons": "🔧 Maintenance Buttons",
+          "enable_diagnostic_entities": "📊 Diagnostic Sensors",
+          "debug_logging": "🐛 Debug Mode"
         },
         "data_description": {
-          "status_update_interval": "How often to check speaker status (1-60 seconds). Lower values provide faster updates but use more resources.",
+          "playing_update_rate": "Fast polling when music is playing for smooth position updates (1-5 seconds)",
+          "idle_update_rate": "Slower polling when not playing for efficiency (5-60 seconds)",
           "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
-          "enable_group_entity": "Create a virtual group controller when this speaker acts as a multiroom master. Allows unified control of speaker groups.",
+          "enable_maintenance_buttons": "Show device maintenance buttons (reboot, sync time) for troubleshooting",
+          "enable_diagnostic_entities": "Show advanced diagnostic sensors for debugging and performance monitoring",
           "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
         }
       }

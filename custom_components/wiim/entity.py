@@ -8,7 +8,6 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN
 from .data import Speaker, get_wiim_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -18,7 +17,7 @@ class WiimEntity(Entity):
     """Base class for all WiiM entities (like SonosEntity)."""
 
     _attr_should_poll = False  # Event-driven, no polling
-    _attr_has_entity_name = True
+    _attr_has_entity_name = True  # Use device name for clean entity IDs
 
     def __init__(self, speaker: Speaker) -> None:
         """Initialize with speaker reference."""

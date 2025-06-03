@@ -1,16 +1,13 @@
 {
   "title": "WiiM Audio (LinkPlay)",
   "config": {
-    "flow_title": "{name}",
+    "flow_title": "Legg til WiiM-høyttaler",
     "step": {
       "user": {
-        "title": "Legg til WiiM høyttaler",
-        "description": "Sett opp din WiiM eller LinkPlay-kompatible høyttaler.",
+        "title": "🎵 Legg til WiiM-høyttaler",
+        "description": "Skriv inn IP-adressen til WiiM-enheten din. Du kan finne denne i ruterens administrasjonspanel eller i WiiM Home-appen under Enhetsinnstillinger → Nettverksinformasjon.",
         "data": {
-          "host": "IP-adresse"
-        },
-        "data_description": {
-          "host": "Skriv inn IP-adressen til din WiiM høyttaler (f.eks. 192.168.1.100)"
+          "host": "Enhetens IP-adresse"
         }
       },
       "upnp": {
@@ -27,32 +24,33 @@
       }
     },
     "abort": {
-      "already_configured": "Denne høyttaleren er allerede konfigurert.",
-      "cannot_connect": "Kan ikke koble til høyttaleren.",
-      "unknown_error_validation": "Ukjent feil under validering av høyttaler."
+      "already_configured": "Denne WiiM-enheten er allerede konfigurert i Home Assistant"
     },
     "error": {
-      "cannot_connect": "Kunne ikke koble til høyttaleren. Sjekk IP-adressen og nettverkstilkoblingen.",
-      "unknown": "Uventet feil oppstod. Vennligst prøv igjen.",
-      "already_configured": "Denne høyttaleren er allerede konfigurert.",
-      "no_host": "Kunne ikke bestemme høyttaler IP-adresse."
+      "no_host": "Vennligst skriv inn en gyldig IP-adresse",
+      "cannot_connect": "❌ Tilkobling mislyktes. Sjekk at IP-adressen er riktig og at WiiM-enheten din er på og koblet til samme nettverk som Home Assistant.",
+      "unknown": "En uventet feil oppstod. Prøv igjen eller sjekk Home Assistant-loggene for detaljer."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Konfigurer høyttaler innstillinger",
-        "description": "Juster innstillinger for denne WiiM høyttaleren. Endringer anvendes umiddelbart uten omstart.",
+        "title": "⚙️ WiiM-enhetsinnstillinger",
+        "description": "Konfigurer essensielle enhetsinnstillinger:",
         "data": {
-          "status_update_interval": "Status oppdateringsfrekvens",
-          "volume_step_percent": "Volumtrinn",
-          "enable_group_entity": "Aktiver gruppekontroll",
-          "debug_logging": "Aktiver feilsøkingslogging"
+          "playing_update_rate": "🎵 Oppdateringsfrekvens under avspilling (sekunder)",
+          "idle_update_rate": "💤 Oppdateringsfrekvens i hvilemodus (sekunder)",
+          "volume_step_percent": "🔊 Volumtrinnstørrelse (%)",
+          "enable_maintenance_buttons": "🔧 Vedlikeholdsknapper",
+          "enable_diagnostic_entities": "📊 Diagnosesensorer",
+          "debug_logging": "🐛 Feilsøkingsmodus"
         },
         "data_description": {
-          "status_update_interval": "Hvor ofte høyttaler status skal sjekkes (1-60 sekunder). Lavere verdier gir raskere oppdateringer men bruker mer ressurser.",
-          "volume_step_percent": "Volumendring når du bruker volum opp/ned knapper (1-50%). Mindre trinn gir finere kontroll.",
-          "enable_group_entity": "Opprett en virtuell gruppekontroller når denne høyttaleren fungerer som multirom master. Tillater enhetlig kontroll av høyttaler grupper.",
+          "playing_update_rate": "Rask polling under musikkavspilling for jevne posisjonsoppdateringer (1-5 sekunder)",
+          "idle_update_rate": "Tregere polling når ikke spiller for effektivitet (5-60 sekunder)",
+          "volume_step_percent": "Volumendring når du bruker volum opp/ned-knapper (1-50%). Mindre trinn gir finere kontroll.",
+          "enable_maintenance_buttons": "Vis enhetsvedlikeholdsknapper (omstart, tidssynkronisering) for feilsøking",
+          "enable_diagnostic_entities": "Vis avanserte diagnosesensorer for feilsøking og ytelsesovervåking",
           "debug_logging": "Aktiver detaljert logging for feilsøking. Anbefales kun ved problemer."
         }
       }

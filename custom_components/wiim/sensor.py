@@ -151,24 +151,30 @@ class WiiMActivitySensor(WiimEntity, SensorEntity):
 
     @property
     def native_value(self) -> str | None:
-        """Return the current smart polling activity level."""
+        """Return the current defensive polling state."""
         if not self.speaker.coordinator.data:
             return None
 
-        smart_polling = self.speaker.coordinator.data.get("smart_polling", {})
-        return smart_polling.get("activity_level", "UNKNOWN")
+        polling_info = self.speaker.coordinator.data.get("polling", {})
+        is_playing = polling_info.get("is_playing", False)
+        return "PLAYING" if is_playing else "IDLE"
 
     @property
     def extra_state_attributes(self) -> dict[str, any]:
-        """Return smart polling diagnostics for performance monitoring."""
+        """Return defensive polling diagnostics for performance monitoring."""
         if not self.speaker.coordinator.data:
             return {}
 
-        smart_polling = self.speaker.coordinator.data.get("smart_polling", {})
+        polling_info = self.speaker.coordinator.data.get("polling", {})
+        api_capabilities = polling_info.get("api_capabilities", {})
 
         return {
-            "polling_interval": smart_polling.get("polling_interval"),
-            "position_predicted": smart_polling.get("position_predicted", False),
+            "polling_interval": polling_info.get("interval"),
+            "playing_interval": getattr(self.speaker.coordinator, "_playing_interval", 1),
+            "idle_interval": getattr(self.speaker.coordinator, "_idle_interval", 5),
+            "statusex_supported": api_capabilities.get("statusex_supported"),
+            "metadata_supported": api_capabilities.get("metadata_supported"),
+            "eq_supported": api_capabilities.get("eq_supported"),
             "coordinator_ip": self.speaker.coordinator.client.host,
         }
 
@@ -196,14 +202,15 @@ class WiiMPollingIntervalSensor(WiimEntity, SensorEntity):
         if not self.speaker.coordinator.data:
             return None
 
-        smart_polling = self.speaker.coordinator.data.get("smart_polling", {})
-        return smart_polling.get("polling_interval")
+        polling_info = self.speaker.coordinator.data.get("polling", {})
+        return polling_info.get("interval")
 
     @property
     def extra_state_attributes(self) -> dict[str, any]:
-        """Return polling optimization diagnostics."""
+        """Return defensive polling configuration."""
         return {
-            "base_interval": getattr(self.speaker.coordinator, "_base_poll_interval", "Unknown"),
-            "smart_polling_enabled": True,
+            "playing_rate": getattr(self.speaker.coordinator, "_playing_interval", 1),
+            "idle_rate": getattr(self.speaker.coordinator, "_idle_interval", 5),
+            "defensive_polling_enabled": True,
             "coordinator_available": self.speaker.coordinator.last_update_success,
         }
