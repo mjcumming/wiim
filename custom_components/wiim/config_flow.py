@@ -18,8 +18,6 @@ from .const import (
     CONF_DEBUG_LOGGING,
     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
-    CONF_IDLE_UPDATE_RATE,
-    CONF_PLAYING_UPDATE_RATE,
     CONF_VOLUME_STEP,
     CONF_VOLUME_STEP_PERCENT,
     DEFAULT_VOLUME_STEP,
@@ -156,12 +154,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             options_data = {}
 
-            # Polling rate configuration
-            if CONF_PLAYING_UPDATE_RATE in user_input:
-                options_data[CONF_PLAYING_UPDATE_RATE] = user_input[CONF_PLAYING_UPDATE_RATE]
-            if CONF_IDLE_UPDATE_RATE in user_input:
-                options_data[CONF_IDLE_UPDATE_RATE] = user_input[CONF_IDLE_UPDATE_RATE]
-
             # Volume step: convert from percentage (UI) to decimal (internal)
             if CONF_VOLUME_STEP_PERCENT in user_input:
                 options_data[CONF_VOLUME_STEP] = user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
@@ -177,9 +169,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=options_data)
 
         # Populate form with current or default values
-        current_playing_rate = self.entry.options.get(CONF_PLAYING_UPDATE_RATE, 1)  # Default 1s
-        current_idle_rate = self.entry.options.get(CONF_IDLE_UPDATE_RATE, 5)  # Default 5s
-
         current_volume_step_decimal = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
         # Convert volume step from decimal (internal) to percentage (UI)
         volume_step_percent = int(current_volume_step_decimal * 100)
@@ -196,14 +185,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Optional(
-                    CONF_PLAYING_UPDATE_RATE,
-                    default=current_playing_rate,
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=5)),
-                vol.Optional(
-                    CONF_IDLE_UPDATE_RATE,
-                    default=current_idle_rate,
-                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
                 vol.Optional(
                     CONF_VOLUME_STEP_PERCENT,
                     default=volume_step_percent,

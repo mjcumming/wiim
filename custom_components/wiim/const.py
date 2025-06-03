@@ -5,7 +5,6 @@ including configuration keys, default values, service names, and API endpoints.
 
 Configuration:
     - Host configuration and connection settings
-    - Polling intervals and timeouts
     - Volume control parameters
     - Device-specific settings
 
@@ -48,10 +47,6 @@ CONF_VOLUME_STEP_PERCENT = "volume_step_percent"
 CONF_ENABLE_GROUP_ENTITY = "enable_group_entity"
 CONF_DEBUG_LOGGING = "debug_logging"
 
-# Defensive two-state polling configuration
-CONF_PLAYING_UPDATE_RATE = "playing_update_rate"
-CONF_IDLE_UPDATE_RATE = "idle_update_rate"
-
 # Entity filtering options
 CONF_ENABLE_DIAGNOSTIC_ENTITIES = "enable_diagnostic_entities"
 CONF_ENABLE_MAINTENANCE_BUTTONS = "enable_maintenance_buttons"
@@ -91,31 +86,6 @@ ATTR_WIFI_RSSI = "wifi_rssi"
 ATTR_WIFI_CHANNEL = "wifi_channel"
 ATTR_GROUP_ROLE = "group_role"
 ATTR_IP_ADDRESS = "ip_address"
-
-# Supported features
-SUPPORT_WIIM = (
-    "play",
-    "pause",
-    "stop",
-    "next_track",
-    "previous_track",
-    "volume_set",
-    "volume_step",
-    "volume_mute",
-    "select_source",
-    "clear_playlist",
-    "play_media",
-    "media_position",
-    "media_position_updated_at",
-    "media_duration",
-    "media_title",
-    "media_artist",
-    "media_album_name",
-    "media_playlist",
-    "shuffle_set",
-    "repeat_set",
-    "group_members",
-)
 
 # WiiM API endpoints
 # Player Controls

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry
 
 from .api import WiiMError
@@ -82,7 +83,7 @@ class MediaPlayerController:
             volume: Volume level 0.0-1.0
 
         Raises:
-            WiiMError: If volume setting fails
+            HomeAssistantError: If volume setting fails
         """
         try:
             self._logger.debug("Setting volume to %.2f for %s", volume, self.speaker.name)
@@ -98,7 +99,9 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to set volume to %.2f: %s", volume, err)
-            raise WiiMError(f"Failed to set volume: {err}") from err
+            raise HomeAssistantError(
+                "Failed to set volume to %d%% on %s: %s" % (int(volume * 100), self.speaker.name, err)
+            ) from err
 
     async def set_mute(self, mute: bool) -> None:
         """Set mute with master/slave logic.
@@ -107,7 +110,7 @@ class MediaPlayerController:
             mute: True to mute, False to unmute
 
         Raises:
-            WiiMError: If mute setting fails
+            HomeAssistantError: If mute setting fails
         """
         try:
             self._logger.debug("Setting mute to %s for %s", mute, self.speaker.name)
@@ -123,7 +126,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to set mute to %s: %s", mute, err)
-            raise WiiMError(f"Failed to set mute: {err}") from err
+            raise HomeAssistantError("Failed to set mute: %s" % err) from err
 
     async def volume_up(self, step: float | None = None) -> None:
         """Volume up with configurable step.
@@ -191,7 +194,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to start playback: %s", err)
-            raise WiiMError(f"Failed to play: {err}") from err
+            raise HomeAssistantError("Failed to play: %s" % err) from err
 
     async def pause(self) -> None:
         """Pause playback (master/slave aware)."""
@@ -207,7 +210,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to pause playback: %s", err)
-            raise WiiMError(f"Failed to pause: {err}") from err
+            raise HomeAssistantError("Failed to pause: %s" % err) from err
 
     async def stop(self) -> None:
         """Stop playback."""
@@ -223,7 +226,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to stop playback: %s", err)
-            raise WiiMError(f"Failed to stop: {err}") from err
+            raise HomeAssistantError("Failed to stop: %s" % err) from err
 
     async def next_track(self) -> None:
         """Next track (master/slave aware)."""
@@ -239,7 +242,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to skip to next track: %s", err)
-            raise WiiMError(f"Failed to skip to next track: {err}") from err
+            raise HomeAssistantError("Failed to skip to next track: %s" % err) from err
 
     async def previous_track(self) -> None:
         """Previous track (master/slave aware)."""
@@ -255,7 +258,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to skip to previous track: %s", err)
-            raise WiiMError(f"Failed to skip to previous track: {err}") from err
+            raise HomeAssistantError("Failed to skip to previous track: %s" % err) from err
 
     async def seek(self, position: float) -> None:
         """Seek to position.
@@ -270,7 +273,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to seek to position %.1f: %s", position, err)
-            raise WiiMError(f"Failed to seek: {err}") from err
+            raise HomeAssistantError("Failed to seek: %s" % err) from err
 
     def get_playback_state(self) -> MediaPlayerState:
         """Get current playback state."""
@@ -316,7 +319,9 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to select source '%s': %s", source, err)
-            raise WiiMError(f"Failed to select source: {err}") from err
+            raise HomeAssistantError(
+                "Failed to select source '%s' on %s: %s" % (source, self.speaker.name, err)
+            ) from err
 
     async def set_eq_preset(self, preset: str) -> None:
         """Set EQ preset.
@@ -330,13 +335,18 @@ class MediaPlayerController:
             # Map friendly preset names to WiiM preset IDs
             preset_id = EQ_PRESET_MAP.get(preset)
             if preset_id is None:
-                raise ValueError(f"Unknown EQ preset: {preset}")
+                raise ValueError(
+                    "Unknown EQ preset '%s' on %s. Available presets: %s"
+                    % (preset, self.speaker.name, ", ".join(EQ_PRESET_MAP.keys()))
+                )
 
             await self.speaker.coordinator.client.set_eq_preset(preset_id)
 
         except Exception as err:
             self._logger.error("Failed to set EQ preset '%s': %s", preset, err)
-            raise WiiMError(f"Failed to set EQ preset: {err}") from err
+            raise HomeAssistantError(
+                "Failed to set EQ preset '%s' on %s: %s" % (preset, self.speaker.name, err)
+            ) from err
 
     async def set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode with repeat coordination.
@@ -353,7 +363,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to set shuffle to %s: %s", shuffle, err)
-            raise WiiMError(f"Failed to set shuffle: {err}") from err
+            raise HomeAssistantError("Failed to set shuffle: %s" % err) from err
 
     async def set_repeat(self, repeat: str) -> None:
         """Set repeat mode (off/one/all).
@@ -372,13 +382,15 @@ class MediaPlayerController:
             elif repeat == "all":
                 repeat_mode = "2"
             else:
-                raise ValueError(f"Unknown repeat mode: {repeat}")
+                raise ValueError(
+                    "Unknown repeat mode '%s' on %s. Valid modes: off, one, all" % (repeat, self.speaker.name)
+                )
 
             await self.speaker.coordinator.client.set_repeat_mode(repeat_mode)
 
         except Exception as err:
             self._logger.error("Failed to set repeat to '%s': %s", repeat, err)
-            raise WiiMError(f"Failed to set repeat: {err}") from err
+            raise HomeAssistantError("Failed to set repeat: %s" % err) from err
 
     def get_source_list(self) -> list[str]:
         """Get sources (master/slave aware)."""
@@ -453,7 +465,9 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to join group: %s", err)
-            raise WiiMError(f"Failed to join group: {err}") from err
+            raise HomeAssistantError(
+                "Failed to create group with %s on %s: %s" % (", ".join(group_members), self.speaker.name, err)
+            ) from err
 
     async def leave_group(self) -> None:
         """Leave current group."""
@@ -467,7 +481,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to leave group: %s", err)
-            raise WiiMError(f"Failed to leave group: {err}") from err
+            raise HomeAssistantError("Failed to remove %s from group: %s" % (self.speaker.name, err)) from err
 
     def get_group_members(self) -> list[str]:
         """Get group member entity IDs."""
@@ -511,7 +525,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to turn on device: %s", err)
-            raise WiiMError(f"Failed to turn on: {err}") from err
+            raise HomeAssistantError("Failed to turn on: %s" % err) from err
 
     async def turn_off(self) -> None:
         """Turn device off."""
@@ -522,7 +536,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to turn off device: %s", err)
-            raise WiiMError(f"Failed to turn off: {err}") from err
+            raise HomeAssistantError("Failed to turn off: %s" % err) from err
 
     async def toggle_power(self) -> None:
         """Toggle power state."""
@@ -533,7 +547,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to toggle power: %s", err)
-            raise WiiMError(f"Failed to toggle power: {err}") from err
+            raise HomeAssistantError("Failed to toggle power: %s" % err) from err
 
     def is_powered_on(self) -> bool:
         """Get power state."""
@@ -568,59 +582,6 @@ class MediaPlayerController:
 
     # ===== MEDIA METADATA =====
 
-    async def get_media_image(self) -> tuple[bytes, str] | None:
-        """Get album artwork with SSL handling.
-
-        Returns:
-            Tuple of (image_bytes, content_type) or None if no image
-        """
-        try:
-            image_url = self.get_media_image_url()
-            if not image_url:
-                return None
-
-            self._logger.debug("Fetching media image from: %s", image_url)
-
-            # Use HA's built-in HTTP client for proper SSL handling
-            import aiohttp
-            import async_timeout
-
-            try:
-                # Create HTTP client session with SSL handling
-                async with aiohttp.ClientSession(
-                    connector=aiohttp.TCPConnector(ssl=False),  # Allow self-signed certs
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as session:
-                    async with async_timeout.timeout(10):
-                        async with session.get(image_url) as response:
-                            if response.status == 200:
-                                content_type = response.headers.get("content-type", "image/jpeg")
-                                image_data = await response.read()
-
-                                # Limit image size to prevent memory issues
-                                if len(image_data) > 5 * 1024 * 1024:  # 5MB limit
-                                    self._logger.warning("Image too large (%d bytes), skipping", len(image_data))
-                                    return None
-
-                                self._logger.debug(
-                                    "Successfully fetched image (%d bytes, %s)", len(image_data), content_type
-                                )
-                                return (image_data, content_type)
-                            else:
-                                self._logger.debug("Failed to fetch image: HTTP %d", response.status)
-                                return None
-
-            except aiohttp.ClientError as err:
-                self._logger.debug("HTTP client error fetching image: %s", err)
-                return None
-            except asyncio.TimeoutError:
-                self._logger.debug("Timeout fetching image from %s", image_url)
-                return None
-
-        except Exception as err:
-            self._logger.error("Failed to fetch media image: %s", err)
-            return None
-
     def get_media_title(self) -> str | None:
         """Get clean track title."""
         return self.speaker.get_media_title()
@@ -645,10 +606,6 @@ class MediaPlayerController:
         """Get position update timestamp."""
         return self.speaker.get_media_position_updated_at()
 
-    def get_media_image_url(self) -> str | None:
-        """Get media image URL."""
-        return self.speaker.get_media_image_url()
-
     # ===== ADVANCED FEATURES =====
 
     async def play_preset(self, preset: int) -> None:
@@ -659,7 +616,7 @@ class MediaPlayerController:
         """
         try:
             if not 1 <= preset <= 6:
-                raise ValueError(f"Preset must be 1-6, got {preset}")
+                raise ValueError("Preset must be 1-6, got %d for %s" % (preset, self.speaker.name))
 
             self._logger.debug("Playing preset %d for %s", preset, self.speaker.name)
 
@@ -667,7 +624,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to play preset %d: %s", preset, err)
-            raise WiiMError(f"Failed to play preset: {err}") from err
+            raise HomeAssistantError("Failed to play preset %d on %s: %s" % (preset, self.speaker.name, err)) from err
 
     async def play_url(self, url: str) -> None:
         """Play URL.
@@ -682,7 +639,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to play URL '%s': %s", url, err)
-            raise WiiMError(f"Failed to play URL: {err}") from err
+            raise HomeAssistantError("Failed to play URL: %s" % err) from err
 
     async def browse_media(self, media_content_type=None, media_content_id=None):
         """Browse media for presets.

@@ -367,15 +367,27 @@ class Speaker:
         return self._last_position_update
 
     def get_media_image_url(self) -> str | None:
-        """Get media image URL."""
+        """Get media image URL.
+
+        The API parser already extracts cover art URLs from many fields
+        and sets them in the 'entity_picture' field when available.
+        """
         if not self.coordinator.data:
             return None
         status = self.coordinator.data.get("status", {})
+
+        # Check entity_picture first - this is what the API parser sets
+        # when it finds cover art URLs from the device
         return (
             status.get("entity_picture")
+            or status.get("cover")
+            or status.get("cover_url")
+            or status.get("albumart")
             or status.get("album_art")
             or status.get("artwork_url")
+            or status.get("art_url")
             or status.get("thumbnail")
+            or status.get("pic_url")
         )
 
     # ===== SOURCE & AUDIO CONTROL METHODS =====
@@ -710,7 +722,7 @@ def get_speaker_from_config_entry(hass: HomeAssistant, config_entry: ConfigEntry
         return hass.data[DOMAIN][config_entry.entry_id]["speaker"]
     except KeyError as err:
         _LOGGER.error("Speaker not found for config entry %s: %s", config_entry.entry_id, err)
-        raise RuntimeError(f"Speaker not found for {config_entry.entry_id}") from err
+        raise RuntimeError("Speaker not found for %s" % config_entry.entry_id) from err
 
 
 def get_or_create_speaker(hass: HomeAssistant, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> Speaker:

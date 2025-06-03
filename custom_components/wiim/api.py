@@ -382,9 +382,9 @@ class WiiMClient:
                     continue
 
         # If we get here, all attempts failed
-        error_msg = f"Failed to communicate with WiiM device at {self.host} after trying: {', '.join(tried)}"
+        error_msg = "Failed to communicate with WiiM device at %s after trying: %s" % (self.host, ", ".join(tried))
         if last_error:
-            error_msg += f"\nLast error: {last_error}"
+            error_msg += "\nLast error: %s" % last_error
         raise WiiMConnectionError(error_msg)
 
     async def close(self) -> None:

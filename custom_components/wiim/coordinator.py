@@ -1,4 +1,4 @@
-"""WiiM coordinator for defensive two-state polling and device updates."""
+"""WiiM coordinator for fixed 5-second polling and device updates."""
 
 from __future__ import annotations
 
@@ -11,17 +11,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
-from .const import CONF_IDLE_UPDATE_RATE, CONF_PLAYING_UPDATE_RATE, DEFAULT_POLL_INTERVAL
+from .const import DEFAULT_POLL_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """WiiM coordinator with defensive two-state polling.
+    """WiiM coordinator with fixed 5-second polling.
 
-    This coordinator implements simple, reliable polling that adapts to device state:
-    - Fast polling (1s) when playing for smooth position updates
-    - Slower polling (5s) when idle for efficiency
+    This coordinator implements simple, reliable polling with fixed intervals:
+    - Fixed 5-second polling interval (HA compliant minimum)
     - Defensive programming with graceful API fallbacks
     - Never fails hard - always has fallbacks for unreliable endpoints
 
@@ -37,27 +36,18 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         client: WiiMClient,
         entry=None,
-        poll_interval: int = DEFAULT_POLL_INTERVAL,
+        poll_interval: int = 5,  # Fixed 5-second polling
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=f"WiiM {client.host}",
-            update_interval=timedelta(seconds=poll_interval),
+            update_interval=timedelta(seconds=5),  # Fixed 5-second interval
         )
         self.client = client
         self.hass = hass
         self.entry = entry
-
-        # Defensive polling configuration
-        self._playing_interval = 1  # 1 second when playing
-        self._idle_interval = 5  # 5 seconds when idle
-
-        # Load user preferences if available
-        if entry and entry.options:
-            self._playing_interval = entry.options.get(CONF_PLAYING_UPDATE_RATE, 1)
-            self._idle_interval = entry.options.get(CONF_IDLE_UPDATE_RATE, 5)
 
         # API capability flags (None = untested, True/False = tested)
         self._statusex_supported: bool | None = None
@@ -77,11 +67,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._update_count = 0
 
         _LOGGER.info(
-            "[WiiM] Defensive coordinator initialized for %s (playing=%ds, idle=%ds, initial_interval=%ds)",
+            "[WiiM] Coordinator initialized for %s with fixed 5-second polling",
             client.host,
-            self._playing_interval,
-            self._idle_interval,
-            poll_interval,
         )
 
     @property
@@ -160,27 +147,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Ensure the UUID from device_info is consistently available
             # The Speaker object will use this.
-            if "uuid" not in device_info and self.config_entry.data.get("uuid"):
+            if "uuid" not in device_info and self.entry.data.get("uuid"):
                 # If API didn't return UUID but we have it from config entry, inject for consistency
                 # This scenario should ideally be avoided by robust API client.
-                data["device_info"]["uuid"] = self.config_entry.data.get("uuid")
+                data["device_info"]["uuid"] = self.entry.data.get("uuid")
                 _LOGGER.debug("Injected UUID from config entry as API did not provide one")
 
-            # Update polling interval based on player state
-            current_play_status = player_status.get("play_status", "idle")
-            is_playing = current_play_status == "play"
-
-            # Fast polling (1s) when playing, slower (5s) when idle
-            new_interval = self._playing_interval if is_playing else self._idle_interval
-            if new_interval != self.update_interval.total_seconds():
-                _LOGGER.info(
-                    "[WiiM] %s: Update interval changed: %ds -> %ds (playing=%s)",
-                    self.client.host,
-                    self.update_interval.total_seconds(),
-                    new_interval,
-                    is_playing,
-                )
-                self.update_interval = timedelta(seconds=new_interval)
+            # Reset consecutive failures on success
+            self._consecutive_failures = 0
 
             return data
 
@@ -195,8 +169,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Simple backoff: increase interval on failures
             if self._consecutive_failures >= 3:
-                backoff_interval = min(30, self._idle_interval * 2)
+                backoff_interval = 15  # Fixed 15-second backoff
                 self.update_interval = timedelta(seconds=backoff_interval)
+            else:
+                # Reset to normal 5-second interval
+                self.update_interval = timedelta(seconds=5)
 
             raise UpdateFailed(f"Error updating WiiM device: {err}") from err
 

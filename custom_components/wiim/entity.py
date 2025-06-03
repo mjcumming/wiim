@@ -24,7 +24,7 @@ class WiimEntity(CoordinatorEntity):
         # Initialize coordinator entity with speaker's coordinator
         super().__init__(speaker.coordinator)  # Pass the coordinator instance
         self.speaker = speaker
-        self._attr_unique_id = self.speaker.uuid  # This is the crucial part
+        self._attr_unique_id = f"wiim_{self.speaker.uuid}"  # Use wiim_ prefix to avoid confusion
         self._attr_device_info = {
             "identifiers": {(DOMAIN, self.speaker.uuid)},
             "name": self.speaker.name,
@@ -84,24 +84,3 @@ class WiimEntity(CoordinatorEntity):
     def available(self) -> bool:
         """Delegate to speaker."""
         return self.speaker.available
-
-
-class WiimPollingEntity(WiimEntity):
-    """Base class for WiiM entities that require polling (like SonosPollingEntity)."""
-
-    _attr_should_poll = True
-
-    def __init__(self, speaker: Speaker) -> None:
-        """Initialize polling entity."""
-        super().__init__(speaker)
-
-    async def async_update(self) -> None:
-        """Update the entity state by requesting coordinator refresh."""
-        if not self.available:
-            return
-
-        try:
-            # Request fresh data from coordinator
-            await self.speaker.coordinator.async_request_refresh()
-        except Exception as err:
-            _LOGGER.debug("Polling update failed for %s: %s", self.entity_id, err)
