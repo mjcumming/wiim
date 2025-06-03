@@ -93,7 +93,15 @@ def bypass_get_data_fixture():
     mock_status["volume"] = 50  # Add volume as integer
 
     # Merge device data into status so device info is available
+    # Make sure project field is available for device model
     mock_status.update(MOCK_DEVICE_DATA)
+
+    # Ensure critical fields are present for device registry
+    mock_status["project"] = MOCK_DEVICE_DATA["project"]
+    mock_status["hardware"] = MOCK_DEVICE_DATA["hardware"]
+    mock_status["firmware"] = MOCK_DEVICE_DATA["firmware"]
+    mock_status["uuid"] = MOCK_DEVICE_DATA["uuid"]
+    mock_status["MAC"] = MOCK_DEVICE_DATA["MAC"]
 
     mock_coordinator_data = {
         "status": mock_status,
@@ -108,7 +116,7 @@ def bypass_get_data_fixture():
     with (
         patch(
             "custom_components.wiim.api.WiiMClient.get_status",
-            return_value=MOCK_STATUS_RESPONSE,
+            return_value=mock_status,  # Use merged status instead of original
         ),
         patch(
             "custom_components.wiim.api.WiiMClient.get_device_info",
@@ -116,7 +124,7 @@ def bypass_get_data_fixture():
         ),
         patch(
             "custom_components.wiim.api.WiiMClient.get_player_status",
-            return_value=MOCK_STATUS_RESPONSE,
+            return_value=mock_status,  # Use merged status instead of original
         ),
         patch(
             "custom_components.wiim.api.WiiMClient.get_multiroom_info",

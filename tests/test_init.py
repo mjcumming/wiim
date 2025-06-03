@@ -104,8 +104,13 @@ async def test_device_creation(hass: HomeAssistant, bypass_get_data) -> None:
     devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
     assert len(devices) >= 1
 
-    # Check device details
+    # Check device details with debug output
     device = devices[0]
+    print(f"Actual device name: '{device.name}'")
+    print(f"Expected device name: '{MOCK_DEVICE_DATA['DeviceName']}'")
+    print(f"Actual device model: '{device.model}'")
+    print(f"Expected device model: '{MOCK_DEVICE_DATA['project']}'")
+
     assert device.name == MOCK_DEVICE_DATA["DeviceName"]
     assert device.manufacturer == "WiiM"
     assert device.model == MOCK_DEVICE_DATA["project"]

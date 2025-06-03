@@ -1040,19 +1040,13 @@ class WiiMClient:
         await self._request("/httpapi.asp?command=reboot")
 
     async def sync_time(self, ts: int | None = None) -> None:
-        """Synchronise device RTC with Unix timestamp (defaults to *now*)."""
-        if ts is None:
-            ts = int(asyncio.get_running_loop().time())
+        """Sync device time with provided timestamp or current time."""
+        import time
 
-        retries = 3  # Number of retries
-        for attempt in range(retries):
-            try:
-                await self._request(f"/httpapi.asp?command=timeSync:{ts}")
-                return  # Exit if successful
-            except WiiMConnectionError as err:
-                _LOGGER.warning(f"Sync time attempt {attempt + 1} failed: {err}")
-                await asyncio.sleep(2)  # Wait before retrying
-        raise WiiMConnectionError(f"Failed to sync time after {retries} attempts.")
+        if ts is None:
+            ts = int(time.time())
+
+        await self._request(f"/httpapi.asp?command=timeSync:{ts}")
 
     async def get_meta_info(self) -> dict[str, Any]:
         """Get current track metadata including album art."""
@@ -1081,6 +1075,26 @@ class WiiMClient:
 
         encoded_url = quote(url, safe="")
         await self._request(f"{API_ENDPOINT_PLAY_PROMPT_URL}{encoded_url}")
+
+    async def send_command(self, command: str) -> dict[str, Any]:
+        """Send an arbitrary LinkPlay API command.
+
+        This method provides direct access to the LinkPlay HTTP API for
+        commands that don't have dedicated methods. Used primarily for
+        group management operations.
+
+        Args:
+            command: The LinkPlay command to send (e.g., "ConnectMasterAp:JoinGroupMaster:192.168.1.100:wifi0.0.0.0")
+
+        Returns:
+            The parsed response from the device
+
+        Example:
+            await client.send_command("multiroom:Ungroup")
+            await client.send_command("ConnectMasterAp:JoinGroupMaster:192.168.1.100:wifi0.0.0.0")
+        """
+        endpoint = f"/httpapi.asp?command={quote(command)}"
+        return await self._request(endpoint)
 
     @property
     def base_url(self) -> str:  # noqa: D401 – simple property helper

@@ -1,101 +1,98 @@
-"""Number entities to adjust polling interval and volume step per WiiM device."""
+"""WiiM number platform.
+
+Provides configurable numeric settings that leverage the Speaker architecture
+for device configuration and performance tuning.
+"""
 
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
 
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_POLL_INTERVAL, CONF_VOLUME_STEP, DEFAULT_POLL_INTERVAL, DEFAULT_VOLUME_STEP, DOMAIN
-from .coordinator import WiiMCoordinator
+from .const import DOMAIN
+from .entity import WiimEntity
+from .data import Speaker
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up number entities for a config entry."""
-    coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    entities: list[NumberEntity] = [
-        _PollIntervalNumber(coordinator, entry),
-        _VolumeStepNumber(coordinator, entry),
+    """Set up WiiM number entities from a config entry.
+
+    Creates configurable numeric controls for device settings and performance
+    optimization. All entities integrate with the Speaker architecture for
+    consistent state management.
+    """
+    speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
+
+    # Only create Volume Step - polling interval is handled in options menu
+    entities = [
+        WiiMVolumeStepNumber(speaker),
+        # Removed WiiMPollingIntervalNumber - redundant with options menu
     ]
+
     async_add_entities(entities)
+    _LOGGER.info("Created %d number entities for %s", len(entities), speaker.name)
 
 
-class _BaseWiiMNumber(CoordinatorEntity[WiiMCoordinator], NumberEntity):
-    _attr_has_entity_name = True
+class WiiMVolumeStepNumber(WiimEntity, NumberEntity):
+    """Volume step size configuration for granular volume control."""
 
-    def __init__(self, coordinator: WiiMCoordinator, entry: ConfigEntry, key: str, name: str):
-        super().__init__(coordinator)
-        self._entry = entry
-        self._key = key
-        self._attr_unique_id = f"{coordinator.client.host}-{key}"
-        self._attr_name = name
-        status = coordinator.data.get("status", {}) if isinstance(coordinator.data, dict) else {}
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.client.host)},
-            name=coordinator.friendly_name,
-            manufacturer="WiiM",
-            model=status.get("project") or status.get("hardware"),
-            sw_version=status.get("firmware"),
-            connections={("mac", status.get("MAC"))} if status.get("MAC") else set(),
-        )
-
-    def _save(self, value):
-        # Update config_entry.options atomically
-        options = dict(self._entry.options)
-        options[self._key] = value
-        self.hass.config_entries.async_update_entry(self._entry, options=options)
-
-
-class _PollIntervalNumber(_BaseWiiMNumber):
+    _attr_icon = "mdi:volume-medium"
+    _attr_mode = NumberMode.BOX
     _attr_native_min_value = 1
-    _attr_native_max_value = 60
+    _attr_native_max_value = 20
     _attr_native_step = 1
-    _attr_unit_of_measurement = "s"
+    _attr_native_unit_of_measurement = "%"
 
-    def __init__(self, coordinator: WiiMCoordinator, entry: ConfigEntry):
-        super().__init__(coordinator, entry, CONF_POLL_INTERVAL, "Polling Interval")
+    def __init__(self, speaker: Speaker) -> None:
+        """Initialize volume step number entity."""
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_volume_step"
+        self._attr_name = "Volume Step"  # Clean name without device duplication
+        self._volume_step = 5  # Default step size
 
     @property
-    def native_value(self):
-        return self._entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
+    def native_value(self) -> int:
+        """Return the current volume step size."""
+        return self._volume_step
 
-    async def async_set_native_value(self, value):
-        # Update coordinator interval immediately
-        value = int(value)
-        self.coordinator.update_interval = timedelta(seconds=value)
-        self.coordinator._base_poll_interval = value
-        self._save(value)
-        # Restart the coordinator's polling loop
-        await self.coordinator.async_stop()
-        await self.coordinator.async_start()
-        await self.coordinator.async_refresh()
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the volume step size.
 
+        This setting controls how much the volume changes when using
+        volume up/down commands. Smaller values provide finer control,
+        larger values provide quicker adjustment.
+        """
+        step_size = int(value)
 
-class _VolumeStepNumber(_BaseWiiMNumber):
-    _attr_native_min_value = 1
-    _attr_native_max_value = 50
-    _attr_native_step = 1
-    _attr_unit_of_measurement = "%"
+        try:
+            _LOGGER.info("Setting volume step to %d%% for %s", step_size, self.speaker.name)
+            self._volume_step = step_size
 
-    def __init__(self, coordinator: WiiMCoordinator, entry: ConfigEntry):
-        super().__init__(coordinator, entry, CONF_VOLUME_STEP, "Volume Step")
+            # Notify that the configuration has changed
+            self.speaker.coordinator.record_user_command("volume_step_change")
+
+            # Update the entity state
+            self.async_write_ha_state()
+
+        except Exception as err:
+            _LOGGER.error("Failed to set volume step for %s: %s", self.speaker.name, err)
+            raise
 
     @property
-    def native_value(self):
-        # Convert from internal decimal (0.01-0.5) to percentage (1-50%)
-        decimal_value = self._entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
-        return int(decimal_value * 100)
-
-    async def async_set_native_value(self, value):
-        # Convert from percentage (1-50%) to internal decimal (0.01-0.5)
-        decimal_value = float(value) / 100.0
-        self._save(decimal_value)
+    def extra_state_attributes(self) -> dict[str, any]:
+        """Return configuration guidance."""
+        return {
+            "description": "Volume change amount for up/down commands",
+            "recommended_range": "3-10%",
+            "current_setting": f"{self._volume_step}%",
+        }

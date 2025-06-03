@@ -1,34 +1,93 @@
-"""Binary sensor platform for WiiM."""
+"""WiiM binary sensor platform.
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+Provides device connectivity monitoring when network monitoring is enabled.
+Avoids redundant sensors that duplicate information available elsewhere.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from homeassistant.components.binary_sensor import (
+    BinarySensorEntity,
+    BinarySensorDeviceClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from .entity import WiiMEntity
+from .const import CONF_ENABLE_NETWORK_MONITORING, DOMAIN
+from .data import Speaker
+from .entity import WiimEntity
+
+_LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    """Setup binary_sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    async_add_entities([WiiMBinarySensor(coordinator, entry)])
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up WiiM binary sensors with smart filtering.
+
+    Only creates connectivity sensors when network monitoring is enabled.
+    Avoids redundant sensors that duplicate media_player or role sensor information.
+    """
+    speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
+    entry = hass.data[DOMAIN][config_entry.entry_id]["entry"]
+
+    entities = []
+
+    # Only create connectivity sensor when network monitoring is enabled
+    if entry.options.get(CONF_ENABLE_NETWORK_MONITORING, False):
+        entities.append(WiiMConnectivityBinarySensor(speaker))
+
+    async_add_entities(entities)
+    _LOGGER.info("Created %d binary sensor entities for %s (filtering applied)", len(entities), speaker.name)
 
 
-class WiiMBinarySensor(WiiMEntity, BinarySensorEntity):
-    """wiim binary_sensor class."""
+class WiiMConnectivityBinarySensor(WiimEntity, BinarySensorEntity):
+    """Device connectivity and health status sensor.
+
+    Only created when network monitoring is enabled.
+    Useful for monitoring device availability and network health.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_icon = "mdi:wifi"
+
+    def __init__(self, speaker: Speaker) -> None:
+        """Initialize connected status binary sensor."""
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_connected"
+        self._attr_name = "Connected"  # Clean name without device duplication
 
     @property
-    def name(self):
-        """Return the name of the binary_sensor."""
-        return "WiiM_Binary_Sensor"
+    def is_on(self) -> bool:
+        """Return true if device is connected and responding."""
+        return self.speaker.available
 
     @property
-    def device_class(self):
-        """Return the class of this binary_sensor."""
-        return None
+    def extra_state_attributes(self) -> dict[str, any]:
+        """Return connectivity and health diagnostics."""
+        attrs = {
+            "coordinator_available": self.speaker.coordinator.last_update_success,
+            "device_ip": self.speaker.ip,
+            "last_update_success": self.speaker.coordinator.last_update_success,
+        }
 
-    @property
-    def is_on(self):
-        """Return true if the binary_sensor is on."""
-        return self.coordinator.data.get("title", "") == "foo"
+        # Add basic polling health information
+        if self.speaker.coordinator.data:
+            smart_polling = self.speaker.coordinator.data.get("smart_polling", {})
+            attrs.update(
+                {
+                    "activity_level": smart_polling.get("activity_level", "UNKNOWN"),
+                    "polling_interval": smart_polling.get("polling_interval"),
+                }
+            )
+
+        # Add failure count if available
+        if hasattr(self.speaker.coordinator, "_consecutive_failures"):
+            attrs["consecutive_failures"] = getattr(self.speaker.coordinator, "_consecutive_failures", 0)
+
+        return attrs

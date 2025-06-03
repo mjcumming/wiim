@@ -32,6 +32,11 @@ from __future__ import annotations
 
 DOMAIN = "wiim"
 
+# Integration metadata
+NAME = "WiiM"
+VERSION = "1.0.0"
+ATTRIBUTION = "Integration created by the WiiM community"
+
 # Config keys
 CONF_HOST = "host"
 CONF_POLL_INTERVAL = "poll_interval"
@@ -42,6 +47,12 @@ CONF_STATUS_UPDATE_INTERVAL = "status_update_interval"
 CONF_VOLUME_STEP_PERCENT = "volume_step_percent"
 CONF_ENABLE_GROUP_ENTITY = "enable_group_entity"
 CONF_DEBUG_LOGGING = "debug_logging"
+
+# Entity filtering options
+CONF_ENABLE_DIAGNOSTIC_ENTITIES = "enable_diagnostic_entities"
+CONF_ENABLE_MAINTENANCE_BUTTONS = "enable_maintenance_buttons"
+CONF_ENABLE_NETWORK_MONITORING = "enable_network_monitoring"
+CONF_ENABLE_EQ_CONTROLS = "enable_eq_controls"
 
 # Defaults
 DEFAULT_PORT = 443  # HTTPS - like python-linkplay

@@ -5,64 +5,19 @@
     "step": {
       "user": {
         "title": "🎵 Add WiiM Speaker",
-        "description": "Let's set up your WiiM audio device! Choose how you'd like to find your speaker:\n\n{message}",
-        "data": {
-          "discovery_mode": "Setup Method"
-        },
-        "data_description": {
-          "discovery_mode": "Automatic discovery will scan your network for WiiM devices. Manual setup requires you to know your device's IP address."
-        }
-      },
-      "manual": {
-        "title": "🏠 Manual Device Setup",
-        "description": "Enter your WiiM device's IP address. You can find this in your router's admin panel or the WiiM Home app under Device Settings → Network Info.\n\n{tip}",
+        "description": "Enter your WiiM device's IP address. You can find this in your router's admin panel or the WiiM Home app under Device Settings → Network Info.",
         "data": {
           "host": "Device IP Address"
-        },
-        "data_description": {
-          "host": "Example: {example} — Make sure your device is powered on and connected to the same network as Home Assistant"
         }
-      },
-      "discovery": {
-        "title": "🔍 Found {count} WiiM Device(s)",
-        "description": "Great! We found these WiiM devices on your network. Select the one you want to add:\n\n{tip}",
-        "data": {
-          "host": "Select Your Device"
-        }
-      },
-      "no_devices_found": {
-        "title": "🔍 No Devices Found",
-        "description": "{message}\n\n{reasons}\n\n{suggestion}",
-        "data": {
-          "no_devices_manual": "Continue with manual setup"
-        },
-        "data_description": {
-          "no_devices_manual": "Click continue to enter your device's IP address manually"
-        }
-      },
-      "upnp": {
-        "title": "🎶 Select Your WiiM Speaker",
-        "description": "Choose a speaker from the discovered devices, or set up manually if yours isn't listed.",
-        "data": {
-          "host": "Available Devices"
-        }
-      },
-      "confirm": {
-        "title": "✅ Ready to Add Device",
-        "description": "Perfect! We'll now add your WiiM device to Home Assistant. It will appear in your Media tab and can be controlled through automations."
       }
     },
-    "abort": {
-      "already_configured": "🔄 This WiiM device is already set up in Home Assistant.",
-      "cannot_connect": "❌ Could not connect to your WiiM device.",
-      "no_host": "⚠️ Please provide a device IP address.",
-      "no_devices": "🔍 No WiiM devices found on your network."
-    },
     "error": {
-      "cannot_connect": "❌ Connection failed. Please check:\n• The IP address is correct\n• Your WiiM device is powered on\n• Both devices are on the same network\n• No firewall is blocking the connection",
-      "already_configured": "This WiiM device is already configured in Home Assistant. Check your Media tab or Devices & Services page.",
-      "no_devices": "🔍 No WiiM devices found automatically. This can happen if:\n• Devices are on a different network segment\n• Network discovery is disabled\n• Firewall is blocking discovery\n\nTry manual setup instead!",
+      "no_host": "Please enter a valid IP address",
+      "cannot_connect": "❌ Connection failed. Please check that the IP address is correct and your WiiM device is powered on and connected to the same network as Home Assistant.",
       "unknown": "An unexpected error occurred. Please try again or check the Home Assistant logs for details."
+    },
+    "abort": {
+      "already_configured": "This WiiM device is already configured in Home Assistant"
     }
   },
   "options": {
@@ -71,73 +26,14 @@
         "title": "⚙️ WiiM Device Settings",
         "description": "Fine-tune how your WiiM device works with Home Assistant:",
         "data": {
-          "status_update_interval": "🔄 Update Frequency",
-          "volume_step_percent": "🔊 Volume Step Size",
+          "status_update_interval": "🔄 Update Frequency (seconds)",
+          "volume_step_percent": "🔊 Volume Step Size (%)",
           "enable_group_entity": "👥 Group Controls",
+          "enable_maintenance_buttons": "🔧 Maintenance Buttons",
+          "enable_diagnostic_entities": "📊 Diagnostic Sensors",
+          "enable_network_monitoring": "🌐 Network Monitoring",
+          "enable_eq_controls": "🎚️ Equalizer Controls",
           "debug_logging": "🐛 Debug Mode"
-        },
-        "data_description": {
-          "status_update_interval": "How often to check speaker status (1-60 seconds). Lower = faster updates but more network traffic.",
-          "volume_step_percent": "Volume change when using +/- buttons (1-50%). Smaller steps = finer control.",
-          "enable_group_entity": "Create virtual group controller for multiroom setups. Enables controlling all grouped speakers together.",
-          "debug_logging": "Enable detailed logging for troubleshooting. Turn off after solving issues to reduce log size."
-        }
-      }
-    }
-  },
-  "selector": {
-    "discovery_mode": {
-      "options": {
-        "discover": "🔍 Automatic — Find devices on my network",
-        "manual": "✍️ Manual — I know the IP address"
-      }
-    }
-  },
-  "services": {
-    "play_preset": {
-      "name": "Play Preset",
-      "description": "Play a preset station or playlist (buttons 1-6 on speaker).",
-      "fields": {
-        "preset": {
-          "name": "Preset Number",
-          "description": "Preset button to trigger (1-6)"
-        }
-      }
-    },
-    "toggle_power": {
-      "name": "Toggle Power",
-      "description": "Toggle speaker power on/off."
-    },
-    "set_eq": {
-      "name": "Set Equalizer",
-      "description": "Configure speaker equalizer settings.",
-      "fields": {
-        "preset": {
-          "name": "EQ Preset",
-          "description": "Equalizer preset to apply"
-        },
-        "custom_values": {
-          "name": "Custom EQ Values",
-          "description": "Custom 10-band equalizer values (-12 to +12 dB)"
-        }
-      }
-    },
-    "reboot_device": {
-      "name": "Reboot Speaker",
-      "description": "Restart the speaker remotely."
-    },
-    "sync_time": {
-      "name": "Sync Time",
-      "description": "Synchronize speaker clock with Home Assistant time."
-    }
-  },
-  "entity": {
-    "select": {
-      "repeat": {
-        "state": {
-          "off": "Off",
-          "all": "All",
-          "one": "One"
         }
       }
     }

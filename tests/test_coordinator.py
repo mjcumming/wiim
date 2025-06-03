@@ -18,7 +18,7 @@ async def test_coordinator_initialization(hass: HomeAssistant, mock_wiim_client)
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
-    assert coordinator.name == "wiim_192.168.1.100"
+    assert coordinator.name == "WiiM 192.168.1.100"
     assert coordinator.client == mock_wiim_client
     assert coordinator.client.host == "192.168.1.100"
 
