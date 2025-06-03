@@ -81,9 +81,31 @@ class Speaker:
         """Extract device info from coordinator data."""
         status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
 
+        # Debug: Log available fields for device naming
+        _LOGGER.debug(
+            "Available status fields for device naming: %s",
+            {k: v for k, v in status.items() if any(name in k.lower() for name in ["name", "device", "group", "ssid"])},
+        )
+
         self.ip = self.coordinator.client.host
         self.mac = (status.get("MAC") or "").lower().replace(":", "")
-        self.name = status.get("DeviceName") or f"WiiM {self.ip}"
+
+        # Extract device name with multiple fallback attempts
+        device_name = (
+            status.get("DeviceName")  # WiiM API primary field
+            or status.get("device_name")  # Alternative field name
+            or status.get("GroupName")  # Group name field
+            or status.get("ssid", "").replace("_", " ")  # Device hotspot name
+            or "WiiM Speaker"  # Clean final fallback (no IP)
+        )
+
+        # Clean up the device name
+        self.name = device_name.strip()
+        if not self.name or self.name.lower() in ["unknown", "none", ""]:
+            self.name = "WiiM Speaker"
+
+        _LOGGER.debug("Device name extracted: '%s' (from field with value: '%s')", self.name, device_name)
+
         self.model = status.get("project") or "WiiM Speaker"
         self.firmware = status.get("firmware")
 
@@ -123,11 +145,24 @@ class Speaker:
         status = data.get("status", {})
         multiroom = data.get("multiroom", {})
 
-        # Update basic properties
-        if device_name := status.get("DeviceName"):
-            if self.name != device_name:
-                self.name = device_name
-                _LOGGER.debug("Speaker %s name updated to: %s", self.uuid, device_name)
+        # Update device name with improved extraction logic
+        device_name = (
+            status.get("DeviceName")  # WiiM API primary field
+            or status.get("device_name")  # Alternative field name
+            or status.get("GroupName")  # Group name field
+            or status.get("ssid", "").replace("_", " ")  # Device hotspot name
+        )
+
+        if device_name and device_name.strip():
+            clean_name = device_name.strip()
+            if clean_name.lower() not in ["unknown", "none", ""]:
+                if self.name != clean_name:
+                    old_name = self.name
+                    self.name = clean_name
+                    _LOGGER.debug("Speaker %s name updated: %s -> %s", self.uuid, old_name, clean_name)
+
+                    # Update device registry with new name
+                    self._update_device_registry_name(clean_name)
 
         # Update group state
         old_role = self.role
@@ -328,6 +363,30 @@ class Speaker:
         except Exception as err:
             _LOGGER.error("Failed to leave group: %s", err)
             raise
+
+    def _update_device_registry_name(self, new_name: str) -> None:
+        """Update device registry with new name."""
+        try:
+            dev_reg = dr.async_get(self.hass)
+            identifiers = {(DOMAIN, self.uuid)}
+
+            # Find device by identifiers
+            device = dev_reg.async_get_device(identifiers=identifiers)
+            if device:
+                dev_reg.async_update_device(device.id, name=new_name)
+                _LOGGER.debug("Updated device registry name for %s: %s", self.uuid, new_name)
+
+                # Update our stored DeviceInfo
+                if self.device_info:
+                    self.device_info = DeviceInfo(
+                        identifiers=self.device_info["identifiers"],
+                        manufacturer=self.device_info["manufacturer"],
+                        name=new_name,
+                        model=self.device_info["model"],
+                        sw_version=self.device_info.get("sw_version"),
+                    )
+        except Exception as err:
+            _LOGGER.warning("Failed to update device registry name: %s", err)
 
 
 # Helper functions
