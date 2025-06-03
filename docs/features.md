@@ -186,6 +186,41 @@ target:
 - **Slave**: Receives audio from master
 - **Solo**: Independent operation
 
+### 🔑 **CRITICAL: Multiroom Role Sensor**
+
+**THE MOST IMPORTANT sensor for multiroom understanding - ALWAYS visible:**
+
+```yaml
+# Always available - never hidden in diagnostics
+sensor.living_room_multiroom_role: "Master"
+sensor.kitchen_multiroom_role: "Slave"
+sensor.bedroom_multiroom_role: "Solo"
+```
+
+**States & Meanings:**
+
+- **"Solo"** - Speaker operates independently
+- **"Master"** - Group leader that controls all slaves
+- **"Slave"** - Group member that follows master commands
+
+**Why This Sensor is ESSENTIAL:**
+
+1. **🎯 Multiroom Understanding** - Users MUST know group hierarchy
+2. **🔧 Troubleshooting** - When groups fail, role shows what went wrong
+3. **🏠 Automation Logic** - Scripts need to know which speaker to control
+4. **📱 Dashboard Display** - Role status drives UI decisions
+
+**Attributes Provided:**
+
+```yaml
+sensor.living_room_multiroom_role:
+  state: "Master"
+  attributes:
+    is_group_coordinator: true
+    group_members_count: 3
+    group_member_names: ["Living Room", "Kitchen", "Dining Room"]
+```
+
 ### Group Entity Features
 
 **Virtual Group Controller**
@@ -272,16 +307,30 @@ data:
 - **Network**: IP address, WiFi signal strength
 - **Firmware**: Version information
 - **Hardware**: Model, capabilities
-- **Group Role**: Current multiroom status
+- **Group Role**: Current multiroom status (**ALWAYS VISIBLE**)
 
-**Diagnostic Entities**
+**Essential Entities (Always Available)**
 
 ```yaml
-# Available sensors (optional)
-sensor.living_room_multiroom_role: "master"
-sensor.living_room_ip_address: "192.168.1.10"
-sensor.living_room_wifi_signal: "-45 dBm"
-sensor.living_room_firmware: "4.6.2.1"
+# CORE entities - never optional
+media_player.living_room: "playing" # Main device control
+sensor.living_room_multiroom_role: "Master" # CRITICAL for multiroom
+```
+
+**Optional Diagnostic Entities**
+
+```yaml
+# Only shown when diagnostic entities enabled in configuration
+sensor.living_room_activity_level: "PLAYING" # Defensive polling state
+sensor.living_room_polling_interval: "1" # Current polling interval
+```
+
+**Optional Maintenance Entities**
+
+```yaml
+# Only shown when maintenance buttons enabled in configuration (default: ON)
+button.living_room_reboot: "Press to reboot device"
+button.living_room_sync_time: "Synchronize device time"
 ```
 
 ---

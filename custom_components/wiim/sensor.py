@@ -15,7 +15,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
-    CONF_ENABLE_NETWORK_MONITORING,
     DOMAIN,
 )
 from .data import Speaker
@@ -29,25 +28,21 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up WiiM sensors from a config entry with smart filtering.
+    """Set up WiiM sensors from a config entry.
 
-    Only creates sensors that are explicitly enabled by the user to avoid clutter.
-    Most sensors are diagnostic and disabled by default.
+    ALWAYS creates the essential role sensor for multiroom status understanding.
+    Diagnostic sensors are only created when explicitly enabled by the user.
     """
     speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
     entry = hass.data[DOMAIN][config_entry.entry_id]["entry"]
 
     entities = []
 
-    # Essential sensors (always enabled if any sensors are enabled)
-    # Only create multiroom role sensor - it's the most useful for users
+    # ALWAYS CREATE: Role sensor - ESSENTIAL for users to understand multiroom status
+    # This is NOT diagnostic - it's core functionality users need to see
     entities.append(WiiMRoleSensor(speaker))
 
-    # Network monitoring sensors (optional)
-    if entry.options.get(CONF_ENABLE_NETWORK_MONITORING, False):
-        entities.append(WiiMIPSensor(speaker))
-
-    # Advanced diagnostic sensors (optional, mostly for developers/troubleshooting)
+    # OPTIONAL: Advanced diagnostic sensors (only when explicitly enabled)
     if entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False):
         entities.extend(
             [
@@ -57,7 +52,12 @@ async def async_setup_entry(
         )
 
     async_add_entities(entities)
-    _LOGGER.info("Created %d sensor entities for %s (filtering applied)", len(entities), speaker.name)
+    _LOGGER.info(
+        "Created %d sensor entities for %s (role sensor always included, %d diagnostic sensors)",
+        len(entities),
+        speaker.name,
+        len(entities) - 1,  # Subtract 1 for the always-present role sensor
+    )
 
 
 class WiiMRoleSensor(WiimEntity, SensorEntity):
@@ -80,9 +80,7 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
     def native_value(self) -> str:
         """Return the current multiroom role of the device."""
         role = self.speaker.role.title()
-        # Make it more user-friendly
-        if role == "Solo":
-            return "Not Grouped"
+        # Return the role directly - Solo/Master/Slave is clear
         return role
 
     @property
@@ -100,37 +98,6 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
             attrs["group_member_names"] = [member.name for member in self.speaker.group_members]
 
         return attrs
-
-
-class WiiMIPSensor(WiimEntity, SensorEntity):
-    """Device IP address sensor for network monitoring.
-
-    Only created when network monitoring is explicitly enabled.
-    Useful for network troubleshooting and device identification.
-    """
-
-    _attr_icon = "mdi:ip-network"
-    _attr_state_class = None  # IP addresses don't have numeric state
-
-    def __init__(self, speaker: Speaker) -> None:
-        """Initialize IP address sensor."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_ip_address"
-        self._attr_name = "IP Address"  # Clean name without device duplication
-
-    @property
-    def native_value(self) -> str:
-        """Return the current IP address of the device."""
-        return self.speaker.ip
-
-    @property
-    def extra_state_attributes(self) -> dict[str, str]:
-        """Return network diagnostic attributes."""
-        return {
-            "mac_address": self.speaker.mac or "Unknown",
-            "device_uuid": self.speaker.uuid,
-            "firmware_version": getattr(self.speaker, "firmware", "Unknown"),
-        }
 
 
 class WiiMActivitySensor(WiimEntity, SensorEntity):
