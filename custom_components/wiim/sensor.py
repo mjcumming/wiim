@@ -17,7 +17,7 @@ from .const import (
     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
     DOMAIN,
 )
-from .data import Speaker
+from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,12 +28,12 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up WiiM sensors from a config entry.
+    """Set up WiiM sensor entities.
 
-    ALWAYS creates the essential role sensor for multiroom status understanding.
-    Diagnostic sensors are only created when explicitly enabled by the user.
+    CRITICAL: Role sensor is ALWAYS created - essential for multiroom understanding.
+    Diagnostic sensors only created when user enables them.
     """
-    speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
+    speaker = get_speaker_from_config_entry(hass, config_entry)
     entry = hass.data[DOMAIN][config_entry.entry_id]["entry"]
 
     entities = []
@@ -74,7 +74,13 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
         """Initialize multiroom role sensor."""
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_multiroom_role"
-        self._attr_name = "Multiroom Role"  # Clean name without device duplication
+        # Use None so entity_id is generated from the cleaned device name
+        self._attr_name = None
+
+    @property
+    def name(self) -> str:
+        """Return the name of the entity."""
+        return f"{self.speaker.name} Multiroom Role"  # Display name includes description
 
     @property
     def native_value(self) -> str:

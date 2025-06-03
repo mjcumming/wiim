@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN
-from .data import Speaker
+from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ async def async_setup_entry(
     Only creates audio feature switches when EQ controls are enabled.
     Avoids internal functionality switches that users don't need.
     """
-    speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
+    speaker = get_speaker_from_config_entry(hass, config_entry)
     entry = hass.data[DOMAIN][config_entry.entry_id]["entry"]
 
     entities = []
@@ -76,12 +76,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         try:
             _LOGGER.info("Enabling equalizer for %s", self.speaker.name)
             await self.speaker.coordinator.client.set_eq_enabled(True)
-
-            # Record user action for smart polling
-            self.speaker.coordinator.record_user_command("equalizer_on")
-
-            # Request immediate refresh to verify the setting
-            await self.speaker.coordinator.async_request_refresh()
+            await self._async_execute_command_with_refresh("equalizer_on")
 
         except Exception as err:
             _LOGGER.error("Failed to enable equalizer for %s: %s", self.speaker.name, err)
@@ -96,12 +91,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         try:
             _LOGGER.info("Disabling equalizer for %s", self.speaker.name)
             await self.speaker.coordinator.client.set_eq_enabled(False)
-
-            # Record user action for smart polling
-            self.speaker.coordinator.record_user_command("equalizer_off")
-
-            # Request immediate refresh to verify the setting
-            await self.speaker.coordinator.async_request_refresh()
+            await self._async_execute_command_with_refresh("equalizer_off")
 
         except Exception as err:
             _LOGGER.error("Failed to disable equalizer for %s: %s", self.speaker.name, err)

@@ -16,7 +16,7 @@ from .const import CONF_IDLE_UPDATE_RATE, CONF_PLAYING_UPDATE_RATE, DEFAULT_POLL
 _LOGGER = logging.getLogger(__name__)
 
 
-class WiiMCoordinator(DataUpdateCoordinator):
+class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """WiiM coordinator with defensive two-state polling.
 
     This coordinator implements simple, reliable polling that adapts to device state:
@@ -73,11 +73,15 @@ class WiiMCoordinator(DataUpdateCoordinator):
         self._last_device_info_update = 0
         self._device_info_interval = 30
 
+        # Debug: Track update calls
+        self._update_count = 0
+
         _LOGGER.info(
-            "[WiiM] Defensive coordinator initialized for %s (playing=%ds, idle=%ds)",
+            "[WiiM] Defensive coordinator initialized for %s (playing=%ds, idle=%ds, initial_interval=%ds)",
             client.host,
             self._playing_interval,
             self._idle_interval,
+            poll_interval,
         )
 
     @property
@@ -103,73 +107,82 @@ class WiiMCoordinator(DataUpdateCoordinator):
             return multiroom.get("slaves", 0) > 0
         return False
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Defensive two-state polling with graceful API fallbacks."""
+    async def _get_player_status(self) -> dict:
+        """Get player status - the only universal endpoint that always works."""
         try:
-            # ALWAYS RELIABLE: Core playbook status (universal endpoint)
-            status = await self._get_player_status()
+            _LOGGER.debug("[WiiM] %s: About to call client.get_player_status()", self.client.host)
+            result = await self.client.get_player_status() or {}
+            _LOGGER.debug("[WiiM] %s: get_player_status() returned: %s", self.client.host, result)
+            return result
+        except WiiMError as err:
+            _LOGGER.warning("[WiiM] %s: getPlayerStatus failed: %s", self.client.host, err)
+            raise
+        except Exception as err:
+            _LOGGER.error("[WiiM] %s: Unexpected error in get_player_status: %s", self.client.host, err)
+            raise
 
-            # Two-state polling: fast when playing, slower when idle
-            is_playing = status.get("play_status") == "play"
-            if is_playing:
-                self.update_interval = timedelta(seconds=self._playing_interval)
-            else:
-                self.update_interval = timedelta(seconds=self._idle_interval)
+    async def _get_device_info_defensive(self) -> dict[str, Any]:
+        """Fetch device information, handling potential errors or missing support."""
+        try:
+            # This method in WiiMClient should return a dict including 'uuid', 'name', 'model', 'firmware', 'mac' etc.
+            # It might internally call getStatusEx or other relevant endpoints.
+            device_info = await self.client.get_device_info()
+            if not device_info.get("uuid"):
+                # Fallback or error if UUID is critical and missing post-setup
+                _LOGGER.warning("Device UUID missing from get_device_info for %s", self.client.host)
+                # Optionally, try to get MAC as a fallback if it's used as part of the unique ID logic
+                # For consistency, the unique ID established in ConfigFlow should be the primary one.
+                # If the device_info from API doesn't have UUID, but we stored one in config_entry,
+                # we might want to inject it here or ensure client always provides it.
+                # For now, we assume client.get_device_info() is the source of truth for current state.
+            return device_info
+        except WiiMError as err:
+            _LOGGER.debug(
+                "Failed to get device info for %s: %s, device info will be unavailable", self.client.host, err
+            )
+        return {}
 
-            # DEFENSIVE: Device info with WiiM enhancement fallback
-            if self._should_update_device_info():
-                device_info = await self._get_device_info_defensive()
-                if device_info:
-                    status.update(device_info)
-                    self._device_info = device_info
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch data from the WiiM device."""
+        try:
+            # Prioritize fetching essential data
+            player_status = await self._get_player_status()  # Assumed to return a rich status dict
+            device_info = await self._get_device_info_defensive()  # Ensure this includes 'uuid'
 
-            # DEFENSIVE: Multiroom info with graceful failure
-            multiroom = await self._get_multiroom_info_defensive()
-
-            # DEFENSIVE: Track metadata with fallback
-            if self._track_changed(status):
-                metadata = await self._get_track_metadata_defensive(status)
-                if metadata:
-                    status.update(metadata)
-
-            # DEFENSIVE: EQ info (only if device supports it)
-            if self._eq_supported is not False:
-                eq_info = await self._get_eq_info_defensive()
-                if eq_info:
-                    status.update(eq_info)
-
-            # Detect role and build result
-            role = self._detect_role_from_status(status, multiroom)
-
-            # Update Speaker object if available
-            await self._update_speaker_object(status, multiroom, role)
-
-            # Reset consecutive failures on success
-            self._consecutive_failures = 0
-
-            result = {
-                "status": status,
-                "multiroom": multiroom,
-                "role": role,
-                "polling": {
-                    "interval": self.update_interval.total_seconds(),
-                    "is_playing": is_playing,
-                    "api_capabilities": {
-                        "statusex_supported": self._statusex_supported,
-                        "metadata_supported": self._metadata_supported,
-                        "eq_supported": self._eq_supported,
-                    },
-                },
+            # Combine data, ensuring device_info (with uuid) is present
+            data: dict[str, Any] = {
+                "status": player_status,
+                "device_info": device_info,  # Contains uuid, name, model, fw, mac
+                "multiroom": {},
+                "metadata": {},
+                "eq": {},
             }
 
-            _LOGGER.debug(
-                "[WiiM] %s: Update completed - role=%s, playing=%s, interval=%ds",
-                self.client.host,
-                role,
-                is_playing,
-                self.update_interval.total_seconds(),
-            )
-            return result
+            # Ensure the UUID from device_info is consistently available
+            # The Speaker object will use this.
+            if "uuid" not in device_info and self.config_entry.data.get("uuid"):
+                # If API didn't return UUID but we have it from config entry, inject for consistency
+                # This scenario should ideally be avoided by robust API client.
+                data["device_info"]["uuid"] = self.config_entry.data.get("uuid")
+                _LOGGER.debug("Injected UUID from config entry as API did not provide one")
+
+            # Update polling interval based on player state
+            current_play_status = player_status.get("play_status", "idle")
+            is_playing = current_play_status == "play"
+
+            # Fast polling (1s) when playing, slower (5s) when idle
+            new_interval = self._playing_interval if is_playing else self._idle_interval
+            if new_interval != self.update_interval.total_seconds():
+                _LOGGER.info(
+                    "[WiiM] %s: Update interval changed: %ds -> %ds (playing=%s)",
+                    self.client.host,
+                    self.update_interval.total_seconds(),
+                    new_interval,
+                    is_playing,
+                )
+                self.update_interval = timedelta(seconds=new_interval)
+
+            return data
 
         except WiiMError as err:
             self._consecutive_failures += 1
@@ -186,37 +199,6 @@ class WiiMCoordinator(DataUpdateCoordinator):
                 self.update_interval = timedelta(seconds=backoff_interval)
 
             raise UpdateFailed(f"Error updating WiiM device: {err}") from err
-
-    async def _get_player_status(self) -> dict:
-        """Get player status - the only universal endpoint that always works."""
-        try:
-            return await self.client.get_player_status() or {}
-        except WiiMError as err:
-            _LOGGER.warning("[WiiM] %s: getPlayerStatus failed: %s", self.client.host, err)
-            raise
-
-    async def _get_device_info_defensive(self) -> dict:
-        """Get device info with WiiM enhancement fallback."""
-        # Try WiiM-enhanced getStatusEx first
-        if self._statusex_supported is not False:
-            try:
-                result = await self.client.get_status()  # This calls getStatusEx internally
-                if self._statusex_supported is None:
-                    self._statusex_supported = True
-                    _LOGGER.debug("[WiiM] %s: getStatusEx works - WiiM device", self.client.host)
-                return result
-            except WiiMError:
-                if self._statusex_supported is None:
-                    self._statusex_supported = False
-                    _LOGGER.info("[WiiM] %s: getStatusEx not supported - pure LinkPlay device", self.client.host)
-
-        # CRITICAL: getStatus doesn't work on WiiM devices!
-        # For pure LinkPlay devices, we would fallback to basic getStatus
-        # But since user confirmed getStatus doesn't work on WiiM devices,
-        # we only try getStatusEx and gracefully handle failure
-
-        _LOGGER.debug("[WiiM] %s: No device info available (getStatusEx failed)", self.client.host)
-        return {}
 
     async def _get_multiroom_info_defensive(self) -> dict:
         """Get multiroom info with graceful failure handling."""
@@ -309,17 +291,30 @@ class WiiMCoordinator(DataUpdateCoordinator):
         self._last_status = status.copy()
         return changed
 
-    def _detect_role_from_status(self, status: dict, multiroom: dict) -> str:
-        """Detect device role from status data."""
-        # Device is slave if group field > 0
-        if status.get("group", "0") != "0":
-            return "slave"
+    async def _detect_role_from_status_and_slaves(self, status: dict, multiroom: dict) -> str:
+        """Detect device role using proper slaves API call."""
+        group_field = status.get("group", "0")
+        slave_count = multiroom.get("slave_count", 0)
 
-        # Device is master if it has slaves
-        if multiroom.get("slaves", 0) > 0:
+        _LOGGER.warning(
+            "[WiiM] %s: Role detection details - group_field='%s', slave_count=%s",
+            self.client.host,
+            group_field,
+            slave_count,
+        )
+
+        # Device is MASTER if it has slaves
+        if slave_count > 0:
+            _LOGGER.warning("[WiiM] %s: Detected as MASTER because slave_count=%s > 0", self.client.host, slave_count)
             return "master"
 
+        # Device is SLAVE if group field > 0 (but no slaves, so it's following another master)
+        if group_field != "0":
+            _LOGGER.warning("[WiiM] %s: Detected as SLAVE because group='%s' != '0'", self.client.host, group_field)
+            return "slave"
+
         # Default to solo
+        _LOGGER.warning("[WiiM] %s: Detected as SOLO (default)", self.client.host)
         return "solo"
 
     async def _update_speaker_object(self, status: dict, multiroom: dict, role: str) -> None:
@@ -359,10 +354,6 @@ class WiiMCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("[WiiM] %s: User command '%s' - requesting immediate refresh", self.client.host, command_type)
         # Force immediate refresh by setting short interval
         self.update_interval = timedelta(seconds=1)
-
-    async def async_request_refresh(self) -> None:
-        """Request immediate refresh of coordinator data."""
-        await self.async_request_refresh()
 
     # Group management methods (simplified from legacy)
     def get_current_role(self) -> str:

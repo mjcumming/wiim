@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .data import Speaker
+from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ async def async_setup_entry(
     Currently no number entities are created - volume step is handled
     in the device configuration menu only to avoid duplication.
     """
-    speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
+    speaker = get_speaker_from_config_entry(hass, config_entry)
 
     # NO entities created - volume step is config-only
     entities = []
@@ -73,9 +73,7 @@ class WiiMVolumeStepNumber(WiimEntity, NumberEntity):
         try:
             _LOGGER.info("Setting volume step to %d%% for %s", step_size, self.speaker.name)
             self._volume_step = step_size
-
-            # Notify that the configuration has changed
-            self.speaker.coordinator.record_user_command("volume_step_change")
+            await self._async_execute_command_with_refresh("volume_step_change")
 
             # Update the entity state
             self.async_write_ha_state()

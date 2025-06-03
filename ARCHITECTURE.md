@@ -1,208 +1,368 @@
-# WiiM / LinkPlay Home Assistant Integration – Architecture Guide
+# WiiM Integration Architecture Design v2.1 - SIMPLIFIED
 
-> **Audience**: Home-Assistant developers & maintainers of this custom component.
-> **Goal**: Provide a single, accurate reference for understanding, extending and debugging the integration.
+## Overview
 
----
+The WiiM integration follows a **pragmatic layered architecture** with clear separation of concerns, avoiding over-engineering while maintaining clean code structure.
 
-## 1. Overview
+## Core Design Principles
 
-The WiiM / LinkPlay integration adds first-class support for WiiM-powered speakers to Home Assistant (HA). The component focuses on **clean architecture & maintainability** while exposing the full feature-set of the underlying devices:
+### 1. Single Responsibility Principle
+Each class has ONE clear purpose and handles ONE aspect of the system.
 
-• Media playback & transport control
-• Multi-room (master/slave) grouping
-• Equaliser presets & custom bands
-• Source switching
-• Device maintenance (reboot, time-sync)
+### 2. Separation of Concerns - **SIMPLIFIED**
+- **Entity Layer**: HA interface only (thin wrapper)
+- **Controller Layer**: **Single controller** handling all media player complexity
+- **Business Layer**: Speaker state management and coordination
+- **API Layer**: Device communication
 
-Key design themes:
+### 3. Pragmatic Controller Pattern
+**One MediaPlayerController** handles all complex media player functionality, avoiding unnecessary abstraction while maintaining testability.
 
-1. **Separation of Concerns** – each file owns a single responsibility.
-2. **UUID-based registry** – a central device registry keyed by immutable hardware UUIDs with O(1) look-ups for IP, MAC **and** entity-id.
-3. **Smart polling** – dynamic intervals (1 s → 120 s) driven by activity heuristics to cut API traffic by up to 90 %.
-4. **Service delegation** – user-facing services implemented in small, testable helper classes instead of monolithic entity methods.
+### 4. Event-Driven Architecture
+State changes flow through the system via events, avoiding tight coupling.
 
----
+### 5. Defensive Programming
+All operations have graceful fallbacks and error handling.
 
-## 2. Repository Layout
+## Simplified Architecture Layers
 
 ```
-custom_components/wiim/
-├── __init__.py            # entry-point & platform setup
-├── api.py                 # async HTTP client (controls the device)
-├── coordinator.py         # DataUpdateCoordinator + smart polling glue
-├── smart_polling.py       # *isolated* polling logic & prediction
-├── device_registry.py     # global UUID registry & group tracking
-├── media_player.py        # core entity (~1 700 LOC – slated for trim)
-├── group_media_player.py  # virtual master entity
-├── button.py / number.py / sensor.py / switch.py / binary_sensor.py
-├── services/              # service helper modules (clean delegation)
-└── utils/                 # misc helpers shared across modules
+┌─────────────────────────────────────────────────────────────┐
+│                    HOME ASSISTANT LAYER                     │
+├─────────────────────────────────────────────────────────────┤
+│  WiiMMediaPlayer (media_player.py)                         │
+│  ├── HA Media Player Interface (THIN)                      │
+│  ├── Property Delegation → Controller                      │
+│  └── Command Delegation → Controller                       │
+├─────────────────────────────────────────────────────────────┤
+│                    CONTROLLER LAYER                         │
+├─────────────────────────────────────────────────────────────┤
+│  MediaPlayerController (media_controller.py)               │
+│  ├── Volume Logic (master/slave coordination)              │
+│  ├── Playback Logic (master/slave aware)                   │
+│  ├── Source Logic (EQ, shuffle, repeat)                    │
+│  ├── Group Logic (join/unjoin validation)                  │
+│  ├── Power Logic (on/off/toggle)                           │
+│  └── Media Logic (artwork, metadata)                       │
+├─────────────────────────────────────────────────────────────┤
+│                     BUSINESS LAYER                          │
+├─────────────────────────────────────────────────────────────┤
+│  Speaker (data.py)                                         │
+│  ├── Device State Management                               │
+│  ├── Group Membership                                      │
+│  ├── Role Detection (master/slave/solo)                    │
+│  └── State Change Events                                   │
+├─────────────────────────────────────────────────────────────┤
+│                   COORDINATION LAYER                        │
+├─────────────────────────────────────────────────────────────┤
+│  WiiMCoordinator (coordinator.py)                          │
+│  ├── Adaptive Polling (1s playing, 5s idle)               │
+│  ├── API Capability Detection                              │
+│  ├── State Normalization                                   │
+│  └── Error Recovery                                        │
+├─────────────────────────────────────────────────────────────┤
+│                       API LAYER                             │
+├─────────────────────────────────────────────────────────────┤
+│  WiiMClient (api.py)                                       │
+│  ├── Protocol Detection (HTTP/HTTPS)                       │
+│  ├── Request/Response Handling                             │
+│  ├── Error Handling                                        │
+│  └── Session Management                                     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
----
+## MediaPlayerController Design - **SINGLE CONTROLLER**
 
-## 3. Core Components
+### Why Single Controller?
 
-### 3.1 Device Registry (`device_registry.py`)
+✅ **Right Balance**: Separates complexity without over-abstraction
+✅ **Maintainable**: All media player logic in one place
+✅ **Testable**: Can unit test complex logic separately from HA entity
+✅ **Understandable**: New developers find everything in one file
+✅ **Faster**: Less files, less indirection, easier debugging
 
-- Single source of truth – all state in one `dict[str, DeviceState]` keyed by device **UUID**.
-- Fast lookup indexes: `_ip_to_uuid`, `_mac_to_uuid`, `_entity_to_uuid`.
-- Tracks roles (`solo`, `master`, `slave`, `virtual_master`) and relationships.
-- Exposes helper methods: `find_device*`, `get_group_members_for_device`, `handle_role_change`, etc.
-- Virtual master entities are registered here → UI & services never need to guess.
+### MediaPlayerController Interface
 
-### 3.2 Coordinator & Smart Polling
+```python
+class MediaPlayerController:
+    """Single controller handling ALL media player complexity.
 
-- `coordinator.py` holds a `WiiMCoordinator` (`DataUpdateCoordinator`).
-- Delegates interval decisions to `SmartPollingManager` in `smart_polling.py`.
-- Activity tiers:
-  - Active Playback – 1 s
-  - Recent Activity – 5 s
-  - Background Idle – 30 s
-  - Deep Sleep – 120 s
-- Playback position prediction avoids frequent `getPlayerStatus` calls during long tracks.
+    This controller encapsulates:
+    - Volume management with master/slave coordination
+    - Playback control with group awareness
+    - Source selection with EQ and mode management
+    - Group operations with validation and state sync
+    - Power control with device coordination
+    - Media metadata and artwork handling
+    """
 
-### 3.3 HTTP Client (`api.py`)
+    def __init__(self, speaker: Speaker):
+        self.speaker = speaker
+        self.hass = speaker.hass
 
-- Full async LinkPlay client (≈1 100 LOC).
-- Auto-detects HTTP/HTTPS, permissive SSL for self-signed certs, tries multiple ports (443/4443/80).
-- Implements every command used by the integration plus fall-backs.
-- **NB:** Detailed protocol reference lives in the manufacturer's documentation – **omitted here by intention**.
+    # ===== VOLUME CONTROL =====
+    async def set_volume(self, volume: float) -> None:
+        """Set volume with master/slave logic"""
 
-### 3.4 Media Entities
+    async def set_mute(self, mute: bool) -> None:
+        """Set mute with master/slave logic"""
 
-- **Physical player** – `WiiMMediaPlayer` (implements HA `MediaPlayerEntity`). Responsible **only** for UI-facing features; heavy lifting is pushed down to coordinator, registry or service helpers.
-- **Virtual master** – `WiiMGroupMediaPlayer` represents the group leader and surfaces group-wide state.
-- Supported entities today:
-  - `media_player` (physical + virtual)
-  - `sensor` – Group Role, IP Address
-  - `button` – Reboot, Sync Time
-  - `number` – Polling Interval, Volume Step _(Volume Step planned for removal – see Roadmap)_
-  - `switch` / `binary_sensor` – small demo entities
+    async def volume_up(self, step: float = None) -> None:
+        """Volume up with configurable step"""
 
-### 3.5 Service Delegation
+    async def volume_down(self, step: float = None) -> None:
+        """Volume down with configurable step"""
 
-- `services/` package holds stateless helpers (`WiiMMediaServices`, `WiiMGroupServices`, …).
-- `media_player.py` merely validates input & calls helpers → keeps entity lean.
+    def get_volume_level(self) -> float | None:
+        """Get effective volume (master/slave aware)"""
 
----
+    def is_volume_muted(self) -> bool | None:
+        """Get effective mute state (master/slave aware)"""
 
-## 4. Group Management Workflow
+    # ===== PLAYBACK CONTROL =====
+    async def play(self) -> None:
+        """Start playback (master/slave aware)"""
 
-1. HA `media_player.join` triggers `async_join` on the target master.
-2. Entity IDs are resolved → coordinators via **device registry** (works with name-based, IP-based or MAC-based IDs).
-3. `_create_wiim_multiroom_group` runs device-level API calls (`ConnectMasterAp:*` or legacy commands).
-4. Registry updates roles/relationships; coordinator refresh cascades to all members via `_refresh_group_coordinately`.
-5. UI updates instantly; virtual master is filtered from join targets to avoid recursive groups.
+    async def pause(self) -> None:
+        """Pause playback (master/slave aware)"""
 
----
+    async def stop(self) -> None:
+        """Stop playback"""
 
-## 5. State-Refresh & Error Handling
+    async def next_track(self) -> None:
+        """Next track (master/slave aware)"""
 
-- `_standardized_refresh` wrapper enforces consistent request→refresh→verify pattern.
-- Batch-refreshes: master first → 100 ms delay → parallel slave refresh.
-- Role-change detection (`handle_role_change`) reconciles mismatches every 3rd polling cycle.
+    async def previous_track(self) -> None:
+        """Previous track (master/slave aware)"""
 
----
+    async def seek(self, position: float) -> None:
+        """Seek to position"""
 
-## 6. Quality, Testing & CI
+    def get_playback_state(self) -> MediaPlayerState:
+        """Get current playback state"""
 
-- Unit tests live under `tests/`. Current coverage ~32 %.
-- `Makefile` targets (`make dev-check`, `make check-all`) reproduce CI locally.
-- Python **3.13+** is mandatory to match HA 2024.12 requirements.
-- One open failure (`test_device_creation` expects name `WiiM`) – tracked in Roadmap.
+    # ===== SOURCE & AUDIO CONTROL =====
+    async def select_source(self, source: str) -> None:
+        """Select source, handle slave group leaving"""
 
----
+    async def set_eq_preset(self, preset: str) -> None:
+        """Set EQ preset"""
 
-## 7. Maintenance Tips
+    async def set_shuffle(self, shuffle: bool) -> None:
+        """Set shuffle mode with repeat coordination"""
 
-- **Adding a new feature** – decide which layer owns it (service, coordinator, registry).
-- **Debugging group issues** – always start with `device_registry.get_group_members_for_device(...)`.
-- **Smart polling diagnostics** – call `media_player.*.get_smart_polling_diagnostics` service.
+    async def set_repeat(self, repeat: str) -> None:
+        """Set repeat mode (off/one/all)"""
 
----
+    def get_source_list(self) -> list[str]:
+        """Get sources (master/slave aware)"""
 
-## 8. Roadmap (excerpt)
+    def get_current_source(self) -> str | None:
+        """Get current source (master/slave aware)"""
 
-See `wiim/ROADMAP.md` for the complete list, but high-priority items include:
+    def get_shuffle_state(self) -> bool | None:
+        """Get shuffle state"""
 
-- Trim `media_player.py` below 800 LOC.
-- Remove `Volume Step` number entity (fixed step of 5 %).
-- Add Firmware Update sensor.
-- Finish test suite for Smart Polling & Group flows (>90 % coverage target).
+    def get_repeat_mode(self) -> str | None:
+        """Get repeat mode"""
 
----
+    def get_sound_mode_list(self) -> list[str]:
+        """Get available EQ presets"""
 
-## 9. Document History
+    def get_sound_mode(self) -> str | None:
+        """Get current EQ preset"""
 
-| Version | Date       | Notes                                                         |
-| ------- | ---------- | ------------------------------------------------------------- |
-| 1.0     | 2025-06-03 | Initial consolidation of legacy design docs into single guide |
+    # ===== GROUP MANAGEMENT =====
+    async def join_group(self, group_members: list[str]) -> None:
+        """HA native join with WiiM multiroom backend"""
 
-## 10. References
+    async def leave_group(self) -> None:
+        """Leave current group"""
 
-For detailed protocol specifications and the upstream reference implementation, consult:
+    def get_group_members(self) -> list[str]:
+        """Get group member entity IDs"""
 
-- LinkPlay/Arylic HTTP API documentation – <https://developer.arylic.com/httpapi/#http-api>
-- WiiM Mini HTTP API – <https://www.wiimhome.com/pdf/HTTP%20API%20for%20WiiM%20Mini.pdf>
-- WiiM Products HTTP API – <https://www.wiimhome.com/pdf/HTTP%20API%20for%20WiiM%20Products.pdf>
-- Up-stream Python reference client (`python-linkplay`) – <https://github.com/Velleman/python-linkplay>
+    def get_group_leader(self) -> str | None:
+        """Get group leader entity ID"""
 
-These documents form the canonical source for low-level command formats, endpoint semantics, and edge-case behaviour that this integration builds upon.
+    # ===== POWER CONTROL =====
+    async def turn_on(self) -> None:
+        """Turn device on"""
 
-## 11. Strategic Refactor (2025-06) - CORRECTED PLAN
+    async def turn_off(self) -> None:
+        """Turn device off"""
 
-The integration is being migrated to a **Sonos-style** architecture based on comprehensive analysis of Home Assistant's premier audio integration. The work is split into nine incremental phases with corrected priorities and dependencies.
+    async def toggle_power(self) -> None:
+        """Toggle power state"""
 
-### **🎯 Sonos Alignment Analysis**
+    def is_powered_on(self) -> bool:
+        """Get power state"""
 
-After thorough examination of the Sonos integration patterns, key architectural gaps were identified:
+    # ===== MEDIA METADATA =====
+    async def get_media_image(self) -> tuple[bytes, str] | None:
+        """Get album artwork with SSL handling"""
 
-| **Component**        | **Current WiiM**     | **Target (Sonos-style)**                 | **Status**   |
-| -------------------- | -------------------- | ---------------------------------------- | ------------ |
-| **Data Layer**       | Basic `data.py`      | Rich `Speaker` class like `SonosSpeaker` | 🔄 Phase 1   |
-| **Entity Base**      | Old `WiiMEntity`     | Event-driven `WiimEntity`                | ❌ Phase 2   |
-| **Media Player**     | 1,762 lines          | ~400 lines (like Sonos)                  | ❌ Phase 3   |
-| **Device Registry**  | 25KB custom registry | HA registry only                         | ❌ Phase 4   |
-| **Event System**     | None                 | Dispatcher-based                         | ❌ Phase 1-2 |
-| **Group Management** | Scattered logic      | Centralized in `Speaker`                 | ❌ Phase 3   |
+    def get_media_title(self) -> str | None:
+        """Get clean track title"""
 
-### **Phase Overview**
+    def get_media_artist(self) -> str | None:
+        """Get clean artist name"""
 
-| Phase | Deliverable                                                       | Status         | Dependencies |
-| ----- | ----------------------------------------------------------------- | -------------- | ------------ |
-| 0     | Foundation & cleanup, feature branch                              | ✅ done        | None         |
-| 1     | Rich `Speaker` class with event dispatching (like `SonosSpeaker`) | 🔄 in-progress | Phase 0      |
-| 2     | New `WiimEntity` base class (like `SonosEntity`)                  | ⏳             | Phase 1      |
-| 3     | Media player refactor: 1,762 → ~400 lines                         | ⏳             | Phase 2      |
-| 4     | Delete custom `device_registry.py`, use HA registry only          | ⏳             | Phase 1      |
-| 5     | Group pattern: virtual master uses same identifiers (Sonos style) | ⏳             | Phase 3      |
-| 6     | Smart-polling isolation (pure functions)                          | ⏳             | Phase 1      |
-| 7     | Comprehensive testing: 90% coverage                               | ⏳             | Phase 1-6    |
-| 8     | Updated documentation & developer guides                          | ⏳             | Phase 7      |
-| 9     | Final cleanup, deprecation warnings, version 1.0.0                | ⏳             | Phase 8      |
+    def get_media_album(self) -> str | None:
+        """Get clean album name"""
 
-### **Key Corrections from Original Plan**
+    def get_media_duration(self) -> int | None:
+        """Get track duration"""
 
-1. **Phase 1 Priority**: Must complete rich `Speaker` class before entity refactor
-2. **Event System**: Critical missing piece - dispatcher-based communication
-3. **Device Registry Elimination**: 25KB custom registry conflicts with HA patterns
-4. **Group Management**: Must be centralized in `Speaker` class, not scattered
-5. **Media Player Size**: Target ~400 lines (matching Sonos), not 800
+    def get_media_position(self) -> int | None:
+        """Get current position"""
 
-### **Critical Success Factors**
+    def get_media_position_updated_at(self) -> float | None:
+        """Get position update timestamp"""
 
-- ✅ **Zero user impact** - maintain all existing functionality
-- ✅ **Event-driven architecture** - implement dispatcher pattern like Sonos
-- ✅ **Single device registration path** - eliminate custom registry conflicts
-- ✅ **Rich Speaker business logic** - move intelligence from entities to Speaker
-- ✅ **Clean separation** - entities become thin wrappers over Speaker
+    def get_media_image_url(self) -> str | None:
+        """Get media image URL"""
 
-### **References**
+    # ===== ADVANCED FEATURES =====
+    async def play_preset(self, preset: int) -> None:
+        """Play preset (1-6)"""
 
-- **Sonos Integration Analysis** - [REFACTOR_PLAN_v2.md](docs/REFACTOR_PLAN_v2.md)
-- **Home Assistant Device Registry** - <https://developers.home-assistant.io/docs/device_registry_index>
-- **Event Dispatcher Pattern** - <https://developers.home-assistant.io/docs/integration_listen_events/>
+    async def play_url(self, url: str) -> None:
+        """Play URL"""
 
-Each phase is released as an **independent PR** to make code-review manageable and to avoid large, risky drops. See `docs/REFACTOR_PLAN_v2.md` for the complete corrected implementation plan with Sonos pattern alignment.
+    async def browse_media(self, media_content_type=None, media_content_id=None):
+        """Browse media for presets"""
+```
+
+## Data Flow Architecture - **SIMPLIFIED**
+
+### State Updates (Event-Driven)
+
+```
+API Response → Coordinator → Speaker → MediaPlayerController → Entity → HA
+     ↓              ↓           ↓              ↓                ↓      ↓
+  Parse/Norm    State Mgmt   Business      All Media         Props   UI
+                                Logic      Player Logic
+```
+
+### User Commands (Command Pattern)
+
+```
+HA Service → Entity → MediaPlayerController → Speaker → Coordinator → API
+     ↓         ↓              ↓                ↓           ↓           ↓
+  Validate   Delegate    All Complex Logic   State       Request    Device
+                        (Volume/Group/etc)   Update
+```
+
+### WiiMMediaPlayer Entity (THIN WRAPPER)
+
+```python
+class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
+    """Thin HA interface wrapper - delegates everything to controller"""
+
+    def __init__(self, speaker: Speaker):
+        super().__init__(speaker)
+        self.controller = MediaPlayerController(speaker)
+
+    # ===== PROPERTIES (delegate to controller) =====
+    @property
+    def volume_level(self) -> float | None:
+        return self.controller.get_volume_level()
+
+    @property
+    def is_volume_muted(self) -> bool | None:
+        return self.controller.is_volume_muted()
+
+    @property
+    def state(self) -> MediaPlayerState:
+        return self.controller.get_playback_state()
+
+    @property
+    def shuffle(self) -> bool | None:
+        return self.controller.get_shuffle_state()
+
+    @property
+    def repeat(self) -> str | None:
+        return self.controller.get_repeat_mode()
+
+    @property
+    def sound_mode(self) -> str | None:
+        return self.controller.get_sound_mode()
+
+    # ===== COMMANDS (delegate to controller) =====
+    async def async_set_volume_level(self, volume: float) -> None:
+        await self.controller.set_volume(volume)
+        await self._async_execute_command_with_refresh("volume")
+
+    async def async_mute_volume(self, mute: bool) -> None:
+        await self.controller.set_mute(mute)
+        await self._async_execute_command_with_refresh("mute")
+
+    async def async_media_play(self) -> None:
+        await self.controller.play()
+        await self._async_execute_command_with_refresh("play")
+
+    async def async_set_shuffle(self, shuffle: bool) -> None:
+        await self.controller.set_shuffle(shuffle)
+        await self._async_execute_command_with_refresh("shuffle")
+
+    async def async_join(self, group_members: list[str]) -> None:
+        await self.controller.join_group(group_members)
+        await self._async_execute_command_with_refresh("group")
+```
+
+## File Organization - **SIMPLIFIED**
+
+```
+wiim/
+├── custom_components/wiim/
+│   ├── __init__.py                     # Integration setup
+│   ├── config_flow.py                  # Configuration flow
+│   ├── const.py                        # Constants and mappings
+│   │
+│   ├── api.py                          # ✅ API layer (existing)
+│   ├── coordinator.py                  # ✅ Coordination layer (existing)
+│   ├── data.py                         # ✅ Business layer (existing)
+│   ├── entity.py                       # ✅ Base entity (existing)
+│   │
+│   ├── media_player.py                 # 🔄 HA interface (THIN - delegates to controller)
+│   ├── media_controller.py             # 🆕 NEW: ALL media player logic (single file)
+│   │
+│   ├── services/                       # 🔄 Service registration
+│   │   ├── __init__.py
+│   │   ├── media.py                   # Media services
+│   │   └── device.py                  # Device services
+│   │
+│   └── tests/                          # 🔄 Test coverage
+│       ├── unit/
+│       │   ├── test_media_controller.py  # Controller unit tests
+│       │   └── test_media_player.py      # Entity integration tests
+│       ├── integration/
+│       └── conftest.py
+```
+
+## Implementation Benefits
+
+### What We Gain ✅
+- **Separation of Concerns**: Entity focuses on HA interface, controller on complex logic
+- **Testability**: Can unit test controller logic separately from HA entity
+- **Maintainability**: All media player complexity in one well-organized file
+- **Performance**: No unnecessary abstraction layers or complex delegation chains
+- **Debuggability**: One place to look for media player issues
+
+### What We Avoid ❌
+- **Over-abstraction**: No unnecessary controller hierarchies
+- **Over-engineering**: No complex factory patterns or event systems
+- **Maintenance Overhead**: No multiple small files for simple functionality
+- **Performance Overhead**: No deep delegation chains
+
+## Next Steps
+
+This simplified architecture provides:
+✅ **Clear separation** without over-engineering
+✅ **Testable components** with practical boundaries
+✅ **Maintainable codebase** with logical organization
+✅ **Fast implementation** with minimal abstraction
+✅ **Easy debugging** with centralized logic
+
+The single controller pattern gives us all the benefits of separation while avoiding unnecessary complexity.

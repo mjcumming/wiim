@@ -9,14 +9,16 @@ from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    MediaType,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .data import Speaker
+from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
+from .media_controller import MediaPlayerController
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,227 +28,312 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up WiiM media player from a config entry."""
-    speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
-    entity = WiiMMediaPlayer(speaker)
-    async_add_entities([entity])
-    _LOGGER.info("Media player entity created for %s", speaker.name)
+    """Set up WiiM Media Player platform."""
+    speaker = get_speaker_from_config_entry(hass, config_entry)
+    async_add_entities([WiiMMediaPlayer(speaker)])
 
 
 class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
-    """WiiM media player - thin wrapper around Speaker."""
+    """WiiM media player entity.
 
-    _attr_has_entity_name = True  # Use device name for clean entity IDs
-    _attr_supported_features = (
-        MediaPlayerEntityFeature.PLAY
-        | MediaPlayerEntityFeature.PAUSE
-        | MediaPlayerEntityFeature.STOP
-        | MediaPlayerEntityFeature.VOLUME_SET
-        | MediaPlayerEntityFeature.VOLUME_MUTE
-        | MediaPlayerEntityFeature.NEXT_TRACK
-        | MediaPlayerEntityFeature.PREVIOUS_TRACK
-        | MediaPlayerEntityFeature.SEEK
-        | MediaPlayerEntityFeature.GROUPING
-    )
+    This is a THIN WRAPPER that delegates all functionality to MediaPlayerController.
+    The entity focuses solely on the Home Assistant interface while the controller
+    handles all complex media player business logic.
+    """
 
     def __init__(self, speaker: Speaker) -> None:
-        """Initialize the media player."""
+        """Initialize media player entity."""
         super().__init__(speaker)
-        self._attr_unique_id = speaker.uuid  # Internal tracking
-        # Don't set _attr_name - let HA use device name for entity_id
+        self._attr_name = None  # Use cleaned device name from Speaker class
 
-    # State properties (delegate to speaker)
+        # Create controller - this handles ALL media player complexity
+        self.controller = MediaPlayerController(speaker)
+
+        _LOGGER.debug(
+            "WiiMMediaPlayer initialized for %s with controller delegation",
+            speaker.name,
+        )
+
+    # ===== HOME ASSISTANT ENTITY PROPERTIES =====
+
     @property
-    def state(self) -> MediaPlayerState:
-        """Return the state of the device."""
-        return self.speaker.get_playback_state()
+    def supported_features(self) -> MediaPlayerEntityFeature:
+        """Flag media player features that are supported."""
+        features = (
+            MediaPlayerEntityFeature.VOLUME_SET
+            | MediaPlayerEntityFeature.VOLUME_MUTE
+            | MediaPlayerEntityFeature.VOLUME_STEP
+            | MediaPlayerEntityFeature.PLAY
+            | MediaPlayerEntityFeature.PAUSE
+            | MediaPlayerEntityFeature.STOP
+            | MediaPlayerEntityFeature.NEXT_TRACK
+            | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            | MediaPlayerEntityFeature.SELECT_SOURCE
+            | MediaPlayerEntityFeature.SELECT_SOUND_MODE
+            | MediaPlayerEntityFeature.SHUFFLE_SET
+            | MediaPlayerEntityFeature.REPEAT_SET
+            | MediaPlayerEntityFeature.TURN_ON
+            | MediaPlayerEntityFeature.TURN_OFF
+            | MediaPlayerEntityFeature.GROUPING
+        )
+
+        # Add conditional features based on device capabilities
+        try:
+            # Check if device supports seeking (most modern WiiM devices do)
+            status = self.speaker.coordinator.data.get("status", {}) if self.speaker.coordinator.data else {}
+
+            # Enable seek if device reports duration/position or is playing streaming content
+            if (
+                status.get("duration") is not None
+                or status.get("position") is not None
+                or status.get("source") in ["spotify", "tidal", "qobuz", "amazon", "network"]
+            ):
+                features |= MediaPlayerEntityFeature.SEEK
+
+            # Enable media browsing for preset support (all WiiM devices support presets)
+            features |= MediaPlayerEntityFeature.BROWSE_MEDIA
+
+            # Enable play_media for URL/stream playback (all WiiM devices support this)
+            features |= MediaPlayerEntityFeature.PLAY_MEDIA
+
+        except Exception as err:
+            _LOGGER.debug("Failed to determine conditional features: %s", err)
+
+        return features
+
+    # ===== VOLUME PROPERTIES (delegate to controller) =====
 
     @property
     def volume_level(self) -> float | None:
         """Volume level of the media player (0..1)."""
-        return self.speaker.get_volume_level()
+        return self.controller.get_volume_level()
 
     @property
     def is_volume_muted(self) -> bool | None:
         """Boolean if volume is currently muted."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("mute") == "1"
+        return self.controller.is_volume_muted()
+
+    # ===== PLAYBACK PROPERTIES (delegate to controller) =====
+
+    @property
+    def state(self) -> MediaPlayerState:
+        """State of the media player."""
+        return self.controller.get_playback_state()
+
+    # ===== SOURCE PROPERTIES (delegate to controller) =====
+
+    @property
+    def source(self) -> str | None:
+        """Name of the current input source."""
+        return self.controller.get_current_source()
+
+    @property
+    def source_list(self) -> list[str]:
+        """List of available input sources."""
+        return self.controller.get_source_list()
+
+    @property
+    def sound_mode(self) -> str | None:
+        """Name of the current sound mode."""
+        return self.controller.get_sound_mode()
+
+    @property
+    def sound_mode_list(self) -> list[str]:
+        """List of available sound modes."""
+        return self.controller.get_sound_mode_list()
+
+    @property
+    def shuffle(self) -> bool | None:
+        """Boolean if shuffle is enabled."""
+        return self.controller.get_shuffle_state()
+
+    @property
+    def repeat(self) -> str | None:
+        """Return current repeat mode."""
+        return self.controller.get_repeat_mode()
+
+    # ===== MEDIA PROPERTIES (delegate to controller) =====
+
+    @property
+    def media_content_type(self) -> MediaType | None:
+        """Content type of current playing media."""
+        # Most WiiM content is music
+        return MediaType.MUSIC
 
     @property
     def media_title(self) -> str | None:
         """Title of current playing media."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("title") or status.get("Title")
+        return self.controller.get_media_title()
 
     @property
     def media_artist(self) -> str | None:
         """Artist of current playing media."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("artist") or status.get("Artist")
+        return self.controller.get_media_artist()
 
     @property
     def media_album_name(self) -> str | None:
         """Album name of current playing media."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("album") or status.get("Album")
+        return self.controller.get_media_album()
 
     @property
     def media_duration(self) -> int | None:
         """Duration of current playing media in seconds."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        duration = status.get("duration")
-        return int(duration) if duration is not None else None
+        return self.controller.get_media_duration()
 
     @property
     def media_position(self) -> int | None:
         """Position of current playing media in seconds."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        position = status.get("position")
-        return int(position) if position is not None else None
+        return self.controller.get_media_position()
+
+    @property
+    def media_position_updated_at(self) -> float | None:
+        """When the position was last updated."""
+        return self.controller.get_media_position_updated_at()
 
     @property
     def media_image_url(self) -> str | None:
         """Image url of current playing media."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("entity_picture")
+        return self.controller.get_media_image_url()
 
-    @property
-    def source(self) -> str | None:
-        """Return the current input source."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("source")
-
-    @property
-    def source_list(self) -> list[str] | None:
-        """List of available input sources."""
-        if not self.speaker.coordinator.data:
-            return None
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("sources", [])
+    # ===== GROUP PROPERTIES (delegate to controller) =====
 
     @property
     def group_members(self) -> list[str]:
-        """Return the list of group members."""
-        return self.speaker.get_group_member_entity_ids()
+        """List of group member entity IDs."""
+        return self.controller.get_group_members()
 
-    # Control methods (delegate to speaker coordinator)
-    async def async_play(self) -> None:
-        """Send play command."""
-        await self.speaker.coordinator.client.play()
-        await self._request_refresh_and_record_command("play")
-
-    async def async_pause(self) -> None:
-        """Send pause command."""
-        await self.speaker.coordinator.client.pause()
-        await self._request_refresh_and_record_command("pause")
-
-    async def async_stop(self) -> None:
-        """Send stop command."""
-        await self.speaker.coordinator.client.stop()
-        await self._request_refresh_and_record_command("stop")
+    # ===== VOLUME COMMANDS (delegate to controller) =====
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0..1."""
-        vol_int = int(volume * 100)
-        await self.speaker.coordinator.client.set_volume(vol_int)
-        await self._request_refresh_and_record_command("volume")
+        await self.controller.set_volume(volume)
+        await self._async_execute_command_with_refresh("volume")
 
     async def async_mute_volume(self, mute: bool) -> None:
-        """Mute (true) or unmute (false) media player."""
-        await self.speaker.coordinator.client.set_mute(mute)
-        await self._request_refresh_and_record_command("mute")
+        """Mute the volume."""
+        await self.controller.set_mute(mute)
+        await self._async_execute_command_with_refresh("mute")
+
+    async def async_volume_up(self) -> None:
+        """Volume up the media player."""
+        await self.controller.volume_up()
+        await self._async_execute_command_with_refresh("volume")
+
+    async def async_volume_down(self) -> None:
+        """Volume down the media player."""
+        await self.controller.volume_down()
+        await self._async_execute_command_with_refresh("volume")
+
+    # ===== PLAYBACK COMMANDS (delegate to controller) =====
+
+    async def async_media_play(self) -> None:
+        """Send play command."""
+        await self.controller.play()
+        await self._async_execute_command_with_refresh("play")
+
+    async def async_media_pause(self) -> None:
+        """Send pause command."""
+        await self.controller.pause()
+        await self._async_execute_command_with_refresh("pause")
+
+    async def async_media_stop(self) -> None:
+        """Send stop command."""
+        await self.controller.stop()
+        await self._async_execute_command_with_refresh("stop")
 
     async def async_media_next_track(self) -> None:
         """Send next track command."""
-        await self.speaker.coordinator.client.next_track()
-        await self._request_refresh_and_record_command("next")
+        await self.controller.next_track()
+        await self._async_execute_command_with_refresh("next")
 
     async def async_media_previous_track(self) -> None:
         """Send previous track command."""
-        await self.speaker.coordinator.client.previous_track()
-        await self._request_refresh_and_record_command("previous")
+        await self.controller.previous_track()
+        await self._async_execute_command_with_refresh("previous")
 
     async def async_media_seek(self, position: float) -> None:
-        """Seek to position in seconds."""
-        seek_position = int(position)
-        await self.speaker.coordinator.client.seek(seek_position)
-        await self._request_refresh_and_record_command("seek")
+        """Send seek command."""
+        await self.controller.seek(position)
+        await self._async_execute_command_with_refresh("seek")
+
+    # ===== SOURCE COMMANDS (delegate to controller) =====
 
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
-        await self.speaker.coordinator.client.set_source(source)
-        await self._request_refresh_and_record_command("source")
+        await self.controller.select_source(source)
+        await self._async_execute_command_with_refresh("source")
+
+    async def async_select_sound_mode(self, sound_mode: str) -> None:
+        """Select sound mode."""
+        await self.controller.set_eq_preset(sound_mode)
+        await self._async_execute_command_with_refresh("eq")
+
+    async def async_set_shuffle(self, shuffle: bool) -> None:
+        """Enable/disable shuffle mode."""
+        await self.controller.set_shuffle(shuffle)
+        await self._async_execute_command_with_refresh("shuffle")
+
+    async def async_set_repeat(self, repeat: str) -> None:
+        """Set repeat mode."""
+        await self.controller.set_repeat(repeat)
+        await self._async_execute_command_with_refresh("repeat")
+
+    # ===== POWER COMMANDS (delegate to controller) =====
+
+    async def async_turn_on(self) -> None:
+        """Turn the media player on."""
+        await self.controller.turn_on()
+        await self._async_execute_command_with_refresh("power")
+
+    async def async_turn_off(self) -> None:
+        """Turn the media player off."""
+        await self.controller.turn_off()
+        await self._async_execute_command_with_refresh("power")
+
+    # ===== GROUP COMMANDS (delegate to controller) =====
 
     async def async_join(self, group_members: list[str]) -> None:
         """Join speakers into a group."""
-        _LOGGER.info(
-            "Group join requested for %s with members: %s",
-            self.speaker.name,
-            group_members,
-        )
-
-        # Delegate to speaker (will be implemented in Phase 5)
-        speakers = self.speaker.resolve_entity_ids_to_speakers(group_members)
-        await self.speaker.async_join_group(speakers)
+        await self.controller.join_group(group_members)
+        await self._async_execute_command_with_refresh("group")
 
     async def async_unjoin(self) -> None:
-        """Remove this speaker from its group."""
-        _LOGGER.info("Group unjoin requested for %s", self.speaker.name)
+        """Remove this speaker from any group."""
+        await self.controller.leave_group()
+        await self._async_execute_command_with_refresh("group")
 
-        # Delegate to speaker (will be implemented in Phase 5)
-        await self.speaker.async_leave_group()
+    # ===== MEDIA COMMANDS (delegate to controller) =====
 
-    # Helper methods
-    async def _request_refresh_and_record_command(self, command_type: str) -> None:
-        """Request coordinator refresh and record user command for smart polling."""
-        # Record user command for smart polling
-        self.speaker.coordinator.record_user_command(command_type)
+    async def async_get_media_image(self) -> tuple[bytes, str] | None:
+        """Fetch media image of current playing image."""
+        return await self.controller.get_media_image()
 
-        # Request immediate refresh
-        await self.speaker.coordinator.async_request_refresh()
+    async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
+        """Play a piece of media."""
+        _LOGGER.debug("Play media called: type=%s, id=%s", media_type, media_id)
+        try:
+            # For URLs, use play_url
+            if media_type in [MediaType.URL, MediaType.MUSIC, "url"]:
+                await self.controller.play_url(media_id)
+                await self._async_execute_command_with_refresh("play_media")
+            else:
+                _LOGGER.warning("Unsupported media type: %s", media_type)
+        except Exception as err:
+            _LOGGER.error("Failed to play media %s: %s", media_id, err)
+            raise
 
-    # Extra state attributes for debugging/monitoring
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        if not self.speaker.coordinator.data:
-            return {}
+    # ===== ADVANCED COMMANDS (delegate to controller) =====
 
-        attrs = {
-            "speaker_uuid": self.speaker.uuid,
-            "speaker_role": self.speaker.role,
-            "coordinator_ip": self.speaker.coordinator.client.host,
-        }
+    async def async_play_preset(self, preset: int) -> None:
+        """Play a WiiM preset (1-6)."""
+        await self.controller.play_preset(preset)
+        await self._async_execute_command_with_refresh("preset")
 
-        # Add defensive polling info if available
-        polling_info = self.speaker.coordinator.data.get("polling", {})
-        if polling_info:
-            attrs.update(
-                {
-                    "is_playing": polling_info.get("is_playing"),
-                    "polling_interval": polling_info.get("interval"),
-                    "api_capabilities": polling_info.get("api_capabilities", {}),
-                }
-            )
+    async def async_play_url(self, url: str) -> None:
+        """Play a URL."""
+        await self.controller.play_url(url)
+        await self._async_execute_command_with_refresh("url")
 
-        # Add group info
-        if self.speaker.role != "solo":
-            attrs["group_members_count"] = len(self.speaker.group_members)
-
-        return attrs
+    async def async_browse_media(self, media_content_type=None, media_content_id=None):
+        """Implement the websocket media browsing helper."""
+        return await self.controller.browse_media(media_content_type, media_content_id)

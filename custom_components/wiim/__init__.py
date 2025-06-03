@@ -76,9 +76,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         poll_interval=entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
     )
 
+    _LOGGER.info(
+        "WiiM coordinator created for %s with %ds poll interval",
+        entry.data["host"],
+        entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
+    )
+
     # Initial data fetch
     try:
+        _LOGGER.info("Starting initial data fetch for %s", entry.data["host"])
         await coordinator.async_config_entry_first_refresh()
+        _LOGGER.info("Initial data fetch completed for %s", entry.data["host"])
+
     except Exception as err:
         _LOGGER.error("Failed to fetch initial data from %s: %s", entry.data["host"], err)
         raise  # Re-raise to trigger SETUP_RETRY instead of SETUP_ERROR
@@ -102,7 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ip_clean = entry.data["host"].replace(".", "_")
         device_uuid = ip_clean
 
-    speaker = get_or_create_speaker(hass, device_uuid, coordinator)
+    speaker = get_or_create_speaker(hass, coordinator, entry)
     await speaker.async_setup(entry)
 
     # Store references for platforms

@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .data import Speaker
+from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ async def async_setup_entry(
     Only creates useful maintenance buttons that users actually need.
     All buttons are optional and controlled by user preferences.
     """
-    speaker: Speaker = hass.data[DOMAIN][config_entry.entry_id]["speaker"]
+    speaker = get_speaker_from_config_entry(hass, config_entry)
 
     # Only create useful maintenance buttons - no internal diagnostic buttons
     entities = [
@@ -54,7 +54,12 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
         """Initialize reboot button."""
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_reboot"
-        self._attr_name = "Reboot"
+        self._attr_name = None
+
+    @property
+    def name(self) -> str:
+        """Return the name of the entity."""
+        return f"{self.speaker.name} Reboot"  # Display name includes action
 
     async def async_press(self) -> None:
         """Execute device reboot command.
@@ -65,12 +70,7 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
         try:
             _LOGGER.info("Initiating reboot for %s", self.speaker.name)
             await self.speaker.coordinator.client.reboot()
-
-            # Record user action for smart polling optimization
-            self.speaker.coordinator.record_user_command("reboot")
-
-            # Request immediate refresh to track reboot status
-            await self.speaker.coordinator.async_request_refresh()
+            await self._async_execute_command_with_refresh("reboot")
 
         except Exception as err:
             _LOGGER.error("Failed to reboot %s: %s", self.speaker.name, err)
@@ -89,7 +89,12 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
         """Initialize time sync button."""
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_sync_time"
-        self._attr_name = "Sync Time"
+        self._attr_name = None
+
+    @property
+    def name(self) -> str:
+        """Return the name of the entity."""
+        return f"{self.speaker.name} Sync Time"  # Display name includes action
 
     async def async_press(self) -> None:
         """Execute time synchronization command.
@@ -100,12 +105,7 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
         try:
             _LOGGER.info("Synchronizing time for %s", self.speaker.name)
             await self.speaker.coordinator.client.sync_time()
-
-            # Record user action for smart polling
-            self.speaker.coordinator.record_user_command("sync_time")
-
-            # Refresh to verify time sync was successful
-            await self.speaker.coordinator.async_request_refresh()
+            await self._async_execute_command_with_refresh("sync_time")
 
         except Exception as err:
             _LOGGER.error("Failed to sync time for %s: %s", self.speaker.name, err)

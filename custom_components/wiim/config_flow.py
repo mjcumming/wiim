@@ -1,7 +1,4 @@
-"""Config flow to configure WiiM component.
-
-Restored full functionality with proper device naming and validation.
-"""
+"""Config flow for the WiiM integration."""
 
 from __future__ import annotations
 
@@ -9,6 +6,7 @@ import logging
 from typing import Any
 
 import voluptuous as vol
+from aiohttp.client_exceptions import ClientError
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
@@ -31,83 +29,114 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-async def _validate_and_get_device_name(host: str) -> str:
-    """Validate device and get proper device name."""
-    client = WiiMClient(host, port=443)
+async def _validate_and_get_device_details(host: str) -> tuple[str, str]:
+    """Validate connectivity and retrieve the device name and UUID.
+
+    Connects to the WiiM device, fetches its details using getStatusEx, and extracts
+    the device name and a stable unique identifier (UUID).
+
+    Args:
+        host: The hostname or IP address of the WiiM device.
+
+    Returns:
+        A tuple containing the device name and the device UUID.
+
+    Raises:
+        ConfigEntryNotReady: If connection to the device fails.
+        WiiMError: For other API-related errors.
+    """
+    client = WiiMClient(host)
     try:
-        # Basic validation
-        await client.get_player_status()
+        # Use getStatusEx which returns comprehensive device info including UUID
+        device_details = await client.get_status()  # This calls getStatusEx endpoint
 
-        # Get device name from getStatusEx (main status endpoint)
-        try:
-            status_info = await client.get_status()
-            device_name = status_info.get("DeviceName") or status_info.get("device_name")
-            if device_name:
-                return device_name
-        except WiiMError:
-            pass
+        # Extract the actual UUID - this should be a proper UUID from the device
+        device_uuid = device_details.get("uuid")
+        if not device_uuid:
+            # Fallback to MAC if UUID not available
+            mac_address = device_details.get("MAC") or device_details.get("mac_address")
+            if mac_address:
+                device_uuid = mac_address.lower().replace(":", "")
+                _LOGGER.info("UUID not found, using MAC address %s as unique ID for %s", device_uuid, host)
+            else:
+                raise WiiMError(f"Could not retrieve UUID or MAC address for {host}")
 
-        # Fallback to get_device_info
-        try:
-            device_info = await client.get_device_info()
-            device_name = device_info.get("DeviceName") or device_info.get("device_name")
-            if device_name:
-                return device_name
-        except WiiMError:
-            pass
+        # Extract device name - this will be cleaned up by the Speaker class later
+        device_name = device_details.get("DeviceName") or device_details.get("device_name") or f"WiiM {host}"
 
-        # Final fallback
-        return f"WiiM {host}"
+        _LOGGER.info(
+            "Retrieved device info from getStatusEx: Name='%s', UUID='%s', Host='%s'", device_name, device_uuid, host
+        )
+        return device_name, device_uuid
 
+    except WiiMError as err:
+        _LOGGER.warning("API error while validating WiiM device at %s: %s", host, err)
+        raise ConfigEntryNotReady(f"API error connecting to WiiM device at {host}: {err}") from err
+    except ClientError as err:
+        _LOGGER.warning("Connection error while validating WiiM device at %s: %s", host, err)
+        raise ConfigEntryNotReady(f"Cannot connect to WiiM device at {host}: {err}") from err
     finally:
         await client.close()
 
 
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a WiiM config flow."""
+    """Manages the configuration flow for setting up a new WiiM device."""
 
     VERSION = 1
 
     def __init__(self) -> None:
-        """Set up instance."""
+        """Initialize the WiiM config flow."""
         self._host: str | None = None
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
-        """Return the options flow."""
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> WiiMOptionsFlow:
+        """Get the options flow for this handler."""
         return WiiMOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial step."""
+        """Handle the initial step of the user configuration."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
             if not host:
-                errors["base"] = "no_host"
+                errors["base"] = "no_host"  # Use a translation key
             else:
                 try:
-                    # Validate and get proper device name
-                    device_name = await _validate_and_get_device_name(host)
+                    # Validate connectivity and get a descriptive device name and UUID
+                    device_name, device_uuid = await _validate_and_get_device_details(host)
 
-                    # Set unique ID and check for duplicates
-                    unique_id = host
-                    await self.async_set_unique_id(unique_id)
-                    self._abort_if_unique_id_configured()
+                    await self.async_set_unique_id(device_uuid)
+                    self._abort_if_unique_id_configured(
+                        updates={CONF_HOST: host},
+                        reload_on_update=True,  # Reload if host changed for existing UUID
+                    )
 
-                    _LOGGER.info("Successfully connected to WiiM device '%s' at %s", device_name, host)
-                    return self.async_create_entry(title=device_name, data={CONF_HOST: host})
+                    _LOGGER.info(
+                        "Successfully identified WiiM device '%s' (UUID: %s) at %s",
+                        device_name,
+                        device_uuid,
+                        host,
+                    )
+                    return self.async_create_entry(
+                        title=device_name,
+                        data={CONF_HOST: host, "uuid": device_uuid},  # Store UUID in entry data too
+                    )
 
                 except ConfigEntryNotReady:
-                    _LOGGER.warning("Failed to connect to %s", host)
-                    errors["base"] = "cannot_connect"
-                except Exception as e:
-                    _LOGGER.error("Unexpected error during config for %s: %s", host, e)
-                    errors["base"] = "unknown"
-
-        # Show form
-        schema = vol.Schema({vol.Required(CONF_HOST, default=""): str})
+                    _LOGGER.warning("Connection to WiiM device at %s failed during setup", host)
+                    errors["base"] = "cannot_connect"  # Use a translation key
+                except WiiMError as err:  # Catch specific WiiMErrors if _validate raises them directly
+                    _LOGGER.warning("API error configuring WiiM device at %s: %s", host, err)
+                    errors["base"] = "cannot_connect"  # Or a more specific error key
+                except Exception as e:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected error configuring WiiM device at %s", host)
+                    errors["base"] = "unknown"  # Use a translation key
+        # Show the form to the user
+        schema = vol.Schema({vol.Required(CONF_HOST, default=self._host or ""): str})
         return self.async_show_form(
             step_id="user",
             data_schema=schema,
@@ -116,56 +145,54 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):
-    """Handle WiiM options."""
+    """Manages the options flow for an existing WiiM configuration entry."""
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        """Init options flow."""
+        """Initialize the WiiM options flow."""
         self.entry = entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle options flow."""
+        """Manage the options for the WiiM integration."""
         if user_input is not None:
-            # Convert user-friendly names back to internal names
             options_data = {}
 
-            # NEW: Defensive two-state polling configuration
+            # Polling rate configuration
             if CONF_PLAYING_UPDATE_RATE in user_input:
                 options_data[CONF_PLAYING_UPDATE_RATE] = user_input[CONF_PLAYING_UPDATE_RATE]
-
             if CONF_IDLE_UPDATE_RATE in user_input:
                 options_data[CONF_IDLE_UPDATE_RATE] = user_input[CONF_IDLE_UPDATE_RATE]
 
-            # Convert volume step from percentage back to decimal
+            # Volume step: convert from percentage (UI) to decimal (internal)
             if CONF_VOLUME_STEP_PERCENT in user_input:
                 options_data[CONF_VOLUME_STEP] = user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
 
-            # Map debug logging option
-            if CONF_DEBUG_LOGGING in user_input:
-                options_data["debug_logging"] = user_input[CONF_DEBUG_LOGGING]
-
-            # Essential entity filtering options only
-            if CONF_ENABLE_DIAGNOSTIC_ENTITIES in user_input:
-                options_data[CONF_ENABLE_DIAGNOSTIC_ENTITIES] = user_input[CONF_ENABLE_DIAGNOSTIC_ENTITIES]
-
+            # Feature toggles
             if CONF_ENABLE_MAINTENANCE_BUTTONS in user_input:
                 options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[CONF_ENABLE_MAINTENANCE_BUTTONS]
+            if CONF_ENABLE_DIAGNOSTIC_ENTITIES in user_input:
+                options_data[CONF_ENABLE_DIAGNOSTIC_ENTITIES] = user_input[CONF_ENABLE_DIAGNOSTIC_ENTITIES]
+            if CONF_DEBUG_LOGGING in user_input:
+                options_data[CONF_DEBUG_LOGGING] = user_input[CONF_DEBUG_LOGGING]
 
             return self.async_create_entry(title="", data=options_data)
 
-        # Get current values and convert for display
-        current_volume_step = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
-        current_debug_logging = self.entry.options.get("debug_logging", False)
+        # Populate form with current or default values
+        current_playing_rate = self.entry.options.get(CONF_PLAYING_UPDATE_RATE, 1)  # Default 1s
+        current_idle_rate = self.entry.options.get(CONF_IDLE_UPDATE_RATE, 5)  # Default 5s
 
-        # Defensive two-state polling options (CORE feature we just implemented)
-        current_playing_rate = self.entry.options.get(CONF_PLAYING_UPDATE_RATE, 1)
-        current_idle_rate = self.entry.options.get(CONF_IDLE_UPDATE_RATE, 5)
+        current_volume_step_decimal = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+        # Convert volume step from decimal (internal) to percentage (UI)
+        volume_step_percent = int(current_volume_step_decimal * 100)
 
-        # Essential entity filtering (keep minimal)
-        current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, True)
-        current_diagnostic_entities = self.entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False)
-
-        # Convert volume step from decimal to percentage for user display
-        volume_step_percent = int(current_volume_step * 100)
+        current_maintenance_buttons = self.entry.options.get(
+            CONF_ENABLE_MAINTENANCE_BUTTONS,
+            True,  # Default enabled
+        )
+        current_diagnostic_entities = self.entry.options.get(
+            CONF_ENABLE_DIAGNOSTIC_ENTITIES,
+            False,  # Default disabled
+        )
+        current_debug_logging = self.entry.options.get(CONF_DEBUG_LOGGING, False)  # Default disabled
 
         schema = vol.Schema(
             {

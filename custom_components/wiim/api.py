@@ -37,7 +37,6 @@ from aiohttp.client_exceptions import ClientError
 
 from .const import (
     API_ENDPOINT_CLEAR_PLAYLIST,
-    API_ENDPOINT_DEVICE_INFO,
     API_ENDPOINT_EQ_CUSTOM,
     API_ENDPOINT_EQ_GET,
     API_ENDPOINT_EQ_LIST,
@@ -736,8 +735,22 @@ class WiiMClient:
 
     # Device Info
     async def get_device_info(self) -> dict[str, Any]:
-        """Get device information."""
-        return await self._request(API_ENDPOINT_DEVICE_INFO)
+        """Get device information including UUID using getStatusEx.
+
+        According to the WiiM API guide, getStatusEx is the proper endpoint
+        for retrieving comprehensive device information including the UUID,
+        device name, firmware, model, and other metadata.
+        """
+        try:
+            # Use getStatusEx endpoint which provides comprehensive device info including UUID
+            device_info = await self._request(API_ENDPOINT_STATUS)
+            _LOGGER.debug("Retrieved device info from getStatusEx for %s: %s", self.host, device_info)
+            return device_info
+
+        except Exception as err:
+            _LOGGER.debug("get_device_info (getStatusEx) failed for %s: %s", self.host, err)
+            # Return empty dict so coordinator doesn't crash
+            return {}
 
     async def get_firmware_version(self) -> str:
         """Get firmware version."""
@@ -821,6 +834,12 @@ class WiiMClient:
         "Artist": "artist_hex",
         "Album": "album_hex",
         "DeviceName": "device_name",
+        # Device identification
+        "uuid": "uuid",  # Unique device identifier
+        "ssid": "ssid",  # Device SSID/hotspot name
+        "MAC": "mac_address",  # MAC address
+        "firmware": "firmware",  # Firmware version
+        "project": "project",  # Device model/project name
         # Wi-Fi (only present in fallback)
         "WifiChannel": "wifi_channel",
         "RSSI": "wifi_rssi",
@@ -987,35 +1006,54 @@ class WiiMClient:
         return data
 
     async def get_multiroom_info(self) -> dict[str, Any]:
-        """Get multiroom status."""
-        response = await self._request(API_ENDPOINT_GROUP_SLAVES)
-        _LOGGER.debug("[WiiM] get_multiroom_info response for %s: %s", self.host, response)
-        # Try to set group_master for slave
-        if "master" in response:
-            self._group_master = response["master"]
-            _LOGGER.debug(
-                "[WiiM] %s: Set group_master from 'master' field: %s",
-                self.host,
-                self._group_master,
-            )
-        elif "master_ip" in response:
-            self._group_master = response["master_ip"]
-            _LOGGER.debug(
-                "[WiiM] %s: Set group_master from 'master_ip' field: %s",
-                self.host,
-                self._group_master,
-            )
-        elif "master_uuid" in response:
-            self._group_master = response["master_uuid"]
-            _LOGGER.debug(
-                "[WiiM] %s: Set group_master from 'master_uuid' field: %s",
-                self.host,
-                self._group_master,
-            )
-        else:
-            self._group_master = None
-            _LOGGER.debug("[WiiM] %s: No master info found in group info response.", self.host)
-        return response
+        """Get multiroom information including master/slave status."""
+        try:
+            response = await self._request(API_ENDPOINT_GROUP_SLAVES)
+            _LOGGER.warning("[WiiM] %s: getSlaveList response: %s", self.host, response)
+
+            # The response can contain either:
+            # - "slaves": <integer> (slave count)
+            # - "slaves": <list> (actual slave devices)
+            slaves_data = response.get("slaves", 0)
+
+            if isinstance(slaves_data, int):
+                # Response is just a count
+                return {"slaves": [], "slave_count": slaves_data}
+            elif isinstance(slaves_data, list):
+                # Response is actual slave list
+                return {"slaves": slaves_data, "slave_count": len(slaves_data)}
+            else:
+                # Unknown format, default to empty
+                return {"slaves": [], "slave_count": 0}
+        except WiiMError as err:
+            # Device doesn't support multiroom or not a master
+            _LOGGER.debug("[WiiM] %s: getSlaveList failed: %s", self.host, err)
+            return {"slaves": [], "slave_count": 0}
+
+    async def get_slaves(self) -> list[str]:
+        """Get list of slave device IPs.
+
+        Returns empty list if device is not a master or doesn't support multiroom.
+        """
+        try:
+            response = await self._request(API_ENDPOINT_GROUP_SLAVES)
+            slaves_data = response.get("slaves", [])
+
+            if isinstance(slaves_data, list):
+                # Extract IP addresses from slave list
+                slave_ips = []
+                for slave in slaves_data:
+                    if isinstance(slave, dict) and "ip" in slave:
+                        slave_ips.append(slave["ip"])
+                    elif isinstance(slave, str):
+                        slave_ips.append(slave)
+                return slave_ips
+            else:
+                # slaves_data is an integer count or other type - no actual IPs available
+                return []
+        except WiiMError:
+            # Device doesn't support multiroom or is not a master
+            return []
 
     async def kick_slave(self, slave_ip: str) -> None:
         """Remove a slave device from the group."""
@@ -1097,83 +1135,12 @@ class WiiMClient:
         return await self._request(endpoint)
 
     @property
-    def base_url(self) -> str:  # noqa: D401 – simple property helper
-        """Return the base URL for the device (scheme://host:port)."""
-        return self._base_url
+    def base_url(self) -> str:
+        """Return the base URL for the device (scheme://host:port).
 
-
-# ---------------------------------------------------------------------------
-# --- low-level helpers (adapted from python-linkplay, MIT) ------------------
-# ---------------------------------------------------------------------------
-
-# The WiiM integration interacts with the speaker exclusively through the
-# HTTP API exposed on ``https://<ip>/httpapi.asp?command=...``.  The three
-# convenience helpers below replicate the tiny helper layer that the
-# *python-linkplay* library offers so that our high-level code remains compact
-# and easy to unit-test.  They purposefully depend **only** on ``aiohttp`` and
-# the Python standard library.
-
-
-async def _ensure_session(base_ssl_ctx: ssl.SSLContext | None) -> ClientSession:  # type: ignore
-    """Create a throw-away :class:`aiohttp.ClientSession` with our SSL context.
-
-    Helper for users that do not provide a session; we open one and make sure
-    the connector uses the given SSL context (or default verification disabled
-    if *None*).  The caller is responsible for closing it.
-    """
-
-    if base_ssl_ctx is None:
-        connector = aiohttp.TCPConnector(ssl=False)
-    else:
-        connector = aiohttp.TCPConnector(ssl=base_ssl_ctx)
-
-    return aiohttp.ClientSession(connector=connector)
-
-
-async def session_call_api(endpoint: str, session: ClientSession, command: str) -> str:
-    """Perform a **single GET** to the LinkPlay HTTP API and return raw text.
-
-    Parameters
-    ----------
-    endpoint
-        Base URL including scheme/host/port, *without* trailing slash, e.g.
-        ``https://192.168.1.10:443``.
-    session
-        An *aiohttp* :class:`ClientSession` instance.
-    command
-        The command part of the API call, for example ``getStatusEx``.
-    """
-
-    url = f"{endpoint}/httpapi.asp?command={command}"
-
-    try:
-        async with async_timeout.timeout(DEFAULT_TIMEOUT):
-            response = await session.get(url, headers=HEADERS)
-    except (TimeoutError, ClientError, asyncio.CancelledError) as err:
-        raise WiiMRequestError(f"{err} error requesting data from '{url}'") from err
-
-    if response.status != HTTPStatus.OK:
-        raise WiiMRequestError(f"Unexpected HTTP status {response.status} received from '{url}'")
-
-    return await response.text()
-
-
-async def session_call_api_json(endpoint: str, session: ClientSession, command: str) -> dict[str, str]:
-    """Call the API and JSON-decode the response."""
-
-    raw = await session_call_api(endpoint, session, command)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise WiiMInvalidDataError(f"Unexpected JSON ({raw[:80]}…) received from '{endpoint}'") from exc
-
-
-async def session_call_api_ok(endpoint: str, session: ClientSession, command: str) -> None:
-    """Call the API and assert the speaker answers exactly 'OK'."""
-
-    result = await session_call_api(endpoint, session, command)
-    if result.strip() != "OK":
-        raise WiiMRequestError(f"Didn't receive expected 'OK' from {endpoint} (got {result!r})")
+        This reflects the most recently successful communication endpoint.
+        """
+        return self._endpoint
 
 
 def _hex_to_str(val: str | None) -> str | None:
