@@ -77,6 +77,34 @@ class Speaker:
         await self._register_ha_device(entry)
         _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
+    def _extract_device_name(self, status: dict) -> str:
+        """Extract device name from status data with fallback logic.
+
+        This is the SINGLE SOURCE OF TRUTH for device name extraction.
+        Used by both initial setup and runtime updates to ensure consistency.
+
+        Args:
+            status: Status dictionary from API response
+
+        Returns:
+            Clean device name string, never empty or containing IP addresses
+        """
+        # Extract device name with multiple fallback attempts
+        device_name = (
+            status.get("DeviceName")  # WiiM API primary field
+            or status.get("device_name")  # Alternative field name
+            or status.get("GroupName")  # Group name field
+            or status.get("ssid", "").replace("_", " ")  # Device hotspot name
+            or "WiiM Speaker"  # Clean final fallback (no IP)
+        )
+
+        # Clean up the device name
+        clean_name = device_name.strip()
+        if not clean_name or clean_name.lower() in ["unknown", "none", ""]:
+            clean_name = "WiiM Speaker"
+
+        return clean_name
+
     async def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
         status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
@@ -90,21 +118,9 @@ class Speaker:
         self.ip = self.coordinator.client.host
         self.mac = (status.get("MAC") or "").lower().replace(":", "")
 
-        # Extract device name with multiple fallback attempts
-        device_name = (
-            status.get("DeviceName")  # WiiM API primary field
-            or status.get("device_name")  # Alternative field name
-            or status.get("GroupName")  # Group name field
-            or status.get("ssid", "").replace("_", " ")  # Device hotspot name
-            or "WiiM Speaker"  # Clean final fallback (no IP)
-        )
-
-        # Clean up the device name
-        self.name = device_name.strip()
-        if not self.name or self.name.lower() in ["unknown", "none", ""]:
-            self.name = "WiiM Speaker"
-
-        _LOGGER.debug("Device name extracted: '%s' (from field with value: '%s')", self.name, device_name)
+        # Single source of truth for device name extraction
+        self.name = self._extract_device_name(status)
+        _LOGGER.debug("Device name extracted: '%s'", self.name)
 
         self.model = status.get("project") or "WiiM Speaker"
         self.firmware = status.get("firmware")
@@ -145,24 +161,15 @@ class Speaker:
         status = data.get("status", {})
         multiroom = data.get("multiroom", {})
 
-        # Update device name with improved extraction logic
-        device_name = (
-            status.get("DeviceName")  # WiiM API primary field
-            or status.get("device_name")  # Alternative field name
-            or status.get("GroupName")  # Group name field
-            or status.get("ssid", "").replace("_", " ")  # Device hotspot name
-        )
+        # Update device name using single source of truth
+        new_name = self._extract_device_name(status)
+        if self.name != new_name:
+            old_name = self.name
+            self.name = new_name
+            _LOGGER.debug("Speaker %s name updated: %s -> %s", self.uuid, old_name, new_name)
 
-        if device_name and device_name.strip():
-            clean_name = device_name.strip()
-            if clean_name.lower() not in ["unknown", "none", ""]:
-                if self.name != clean_name:
-                    old_name = self.name
-                    self.name = clean_name
-                    _LOGGER.debug("Speaker %s name updated: %s -> %s", self.uuid, old_name, clean_name)
-
-                    # Update device registry with new name
-                    self._update_device_registry_name(clean_name)
+            # Update device registry with new name
+            self._update_device_registry_name(new_name)
 
         # Update group state
         old_role = self.role
