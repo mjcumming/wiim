@@ -260,3 +260,41 @@ Contributions are welcome! Please see the GitHub repository for development guid
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🎯 **Key Features**
+
+| Feature                  | Status | Description                            |
+| ------------------------ | ------ | -------------------------------------- |
+| Media Control            | ✅     | Play, Pause, Stop, Next/Previous       |
+| Volume Control           | ✅     | Volume adjustment and mute             |
+| **Hierarchical Sources** | ✅     | **Smart source detection (see below)** |
+| Source Selection         | ✅     | WiFi, Bluetooth, Line In, etc.         |
+| Sound Modes              | ✅     | EQ presets and audio enhancement       |
+| Shuffle & Repeat         | ✅     | Playback mode controls                 |
+| Track Position           | ✅     | Seek support with position tracking    |
+| Cover Art                | ✅     | Album artwork with change detection    |
+| Multiroom Control        | ✅     | Group management and synchronization   |
+| Device Discovery         | ✅     | Automatic network discovery            |
+
+### 🔍 **Hierarchical Source Detection**
+
+Our integration uses **intelligent source detection** that prioritizes what users actually care about:
+
+#### **What You See vs. Technical Details**
+
+| **You See (Priority 1)** | **Technical Reality (Priority 2)** | **When Used**          |
+| ------------------------ | ---------------------------------- | ---------------------- |
+| **Amazon Music** 🎵      | WiFi                               | Streaming from Amazon  |
+| **Spotify** 🎵           | WiFi                               | Streaming from Spotify |
+| **AirPlay** 📱           | WiFi                               | Casting from iOS/Mac   |
+| **Bluetooth** 📱         | Bluetooth                          | Direct BT connection   |
+| **Line In** 🔌           | Line In                            | Physical audio input   |
+
+#### **Why This Matters**
+
+- **Before**: Users saw confusing technical details like "WiFi" when streaming
+- **After**: Users see meaningful information like "Amazon Music"
+- **Smart Detection**: Uses artwork URLs, metadata, and API fields to identify streaming services
+- **Fallback Logic**: Shows input type (WiFi, Bluetooth) when service can't be detected
+
+This matches how other premium integrations work (Sonos shows "Spotify", not "Network").

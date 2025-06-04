@@ -293,12 +293,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Check metadata first, then status
         artwork_url = None
+        found_field = None
 
         # Check metadata first
         for field in artwork_fields:
             artwork_url = metadata.get(field)
             if artwork_url and artwork_url != "un_known":  # Filter out invalid URLs
-                _LOGGER.info("🎨 Found artwork for %s in metadata field '%s': %s", self.client.host, field, artwork_url)
+                found_field = f"metadata.{field}"
                 break
 
         # Then check status if not found in metadata
@@ -306,17 +307,29 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for field in artwork_fields:
                 artwork_url = status.get(field)
                 if artwork_url and artwork_url != "un_known":
-                    _LOGGER.info(
-                        "🎨 Found artwork for %s in status field '%s': %s", self.client.host, field, artwork_url
-                    )
+                    found_field = f"status.{field}"
                     break
+
+        # Track last artwork URL to reduce repetitive logging
+        if not hasattr(self, "_last_artwork_url"):
+            self._last_artwork_url = None
 
         if artwork_url and artwork_url != "un_known":
             enhanced["entity_picture"] = artwork_url
             enhanced["cover_url"] = artwork_url
-            _LOGGER.info("✅ Enhanced metadata with artwork for %s: %s", self.client.host, artwork_url)
+
+            # Only log when artwork URL actually changes
+            if self._last_artwork_url != artwork_url:
+                _LOGGER.info("🎨 Artwork changed for %s (%s): %s", self.client.host, found_field, artwork_url)
+                self._last_artwork_url = artwork_url
+            else:
+                _LOGGER.debug("🎨 Artwork unchanged for %s: %s", self.client.host, artwork_url)
         else:
-            _LOGGER.debug("❌ No valid artwork URL found for %s", self.client.host)
+            if self._last_artwork_url is not None:
+                _LOGGER.info("🎨 Artwork removed for %s", self.client.host)
+                self._last_artwork_url = None
+            else:
+                _LOGGER.debug("❌ No valid artwork URL found for %s", self.client.host)
 
         return enhanced
 

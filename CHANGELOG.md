@@ -264,6 +264,39 @@ All notable changes to this project will be documented in this file.
 
 ### Various improvements and bug fixes in earlier versions
 
+## [Unreleased]
+
+### 🎯 **Hierarchical Source Detection**
+
+- **FEATURE**: Implemented intelligent source detection that prioritizes streaming services over connection methods
+- **UX**: Users now see "Amazon Music" instead of "WiFi" when streaming from Amazon
+- **DETECTION**: Smart service inference from artwork URLs (e.g., Amazon URLs → "Amazon Music")
+- **MAPPING**: Comprehensive streaming service mapping (Spotify, Tidal, Qobuz, AirPlay, DLNA, etc.)
+- **FALLBACK**: Graceful fallback to input types (WiFi, Bluetooth, Line In) when service unknown
+- **ARCHITECTURE**: Two-layer system matches premium integration standards (like Sonos)
+
+### 🔧 **Logging Improvements**
+
+- **REDUCED**: Eliminated repetitive artwork logging (was logging same URL every 5 seconds)
+- **SMART**: Artwork changes now only logged when URL actually changes
+- **PERFORMANCE**: Reduced log volume significantly during music playback
+- **TRACKING**: Added artwork change detection to prevent spam
+
+### 🎛️ **Group Control Fixes**
+
+- **FIXED**: Group volume and mute controls now appear for multiroom masters
+- **PLATFORM**: Added Platform.NUMBER and Platform.SWITCH to core platforms
+- **ENTITIES**: Group Volume Control (number entity) and Group Mute Control (switch entity)
+- **DYNAMIC**: Controls auto-appear when speaker becomes group master, hide when solo
+- **NAMING**: Smart group names like "Main Floor + Kitchen Group Volume"
+
+### 📚 **Documentation Updates**
+
+- **ADDED**: Comprehensive documentation of hierarchical source detection
+- **EXPLAINED**: Two-layer source architecture (Service vs Input)
+- **EXAMPLES**: Updated automation examples with smart source detection
+- **GUIDE**: Enhanced API documentation with source field mapping
+
 ---
 
 **Note**: This changelog covers recent versions. For a complete history, see the Git commit log.

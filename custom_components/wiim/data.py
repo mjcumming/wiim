@@ -804,7 +804,7 @@ class Speaker:
         return self._uuid
 
     def get_playback_state(self) -> MediaPlayerState:
-        """Calculate current playbook state from coordinator data."""
+        """Calculate current playback state from coordinator data."""
         if not self.coordinator.data:
             return MediaPlayerState.OFF
 
@@ -812,26 +812,56 @@ class Speaker:
         # Check both 'play_status' (parsed) and 'state' (raw) for compatibility
         state = (status.get("play_status") or status.get("state", "stop")).lower()
 
-        # Only log when state is unexpected or for debugging
-        if state not in ["play", "pause", "stop"]:
-            _LOGGER.warning(
-                "🎵 UNEXPECTED PLAY STATE for %s: '%s' (raw status: play_status='%s', state='%s', status='%s')",
-                self.name,
-                state,
-                status.get("play_status"),
-                status.get("state"),
-                status.get("status"),
-            )
-
+        # Handle primary stable states
         if state == "play":
             return MediaPlayerState.PLAYING
         elif state == "pause":
             return MediaPlayerState.PAUSED
         elif state == "stop":
             return MediaPlayerState.IDLE
-        else:
-            _LOGGER.debug("Returning OFF state for %s (unknown state: '%s')", self.name, state)
-            return MediaPlayerState.OFF
+
+        # Handle loading states - keep as PLAYING for better UX
+        if state in ["load", "loading", "loaded"]:
+            _LOGGER.debug("🎵 Loading state '%s' for %s -> PLAYING", state, self.name)
+            return MediaPlayerState.PLAYING
+
+        # Handle other transitional states (return to IDLE)
+        transitional_states = {
+            "connecting",
+            "connect",
+            "connected",  # Service connection
+            "buffering",
+            "buffer",
+            "buffered",  # Content buffering
+            "seeking",
+            "seek",  # Position seeking
+            "switching",
+            "switch",  # Source switching
+            "initializing",
+            "init",  # Device initialization
+            "preparing",
+            "prepare",  # Content preparation
+            "starting",
+            "start",  # Playback starting
+            "transitioning",
+            "transition",  # Generic transition
+        }
+
+        if state in transitional_states:
+            # Transitional state - return IDLE as safe default
+            _LOGGER.debug("🎵 Transitional state '%s' for %s -> IDLE", state, self.name)
+            return MediaPlayerState.IDLE
+
+        # Handle unknown states (log warning but don't spam)
+        _LOGGER.warning(
+            "🎵 UNKNOWN PLAY STATE for %s: '%s' (raw status: play_status='%s', state='%s', status='%s')",
+            self.name,
+            state,
+            status.get("play_status"),
+            status.get("state"),
+            status.get("status"),
+        )
+        return MediaPlayerState.OFF
 
     def get_volume_level(self) -> float | None:
         """Get current volume level (0.0-1.0)."""
@@ -996,11 +1026,53 @@ class Speaker:
     # ===== SOURCE & AUDIO CONTROL METHODS =====
 
     def get_current_source(self) -> str | None:
-        """Get current input source."""
+        """Get current source using WiiM API mode field.
+
+        Uses official WiiM API specification for mode values:
+        - Simple, direct mapping from mode to source
+        - No complex inference or artwork URL parsing
+        - API-compliant and maintainable
+        """
         if not self.coordinator.data:
+            _LOGGER.debug("🎵 No coordinator data for %s", self.name)
             return None
+
         status = self.coordinator.data.get("status", {})
-        return status.get("source") or status.get("input") or status.get("mode")
+        mode = status.get("mode")
+
+        # Debug logging to understand what's happening
+        _LOGGER.debug(
+            "🎵 Source detection for %s: mode='%s', status keys: %s", self.name, mode, list(status.keys())[:10]
+        )
+
+        if mode is None:
+            _LOGGER.warning("🎵 No mode field found for %s in status: %s", self.name, status)
+            return None
+
+        # Direct mode-to-source mapping per WiiM API documentation
+        mode_map = {
+            "0": "Idle",
+            "1": "AirPlay",
+            "2": "DLNA",
+            "10": "Streaming",  # Network content (Amazon Music, Deezer, etc.)
+            "11": "USB",
+            "20": "HTTP API",
+            "31": "Spotify",  # Spotify Connect
+            "40": "Line In",
+            "41": "Bluetooth",
+            "43": "Optical",
+            "47": "Line In 2",
+            "51": "USB DAC",
+            "99": "Multiroom Guest",
+        }
+
+        source = mode_map.get(str(mode))
+        if source:
+            _LOGGER.info("🎵 Source from mode='%s' -> '%s' for %s", mode, source, self.name)
+            return source
+        else:
+            _LOGGER.warning("🎵 Unknown mode '%s' for %s", mode, self.name)
+            return f"Mode {mode}"  # Return something instead of None
 
     def get_shuffle_state(self) -> bool | None:
         """Get current shuffle state."""

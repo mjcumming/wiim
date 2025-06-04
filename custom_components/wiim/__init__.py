@@ -29,13 +29,15 @@ _LOGGER = logging.getLogger(__name__)
 CORE_PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,  # Always enabled - core functionality
     Platform.SENSOR,  # Always enabled - role sensor is essential for multiroom
+    Platform.NUMBER,  # Always enabled - group volume control for multiroom
+    Platform.SWITCH,  # Always enabled - group mute control for multiroom
 ]
 
 # Essential optional platforms based on user configuration
 OPTIONAL_PLATFORMS: dict[str, Platform] = {
     CONF_ENABLE_MAINTENANCE_BUTTONS: Platform.BUTTON,
-    CONF_ENABLE_EQ_CONTROLS: Platform.SWITCH,
     CONF_ENABLE_NETWORK_MONITORING: Platform.BINARY_SENSOR,
+    # Note: EQ controls are now handled within the switch platform conditionally
 }
 
 

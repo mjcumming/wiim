@@ -74,26 +74,126 @@ data:
 - **Relative Scaling**: Maintains volume relationships
 - **Individual Override**: Fine-tune specific speakers
 
-### Source Selection
+## 🎵 **Source Selection**
 
-**Supported Sources**
+### **Hierarchical Source Detection**
 
-- **Wi-Fi**: Network streaming, internet radio
-- **Bluetooth**: Paired devices
-- **Line In**: Analog audio input
-- **Optical**: Digital optical input
-- **USB**: USB audio devices/storage
-- **AirPlay**: Apple AirPlay streaming
-- **DLNA**: DLNA/UPnP streaming
+The WiiM integration features **intelligent source detection** that shows users what they actually care about:
+
+#### **Streaming Services (Priority 1)**
+
+When you're streaming, you'll see the actual service:
+
+- **Amazon Music** 🎵 - Amazon Music streaming
+- **Spotify** 🎵 - Spotify streaming
+- **Tidal** 🎵 - Tidal streaming
+- **Qobuz** 🎵 - Qobuz streaming
+- **Deezer** 🎵 - Deezer streaming
+- **AirPlay** 📱 - Apple device casting
+- **DLNA** 🌐 - DLNA media streaming
+- **Chromecast** 🎵 - Google Cast streaming
+
+#### **Physical Inputs (Priority 2)**
+
+When no streaming service detected:
+
+- **Line In** 🔌 - Analog audio input
+- **Optical** 💿 - Digital optical input
+- **Coaxial** 📡 - Digital coaxial input
+- **Bluetooth** 📱 - Direct Bluetooth connection
+- **USB** 💾 - USB device playback
+
+#### **Connection Methods (Fallback)**
+
+Basic connection info when service unknown:
+
+- **WiFi** 📶 - Network streaming (generic)
+- **Ethernet** 🌐 - Wired network connection
+
+### **Smart Detection Features**
+
+#### **Artwork-Based Inference**
+
+The integration can identify streaming services from artwork URLs:
+
+```
+https://m.media-amazon.com/images/... → Amazon Music
+https://scdn.co/... → Spotify
+https://tidal.com/... → Tidal
+```
+
+#### **API Field Priority**
+
+Multiple detection methods in order of reliability:
+
+1. `streaming_service` field (most reliable)
+2. `app_name` field
+3. `source` field mapping
+4. Artwork URL patterns
+5. Input type fallback
+
+#### **User Experience Benefits**
+
+**What Users See:**
+
+- ✅ "Amazon Music" (meaningful)
+- ✅ "Spotify" (actionable)
+- ✅ "AirPlay" (clear)
+
+**Instead of:**
+
+- ❌ "WiFi" (confusing)
+- ❌ "Network" (generic)
+- ❌ "Mode 99" (technical)
+
+### **Source List Configuration**
+
+The source list automatically includes:
+
+- **All detected streaming services**
+- **Available physical inputs**
+- **Network protocols** (AirPlay, DLNA, etc.)
+- **Preset stations** (if configured)
+
+Sources appear and disappear based on:
+
+- Device capabilities
+- Network availability
+- Account connectivity
+- Physical connections
+
+### **Automation Examples**
 
 ```yaml
-# Switch audio source
-service: media_player.select_source
-target:
-  entity_id: media_player.living_room
-data:
-  source: "Bluetooth"
+# Switch to Amazon Music (smart detection)
+- service: media_player.select_source
+  target:
+    entity_id: media_player.living_room
+  data:
+    source: "Amazon Music"
+
+# Switch to Line In for TV audio
+- service: media_player.select_source
+  target:
+    entity_id: media_player.living_room
+  data:
+    source: "Line In"
+
+# Trigger when streaming service changes
+- trigger:
+    platform: state
+    entity_id: media_player.living_room
+    attribute: source
+  condition:
+    condition: template
+    value_template: "{{ trigger.to_state.attributes.source in ['Amazon Music', 'Spotify', 'Tidal'] }}"
+  action:
+    service: light.turn_on
+    target:
+      entity_id: light.music_mode
 ```
+
+This hierarchical approach ensures users always see the most relevant information about what's playing on their WiiM devices.
 
 ---
 

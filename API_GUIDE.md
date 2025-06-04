@@ -15,6 +15,77 @@
 
 ---
 
+## 🎯 **WiiM Source Architecture**
+
+### **Two-Layer Source System**
+
+WiiM devices have a **hierarchical source system** that our integration handles intelligently:
+
+#### **Layer 1: Input/Connection (Technical)**
+
+Physical and connection-level inputs:
+
+- **WiFi/Network** - Internet streaming input
+- **Bluetooth** - Bluetooth audio input
+- **Line In** - Analog audio input
+- **Optical** - Digital optical input
+- **Coaxial** - Digital coaxial input
+
+#### **Layer 2: Service/Content (User-Facing)**
+
+Streaming services and protocols:
+
+- **Amazon Music** - Streaming service
+- **Spotify** - Streaming service
+- **Tidal** - Streaming service
+- **AirPlay** - Apple casting protocol
+- **DLNA** - Network media protocol
+- **Preset 1-6** - Saved stations/playlists
+
+### **API Field Mapping**
+
+Our integration detects the appropriate layer from multiple API fields:
+
+```json
+{
+  "source": "wifi", // Input layer (connection method)
+  "mode": "wifi", // Alternative input field
+  "input": "network", // Physical input type
+  "streaming_service": "amazon", // Service layer (priority!)
+  "app_name": "Amazon Music", // Friendly service name
+  "albumArtURI": "https://m.media-amazon.com/...", // Service inference
+  "preset": null, // Preset mode
+  "play_mode": "normal" // Playback state
+}
+```
+
+### **Detection Priority**
+
+Our `get_current_source()` method uses this hierarchy:
+
+1. **Explicit service fields** (`streaming_service`, `app_name`)
+2. **Service inference** (from `source` field mapping)
+3. **Artwork URL patterns** (Amazon URLs → "Amazon Music")
+4. **Input fallback** (WiFi, Bluetooth, Line In)
+
+### **User Experience Impact**
+
+**Before (confusing):**
+
+- Source: "WiFi" (when streaming Amazon Music)
+- Source: "WiFi" (when streaming Spotify)
+- Source: "Network" (when using AirPlay)
+
+**After (meaningful):**
+
+- Source: "Amazon Music" 🎵
+- Source: "Spotify" 🎵
+- Source: "AirPlay" 📱
+
+This matches user expectations and premium integration standards.
+
+---
+
 ## ⚡ **API Reliability Matrix**
 
 ### **✅ UNIVERSAL ENDPOINTS (Always Available)**
