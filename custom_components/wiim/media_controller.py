@@ -342,8 +342,6 @@ class MediaPlayerController:
             self._logger.debug("Setting EQ preset '%s' for %s", preset, self.speaker.name)
 
             # Handle both internal keys and display names
-            from .const import EQ_PRESET_MAP
-
             preset_key = None
 
             # First, try direct key lookup (e.g., "bassreducer")
@@ -521,8 +519,6 @@ class MediaPlayerController:
 
     def get_sound_mode_list(self) -> list[str]:
         """Get available EQ presets (capitalized display names)."""
-        from .const import EQ_PRESET_MAP
-
         return list(EQ_PRESET_MAP.values())  # Return display names: ["Flat", "Acoustic", "Bass"]
 
     def get_sound_mode(self) -> str | None:
@@ -684,7 +680,6 @@ class MediaPlayerController:
             # Import here to avoid circular imports
             from homeassistant.helpers.aiohttp_client import async_get_clientsession
             import aiohttp
-            from contextlib import suppress
 
             # Use Home Assistant's shared session for efficiency
             session = async_get_clientsession(self.hass)

@@ -1009,11 +1009,14 @@ class Speaker:
             "thumbnail",
         ]
 
-        for field in fallback_fields:
-            image_url = status_from_coord.get(field)
+        for artwork_field in fallback_fields:
+            image_url = status_from_coord.get(artwork_field)
             if image_url:
                 _LOGGER.debug(
-                    "Found media image URL from fallback status field '%s': %s for %s", field, image_url, self.name
+                    "Found media image URL from fallback status field '%s': %s for %s",
+                    artwork_field,
+                    image_url,
+                    self.name,
                 )
                 return image_url
 

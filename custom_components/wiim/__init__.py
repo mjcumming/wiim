@@ -14,7 +14,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from . import config_flow  # noqa: F401
 from .api import WiiMClient, WiiMConnectionError, WiiMError, WiiMTimeoutError
 from .const import (
-    CONF_ENABLE_EQ_CONTROLS,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
     CONF_ENABLE_NETWORK_MONITORING,
     DOMAIN,

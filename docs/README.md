@@ -1,111 +1,95 @@
-# WiiM Integration Documentation
+# WiiM Integration - User Documentation
 
-> **Purpose**: Complete documentation for the WiiM Home Assistant integration - a world-class audio integration following Sonos-inspired design patterns.
-
----
-
-## 📚 **Documentation Structure**
-
-### **🏗️ Architecture & Development**
-
-| Document                                     | Purpose                                                                       | Audience                |
-| -------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------- |
-| **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** | Complete development guide: architecture, design principles, coding standards | Developers/Contributors |
-| **[API_GUIDE.md](API_GUIDE.md)**             | API compatibility, group management, defensive programming                    | API Developers          |
-
-### **📖 User Documentation**
-
-| Document                       | Purpose                                               | Audience         |
-| ------------------------------ | ----------------------------------------------------- | ---------------- |
-| **[ENTITIES.md](ENTITIES.md)** | Complete entity reference - critical role sensor info | Users/Developers |
-| **[features.md](features.md)** | Complete feature overview and usage guide             | Users            |
-
-### **📋 Reference Materials**
-
-| Document                                     | Purpose                               | Audience |
-| -------------------------------------------- | ------------------------------------- | -------- |
-| **[installation.md](installation.md)**       | Installation via HACS or manual setup | Users    |
-| **[configuration.md](configuration.md)**     | Device configuration and setup        | Users    |
-| **[multiroom.md](multiroom.md)**             | Multiroom audio setup and management  | Users    |
-| **[troubleshooting.md](troubleshooting.md)** | Common issues and solutions           | Users    |
+> **Purpose**: Complete user guide for the WiiM Home Assistant integration.
 
 ---
 
-## 🎊 **Integration Status: Production Ready**
+## 📚 **User Documentation**
 
-The WiiM integration has achieved **world-class quality** and is production-ready.
+### **🚀 Getting Started**
 
-### **✅ Architecture Excellence**
+| Document                                 | Purpose                          | When to Use                 |
+| ---------------------------------------- | -------------------------------- | --------------------------- |
+| **[installation.md](installation.md)**   | Installation via HACS or manual  | First-time setup            |
+| **[configuration.md](configuration.md)** | Device configuration and options | Customizing device behavior |
+| **[features.md](features.md)**           | Complete feature overview        | Understanding capabilities  |
 
-| Component           | Achievement                               | Status      |
-| ------------------- | ----------------------------------------- | ----------- |
-| **Architecture**    | Sonos-inspired Speaker-centric design     | ✅ Complete |
-| **Code Quality**    | 71% reduction, event-driven patterns      | ✅ Complete |
-| **Entity Design**   | Essential-only (15 → 2-5 per device)      | ✅ Complete |
-| **API Reliability** | Defensive polling with graceful fallbacks | ✅ Complete |
-| **Role Sensor**     | Always visible multiroom status           | ✅ Complete |
+### **🎵 Advanced Features**
 
-### **🔑 Critical Design Achievement: Role Sensor**
+| Document                           | Purpose                               | When to Use                   |
+| ---------------------------------- | ------------------------------------- | ----------------------------- |
+| **[multiroom.md](multiroom.md)**   | Multiroom audio setup and management  | Setting up speaker groups     |
+| **[automation.md](automation.md)** | Automation scripts and examples       | Creating smart audio scenes   |
+| **[ENTITIES.md](ENTITIES.md)**     | Entity reference and role sensor info | Understanding entity behavior |
 
-**THE MOST IMPORTANT SENSOR** for multiroom audio - **ALWAYS VISIBLE**:
+### **🔧 Support**
 
-```yaml
-sensor.living_room_multiroom_role: "Master"
-sensor.kitchen_multiroom_role: "Slave"
-sensor.bedroom_multiroom_role: "Solo"
-```
-
-This sensor is **NEVER optional** because multiroom understanding is core functionality, not diagnostic.
+| Document                                     | Purpose                     | When to Use          |
+| -------------------------------------------- | --------------------------- | -------------------- |
+| **[troubleshooting.md](troubleshooting.md)** | Common issues and solutions | When things go wrong |
 
 ---
 
-## 🎯 **Quick Start Guide**
+## 🎯 **Quick Start Path**
 
-### **For Developers**
+### **New Users**
 
-1. **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Complete development foundation
-2. **[API_GUIDE.md](API_GUIDE.md)** - API integration patterns
+1. **[installation.md](installation.md)** - Install the integration
+2. **[configuration.md](configuration.md)** - Configure your devices
+3. **[features.md](features.md)** - Explore what you can do
+4. **[multiroom.md](multiroom.md)** - Set up speaker groups (optional)
 
-### **For Users**
+### **Automation Enthusiasts**
 
-1. **[installation.md](installation.md)** - Get started quickly
-2. **[ENTITIES.md](ENTITIES.md)** - Understand what entities you get
-3. **[features.md](features.md)** - Complete feature reference
-4. **[multiroom.md](multiroom.md)** - Set up multiroom audio
+1. **[ENTITIES.md](ENTITIES.md)** - Understand available entities
+2. **[automation.md](automation.md)** - Copy/paste automation examples
+3. **[multiroom.md](multiroom.md)** - Advanced group management
 
----
+### **Having Issues?**
 
-## 🏆 **Integration Excellence Achieved**
-
-This integration now serves as a **reference implementation** for complex audio device integrations in Home Assistant:
-
-✅ **Best Practices** - Follows Home Assistant's premier audio integration patterns
-✅ **Code Excellence** - Clean, maintainable, well-tested codebase
-✅ **User Experience** - Essential-only entities with critical role sensor always visible
-✅ **Developer Experience** - Clear architecture for future enhancements
-✅ **Universal Compatibility** - Works reliably across entire LinkPlay ecosystem
-✅ **Production Quality** - Defensive programming with graceful API fallbacks
-
-**The integration achieves world-class quality that other developers can study to learn best practices.**
+1. **[troubleshooting.md](troubleshooting.md)** - Common solutions
+2. **[GitHub Issues](https://github.com/mjcumming/wiim/issues)** - Report bugs
+3. **[HA Community](https://community.home-assistant.io/)** - Get help
 
 ---
 
-## 📝 **Documentation Maintenance**
+## 🎊 **Key Features Highlights**
 
-### **Current State**
+### **🔑 Essential Entities (Always Available)**
 
-- ✅ **Clean Structure** - Consolidated from 12+ files to 4 core documents
-- ✅ **No Duplication** - Single source of truth for each topic
-- ✅ **External Links** - No copied API docs, links to official sources
-- ✅ **Accurate Content** - All documentation reflects actual implementation
+- **Media Player** - Full device control (play, pause, volume, grouping)
+- **🔴 Multiroom Role Sensor** - **CRITICAL** for understanding group status
+  - States: `Solo`, `Master`, `Slave`
+  - **Always visible** - never hidden in diagnostics
+  - Essential for troubleshooting and automation
 
-### **Core Principles**
+### **🎵 Smart Source Detection**
 
-1. **Developer Guide** - All architecture, design, and coding patterns in one place
-2. **API Guide** - All API compatibility and integration patterns consolidated
-3. **Entity Guide** - Complete entity reference emphasizing critical role sensor
-4. **Features Guide** - User-focused feature documentation
+Shows what you actually care about:
+
+- **"Amazon Music"** instead of "WiFi"
+- **"Spotify"** instead of "Network"
+- **"AirPlay"** instead of "Mode 99"
+
+### **🎛️ Multiroom Excellence**
+
+- **Native HA Grouping** - Built-in group button support
+- **Group Entities** - Optional virtual group controllers
+- **Synchronized Control** - Perfect audio sync across speakers
+- **Stable Operations** - Dramatically improved reliability
 
 ---
 
-**External API Reference**: [Arylic LinkPlay API](https://developer.arylic.com/httpapi/)
+## 📋 **Integration Status**
+
+**✅ Production Ready** - World-class quality achieved:
+
+- ✅ **Essential-Only Entities** - Clean UI
+- ✅ **Always-Visible Role Sensor** - Critical multiroom understanding
+- ✅ **Sonos-Inspired Architecture** - Battle-tested patterns
+- ✅ **Universal Compatibility** - Works across entire LinkPlay ecosystem
+- ✅ **Defensive Programming** - Graceful API fallbacks
+
+---
+
+**For developer documentation, see [../development/README.md](../development/README.md)**
