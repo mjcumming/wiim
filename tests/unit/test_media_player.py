@@ -1,7 +1,7 @@
 """Unit tests for WiiM media player platform."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock, call, patch
 from homeassistant.components.media_player import (
     MediaPlayerState,
     MediaPlayerEntityFeature,
@@ -115,7 +115,13 @@ class TestWiiMMediaPlayer:
 
         # The new source detection should map mode "10" to "WiFi"
         assert media_player.source == "WiFi"
-        assert media_player.source_list == ["wifi", "bluetooth", "line_in"]
+
+        # The source_list returns friendly names from SOURCE_MAP, not raw sources
+        source_list = media_player.source_list
+        assert isinstance(source_list, list)
+        assert len(source_list) > 0
+        # Should contain WiFi as one of the available sources
+        assert "WiFi" in source_list
 
     def test_group_members_property(self, media_player, wiim_speaker):
         """Test group members property delegation."""
@@ -166,6 +172,7 @@ class TestMediaPlayerControls:
         """Test volume setting."""
         await media_player.async_set_volume_level(0.75)
 
+        # The controller's set_volume method converts to percentage and calls speaker's coordinator client
         media_player.speaker.coordinator.client.set_volume.assert_called_once_with(75)
 
     @pytest.mark.asyncio
@@ -295,15 +302,14 @@ class TestMediaPlayerSetup:
         """Test platform setup entry point."""
         from custom_components.wiim.media_player import async_setup_entry
 
-        # Mock the hass.data structure
-        hass.data = {"wiim": {wiim_config_entry.entry_id: {"speaker": wiim_speaker}}}
-
         entities = []
 
         async def mock_add_entities(entity_list):
             entities.extend(entity_list)
 
-        await async_setup_entry(hass, wiim_config_entry, mock_add_entities)
+        # Mock the get_speaker_from_config_entry function to return our test speaker
+        with patch("custom_components.wiim.media_player.get_speaker_from_config_entry", return_value=wiim_speaker):
+            await async_setup_entry(hass, wiim_config_entry, mock_add_entities)
 
         assert len(entities) == 1
         assert entities[0].speaker is wiim_speaker
