@@ -44,10 +44,14 @@ async def _validate_and_get_device_details(host: str) -> tuple[str, str]:
         ConfigEntryNotReady: If connection to the device fails.
         WiiMError: For other API-related errors.
     """
-    client = WiiMClient(host)
+    # Use shorter timeout for discovery to avoid blocking the UI
+    client = WiiMClient(host, timeout=5.0)
     try:
+        _LOGGER.debug("Validating WiiM device at %s", host)
+
         # Use getStatusEx which returns comprehensive device info including UUID
         device_details = await client.get_status()  # This calls getStatusEx endpoint
+        _LOGGER.debug("Device validation response for %s: %s", host, device_details)
 
         # Extract the actual UUID - this should be a proper UUID from the device
         device_uuid = device_details.get("uuid")
@@ -58,7 +62,15 @@ async def _validate_and_get_device_details(host: str) -> tuple[str, str]:
                 device_uuid = mac_address.lower().replace(":", "")
                 _LOGGER.info("UUID not found, using MAC address %s as unique ID for %s", device_uuid, host)
             else:
-                raise WiiMError(f"Could not retrieve UUID or MAC address for {host}")
+                # Last resort - use a combination of host and device name
+                device_name_raw = device_details.get("DeviceName") or device_details.get("device_name")
+                if device_name_raw:
+                    import hashlib
+
+                    device_uuid = hashlib.md5(f"{host}_{device_name_raw}".encode()).hexdigest()[:12]
+                    _LOGGER.warning("No UUID or MAC found, generated fallback ID %s for %s", device_uuid, host)
+                else:
+                    raise WiiMError(f"Could not retrieve UUID, MAC address, or device name for {host}")
 
         # Extract device name - this will be cleaned up by the Speaker class later
         device_name = device_details.get("DeviceName") or device_details.get("device_name") or f"WiiM {host}"
@@ -74,6 +86,9 @@ async def _validate_and_get_device_details(host: str) -> tuple[str, str]:
     except ClientError as err:
         _LOGGER.warning("Connection error while validating WiiM device at %s: %s", host, err)
         raise ConfigEntryNotReady(f"Cannot connect to WiiM device at {host}: {err}") from err
+    except Exception as err:
+        _LOGGER.warning("Unexpected error while validating WiiM device at %s: %s", host, err)
+        raise ConfigEntryNotReady(f"Unexpected error connecting to WiiM device at {host}: {err}") from err
     finally:
         await client.close()
 
@@ -144,28 +159,36 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_ssdp(self, discovery_info: ssdp.SsdpServiceInfo) -> FlowResult:
         """Handle a flow initialized by SSDP discovery."""
+        _LOGGER.info("🔍 SSDP discovery triggered for WiiM integration")
         _LOGGER.debug("SSDP discovery received: %s", discovery_info)
+        _LOGGER.debug("SSDP location: %s", getattr(discovery_info, "ssdp_location", "N/A"))
+        _LOGGER.debug("SSDP USN: %s", getattr(discovery_info, "ssdp_usn", "N/A"))
+        _LOGGER.debug("SSDP ST: %s", getattr(discovery_info, "ssdp_st", "N/A"))
+        _LOGGER.debug("SSDP upnp data: %s", getattr(discovery_info, "upnp", {}))
 
-        # Extract host from the discovery info
-        host = discovery_info.ssdp_location
-        if host:
-            # Parse the URL to get just the host
+        # Extract host from the SSDP location URL
+        host = None
+        if discovery_info.ssdp_location:
             from urllib.parse import urlparse
 
-            parsed = urlparse(host)
-            host = parsed.hostname
-            if parsed.port and parsed.port != 80:
-                host = f"{host}:{parsed.port}"
+            parsed = urlparse(discovery_info.ssdp_location)
+            if parsed.hostname:
+                host = parsed.hostname
+                # WiiM devices typically use HTTPS (443) or HTTP (80)
+                # Don't append port 80 as it's default for HTTP
+                if parsed.port and parsed.port not in (80, 443):
+                    host = f"{host}:{parsed.port}"
 
         if not host:
-            _LOGGER.debug("No host found in SSDP discovery info")
+            _LOGGER.warning("❌ No valid host found in SSDP discovery info: %s", discovery_info.ssdp_location)
             return self.async_abort(reason="no_host")
 
         self._host = host
-        _LOGGER.info("Discovered WiiM device via SSDP at %s", host)
+        _LOGGER.info("✅ Discovered WiiM device via SSDP at %s (from location: %s)", host, discovery_info.ssdp_location)
 
         try:
             # Validate the device and get details
+            _LOGGER.debug("🔗 Attempting to validate discovered device at %s", host)
             device_name, device_uuid = await _validate_and_get_device_details(host)
 
             await self.async_set_unique_id(device_uuid)
@@ -176,30 +199,40 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Show confirmation form to user
             self.context["title_placeholders"] = {"name": device_name}
+            _LOGGER.info("🎉 SSDP discovery successful for %s (%s)", device_name, host)
             return await self.async_step_discovery_confirm()
 
-        except (ConfigEntryNotReady, WiiMError):
-            _LOGGER.debug("Failed to validate SSDP discovered device at %s", host)
+        except (ConfigEntryNotReady, WiiMError) as err:
+            _LOGGER.warning("❌ Failed to validate SSDP discovered device at %s: %s", host, err)
             return self.async_abort(reason="cannot_connect")
 
     async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
         """Handle a flow initialized by Zeroconf discovery."""
+        _LOGGER.info("🔍 Zeroconf discovery triggered for WiiM integration")
         _LOGGER.debug("Zeroconf discovery received: %s", discovery_info)
+        _LOGGER.debug("Zeroconf host: %s", getattr(discovery_info, "host", "N/A"))
+        _LOGGER.debug("Zeroconf port: %s", getattr(discovery_info, "port", "N/A"))
+        _LOGGER.debug("Zeroconf type: %s", getattr(discovery_info, "type", "N/A"))
+        _LOGGER.debug("Zeroconf name: %s", getattr(discovery_info, "name", "N/A"))
+        _LOGGER.debug("Zeroconf properties: %s", getattr(discovery_info, "properties", {}))
 
         # Extract host from the discovery info
         host = discovery_info.host
-        if discovery_info.port and discovery_info.port != 80:
-            host = f"{host}:{discovery_info.port}"
-
         if not host:
-            _LOGGER.debug("No host found in Zeroconf discovery info")
+            _LOGGER.warning("❌ No host found in Zeroconf discovery info")
             return self.async_abort(reason="no_host")
 
+        # WiiM devices typically use HTTPS (443) or HTTP (80)
+        # Only append port if it's not the default HTTP/HTTPS ports
+        if discovery_info.port and discovery_info.port not in (80, 443):
+            host = f"{host}:{discovery_info.port}"
+
         self._host = host
-        _LOGGER.info("Discovered WiiM device via Zeroconf at %s", host)
+        _LOGGER.info("✅ Discovered WiiM device via Zeroconf at %s (port: %s)", host, discovery_info.port)
 
         try:
             # Validate the device and get details
+            _LOGGER.debug("🔗 Attempting to validate discovered device at %s", host)
             device_name, device_uuid = await _validate_and_get_device_details(host)
 
             await self.async_set_unique_id(device_uuid)
@@ -210,10 +243,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Show confirmation form to user
             self.context["title_placeholders"] = {"name": device_name}
+            _LOGGER.info("🎉 Zeroconf discovery successful for %s (%s)", device_name, host)
             return await self.async_step_discovery_confirm()
 
-        except (ConfigEntryNotReady, WiiMError):
-            _LOGGER.debug("Failed to validate Zeroconf discovered device at %s", host)
+        except (ConfigEntryNotReady, WiiMError) as err:
+            _LOGGER.warning("❌ Failed to validate Zeroconf discovered device at %s: %s", host, err)
             return self.async_abort(reason="cannot_connect")
 
     async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:

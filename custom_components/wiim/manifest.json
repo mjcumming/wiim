@@ -11,12 +11,32 @@
   "quality_scale": "gold",
   "requirements": ["aiohttp"],
   "ssdp": [
-    { "st": "upnp:rootdevice" },
-    { "device_type": "urn:schemas-upnp-org:device:MediaRenderer:1" },
-    { "st": "urn:schemas-upnp-org:service:AVTransport:1" },
-    { "st": "urn:schemas-upnp-org:service:RenderingControl:1" },
-    { "st": "urn:schemas-upnp-org:service:ConnectionManager:1" }
+    {
+      "manufacturer": "WiiM",
+      "st": "upnp:rootdevice"
+    },
+    {
+      "manufacturer": "LinkPlay",
+      "st": "upnp:rootdevice"
+    },
+    {
+      "manufacturer": "WiiM",
+      "device_type": "urn:schemas-upnp-org:device:MediaRenderer:1"
+    },
+    {
+      "manufacturer": "LinkPlay",
+      "device_type": "urn:schemas-upnp-org:device:MediaRenderer:1"
+    },
+    {
+      "st": "urn:schemas-upnp-org:service:AVTransport:1"
+    },
+    {
+      "st": "urn:schemas-upnp-org:service:RenderingControl:1"
+    },
+    {
+      "st": "urn:schemas-upnp-org:service:ConnectionManager:1"
+    }
   ],
-  "version": "1.0.5",
+  "version": "1.0.6",
   "zeroconf": [{ "type": "_linkplay._tcp.local." }]
 }
