@@ -16,5 +16,8 @@ aresponses>=2.1.6
 freezegun>=1.2.2
 zeroconf
 
+# Discovery dependencies (matches HA Core versions)
+async-upnp-client==0.44.0
+
 # Code quality
 flake8>=6.0.0
