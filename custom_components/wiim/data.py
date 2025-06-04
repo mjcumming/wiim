@@ -426,6 +426,12 @@ class Speaker:
             master_uuid = device_info.get("master_uuid")
             master_ip = device_info.get("master_ip")
             self._update_slave_group_state(master_uuid, master_ip)
+
+            # CRITICAL FIX: Force source re-detection for slaves after master is established
+            # This ensures "Following [Master Name]" is displayed instead of generic "Multiroom"
+            if self.coordinator_speaker:
+                _LOGGER.info("🎵 Slave %s master established, forcing source re-detection", self.name)
+                changes_made = True  # Ensure entity update is triggered
         else:  # solo
             _LOGGER.debug("Speaker %s is SOLO - clearing group state", self.name)
             self._clear_group_state()
@@ -1026,12 +1032,11 @@ class Speaker:
     # ===== SOURCE & AUDIO CONTROL METHODS =====
 
     def get_current_source(self) -> str | None:
-        """Get current source using WiiM API mode field.
+        """Get current source with smart master/slave handling.
 
-        Uses official WiiM API specification for mode values:
-        - Simple, direct mapping from mode to source
-        - No complex inference or artwork URL parsing
-        - API-compliant and maintainable
+        Returns user-friendly source names:
+        - Masters: Show actual source (WiFi, Bluetooth, etc.)
+        - Slaves: Show "Following [Master Name]"
         """
         if not self.coordinator.data:
             _LOGGER.debug("🎵 No coordinator data for %s", self.name)
@@ -1042,37 +1047,57 @@ class Speaker:
 
         # Debug logging to understand what's happening
         _LOGGER.debug(
-            "🎵 Source detection for %s: mode='%s', status keys: %s", self.name, mode, list(status.keys())[:10]
+            "🎵 Source detection for %s: mode='%s', role='%s', status keys: %s",
+            self.name,
+            mode,
+            self.role,
+            list(status.keys())[:10],
         )
 
         if mode is None:
             _LOGGER.warning("🎵 No mode field found for %s in status: %s", self.name, status)
             return None
 
-        # Direct mode-to-source mapping per WiiM API documentation
+        # Special handling for slave devices in multiroom groups
+        if self.role == "slave" and str(mode) == "99":
+            # Slave devices should show they're following the master
+            _LOGGER.debug(
+                "🎵 Slave source detection: role=%s, coordinator_speaker=%s",
+                self.role,
+                self.coordinator_speaker.name if self.coordinator_speaker else "None",
+            )
+            if self.coordinator_speaker:
+                following_text = f"Following {self.coordinator_speaker.name}"
+                _LOGGER.info("🎵 Slave %s showing source: '%s'", self.name, following_text)
+                return following_text
+            else:
+                _LOGGER.warning("🎵 Slave %s has no coordinator_speaker, showing generic source", self.name)
+                return "Multiroom Slave"
+
+        # For masters and solo devices, map mode to user-friendly source names
         mode_map = {
             "0": "Idle",
             "1": "AirPlay",
             "2": "DLNA",
-            "10": "Streaming",  # Network content (Amazon Music, Deezer, etc.)
+            "10": "WiFi",  # Network streaming (Amazon Music, Spotify via WiFi, etc.)
             "11": "USB",
-            "20": "HTTP API",
-            "31": "Spotify",  # Spotify Connect
+            "20": "Network",
+            "31": "Spotify Connect",
             "40": "Line In",
             "41": "Bluetooth",
             "43": "Optical",
             "47": "Line In 2",
             "51": "USB DAC",
-            "99": "Multiroom Guest",
+            "99": "Multiroom",  # Should not happen for masters, but fallback
         }
 
         source = mode_map.get(str(mode))
         if source:
-            _LOGGER.info("🎵 Source from mode='%s' -> '%s' for %s", mode, source, self.name)
+            _LOGGER.info("🎵 Source from mode='%s' -> '%s' for %s (role: %s)", mode, source, self.name, self.role)
             return source
         else:
             _LOGGER.warning("🎵 Unknown mode '%s' for %s", mode, self.name)
-            return f"Mode {mode}"  # Return something instead of None
+            return f"Unknown ({mode})"
 
     def get_shuffle_state(self) -> bool | None:
         """Get current shuffle state."""

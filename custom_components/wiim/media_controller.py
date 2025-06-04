@@ -464,7 +464,11 @@ class MediaPlayerController:
             if not internal_source:
                 return None
 
-            # Map internal source to friendly name
+            # Handle dynamic slave sources like "Following [Master Name]"
+            if internal_source.startswith("Following "):
+                return internal_source  # Return as-is for slave sources
+
+            # Map other internal sources to friendly names
             from .const import SOURCE_MAP
 
             return SOURCE_MAP.get(internal_source.lower(), internal_source)

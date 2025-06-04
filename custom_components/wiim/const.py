@@ -216,12 +216,19 @@ SOURCE_MAP = {
     "airplay": "AirPlay",
     "dlna": "DLNA",
     "spotify": "Spotify",
+    "spotify connect": "Spotify Connect",
     "tidal": "Tidal",
     "amazon": "Amazon Music",
     "qobuz": "Qobuz",
     "deezer": "Deezer",
     "usb": "USB",
-    "network": "WiFi",
+    "network": "Network",
+    "idle": "Idle",
+    "multiroom": "Multiroom",
+    "usb dac": "USB DAC",
+    "line in 2": "Line In 2",
+    # Handle "Following [name]" sources from slaves
+    "following": "Following",  # Partial match for slave sources
 }
 
 # Services – extended diagnostic helpers
