@@ -5,31 +5,25 @@
     "step": {
       "user": {
         "title": "🎵 Legg til WiiM-høyttaler",
-        "description": "Skriv inn IP-adressen til WiiM-enheten din. Du kan finne denne i ruterens administrasjonspanel eller i WiiM Home-appen under Enhetsinnstillinger → Nettverksinformasjon.",
+        "description": "Skriv inn IP-adressen til WiiM-enheten din. Du finner denne i ruterens administrasjonspanel eller i WiiM Home-appen under Enhetsinnstillinger → Nettverksinformasjon.",
         "data": {
-          "host": "Enhetens IP-adresse"
+          "host": "Enhets IP-adresse"
         }
       },
-      "upnp": {
-        "title": "Velg WiiM høyttaler",
-        "description": "Velg en høyttaler fra de oppdagede enhetene, eller konfigurer manuelt.",
-        "data": {
-          "host": "Høyttaler"
-        }
-      },
-      "confirm": {
-        "title": "Bekreft oppsett",
-        "description": "Bekreft at denne WiiM høyttaleren skal legges til Home Assistant.",
+      "discovery_confirm": {
+        "title": "🎵 WiiM-høyttaler oppdaget",
+        "description": "En WiiM-høyttaler ble oppdaget på {host}. Ønsker du å legge den til i Home Assistant?",
         "data": {}
       }
     },
-    "abort": {
-      "already_configured": "Denne WiiM-enheten er allerede konfigurert i Home Assistant"
-    },
     "error": {
       "no_host": "Vennligst skriv inn en gyldig IP-adresse",
-      "cannot_connect": "❌ Tilkobling mislyktes. Sjekk at IP-adressen er riktig og at WiiM-enheten din er på og koblet til samme nettverk som Home Assistant.",
+      "cannot_connect": "❌ Tilkobling mislyktes. Kontroller at IP-adressen er riktig og at WiiM-enheten er påslått og koblet til samme nettverk som Home Assistant.",
       "unknown": "En uventet feil oppstod. Prøv igjen eller sjekk Home Assistant-loggene for detaljer."
+    },
+    "abort": {
+      "already_configured": "Denne WiiM-enheten er allerede konfigurert i Home Assistant",
+      "no_host": "Ingen gyldig vert funnet i oppdagelsesinformasjon"
     }
   },
   "options": {
@@ -38,19 +32,19 @@
         "title": "⚙️ WiiM-enhetsinnstillinger",
         "description": "Konfigurer essensielle enhetsinnstillinger:",
         "data": {
-          "playing_update_rate": "🎵 Oppdateringsfrekvens under avspilling (sekunder)",
-          "idle_update_rate": "💤 Oppdateringsfrekvens i hvilemodus (sekunder)",
+          "playing_update_rate": "🎵 Oppdateringsrate under avspilling (sekunder)",
+          "idle_update_rate": "💤 Oppdateringsrate når inaktiv (sekunder)",
           "volume_step_percent": "🔊 Volumtrinnstørrelse (%)",
           "enable_maintenance_buttons": "🔧 Vedlikeholdsknapper",
           "enable_diagnostic_entities": "📊 Diagnosesensorer",
-          "debug_logging": "🐛 Feilsøkingsmodus"
+          "debug_logging": "🐛 Debug-modus"
         },
         "data_description": {
-          "playing_update_rate": "Rask polling under musikkavspilling for jevne posisjonsoppdateringer (1-5 sekunder)",
-          "idle_update_rate": "Tregere polling når ikke spiller for effektivitet (5-60 sekunder)",
-          "volume_step_percent": "Volumendring når du bruker volum opp/ned-knapper (1-50%). Mindre trinn gir finere kontroll.",
-          "enable_maintenance_buttons": "Vis enhetsvedlikeholdsknapper (omstart, tidssynkronisering) for feilsøking",
-          "enable_diagnostic_entities": "Vis avanserte diagnosesensorer for feilsøking og ytelsesovervåking",
+          "playing_update_rate": "Rask spørring når musikk spilles for jevne posisjonsoppdateringer (1-5 sekunder)",
+          "idle_update_rate": "Langsommere spørring når ikke spiller for effektivitet (5-60 sekunder)",
+          "volume_step_percent": "Volumendringsstørrelse når volum opp/ned-knapper brukes (1-50%). Mindre trinn gir finere kontroll.",
+          "enable_maintenance_buttons": "Vis enhetsvedlikeholdsknapper (omstart, synkroniser tid) for feilsøking",
+          "enable_diagnostic_entities": "Vis avanserte diagnosesensorer for debugging og ytelsesovervåking",
           "debug_logging": "Aktiver detaljert logging for feilsøking. Anbefales kun ved problemer."
         }
       }

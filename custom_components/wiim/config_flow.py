@@ -8,6 +8,7 @@ from typing import Any
 import voluptuous as vol
 from aiohttp.client_exceptions import ClientError
 from homeassistant import config_entries
+from homeassistant.components import ssdp, zeroconf
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
@@ -138,6 +139,116 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_ssdp(self, discovery_info: ssdp.SsdpServiceInfo) -> FlowResult:
+        """Handle a flow initialized by SSDP discovery."""
+        _LOGGER.debug("SSDP discovery received: %s", discovery_info)
+
+        # Extract host from the discovery info
+        host = discovery_info.ssdp_location
+        if host:
+            # Parse the URL to get just the host
+            from urllib.parse import urlparse
+
+            parsed = urlparse(host)
+            host = parsed.hostname
+            if parsed.port and parsed.port != 80:
+                host = f"{host}:{parsed.port}"
+
+        if not host:
+            _LOGGER.debug("No host found in SSDP discovery info")
+            return self.async_abort(reason="no_host")
+
+        self._host = host
+        _LOGGER.info("Discovered WiiM device via SSDP at %s", host)
+
+        try:
+            # Validate the device and get details
+            device_name, device_uuid = await _validate_and_get_device_details(host)
+
+            await self.async_set_unique_id(device_uuid)
+            self._abort_if_unique_id_configured(
+                updates={CONF_HOST: host},
+                reload_on_update=True,
+            )
+
+            # Show confirmation form to user
+            self.context["title_placeholders"] = {"name": device_name}
+            return await self.async_step_discovery_confirm()
+
+        except (ConfigEntryNotReady, WiiMError):
+            _LOGGER.debug("Failed to validate SSDP discovered device at %s", host)
+            return self.async_abort(reason="cannot_connect")
+
+    async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
+        """Handle a flow initialized by Zeroconf discovery."""
+        _LOGGER.debug("Zeroconf discovery received: %s", discovery_info)
+
+        # Extract host from the discovery info
+        host = discovery_info.host
+        if discovery_info.port and discovery_info.port != 80:
+            host = f"{host}:{discovery_info.port}"
+
+        if not host:
+            _LOGGER.debug("No host found in Zeroconf discovery info")
+            return self.async_abort(reason="no_host")
+
+        self._host = host
+        _LOGGER.info("Discovered WiiM device via Zeroconf at %s", host)
+
+        try:
+            # Validate the device and get details
+            device_name, device_uuid = await _validate_and_get_device_details(host)
+
+            await self.async_set_unique_id(device_uuid)
+            self._abort_if_unique_id_configured(
+                updates={CONF_HOST: host},
+                reload_on_update=True,
+            )
+
+            # Show confirmation form to user
+            self.context["title_placeholders"] = {"name": device_name}
+            return await self.async_step_discovery_confirm()
+
+        except (ConfigEntryNotReady, WiiMError):
+            _LOGGER.debug("Failed to validate Zeroconf discovered device at %s", host)
+            return self.async_abort(reason="cannot_connect")
+
+    async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle user confirmation of discovered device."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                # Re-validate to get fresh device details
+                device_name, device_uuid = await _validate_and_get_device_details(self._host)
+
+                _LOGGER.info(
+                    "Confirmed setup of discovered WiiM device '%s' (UUID: %s) at %s",
+                    device_name,
+                    device_uuid,
+                    self._host,
+                )
+                return self.async_create_entry(
+                    title=device_name,
+                    data={CONF_HOST: self._host, "uuid": device_uuid},
+                )
+
+            except ConfigEntryNotReady:
+                _LOGGER.warning("Connection to discovered WiiM device at %s failed during confirmation", self._host)
+                errors["base"] = "cannot_connect"
+            except WiiMError as err:
+                _LOGGER.warning("API error confirming discovered WiiM device at %s: %s", self._host, err)
+                errors["base"] = "cannot_connect"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected error confirming discovered WiiM device at %s", self._host)
+                errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="discovery_confirm",
+            description_placeholders={"host": self._host},
             errors=errors,
         )
 

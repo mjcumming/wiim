@@ -10,26 +10,20 @@
           "host": "Adresse IP de l'appareil"
         }
       },
-      "upnp": {
-        "title": "Sélectionner un haut-parleur WiiM",
-        "description": "Choisissez un haut-parleur parmi les appareils découverts, ou configurez manuellement.",
-        "data": {
-          "host": "Haut-parleur"
-        }
-      },
-      "confirm": {
-        "title": "Confirmer la configuration",
-        "description": "Confirmez l'ajout de ce haut-parleur WiiM à Home Assistant.",
+      "discovery_confirm": {
+        "title": "🎵 Haut-parleur WiiM découvert",
+        "description": "Un haut-parleur WiiM a été découvert à l'adresse {host}. Souhaitez-vous l'ajouter à Home Assistant ?",
         "data": {}
       }
-    },
-    "abort": {
-      "already_configured": "Cet appareil WiiM est déjà configuré dans Home Assistant"
     },
     "error": {
       "no_host": "Veuillez entrer une adresse IP valide",
       "cannot_connect": "❌ Échec de la connexion. Veuillez vérifier que l'adresse IP est correcte et que votre appareil WiiM est allumé et connecté au même réseau que Home Assistant.",
       "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer ou consulter les journaux de Home Assistant pour plus de détails."
+    },
+    "abort": {
+      "already_configured": "Cet appareil WiiM est déjà configuré dans Home Assistant",
+      "no_host": "Aucun hôte valide trouvé dans les informations de découverte"
     }
   },
   "options": {

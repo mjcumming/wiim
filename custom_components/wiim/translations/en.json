@@ -10,26 +10,20 @@
           "host": "Device IP Address"
         }
       },
-      "upnp": {
-        "title": "Select WiiM Speaker",
-        "description": "Choose a speaker from the discovered devices, or configure manually.",
-        "data": {
-          "host": "Speaker"
-        }
-      },
-      "confirm": {
-        "title": "Confirm Setup",
-        "description": "Confirm adding this WiiM speaker to Home Assistant.",
+      "discovery_confirm": {
+        "title": "🎵 WiiM Speaker Discovered",
+        "description": "A WiiM speaker was discovered at {host}. Would you like to add it to Home Assistant?",
         "data": {}
       }
-    },
-    "abort": {
-      "already_configured": "This WiiM device is already configured in Home Assistant"
     },
     "error": {
       "no_host": "Please enter a valid IP address",
       "cannot_connect": "❌ Connection failed. Please check that the IP address is correct and your WiiM device is powered on and connected to the same network as Home Assistant.",
       "unknown": "An unexpected error occurred. Please try again or check the Home Assistant logs for details."
+    },
+    "abort": {
+      "already_configured": "This WiiM device is already configured in Home Assistant",
+      "no_host": "No valid host found in discovery information"
     }
   },
   "options": {
