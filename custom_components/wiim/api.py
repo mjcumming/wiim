@@ -193,19 +193,37 @@ class WiiMClient:
         """Initialize the WiiM client.
 
         Args:
-            host: The IP address or hostname of the WiiM device.
-            port: The port number for the HTTP API (default: 443 for HTTPS).
+            host: The IP address or hostname of the WiiM device, optionally with port (e.g., "192.168.1.100:49152").
+            port: The port number for the HTTP API (default: 443 for HTTPS). Ignored if host contains port.
             timeout: Request timeout in seconds (default: 10.0).
             ssl_context: SSL context for HTTPS connections.
             session: Optional aiohttp ClientSession to use for requests.
         """
-        self._host = host
-        self.port = port
+        # Parse host and port if host contains a port
+        if ":" in host and not host.startswith("["):  # IPv6 addresses start with [
+            try:
+                parsed_host, parsed_port_str = host.rsplit(":", 1)
+                parsed_port = int(parsed_port_str)
+                self._host = parsed_host
+                self.port = parsed_port
+                self._discovered_port = True  # Flag to indicate we got port from discovery
+                _LOGGER.debug("Parsed host '%s' into host='%s', port=%d", host, parsed_host, parsed_port)
+            except (ValueError, TypeError):
+                # If parsing fails, treat the whole thing as hostname
+                self._host = host
+                self.port = port
+                self._discovered_port = False
+                _LOGGER.debug("Failed to parse host '%s', using as-is with default port %d", host, port)
+        else:
+            self._host = host
+            self.port = port
+            self._discovered_port = False
+
         self.timeout = timeout
         self.ssl_context = ssl_context
         self._session = session
         # Start with HTTPS endpoint, will auto-detect if fallback needed
-        self._endpoint = f"https://{host}:443"
+        self._endpoint = f"https://{self._host}:{self.port}"
         self._lock = asyncio.Lock()
         self._base_url = self._endpoint
         self._group_master: str | None = None
@@ -218,7 +236,7 @@ class WiiMClient:
 
     @property
     def host(self) -> str:
-        """Return the host address."""
+        """Return the host address (without port)."""
         return self._host
 
     def _get_ssl_context(self) -> ssl.SSLContext:
@@ -269,6 +287,8 @@ class WiiMClient:
 
         Tries HTTPS first (ports 443, 4443), then HTTP (port 80) as fallback.
         WiiM devices typically support HTTPS with self-signed certificates.
+        If a specific port was discovered (e.g., from SSDP/Zeroconf), that port
+        takes priority over default ports.
 
         Args:
             endpoint: API endpoint path (e.g., "/httpapi.asp?command=getPlayerStatus")
@@ -289,23 +309,32 @@ class WiiMClient:
 
         kwargs.setdefault("headers", HEADERS)
 
-        # Try protocols in python-linkplay order: HTTPS first, then HTTP fallback
-        protocols_to_try = [
-            ("https", 443, self._get_ssl_context()),  # HTTPS primary
-            ("https", 4443, self._get_ssl_context()),  # HTTPS alternate port
-            ("http", 80, None),  # HTTP fallback
-        ]
+        # If we have a discovered port (from SSDP/Zeroconf), prioritize that
+        if hasattr(self, "_discovered_port") and self._discovered_port:
+            # For discovered ports, try both HTTPS and HTTP on the same port
+            protocols_to_try = [
+                ("https", self.port, self._get_ssl_context()),  # Discovered port with HTTPS
+                ("http", self.port, None),  # Discovered port with HTTP
+            ]
+            _LOGGER.debug("Using discovered port %d for %s", self.port, self._host)
+        else:
+            # Default behavior: try common WiiM ports
+            protocols_to_try = [
+                ("https", 443, self._get_ssl_context()),  # HTTPS primary
+                ("https", 4443, self._get_ssl_context()),  # HTTPS alternate port
+                ("http", 80, None),  # HTTP fallback
+            ]
 
-        # If user specified a custom port, try that with both protocols first
-        if self.port not in (80, 443):
-            protocols_to_try.insert(0, ("https", self.port, self._get_ssl_context()))
-            protocols_to_try.insert(1, ("http", self.port, None))
+            # If user specified a custom port, try that with both protocols first
+            if self.port not in (80, 443):
+                protocols_to_try.insert(0, ("https", self.port, self._get_ssl_context()))
+                protocols_to_try.insert(1, ("http", self.port, None))
 
         tried: list[str] = []
         last_error: Exception | None = None
 
         for scheme, port, ssl_context in protocols_to_try:
-            url = f"{scheme}://{self.host}:{port}{endpoint}"
+            url = f"{scheme}://{self._host}:{port}{endpoint}"
             tried.append(url)
 
             # Set SSL context for HTTPS requests only
@@ -323,7 +352,7 @@ class WiiMClient:
                         _LOGGER.debug("Response from %s: %s", url, text[:200])
 
                         # Success! Update our endpoint for future requests
-                        self._endpoint = f"{scheme}://{self.host}:{port}"
+                        self._endpoint = f"{scheme}://{self._host}:{port}"
 
                         if text.strip() == "OK":
                             return {"raw": text.strip()}
@@ -336,7 +365,7 @@ class WiiMClient:
                 # For JSON decode errors, treat as successful raw response
                 if isinstance(err, json.JSONDecodeError):
                     _LOGGER.debug("Non-JSON response from %s: %s", url, text[:200])
-                    self._endpoint = f"{scheme}://{self.host}:{port}"
+                    self._endpoint = f"{scheme}://{self._host}:{port}"
                     return {"raw": text.strip()}
 
                 # Continue to next protocol/port
@@ -345,7 +374,7 @@ class WiiMClient:
             except RuntimeError as err:
                 # Handle session closed errors gracefully
                 if "session is closed" in str(err).lower():
-                    _LOGGER.debug("Session closed for %s, recreating session", self.host)
+                    _LOGGER.debug("Session closed for %s, recreating session", self._host)
                     try:
                         if self._session and not self._session.closed:
                             await self._session.close()
@@ -368,7 +397,7 @@ class WiiMClient:
                                 text = await response.text()
                                 _LOGGER.debug("Retry response from %s: %s", url, text[:200])
 
-                                self._endpoint = f"{scheme}://{self.host}:{port}"
+                                self._endpoint = f"{scheme}://{self._host}:{port}"
 
                                 if text.strip() == "OK":
                                     return {"raw": text.strip()}
@@ -382,7 +411,7 @@ class WiiMClient:
                     continue
 
         # If we get here, all attempts failed
-        error_msg = "Failed to communicate with WiiM device at {} after trying: {}".format(self.host, ", ".join(tried))
+        error_msg = "Failed to communicate with WiiM device at {} after trying: {}".format(self._host, ", ".join(tried))
         if last_error:
             error_msg += f"\nLast error: {last_error}"
         raise WiiMConnectionError(error_msg)

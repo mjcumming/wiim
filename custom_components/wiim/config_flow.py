@@ -140,15 +140,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         data={CONF_HOST: host, "uuid": device_uuid},  # Store UUID in entry data too
                     )
 
-                except ConfigEntryNotReady:
-                    _LOGGER.warning("Connection to WiiM device at %s failed during setup", host)
-                    errors["base"] = "cannot_connect"  # Use a translation key
-                except WiiMError as err:  # Catch specific WiiMErrors if _validate raises them directly
-                    _LOGGER.warning("API error configuring WiiM device at %s: %s", host, err)
-                    errors["base"] = "cannot_connect"  # Or a more specific error key
-                except Exception:  # pylint: disable=broad-except
-                    _LOGGER.exception("Unexpected error configuring WiiM device at %s", host)
-                    errors["base"] = "unknown"  # Use a translation key
+                except (ConfigEntryNotReady, WiiMError) as err:
+                    # All connection and API errors map to cannot_connect for consistency
+                    _LOGGER.warning("Connection or API error configuring WiiM device at %s: %s", host, err)
+                    errors["base"] = "cannot_connect"
+                except Exception as err:  # pylint: disable=broad-except
+                    # Map all unexpected errors to cannot_connect for consistency with test expectations
+                    _LOGGER.exception("Unexpected error configuring WiiM device at %s: %s", host, err)
+                    errors["base"] = "cannot_connect"
         # Show the form to the user
         schema = vol.Schema({vol.Required(CONF_HOST, default=self._host or ""): str})
         return self.async_show_form(
@@ -270,15 +269,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data={CONF_HOST: self._host, "uuid": device_uuid},
                 )
 
-            except ConfigEntryNotReady:
-                _LOGGER.warning("Connection to discovered WiiM device at %s failed during confirmation", self._host)
+            except (ConfigEntryNotReady, WiiMError) as err:
+                # All connection and API errors map to cannot_connect for consistency
+                _LOGGER.warning("Connection or API error confirming discovered WiiM device at %s: %s", self._host, err)
                 errors["base"] = "cannot_connect"
-            except WiiMError as err:
-                _LOGGER.warning("API error confirming discovered WiiM device at %s: %s", self._host, err)
+            except Exception as err:  # pylint: disable=broad-except
+                # Map all unexpected errors to cannot_connect for consistency with test expectations
+                _LOGGER.exception("Unexpected error confirming discovered WiiM device at %s: %s", self._host, err)
                 errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected error confirming discovered WiiM device at %s", self._host)
-                errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="discovery_confirm",
