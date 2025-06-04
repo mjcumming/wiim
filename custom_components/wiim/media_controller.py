@@ -15,26 +15,16 @@ and complex media player business logic.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.media_player import MediaPlayerState
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry
 
-from .api import WiiMError
 from .const import (
     CONF_VOLUME_STEP,
     DEFAULT_VOLUME_STEP,
     EQ_PRESET_MAP,
-    PLAY_MODE_NORMAL,
-    PLAY_MODE_REPEAT_ALL,
-    PLAY_MODE_REPEAT_ONE,
-    PLAY_MODE_SHUFFLE,
-    PLAY_MODE_SHUFFLE_REPEAT_ALL,
-    SOURCE_MAP,
 )
 
 if TYPE_CHECKING:
@@ -100,7 +90,7 @@ class MediaPlayerController:
         except Exception as err:
             self._logger.error("Failed to set volume to %.2f: %s", volume, err)
             raise HomeAssistantError(
-                "Failed to set volume to %d%% on %s: %s" % (int(volume * 100), self.speaker.name, err)
+                f"Failed to set volume to {int(volume * 100)}% on {self.speaker.name}: {err}"
             ) from err
 
     async def set_mute(self, mute: bool) -> None:
@@ -126,7 +116,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to set mute to %s: %s", mute, err)
-            raise HomeAssistantError("Failed to set mute: %s" % err) from err
+            raise HomeAssistantError(f"Failed to set mute: {err}") from err
 
     async def volume_up(self, step: float | None = None) -> None:
         """Volume up with configurable step.
@@ -194,7 +184,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to start playback: %s", err)
-            raise HomeAssistantError("Failed to play: %s" % err) from err
+            raise HomeAssistantError(f"Failed to play: {err}") from err
 
     async def pause(self) -> None:
         """Pause playback (master/slave aware)."""
@@ -210,7 +200,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to pause playback: %s", err)
-            raise HomeAssistantError("Failed to pause: %s" % err) from err
+            raise HomeAssistantError(f"Failed to pause: {err}") from err
 
     async def stop(self) -> None:
         """Stop playback."""
@@ -226,7 +216,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to stop playback: %s", err)
-            raise HomeAssistantError("Failed to stop: %s" % err) from err
+            raise HomeAssistantError(f"Failed to stop: {err}") from err
 
     async def next_track(self) -> None:
         """Next track (master/slave aware)."""
@@ -242,7 +232,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to skip to next track: %s", err)
-            raise HomeAssistantError("Failed to skip to next track: %s" % err) from err
+            raise HomeAssistantError(f"Failed to skip to next track: {err}") from err
 
     async def previous_track(self) -> None:
         """Previous track (master/slave aware)."""
@@ -258,7 +248,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to skip to previous track: %s", err)
-            raise HomeAssistantError("Failed to skip to previous track: %s" % err) from err
+            raise HomeAssistantError(f"Failed to skip to previous track: {err}") from err
 
     async def seek(self, position: float) -> None:
         """Seek to position.
@@ -273,7 +263,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to seek to position %.1f: %s", position, err)
-            raise HomeAssistantError("Failed to seek: %s" % err) from err
+            raise HomeAssistantError(f"Failed to seek: {err}") from err
 
     def get_playback_state(self) -> MediaPlayerState:
         """Get current playback state."""
@@ -319,9 +309,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to select source '%s': %s", source, err)
-            raise HomeAssistantError(
-                "Failed to select source '%s' on %s: %s" % (source, self.speaker.name, err)
-            ) from err
+            raise HomeAssistantError(f"Failed to select source '{source}' on {self.speaker.name}: {err}") from err
 
     async def set_eq_preset(self, preset: str) -> None:
         """Set EQ preset.
@@ -336,17 +324,16 @@ class MediaPlayerController:
             preset_id = EQ_PRESET_MAP.get(preset)
             if preset_id is None:
                 raise ValueError(
-                    "Unknown EQ preset '%s' on %s. Available presets: %s"
-                    % (preset, self.speaker.name, ", ".join(EQ_PRESET_MAP.keys()))
+                    "Unknown EQ preset '{}' on {}. Available presets: {}".format(
+                        preset, self.speaker.name, ", ".join(EQ_PRESET_MAP.keys())
+                    )
                 )
 
             await self.speaker.coordinator.client.set_eq_preset(preset_id)
 
         except Exception as err:
             self._logger.error("Failed to set EQ preset '%s': %s", preset, err)
-            raise HomeAssistantError(
-                "Failed to set EQ preset '%s' on %s: %s" % (preset, self.speaker.name, err)
-            ) from err
+            raise HomeAssistantError(f"Failed to set EQ preset '{preset}' on {self.speaker.name}: {err}") from err
 
     async def set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode with repeat coordination.
@@ -363,7 +350,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to set shuffle to %s: %s", shuffle, err)
-            raise HomeAssistantError("Failed to set shuffle: %s" % err) from err
+            raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
 
     async def set_repeat(self, repeat: str) -> None:
         """Set repeat mode (off/one/all).
@@ -382,15 +369,13 @@ class MediaPlayerController:
             elif repeat == "all":
                 repeat_mode = "2"
             else:
-                raise ValueError(
-                    "Unknown repeat mode '%s' on %s. Valid modes: off, one, all" % (repeat, self.speaker.name)
-                )
+                raise ValueError(f"Unknown repeat mode '{repeat}' on {self.speaker.name}. Valid modes: off, one, all")
 
             await self.speaker.coordinator.client.set_repeat_mode(repeat_mode)
 
         except Exception as err:
             self._logger.error("Failed to set repeat to '%s': %s", repeat, err)
-            raise HomeAssistantError("Failed to set repeat: %s" % err) from err
+            raise HomeAssistantError(f"Failed to set repeat: {err}") from err
 
     def get_source_list(self) -> list[str]:
         """Get sources (master/slave aware)."""
@@ -466,7 +451,7 @@ class MediaPlayerController:
         except Exception as err:
             self._logger.error("Failed to join group: %s", err)
             raise HomeAssistantError(
-                "Failed to create group with %s on %s: %s" % (", ".join(group_members), self.speaker.name, err)
+                "Failed to create group with {} on {}: {}".format(", ".join(group_members), self.speaker.name, err)
             ) from err
 
     async def leave_group(self) -> None:
@@ -481,7 +466,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to leave group: %s", err)
-            raise HomeAssistantError("Failed to remove %s from group: %s" % (self.speaker.name, err)) from err
+            raise HomeAssistantError(f"Failed to remove {self.speaker.name} from group: {err}") from err
 
     def get_group_members(self) -> list[str]:
         """Get group member entity IDs."""
@@ -525,7 +510,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to turn on device: %s", err)
-            raise HomeAssistantError("Failed to turn on: %s" % err) from err
+            raise HomeAssistantError(f"Failed to turn on: {err}") from err
 
     async def turn_off(self) -> None:
         """Turn device off."""
@@ -536,7 +521,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to turn off device: %s", err)
-            raise HomeAssistantError("Failed to turn off: %s" % err) from err
+            raise HomeAssistantError(f"Failed to turn off: {err}") from err
 
     async def toggle_power(self) -> None:
         """Toggle power state."""
@@ -547,7 +532,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to toggle power: %s", err)
-            raise HomeAssistantError("Failed to toggle power: %s" % err) from err
+            raise HomeAssistantError(f"Failed to toggle power: {err}") from err
 
     def is_powered_on(self) -> bool:
         """Get power state."""
@@ -616,7 +601,7 @@ class MediaPlayerController:
         """
         try:
             if not 1 <= preset <= 6:
-                raise ValueError("Preset must be 1-6, got %d for %s" % (preset, self.speaker.name))
+                raise ValueError(f"Preset must be 1-6, got {preset} for {self.speaker.name}")
 
             self._logger.debug("Playing preset %d for %s", preset, self.speaker.name)
 
@@ -624,7 +609,7 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to play preset %d: %s", preset, err)
-            raise HomeAssistantError("Failed to play preset %d on %s: %s" % (preset, self.speaker.name, err)) from err
+            raise HomeAssistantError(f"Failed to play preset {preset} on {self.speaker.name}: {err}") from err
 
     async def play_url(self, url: str) -> None:
         """Play URL.
@@ -639,77 +624,4 @@ class MediaPlayerController:
 
         except Exception as err:
             self._logger.error("Failed to play URL '%s': %s", url, err)
-            raise HomeAssistantError("Failed to play URL: %s" % err) from err
-
-    async def browse_media(self, media_content_type=None, media_content_id=None):
-        """Browse media for presets.
-
-        Returns:
-            BrowseMedia object for HA media browser
-        """
-        try:
-            from homeassistant.components.media_player.browse_media import (
-                BrowseMedia,
-                MediaClass,
-                MediaType,
-            )
-
-            # Root level - show preset category
-            if media_content_id is None:
-                return BrowseMedia(
-                    title="WiiM Media",
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_id="wiim_root",
-                    media_content_type="wiim",
-                    can_play=False,
-                    can_expand=True,
-                    children=[
-                        BrowseMedia(
-                            title="Presets",
-                            media_class=MediaClass.DIRECTORY,
-                            media_content_id="wiim_presets",
-                            media_content_type="wiim_presets",
-                            can_play=False,
-                            can_expand=True,
-                        )
-                    ],
-                )
-
-            # Preset level - show individual presets
-            elif media_content_id == "wiim_presets":
-                presets = []
-                for i in range(1, 7):  # Presets 1-6
-                    presets.append(
-                        BrowseMedia(
-                            title=f"Preset {i}",
-                            media_class=MediaClass.MUSIC,
-                            media_content_id=f"wiim_preset_{i}",
-                            media_content_type="wiim_preset",
-                            can_play=True,
-                            can_expand=False,
-                        )
-                    )
-
-                return BrowseMedia(
-                    title="WiiM Presets",
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_id="wiim_presets",
-                    media_content_type="wiim_presets",
-                    can_play=False,
-                    can_expand=True,
-                    children=presets,
-                )
-
-            # Individual preset - play it
-            elif media_content_id.startswith("wiim_preset_"):
-                preset_num = int(media_content_id.split("_")[-1])
-                await self.play_preset(preset_num)
-                return None
-
-            else:
-                self._logger.warning("Unknown media content ID: %s", media_content_id)
-                return None
-
-        except Exception as err:
-            self._logger.error("Failed to browse media: %s", err)
-            return None
+            raise HomeAssistantError(f"Failed to play URL: {err}") from err

@@ -92,8 +92,16 @@ def wiim_data(hass):
 def wiim_speaker(hass, wiim_coordinator, wiim_data):
     """Create a test Speaker instance."""
     from custom_components.wiim.data import Speaker
+    from homeassistant.config_entries import ConfigEntry
 
-    speaker = Speaker(hass, "test-speaker-uuid", wiim_coordinator)
+    # Create a mock config entry
+    config_entry = MagicMock(spec=ConfigEntry)
+    config_entry.unique_id = "test-speaker-uuid"
+    config_entry.data = {"host": "192.168.1.100"}
+    config_entry.options = {}
+    config_entry.title = "Test WiiM"
+
+    speaker = Speaker(hass, wiim_coordinator, config_entry)
     speaker.ip = "192.168.1.100"
     speaker.name = "Test WiiM"
     speaker.model = "WiiM Mini"

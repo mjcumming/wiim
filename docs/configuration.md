@@ -33,13 +33,14 @@ The integration automatically discovers WiiM speakers on your network using:
 
 Each device can be individually configured via **Configure** button:
 
-| Option                   | Description                      | Default | Range  |
-| ------------------------ | -------------------------------- | ------- | ------ |
-| **Polling Interval**     | How often to check device status | 5 sec   | 1-60s  |
-| **Volume Step**          | Volume button increment          | 5%      | 1-50%  |
-| **Enable Group Control** | Create virtual group entity      | Off     | On/Off |
+| Option                   | Description                 | Default | Range  |
+| ------------------------ | --------------------------- | ------- | ------ |
+| **Volume Step**          | Volume button increment     | 5%      | 1-50%  |
+| **Enable Group Control** | Create virtual group entity | Off     | On/Off |
 
 **Changes apply immediately** - no restart required.
+
+**Note**: Polling interval is fixed at 5 seconds and not user-configurable.
 
 ### Advanced Entity Options
 
@@ -210,9 +211,9 @@ member_192_168_1_102_name: "Bedroom"
 
 **Polling Intervals:**
 
-- **Active playback**: 1-5 seconds
-- **Grouped speakers**: 5-10 seconds
-- **Idle devices**: 10-15 seconds
+- **Fixed interval**: 5 seconds for all states
+- **User configurable**: 1-60 seconds range
+- **Consistent load**: Predictable resource usage
 
 **Resource Management:**
 

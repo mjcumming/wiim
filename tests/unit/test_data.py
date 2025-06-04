@@ -73,7 +73,7 @@ class TestSpeaker:
         assert wiim_speaker.name == "Test WiiM"
         assert wiim_speaker.model == "WiiM Mini"
         assert wiim_speaker.ip == "192.168.1.100"
-        assert wiim_speaker.mac == "aa:bb:cc:dd:ee:ff".replace(":", "")
+        assert wiim_speaker.mac_address == "aa:bb:cc:dd:ee:ff".replace(":", "")
         assert wiim_speaker.firmware == "1.0.0"
         assert wiim_speaker.role == "solo"
 
@@ -133,7 +133,7 @@ class TestSpeaker:
 
         assert wiim_speaker.name == "Updated WiiM"
         assert wiim_speaker.model == "WiiM Pro Plus"
-        assert wiim_speaker.mac == "new:mac:address"
+        assert wiim_speaker.mac_address == "new:mac:address"
         assert wiim_speaker.firmware == "2.0.0"
         assert wiim_speaker.role == "master"
 
@@ -164,24 +164,10 @@ class TestSpeakerGroupManagement:
 
     @pytest.mark.asyncio
     async def test_async_join_group(self, wiim_speaker, wiim_speaker_slave):
-        """Test group joining functionality."""
-        # Mock the API calls
-        wiim_speaker_slave.coordinator.client.send_command = AsyncMock()
-
-        await wiim_speaker.async_join_group([wiim_speaker_slave])
-
-        # Verify API call was made
-        wiim_speaker_slave.coordinator.client.send_command.assert_called_once_with(
-            f"ConnectMasterAp:JoinGroupMaster:{wiim_speaker.ip}:wifi0.0.0.0"
-        )
-
-        # Verify roles updated
-        assert wiim_speaker.role == "master"
-        assert wiim_speaker_slave.role == "slave"
-
-        # Verify group membership
-        assert wiim_speaker_slave in wiim_speaker.group_members
-        assert wiim_speaker.group_members[0] is wiim_speaker  # Master first
+        """Test group joining functionality is not implemented."""
+        # The join functionality is not implemented yet (ConnectMasterAp is WiFi, not grouping)
+        with pytest.raises(NotImplementedError, match="Multiroom join commands not implemented yet"):
+            await wiim_speaker.async_join_group([wiim_speaker_slave])
 
     @pytest.mark.asyncio
     async def test_async_leave_group_as_slave(self, wiim_speaker, wiim_speaker_slave):

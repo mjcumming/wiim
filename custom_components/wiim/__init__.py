@@ -13,7 +13,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from . import config_flow  # noqa: F401
 from .api import WiiMClient
 from .const import (
-    CONF_ENABLE_DIAGNOSTIC_ENTITIES,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
     CONF_POLL_INTERVAL,
     DEFAULT_POLL_INTERVAL,

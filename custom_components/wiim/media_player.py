@@ -15,7 +15,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 from .media_controller import MediaPlayerController
@@ -89,9 +88,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 or status.get("source") in ["spotify", "tidal", "qobuz", "amazon", "network"]
             ):
                 features |= MediaPlayerEntityFeature.SEEK
-
-            # Enable media browsing for preset support (all WiiM devices support presets)
-            features |= MediaPlayerEntityFeature.BROWSE_MEDIA
 
             # Enable play_media for URL/stream playback (all WiiM devices support this)
             features |= MediaPlayerEntityFeature.PLAY_MEDIA
@@ -189,67 +185,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def media_position_updated_at(self) -> float | None:
         """When the position was last updated."""
         return self.controller.get_media_position_updated_at()
-
-    # ===== COVER ART / IMAGE PROPERTIES =====
-
-    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
-        """Fetch media image of current playing item."""
-        if not self.speaker.coordinator.data or not (status := self.speaker.coordinator.data.get("status")):
-            return None, None
-
-        title = status.get("title")
-        artist = status.get("artist")
-        album = status.get("album")
-
-        if not title and not artist and not album:
-            _LOGGER.debug("No metadata available to fetch artwork for %s", self.entity_id)
-            return None, None
-
-        _LOGGER.debug(
-            "Attempting to fetch artwork for %s: Title=%s, Artist=%s, Album=%s",
-            self.entity_id,
-            title,
-            artist,
-            album,
-        )
-
-        #
-        # --- BEGIN Placeholder for Artwork Fetching Logic ---
-        #
-        # Here you would integrate with a library or service to fetch artwork.
-        # For example, using a hypothetical 'artwork_fetcher' library:
-        #
-        # try:
-        #     image_bytes, mime_type = await artwork_fetcher.get_artwork(
-        #         artist=artist, album=album, title=title, hass=self.hass
-        #     )
-        #     if image_bytes and mime_type:
-        #         _LOGGER.debug("Successfully fetched artwork for %s, mime_type: %s",
-        #                      self.entity_id, mime_type)
-        #         return image_bytes, mime_type
-        #     _LOGGER.debug("Artwork fetcher did not return image data for %s", self.entity_id)
-        # except Exception as e:
-        #     _LOGGER.warning(
-        #         "Error fetching artwork for %s (Title=%s, Artist=%s, Album=%s): %s",
-        #         self.entity_id,
-        #         title,
-        #         artist,
-        #         album,
-        #         e,
-        #     )
-        #
-        # --- END Placeholder for Artwork Fetching Logic ---
-        #
-
-        # If no artwork fetching logic is implemented, return None
-        _LOGGER.debug(
-            "No artwork found for %s (Title=%s, Artist=%s, Album=%s)",
-            self.entity_id,
-            title,
-            artist,
-            album,
-        )
-        return None, None
 
     # ===== GROUP PROPERTIES (delegate to controller) =====
 
@@ -406,10 +341,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         await self.controller.play_url(url)
         # Request coordinator refresh after URL play
         await self.coordinator.async_request_refresh()
-
-    async def async_browse_media(self, media_content_type=None, media_content_id=None):
-        """Implement the websocket media browsing helper."""
-        return await self.controller.browse_media(media_content_type, media_content_id)
 
     # ===== APP NAME PROPERTY =====
 

@@ -14,7 +14,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DOMAIN, EQ_PRESET_MAP, SOURCE_MAP
+from .const import DOMAIN, EQ_PRESET_MAP
 
 if TYPE_CHECKING:
     from .coordinator import WiiMCoordinator
@@ -540,7 +540,9 @@ class Speaker:
         """Join speakers to this speaker as group master.
 
         This speaker becomes the master, provided speakers become slaves.
-        Uses LinkPlay ConnectMasterAp API command.
+
+        NOTE: The multiroom join command is not implemented yet.
+        The ConnectMasterAp command is for WiFi AP connection, not multiroom grouping.
         """
         if not speakers:
             _LOGGER.warning("No speakers provided for group join")
@@ -548,40 +550,45 @@ class Speaker:
 
         _LOGGER.info("Joining %d speakers to master %s", len(speakers), self.name)
 
-        try:
-            # Send ConnectMasterAp command to each slave
-            for slave_speaker in speakers:
-                if slave_speaker is self:
-                    continue  # Skip self
+        # TODO: Implement proper multiroom join commands
+        # The ConnectMasterAp command is for WiFi, not multiroom grouping
+        _LOGGER.error("Multiroom join not implemented - ConnectMasterAp is WiFi command, not grouping")
+        raise NotImplementedError("Multiroom join commands not implemented yet")
 
-                # Send join command to slave device
-                cmd = f"ConnectMasterAp:JoinGroupMaster:{self.ip_address}:wifi0.0.0.0"
-                _LOGGER.debug("Sending join command to %s: %s", slave_speaker.name, cmd)
+        # try:
+        #     # Send ConnectMasterAp command to each slave
+        #     for slave_speaker in speakers:
+        #         if slave_speaker is self:
+        #             continue  # Skip self
 
-                try:
-                    await slave_speaker.coordinator.client.send_command(cmd)
-                    _LOGGER.debug("Successfully sent join command to %s", slave_speaker.name)
-                except Exception as err:
-                    _LOGGER.error("Failed to join speaker %s: %s", slave_speaker.name, err)
-                    # Continue with other speakers
+        #         # Send join command to slave device
+        #         cmd = f"ConnectMasterAp:JoinGroupMaster:{self.ip_address}:wifi0.0.0.0"
+        #         _LOGGER.debug("Sending join command to %s: %s", slave_speaker.name, cmd)
 
-            # Update group states will happen via coordinator polling
-            # Request immediate refresh to verify group formation
-            await self.coordinator.async_request_refresh()
+        #         try:
+        #             await slave_speaker.coordinator.client.send_command(cmd)
+        #             _LOGGER.debug("Successfully sent join command to %s", slave_speaker.name)
+        #         except Exception as err:
+        #             _LOGGER.error("Failed to join speaker %s: %s", slave_speaker.name, err)
+        #             # Continue with other speakers
 
-            # Also refresh slave coordinators to get updated state quickly
-            for slave_speaker in speakers:
-                if slave_speaker is not self:
-                    try:
-                        await slave_speaker.coordinator.async_request_refresh()
-                    except Exception as err:
-                        _LOGGER.debug("Could not refresh slave coordinator %s: %s", slave_speaker.name, err)
+        #     # Update group states will happen via coordinator polling
+        #     # Request immediate refresh to verify group formation
+        #     await self.coordinator.async_request_refresh()
 
-            _LOGGER.info("Group join commands sent successfully")
+        #     # Also refresh slave coordinators to get updated state quickly
+        #     for slave_speaker in speakers:
+        #         if slave_speaker is not self:
+        #             try:
+        #                 await slave_speaker.coordinator.async_request_refresh()
+        #             except Exception as err:
+        #                 _LOGGER.debug("Could not refresh slave coordinator %s: %s", slave_speaker.name, err)
 
-        except Exception as err:
-            _LOGGER.error("Failed to join group: %s", err)
-            raise
+        #     _LOGGER.info("Group join commands sent successfully")
+
+        # except Exception as err:
+        #     _LOGGER.error("Failed to join group: %s", err)
+        #     raise
 
     async def async_leave_group(self) -> None:
         """Remove this speaker from its group.
@@ -722,7 +729,7 @@ def get_speaker_from_config_entry(hass: HomeAssistant, config_entry: ConfigEntry
         return hass.data[DOMAIN][config_entry.entry_id]["speaker"]
     except KeyError as err:
         _LOGGER.error("Speaker not found for config entry %s: %s", config_entry.entry_id, err)
-        raise RuntimeError("Speaker not found for %s" % config_entry.entry_id) from err
+        raise RuntimeError(f"Speaker not found for {config_entry.entry_id}") from err
 
 
 def get_or_create_speaker(hass: HomeAssistant, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> Speaker:

@@ -8,8 +8,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .data import Speaker, get_wiim_data
 from .const import DOMAIN  # Make sure DOMAIN is imported
+from .data import Speaker, get_wiim_data
 
 _LOGGER = logging.getLogger(__name__)
 

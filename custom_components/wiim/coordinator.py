@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
-from .const import DEFAULT_POLL_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 

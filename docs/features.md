@@ -321,8 +321,8 @@ sensor.living_room_multiroom_role: "Master" # CRITICAL for multiroom
 
 ```yaml
 # Only shown when diagnostic entities enabled in configuration
-sensor.living_room_activity_level: "PLAYING" # Defensive polling state
-sensor.living_room_polling_interval: "1" # Current polling interval
+sensor.living_room_activity_level: "PLAYING" # Fixed polling state
+sensor.living_room_polling_interval: "5" # Current polling interval
 ```
 
 **Optional Maintenance Entities**
@@ -357,10 +357,11 @@ button.living_room_sync_time: "Synchronize device time"
 **Per-Device Settings**
 | Option | Purpose | Default | Range |
 |--------|---------|---------|-------|
-| **Polling Interval** | Status update frequency | 5 seconds | 1-60s |
 | **Volume Step** | Volume button increment | 5% | 1-50% |
 | **Group Entity** | Virtual group controller | Disabled | On/Off |
 | **Debug Logging** | Enhanced troubleshooting | Disabled | On/Off |
+
+**Note**: Polling interval is fixed at 5 seconds and not configurable.
 
 **Global Settings**
 
@@ -396,25 +397,6 @@ sensor.living_room_wifi_signal
 ---
 
 ## Advanced Features
-
-### Media Browsing
-
-**Preset Browser**
-
-- **Built-in Browser**: Home Assistant media browser
-- **Preset Access**: Quick selection interface
-- **Category Organization**: Grouped by type
-
-```yaml
-# Media browser structure
-Presets/
-├── Preset 1
-├── Preset 2
-├── Preset 3
-├── Preset 4
-├── Preset 5
-└── Preset 6
-```
 
 ### Automation Integration
 
@@ -489,19 +471,19 @@ data:
 
 ## Performance Features
 
-### Adaptive Polling
+### Fixed Polling
 
-**Smart Intervals**
+**Consistent Updates**
 
-- **Active Playback**: 1-second updates
-- **Recently Active**: 5-second updates
-- **Idle**: 10-second updates
-- **Configurable**: User override available
+- **Fixed 5-second** polling interval
+- **Reliable** status updates
+- **Predictable** resource usage
+- **Configurable** user override available
 
 **Resource Optimization**
 
 - **CPU Efficient**: Minimal processing overhead
-- **Network Friendly**: Reduces API calls
+- **Network Friendly**: Consistent API calls
 - **Battery Aware**: Considers mobile HA installations
 
 ### Error Recovery

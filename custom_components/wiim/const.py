@@ -40,6 +40,8 @@ ATTRIBUTION = "Integration created by the WiiM community"
 CONF_HOST = "host"
 CONF_POLL_INTERVAL = "poll_interval"
 CONF_VOLUME_STEP = "volume_step"
+CONF_PLAYING_UPDATE_RATE = "playing_update_rate"
+CONF_IDLE_UPDATE_RATE = "idle_update_rate"
 
 # User-friendly option names (for UI)
 CONF_STATUS_UPDATE_INTERVAL = "status_update_interval"
@@ -112,7 +114,6 @@ API_ENDPOINT_PLAY_M3U = "/httpapi.asp?command=setPlayerCmd:playlist:"
 API_ENDPOINT_PLAY_PROMPT_URL = "/httpapi.asp?command=playPromptUrl:"
 
 # Multiroom Control
-API_ENDPOINT_GROUP_JOIN = "/httpapi.asp?command=ConnectMasterAp:JoinGroupMaster:eth{ip}:wifi0.0.0.0"
 API_ENDPOINT_GROUP_EXIT = "/httpapi.asp?command=multiroom:Ungroup"
 API_ENDPOINT_GROUP_CREATE = "/httpapi.asp?command=setMultiroom:Master"
 API_ENDPOINT_GROUP_DELETE = "/httpapi.asp?command=multiroom:Ungroup"

@@ -130,7 +130,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 except WiiMError as err:  # Catch specific WiiMErrors if _validate raises them directly
                     _LOGGER.warning("API error configuring WiiM device at %s: %s", host, err)
                     errors["base"] = "cannot_connect"  # Or a more specific error key
-                except Exception as e:  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected error configuring WiiM device at %s", host)
                     errors["base"] = "unknown"  # Use a translation key
         # Show the form to the user

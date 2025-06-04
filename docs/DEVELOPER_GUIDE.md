@@ -291,20 +291,17 @@ tests/
 
 ## 📊 **Performance Guidelines**
 
-### **Defensive Two-State Polling**
+### **Fixed 5-Second Polling**
 
 **Simple, Reliable Strategy**:
 
-- **1 second** when playing (smooth position updates)
-- **5 seconds** when idle (efficient)
+- **5 seconds** - Fixed polling interval for all states
 - **API capability probing** with graceful fallbacks
+- **No complexity** - Consistent, predictable behavior
 
 ```python
-# Simple polling logic
-if status.get("status") == "play":
-    self.update_interval = timedelta(seconds=1)  # Fast when playing
-else:
-    self.update_interval = timedelta(seconds=5)  # Slower when idle
+# Simple fixed polling logic
+self.update_interval = timedelta(seconds=5)  # Always 5 seconds
 ```
 
 ### **Memory Efficiency**

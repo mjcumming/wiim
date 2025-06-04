@@ -140,15 +140,14 @@ async def update_eq_status(self):
 
 ### **Essential Group Commands**
 
-#### **Join Group Command**
+#### **Create Master Command**
 
 ```
-ConnectMasterAp:JoinGroupMaster:<master_ip>:wifi0.0.0.0
+setMultiroom:Master
 ```
 
-- **Purpose**: Makes a device join another device's group as a slave
-- **Target**: Send to the slave device's IP
-- **Parameters**: `<master_ip>` - IP address of the master device
+- **Purpose**: Makes the current device a multiroom master
+- **Target**: Send to the device that should become master
 
 #### **Leave Group Command**
 
@@ -166,8 +165,11 @@ multiroom:SlaveKickout:<slave_ip>
 multiroom:Ungroup
 ```
 
-- **Purpose**: Disbands the entire group
-- **Target**: Send to the master device's IP
+- **Purpose**: Disbands the entire group or leaves current group
+- **Target**: Send to any device in the group
+
+**NOTE**: The group join command for slaves is not currently known/implemented.
+The ConnectMasterAp commands are for WiFi access point connections, not multiroom grouping.
 
 ### **Group Status Detection**
 
