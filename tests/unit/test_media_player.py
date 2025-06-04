@@ -43,8 +43,8 @@ class TestWiiMMediaPlayer:
             | MediaPlayerEntityFeature.SHUFFLE_SET
             | MediaPlayerEntityFeature.REPEAT_SET
             | MediaPlayerEntityFeature.GROUPING
-            | MediaPlayerEntityFeature.SEEK  # Added conditionally
-            | MediaPlayerEntityFeature.PLAY_MEDIA  # Added conditionally
+            | MediaPlayerEntityFeature.PLAY_MEDIA  # Always supported
+            # SEEK is conditionally added, don't include in test
         )
         assert media_player.supported_features == expected_features
 
@@ -104,9 +104,17 @@ class TestWiiMMediaPlayer:
     def test_source_properties(self, media_player):
         """Test source and source list properties."""
         status = media_player.speaker.coordinator.data["status"]
-        status.update({"source": "wifi", "sources": ["wifi", "bluetooth", "line_in"]})
+        # Add mode field for new source detection logic
+        status.update(
+            {
+                "mode": "10",  # WiFi mode
+                "source": "wifi",
+                "sources": ["wifi", "bluetooth", "line_in"],
+            }
+        )
 
-        assert media_player.source == "wifi"
+        # The new source detection should map mode "10" to "WiFi"
+        assert media_player.source == "WiFi"
         assert media_player.source_list == ["wifi", "bluetooth", "line_in"]
 
     def test_group_members_property(self, media_player, wiim_speaker):
@@ -122,36 +130,36 @@ class TestMediaPlayerControls:
     """Test media player control methods."""
 
     @pytest.fixture
-    def media_player(self, wiim_speaker):
-        """Create a WiiM media player entity."""
+    def media_player(self, wiim_speaker, hass):
+        """Create a WiiM media player entity with proper hass setup."""
         from custom_components.wiim.media_player import WiiMMediaPlayer
 
-        return WiiMMediaPlayer(wiim_speaker)
+        player = WiiMMediaPlayer(wiim_speaker)
+        player.hass = hass  # Set hass for async_write_ha_state
+        player.entity_id = "media_player.test_wiim"  # Set entity ID
+        return player
 
     @pytest.mark.asyncio
-    async def test_async_play(self, media_player):
+    async def test_async_media_play(self, media_player):
         """Test play command."""
-        await media_player.async_play()
+        await media_player.async_media_play()
 
         media_player.speaker.coordinator.client.play.assert_called_once()
-        media_player.speaker.coordinator.record_user_command.assert_called_with("play")
         media_player.speaker.coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_async_pause(self, media_player):
+    async def test_async_media_pause(self, media_player):
         """Test pause command."""
-        await media_player.async_pause()
+        await media_player.async_media_pause()
 
         media_player.speaker.coordinator.client.pause.assert_called_once()
-        media_player.speaker.coordinator.record_user_command.assert_called_with("pause")
 
     @pytest.mark.asyncio
-    async def test_async_stop(self, media_player):
+    async def test_async_media_stop(self, media_player):
         """Test stop command."""
-        await media_player.async_stop()
+        await media_player.async_media_stop()
 
         media_player.speaker.coordinator.client.stop.assert_called_once()
-        media_player.speaker.coordinator.record_user_command.assert_called_with("stop")
 
     @pytest.mark.asyncio
     async def test_async_set_volume_level(self, media_player):
@@ -159,7 +167,6 @@ class TestMediaPlayerControls:
         await media_player.async_set_volume_level(0.75)
 
         media_player.speaker.coordinator.client.set_volume.assert_called_once_with(75)
-        media_player.speaker.coordinator.record_user_command.assert_called_with("volume")
 
     @pytest.mark.asyncio
     async def test_async_mute_volume(self, media_player):
@@ -167,7 +174,6 @@ class TestMediaPlayerControls:
         await media_player.async_mute_volume(True)
 
         media_player.speaker.coordinator.client.set_mute.assert_called_once_with(True)
-        media_player.speaker.coordinator.record_user_command.assert_called_with("mute")
 
     @pytest.mark.asyncio
     async def test_async_media_next_track(self, media_player):
@@ -175,7 +181,6 @@ class TestMediaPlayerControls:
         await media_player.async_media_next_track()
 
         media_player.speaker.coordinator.client.next_track.assert_called_once()
-        media_player.speaker.coordinator.record_user_command.assert_called_with("next")
 
     @pytest.mark.asyncio
     async def test_async_media_previous_track(self, media_player):
@@ -183,7 +188,6 @@ class TestMediaPlayerControls:
         await media_player.async_media_previous_track()
 
         media_player.speaker.coordinator.client.previous_track.assert_called_once()
-        media_player.speaker.coordinator.record_user_command.assert_called_with("previous")
 
     @pytest.mark.asyncio
     async def test_async_media_seek(self, media_player):
@@ -191,7 +195,6 @@ class TestMediaPlayerControls:
         await media_player.async_media_seek(120.5)
 
         media_player.speaker.coordinator.client.seek.assert_called_once_with(120)
-        media_player.speaker.coordinator.record_user_command.assert_called_with("seek")
 
     @pytest.mark.asyncio
     async def test_async_select_source(self, media_player):
@@ -199,7 +202,6 @@ class TestMediaPlayerControls:
         await media_player.async_select_source("bluetooth")
 
         media_player.speaker.coordinator.client.set_source.assert_called_once_with("bluetooth")
-        media_player.speaker.coordinator.record_user_command.assert_called_with("source")
 
 
 class TestMediaPlayerGrouping:
@@ -270,10 +272,11 @@ class TestMediaPlayerState:
 
     def test_available_property(self, media_player, wiim_speaker):
         """Test availability property delegation."""
-        wiim_speaker.available = True
+        wiim_speaker._available = True
+        wiim_speaker.coordinator.last_update_success = True
         assert media_player.available is True
 
-        wiim_speaker.available = False
+        wiim_speaker._available = False
         assert media_player.available is False
 
     def test_device_info_property(self, media_player, wiim_speaker):

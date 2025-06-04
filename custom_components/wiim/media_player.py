@@ -684,3 +684,28 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 return streaming_map[source_lower]
 
         return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes for diagnostics."""
+        if not self.speaker.coordinator.data:
+            return {}
+
+        attrs = {
+            "speaker_uuid": self.speaker.uuid,
+            "speaker_role": self.speaker.role,
+            "coordinator_ip": self.speaker.ip_address,
+            "group_members_count": len(self.speaker.group_members),
+        }
+
+        # Add smart polling diagnostics
+        polling_info = self.speaker.coordinator.data.get("polling", {})
+        if polling_info:
+            attrs.update(
+                {
+                    "activity_level": polling_info.get("activity_level", "unknown"),
+                    "polling_interval": polling_info.get("interval", 5.0),
+                }
+            )
+
+        return attrs
