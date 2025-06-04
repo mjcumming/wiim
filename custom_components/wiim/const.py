@@ -38,10 +38,7 @@ ATTRIBUTION = "Integration created by the WiiM community"
 
 # Config keys
 CONF_HOST = "host"
-CONF_POLL_INTERVAL = "poll_interval"
 CONF_VOLUME_STEP = "volume_step"
-CONF_PLAYING_UPDATE_RATE = "playing_update_rate"
-CONF_IDLE_UPDATE_RATE = "idle_update_rate"
 
 # User-friendly option names (for UI)
 CONF_STATUS_UPDATE_INTERVAL = "status_update_interval"
@@ -58,7 +55,8 @@ CONF_ENABLE_EQ_CONTROLS = "enable_eq_controls"
 # Defaults
 DEFAULT_PORT = 443  # HTTPS - like python-linkplay
 DEFAULT_TIMEOUT = 10  # seconds
-DEFAULT_POLL_INTERVAL = 5  # seconds
+# Fixed polling interval - HA compliant, easily changeable
+FIXED_POLL_INTERVAL = 5  # seconds - hard-coded 5s polling for all devices
 DEFAULT_VOLUME_STEP = 0.05  # 5%
 
 # Services
@@ -115,7 +113,9 @@ API_ENDPOINT_PLAY_PROMPT_URL = "/httpapi.asp?command=playPromptUrl:"
 
 # Multiroom Control
 API_ENDPOINT_GROUP_EXIT = "/httpapi.asp?command=multiroom:Ungroup"
-API_ENDPOINT_GROUP_CREATE = "/httpapi.asp?command=setMultiroom:Master"
+API_ENDPOINT_GROUP_CREATE = (
+    "/httpapi.asp?command=ConnectMasterAp:JoinGroupMaster:eth0.0.0.0:wifi0.0.0.0"  # May not be needed
+)
 API_ENDPOINT_GROUP_DELETE = "/httpapi.asp?command=multiroom:Ungroup"
 API_ENDPOINT_GROUP_SLAVES = "/httpapi.asp?command=multiroom:getSlaveList"
 API_ENDPOINT_GROUP_KICK = "/httpapi.asp?command=multiroom:SlaveKickout:"

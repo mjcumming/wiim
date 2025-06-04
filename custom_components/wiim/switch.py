@@ -13,7 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN
+from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN, EQ_PRESET_MAP
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
@@ -101,19 +101,16 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
     def extra_state_attributes(self) -> dict[str, any]:
         """Return equalizer-related information."""
         if not self.speaker.coordinator.data:
-            return {}
+            return {"eq_supported": False, "current_preset": None, "available_presets": []}
 
-        status = self.speaker.coordinator.data.get("status", {})
+        eq_info = self.speaker.coordinator.data.get("eq", {})
+        polling_info = self.speaker.coordinator.data.get("polling", {})
+        api_capabilities = polling_info.get("api_capabilities", {})
+
         attrs = {
-            "eq_supported": getattr(self.speaker.coordinator, "eq_supported", False),
+            "eq_supported": api_capabilities.get("eq_supported", False),
+            "current_preset": eq_info.get("eq_preset"),
+            "available_presets": list(EQ_PRESET_MAP.keys()),
         }
-
-        # Add current EQ preset if available
-        if eq_preset := status.get("eq_preset"):
-            attrs["current_preset"] = eq_preset
-
-        # Add available presets if available
-        if hasattr(self.speaker.coordinator, "eq_presets") and self.speaker.coordinator.eq_presets:
-            attrs["available_presets"] = self.speaker.coordinator.eq_presets
 
         return attrs

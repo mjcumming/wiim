@@ -479,9 +479,27 @@ class WiiMClient:
         Raises:
             ValueError: If an invalid repeat mode is specified.
         """
+        _LOGGER.debug("=== API REPEAT MODE START ===")
+        _LOGGER.debug("set_repeat_mode called with mode='%s'", mode)
+        _LOGGER.debug("Valid modes are: %s", (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE))
+
         if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE):
+            _LOGGER.error("Invalid repeat mode validation failed: mode='%s'", mode)
             raise ValueError(f"Invalid repeat mode: {mode}")
-        await self._request(f"{API_ENDPOINT_REPEAT}{mode}")
+
+        endpoint_url = f"{API_ENDPOINT_REPEAT}{mode}"
+        _LOGGER.debug("Constructed endpoint URL: '%s'", endpoint_url)
+        _LOGGER.debug("About to send HTTP request for repeat mode")
+
+        try:
+            result = await self._request(endpoint_url)
+            _LOGGER.debug("API repeat mode request successful, result: %s", result)
+            _LOGGER.debug("=== API REPEAT MODE SUCCESS ===")
+        except Exception as err:
+            _LOGGER.error("=== API REPEAT MODE FAILED ===")
+            _LOGGER.error("HTTP request failed for repeat mode: %s", err)
+            _LOGGER.error("Failed endpoint URL was: '%s'", endpoint_url)
+            raise
 
     async def set_shuffle_mode(self, mode: str) -> None:
         """Set the shuffle mode.
@@ -492,13 +510,31 @@ class WiiMClient:
         Raises:
             ValueError: If an invalid shuffle mode is specified.
         """
+        _LOGGER.debug("=== API SHUFFLE MODE START ===")
+        _LOGGER.debug("set_shuffle_mode called with mode='%s'", mode)
+        _LOGGER.debug("Valid modes are: %s", (PLAY_MODE_NORMAL, PLAY_MODE_SHUFFLE, PLAY_MODE_SHUFFLE_REPEAT_ALL))
+
         if mode not in (
             PLAY_MODE_NORMAL,
             PLAY_MODE_SHUFFLE,
             PLAY_MODE_SHUFFLE_REPEAT_ALL,
         ):
+            _LOGGER.error("Invalid shuffle mode validation failed: mode='%s'", mode)
             raise ValueError(f"Invalid shuffle mode: {mode}")
-        await self._request(f"{API_ENDPOINT_SHUFFLE}{mode}")
+
+        endpoint_url = f"{API_ENDPOINT_SHUFFLE}{mode}"
+        _LOGGER.debug("Constructed endpoint URL: '%s'", endpoint_url)
+        _LOGGER.debug("About to send HTTP request for shuffle mode")
+
+        try:
+            result = await self._request(endpoint_url)
+            _LOGGER.debug("API shuffle mode request successful, result: %s", result)
+            _LOGGER.debug("=== API SHUFFLE MODE SUCCESS ===")
+        except Exception as err:
+            _LOGGER.error("=== API SHUFFLE MODE FAILED ===")
+            _LOGGER.error("HTTP request failed for shuffle mode: %s", err)
+            _LOGGER.error("Failed endpoint URL was: '%s'", endpoint_url)
+            raise
 
     async def seek(self, position: int) -> None:
         """Seek to a specific position in the current track.
@@ -527,28 +563,19 @@ class WiiMClient:
     async def create_group(self) -> None:
         """Create a multiroom group and become the master.
 
-        The original LinkPlay command for turning the *current* device
-        into a master of a new multi-room group is::
-
-            /httpapi.asp?command=setMultiroom:Master
-
-        This is the only reliable command for creating multiroom groups.
-        The ConnectMasterAp commands are for WiFi access point connections,
-        not multiroom audio grouping.
+        Based on LinkPlay documentation, there might not be an explicit "create master" command.
+        Instead, a device becomes a master when other devices join it.
+        For now, we'll try a simple approach and see if the device automatically becomes master
+        when slaves start joining it.
         """
 
         _LOGGER.debug("[WiiM] Creating multiroom group on %s", self.host)
 
-        # Use the standard setMultiroom:Master command
-        cmd = API_ENDPOINT_GROUP_CREATE  # setMultiroom:Master
-
+        # Try the documented ConnectMasterAp command to see if it works for creating master
+        # If this fails, the device might automatically become master when slaves join
         try:
-            resp = await self._request(cmd)
-            raw_resp = resp.get("raw") if isinstance(resp, dict) else None
-            # A lot of firmwares respond with plain text.  Treat *anything*
-            # that isn't an explicit "OK" as a failure.
-            if raw_resp is not None and raw_resp.strip().upper() != "OK":
-                raise WiiMError(f"Device answered {raw_resp!r}")
+            resp = await self._request(API_ENDPOINT_GROUP_CREATE)
+            _LOGGER.debug("[WiiM] Group creation response on %s: %s", self.host, resp)
 
             # Give the speaker a brief moment to switch roles
             await asyncio.sleep(0.1)
@@ -560,8 +587,13 @@ class WiiMClient:
             return
 
         except Exception as err:
-            _LOGGER.error("[WiiM] Failed to create group on %s: %s", self.host, err)
-            raise WiiMError(f"Unable to create multi-room group: {err}") from err
+            _LOGGER.warning("[WiiM] ConnectMasterAp create command failed on %s: %s", self.host, err)
+            _LOGGER.info("[WiiM] Device %s may become master automatically when slaves join", self.host)
+
+            # Update our internal bookkeeping optimistically
+            self._group_master = self.host
+            self._group_slaves = []
+            return
 
     async def delete_group(self) -> None:
         """Delete the current multiroom group."""
@@ -572,13 +604,35 @@ class WiiMClient:
         self._group_master = None
         self._group_slaves = []
 
-    async def join_group(self, master_ip: str) -> None:
-        """Join a multiroom group as a slave.
+    async def join_slave(self, master_ip: str) -> None:
+        """Join this device as a slave to a master device.
 
-        NOTE: This functionality is not implemented yet.
-        The correct LinkPlay command for joining groups is unknown.
+        Uses the documented ConnectMasterAp:JoinGroupMaster command.
+
+        Args:
+            master_ip: IP address of the master device to join
         """
-        raise NotImplementedError("Multiroom join not implemented - command unknown")
+        _LOGGER.debug("[WiiM] %s joining as slave to master %s", self.host, master_ip)
+
+        # Use the documented ConnectMasterAp command format
+        command = f"ConnectMasterAp:JoinGroupMaster:eth{master_ip}:wifi0.0.0.0"
+        endpoint = f"/httpapi.asp?command={command}"
+
+        _LOGGER.debug("[WiiM] Sending join command: %s", command)
+
+        try:
+            response = await self._request(endpoint)
+            _LOGGER.debug("[WiiM] Join response: %s", response)
+
+            # Update internal state
+            self._group_master = master_ip
+            self._group_slaves = []
+            _LOGGER.info("[WiiM] Successfully joined %s as slave to master %s", self.host, master_ip)
+
+        except Exception as err:
+            _LOGGER.error("[WiiM] Failed to join %s as slave to master %s: %s", self.host, master_ip, err)
+            _LOGGER.error("[WiiM] Failed command was: %s", command)
+            raise
 
     async def leave_group(self) -> None:
         """Leave the current multiroom group."""
@@ -704,14 +758,39 @@ class WiiMClient:
         for retrieving comprehensive device information including the UUID,
         device name, firmware, model, and other metadata.
         """
+        _LOGGER.debug("=== API get_device_info START for %s ===", self.host)
+
         try:
+            _LOGGER.debug("Calling getStatusEx endpoint for %s", self.host)
             # Use getStatusEx endpoint which provides comprehensive device info including UUID
             device_info = await self._request(API_ENDPOINT_STATUS)
+            _LOGGER.debug("Raw getStatusEx response for %s: %s", self.host, device_info)
+
+            # Extract key group-related fields for debugging
+            group_field = device_info.get("group")
+            uuid_field = device_info.get("uuid")
+            master_uuid = device_info.get("master_uuid")
+            master_ip = device_info.get("master_ip")
+            device_name = device_info.get("DeviceName") or device_info.get("device_name")
+
+            _LOGGER.debug(
+                "Group detection fields from getStatusEx for %s: group='%s', uuid='%s', master_uuid='%s', master_ip='%s', device_name='%s'",
+                self.host,
+                group_field,
+                uuid_field,
+                master_uuid,
+                master_ip,
+                device_name,
+            )
+
             _LOGGER.debug("Retrieved device info from getStatusEx for %s: %s", self.host, device_info)
+            _LOGGER.debug("=== API get_device_info SUCCESS for %s ===", self.host)
             return device_info
 
         except Exception as err:
-            _LOGGER.debug("get_device_info (getStatusEx) failed for %s: %s", self.host, err)
+            _LOGGER.error("=== API get_device_info FAILED for %s ===", self.host)
+            _LOGGER.error("get_device_info (getStatusEx) failed for %s: %s", self.host, err)
+            _LOGGER.error("Error type: %s", type(err).__name__)
             # Return empty dict so coordinator doesn't crash
             return {}
 
@@ -772,13 +851,24 @@ class WiiMClient:
             - source: Current audio source
             - play_mode: Current play mode (normal/repeat/shuffle)
         """
+        _LOGGER.debug("=== API get_player_status START for %s ===", self.host)
+
         try:
+            _LOGGER.debug("Calling getPlayerStatus endpoint for %s", self.host)
             raw: dict[str, Any] = await self._request(API_ENDPOINT_PLAYER_STATUS)
-        except WiiMError:
+            _LOGGER.debug("Raw getPlayerStatus response for %s: %s", self.host, raw)
+
+        except WiiMError as err:
+            _LOGGER.warning("getPlayerStatus failed for %s, falling back to getStatusEx: %s", self.host, err)
             # Fallback to basic status if player status fails
             raw = await self._request(API_ENDPOINT_STATUS)
+            _LOGGER.debug("Raw getStatusEx fallback response for %s: %s", self.host, raw)
 
-        return self._parse_player_status(raw)
+        parsed = self._parse_player_status(raw)
+        _LOGGER.debug("Parsed player status for %s: %s", self.host, parsed)
+        _LOGGER.debug("=== API get_player_status END for %s ===", self.host)
+
+        return parsed
 
     # Normalisation table for the *player-status* endpoint.  Keys on the left
     # are raw HTTP-API field names, values are our canonical attribute names
@@ -970,27 +1060,65 @@ class WiiMClient:
 
     async def get_multiroom_info(self) -> dict[str, Any]:
         """Get multiroom information including master/slave status."""
+        _LOGGER.debug("=== API get_multiroom_info START for %s ===", self.host)
+
         try:
+            _LOGGER.debug("Calling getSlaveList endpoint for %s", self.host)
             response = await self._request(API_ENDPOINT_GROUP_SLAVES)
-            _LOGGER.warning("[WiiM] %s: getSlaveList response: %s", self.host, response)
+            _LOGGER.debug("Raw getSlaveList response for %s: %s", self.host, response)
 
             # The response can contain either:
             # - "slaves": <integer> (slave count)
             # - "slaves": <list> (actual slave devices)
             slaves_data = response.get("slaves", 0)
+            _LOGGER.debug("Extracted slaves_data for %s: %s (type: %s)", self.host, slaves_data, type(slaves_data))
+
+            # DIAGNOSTIC: Check for slave_count vs slaves field inconsistency
+            if "slave_count" in response:
+                _LOGGER.debug("Response also contains slave_count field: %s", response.get("slave_count"))
 
             if isinstance(slaves_data, int):
                 # Response is just a count
-                return {"slaves": [], "slave_count": slaves_data}
+                result = {"slaves": [], "slave_count": slaves_data}
+                _LOGGER.debug("Parsed as slave count for %s: %d slaves", self.host, slaves_data)
+
+                if slaves_data > 0:
+                    _LOGGER.warning(
+                        "SLAVE LIST ISSUE: %s reports %d slaves but slaves field is integer (no slave details provided)",
+                        self.host,
+                        slaves_data,
+                    )
+
             elif isinstance(slaves_data, list):
                 # Response is actual slave list
-                return {"slaves": slaves_data, "slave_count": len(slaves_data)}
+                result = {"slaves": slaves_data, "slave_count": len(slaves_data)}
+                _LOGGER.debug("Parsed as slave list for %s: %d slaves in list", self.host, len(slaves_data))
+                for i, slave in enumerate(slaves_data):
+                    _LOGGER.debug("Slave %d for %s: %s", i, self.host, slave)
+
+                # DIAGNOSTIC: Check if list is empty when count suggests slaves exist
+                if len(slaves_data) == 0 and response.get("slaves") != 0:
+                    _LOGGER.warning(
+                        "SLAVE LIST ISSUE: %s has empty slaves list but non-zero count in response", self.host
+                    )
+
             else:
                 # Unknown format, default to empty
-                return {"slaves": [], "slave_count": 0}
+                result = {"slaves": [], "slave_count": 0}
+                _LOGGER.warning(
+                    "Unknown slaves_data format for %s: %s (type: %s)", self.host, slaves_data, type(slaves_data)
+                )
+
+            _LOGGER.debug("Final multiroom info for %s: %s", self.host, result)
+            _LOGGER.debug("=== API get_multiroom_info SUCCESS for %s ===", self.host)
+            return result
+
         except WiiMError as err:
             # Device doesn't support multiroom or not a master
-            _LOGGER.debug("[WiiM] %s: getSlaveList failed: %s", self.host, err)
+            _LOGGER.debug("=== API get_multiroom_info FAILED for %s ===", self.host)
+            _LOGGER.debug(
+                "getSlaveList failed for %s: %s (likely not a master or no multiroom support)", self.host, err
+            )
             return {"slaves": [], "slave_count": 0}
 
     async def get_slaves(self) -> list[str]:
@@ -1020,8 +1148,24 @@ class WiiMClient:
 
     async def kick_slave(self, slave_ip: str) -> None:
         """Remove a slave device from the group."""
+        _LOGGER.debug(
+            "[WiiM] Kick slave request: host=%s, is_master=%s, _group_master=%s, slave_ip=%s",
+            self.host,
+            self.is_master,
+            self._group_master,
+            slave_ip,
+        )
+
         if not self.is_master:
+            _LOGGER.error(
+                "[WiiM] Cannot kick slave %s from %s: Not a group master (is_master=%s, _group_master=%s)",
+                slave_ip,
+                self.host,
+                self.is_master,
+                self._group_master,
+            )
             raise WiiMError("Not a group master")
+
         _LOGGER.debug("[WiiM] Kicking slave %s from group", slave_ip)
         await self._request(f"{API_ENDPOINT_GROUP_KICK}{slave_ip}")
 

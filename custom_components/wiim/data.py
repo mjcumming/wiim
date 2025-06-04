@@ -1,4 +1,58 @@
-"""Core data layer for WiiM integration."""
+"""Core data layer for WiiM integration.
+
+ARCHITECTURAL IMPROVEMENTS (v2.0):
+==================================
+
+This module has been enhanced based on comprehensive code review to address
+critical issues and implement architectural best practices:
+
+1. CRITICAL FIX: Group Membership Population
+   - update_from_coordinator_data() now actually populates self.group_members and self.coordinator_speaker
+   - Master speakers maintain authoritative group state via _update_master_group_state()
+   - Slave speakers maintain master references via _update_slave_group_state()
+   - Group state resolution works incrementally over polling cycles
+   - Proper "Cannot find slave/master" logging for troubleshooting
+
+2. CONSOLIDATED UPDATE LOGIC
+   - update_from_coordinator_data() is now SINGLE SOURCE OF TRUTH for all updates
+   - Removed redundant _populate_from_coordinator_data() method
+   - Robust device name extraction with _extract_device_name_from_update()
+   - Automatic device registry updates when names change
+
+3. BIDIRECTIONAL ENTITY MAPPING (Performance)
+   - WiimData now has O(1) entity ID to Speaker lookup via speaker_to_entity_mappings
+   - register_entity()/unregister_entity() maintain bidirectional mappings
+   - _get_entity_id_for_speaker() now uses O(1) lookup instead of O(n) loop
+
+4. MAC ADDRESS CONSISTENCY
+   - _normalize_mac_address() standardizes to lowercase colon-separated format
+   - Consistent formatting for Home Assistant device registry
+   - Handles various input formats (with/without colons/dashes)
+
+5. MASTER-MANAGED GROUP STATE ARCHITECTURE
+   - Masters resolve slave IPs to Speaker objects using global WiimData registry
+   - Slaves maintain simple reference to master Speaker object
+   - Clean separation: masters manage groups, slaves reference masters
+   - Group state converges naturally over multiple coordinator polling cycles
+
+INTEGRATION FLOW:
+================
+1. Coordinator polls device API (getStatusEx, getSlaveList)
+2. Coordinator calls speaker.update_from_coordinator_data(processed_data)
+3. Speaker resolves group relationships using WiimData registry
+4. Entity state updates triggered only when significant changes occur
+5. Home Assistant group operations use resolved Speaker objects
+
+CRITICAL DEPENDENCIES:
+=====================
+- Entity registration MUST call wiim_data.register_entity() for group resolution
+- All speakers in a group must be discovered before group state can be fully populated
+- Master speakers need successful getSlaveList responses to populate group_members
+- Slave speakers need master_uuid or master_ip in coordinator data to find masters
+
+This architecture ensures reliable group management while maintaining clean
+separation of concerns and efficient performance.
+"""
 
 from __future__ import annotations
 
@@ -31,11 +85,15 @@ __all__ = [
 
 @dataclass
 class WiimData:
-    """Central registry for all WiiM speakers (like SonosData)."""
+    """Central registry for all WiiM speakers (like SonosData).
+
+    Enhanced with bidirectional entity mapping for O(1) performance.
+    """
 
     hass: HomeAssistant
     speakers: dict[str, Speaker] = field(default_factory=dict)
     entity_id_mappings: dict[str, Speaker] = field(default_factory=dict)
+    speaker_to_entity_mappings: dict[Speaker, str] = field(default_factory=dict)
     discovery_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def get_speaker_by_ip(self, ip: str) -> Speaker | None:
@@ -45,6 +103,21 @@ class WiimData:
     def get_speaker_by_entity_id(self, entity_id: str) -> Speaker | None:
         """Find speaker by entity ID."""
         return self.entity_id_mappings.get(entity_id)
+
+    def register_entity(self, entity_id: str, speaker: Speaker) -> None:
+        """Register bidirectional entity ID to Speaker mapping."""
+        self.entity_id_mappings[entity_id] = speaker
+        self.speaker_to_entity_mappings[speaker] = entity_id
+
+    def unregister_entity(self, entity_id: str) -> None:
+        """Remove entity ID to Speaker mapping."""
+        if entity_id in self.entity_id_mappings:
+            speaker = self.entity_id_mappings.pop(entity_id)
+            self.speaker_to_entity_mappings.pop(speaker, None)
+
+    def get_entity_id_for_speaker(self, speaker: Speaker) -> str | None:
+        """Get entity ID for speaker (O(1) lookup)."""
+        return self.speaker_to_entity_mappings.get(speaker)
 
 
 class Speaker:
@@ -152,6 +225,55 @@ class Speaker:
 
         return clean_name
 
+    def _normalize_mac_address(self, mac: str | None) -> str | None:
+        """Normalize MAC address to lowercase colon-separated format.
+
+        Args:
+            mac: MAC address in any format (with/without colons/dashes)
+
+        Returns:
+            MAC address in lowercase colon-separated format (aa:bb:cc:dd:ee:ff)
+            or None if invalid
+        """
+        if not mac:
+            return None
+
+        # Remove existing separators and convert to lowercase
+        clean_mac = mac.lower().replace(":", "").replace("-", "").replace(" ", "")
+
+        if len(clean_mac) != 12 or not all(c in "0123456789abcdef" for c in clean_mac):
+            _LOGGER.warning("Invalid MAC address format: %s", mac)
+            return None
+
+        # Insert colons every 2 characters
+        return ":".join(clean_mac[i : i + 2] for i in range(0, 12, 2))
+
+    def _extract_device_name_from_update(self, device_info: dict, status: dict) -> str | None:
+        """Extract device name during coordinator updates.
+
+        Uses the same robust extraction logic as initial setup.
+
+        Args:
+            device_info: Device info section from coordinator data
+            status: Status section from coordinator data
+
+        Returns:
+            Extracted device name or None if no change needed
+        """
+        # Combine both sources for extraction
+        combined_data = {**status, **device_info}
+
+        # Try to extract name from device_info first, then fall back to status
+        new_name = (
+            device_info.get("name") or device_info.get("DeviceName") or status.get("name") or status.get("DeviceName")
+        )
+
+        # If no direct name found, use robust extraction
+        if not new_name:
+            new_name = self._extract_device_name(combined_data)
+
+        return new_name if new_name != self.name else None
+
     async def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
         status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
@@ -163,7 +285,7 @@ class Speaker:
         )
 
         self.ip_address = self.coordinator.client.host
-        self.mac_address = (status.get("MAC") or "").lower().replace(":", "")
+        self.mac_address = self._normalize_mac_address(status.get("MAC"))
 
         # PRIORITY 1: Use the config entry title (set correctly during config flow)
         # PRIORITY 2: Extract from API status if config entry title is generic
@@ -211,29 +333,350 @@ class Speaker:
         async_dispatcher_send(self.hass, f"wiim_state_updated_{self.uuid}")
 
     def update_from_coordinator_data(self, data: dict) -> None:
-        """Update speaker state from coordinator data."""
+        """Update speaker state from comprehensive coordinator data.
+
+        SINGLE SOURCE OF TRUTH for all coordinator data updates.
+
+        This method processes all data from the coordinator including:
+        - Device information updates (with robust name extraction)
+        - Group role and multiroom state changes (CRITICAL: actual Speaker object population)
+        - Status and availability updates
+        - Trigger entity state updates when needed
+
+        ARCHITECTURAL NOTES:
+        - Master speakers manage group state (populate self.group_members)
+        - Slave speakers maintain reference to master (populate self.coordinator_speaker)
+        - Group state resolution uses incremental discovery over polling cycles
+        """
+        if not data:
+            _LOGGER.debug("No coordinator data to update for %s", self.uuid)
+            return
+
+        _LOGGER.debug("=== SPEAKER UPDATE FROM COORDINATOR START for %s ===", self.name)
+
+        # Extract data sections
         status = data.get("status", {})
+        device_info = data.get("device_info", {})
         multiroom = data.get("multiroom", {})
+        metadata = data.get("metadata", {})
+        eq_info = data.get("eq", {})
+        polling_info = data.get("polling", {})
+        role = data.get("role", "solo")  # Role calculated by coordinator from getStatusEx
 
-        _LOGGER.warning(
-            "[WiiM] %s: Speaker.update_from_coordinator_data called with status keys=%s, multiroom=%s",
-            self.uuid,
-            list(status.keys()),
-            multiroom,
-        )
+        _LOGGER.debug("Speaker %s processing coordinator data sections: %s", self.name, list(data.keys()))
+        _LOGGER.debug("Speaker %s role from coordinator: %s", self.name, role)
+        _LOGGER.debug("Speaker %s multiroom data: %s", self.name, multiroom)
 
-        # Device name is extracted ONCE during setup, not on every update
-        # No need to re-extract device name on every polling cycle
+        # Track if any significant changes occurred
+        changes_made = False
 
-        # Update group state - get role from the coordinator data
+        # 1. Update device information with robust name extraction
+        new_name = self._extract_device_name_from_update(device_info, status)
+        if new_name:
+            _LOGGER.info("Device name updated: %s -> %s", self.name, new_name)
+            self.name = new_name
+            changes_made = True
+            # Schedule device registry update
+            import asyncio
+
+            asyncio.create_task(self._update_device_registry_name())
+
+        # Update other device properties
+        if device_info.get("model"):
+            self.model = device_info["model"]
+        if device_info.get("firmware"):
+            self.firmware = device_info["firmware"]
+        if device_info.get("mac"):
+            normalized_mac = self._normalize_mac_address(device_info["mac"])
+            if normalized_mac != self.mac_address:
+                self.mac_address = normalized_mac
+
+        # 2. CRITICAL: Update group role and populate group relationships
         old_role = self.role
-        self.role = data.get("role", "solo")  # Role is calculated by coordinator
-        _LOGGER.warning("[WiiM] %s: Role update - old_role=%s, new_role=%s", self.uuid, old_role, self.role)
+        self.role = role
 
-        # If role changed, notify entities
         if old_role != self.role:
-            _LOGGER.debug("Speaker %s role changed: %s -> %s", self.uuid, old_role, self.role)
+            _LOGGER.info("Speaker %s role changed: %s -> %s", self.uuid, old_role, self.role)
+            changes_made = True
+
+        # 3. CRITICAL FIX: Actually populate group member relationships
+        _LOGGER.debug("Speaker %s updating group state for role: %s", self.name, self.role)
+
+        if self.role == "master":
+            _LOGGER.debug("Speaker %s is MASTER - updating master group state", self.name)
+            self._update_master_group_state(multiroom)
+        elif self.role == "slave":
+            _LOGGER.debug("Speaker %s is SLAVE - updating slave group state", self.name)
+            # CRITICAL FIX: Get master info from device_info where getStatusEx puts it
+            master_uuid = device_info.get("master_uuid")
+            master_ip = device_info.get("master_ip")
+            self._update_slave_group_state(master_uuid, master_ip)
+        else:  # solo
+            _LOGGER.debug("Speaker %s is SOLO - clearing group state", self.name)
+            self._clear_group_state()
+
+        # 4. Update availability based on coordinator success
+        old_available = self._available
+        self._available = self.coordinator.last_update_success
+
+        if old_available != self._available:
+            _LOGGER.debug("Speaker %s availability changed: %s -> %s", self.uuid, old_available, self._available)
+            changes_made = True
+
+        # 5. Store polling diagnostics for sensor entities
+        if polling_info:
+            # This data is used by diagnostic sensors
+            _LOGGER.debug(
+                "Updated polling info: interval=%.1fs, playing=%s",
+                polling_info.get("interval", 0),
+                polling_info.get("is_playing", False),
+            )
+
+        # 6. Log metadata and EQ updates for debugging
+        if metadata:
+            current_title = metadata.get("title")
+            if current_title:
+                _LOGGER.debug("Current track: %s", current_title)
+
+        if eq_info:
+            eq_enabled = eq_info.get("eq_enabled")
+            if eq_enabled is not None:
+                _LOGGER.debug("EQ enabled: %s", eq_enabled)
+
+        # 7. Notify entities of state changes if significant changes occurred
+        if changes_made:
+            _LOGGER.debug("Significant changes detected, notifying entities for %s", self.uuid)
             self.async_write_entity_states()
+        else:
+            _LOGGER.debug("No significant changes for %s, skipping entity notification", self.uuid)
+
+        _LOGGER.debug("=== SPEAKER UPDATE FROM COORDINATOR END for %s ===", self.name)
+
+    def _update_master_group_state(self, multiroom: dict) -> None:
+        """Update group state for master speakers.
+
+        CRITICAL: Masters maintain authoritative group state by resolving
+        slave IPs to Speaker objects using the global registry.
+        """
+        _LOGGER.debug("=== MASTER GROUP STATE UPDATE START for %s ===", self.name)
+
+        slave_list = multiroom.get("slave_list", [])
+        slave_count = multiroom.get("slave_count", 0)
+        slaves_field = multiroom.get("slaves", [])
+
+        _LOGGER.debug("Master %s multiroom input data:", self.name)
+        _LOGGER.debug("  - slave_list: %s", slave_list)
+        _LOGGER.debug("  - slave_count: %s", slave_count)
+        _LOGGER.debug("  - slaves: %s", slaves_field)
+
+        # Use slave_list if available, otherwise fall back to slaves field
+        actual_slave_list = slave_list if slave_list else slaves_field
+        _LOGGER.debug("Master %s using actual_slave_list: %s", self.name, actual_slave_list)
+
+        _LOGGER.debug("Master %s processing %d slaves from multiroom data", self.name, len(actual_slave_list))
+
+        # Clear coordinator reference (masters don't have one)
+        old_coordinator = self.coordinator_speaker
+        self.coordinator_speaker = None
+        if old_coordinator:
+            _LOGGER.debug("Master %s cleared coordinator reference (was: %s)", self.name, old_coordinator.name)
+
+        # Resolve slave IPs/UUIDs to Speaker objects
+        wiim_data = get_wiim_data(self.hass)
+        new_group_members = []
+        _LOGGER.debug("Master %s available speakers in registry: %s", self.name, list(wiim_data.speakers.keys()))
+
+        for i, slave_info in enumerate(actual_slave_list):
+            _LOGGER.debug("Master %s processing slave %d: %s", self.name, i, slave_info)
+
+            # slave_info could be {"ip": "192.168.1.101", "uuid": "...", "name": "Kitchen"}
+            # or just an IP string - handle both formats
+            if isinstance(slave_info, dict):
+                slave_ip = slave_info.get("ip")
+                slave_uuid = slave_info.get("uuid")
+                slave_name = slave_info.get("name", "Unknown")
+            else:
+                # Assume it's just an IP string
+                slave_ip = str(slave_info)
+                slave_uuid = None
+                slave_name = "Unknown"
+
+            _LOGGER.debug(
+                "Master %s slave %d details: ip='%s', uuid='%s', name='%s'",
+                self.name,
+                i,
+                slave_ip,
+                slave_uuid,
+                slave_name,
+            )
+
+            # Try to find slave by UUID first, then by IP
+            slave_speaker = None
+            if slave_uuid:
+                slave_speaker = wiim_data.speakers.get(slave_uuid)
+                _LOGGER.debug(
+                    "Master %s UUID lookup for '%s': %s",
+                    self.name,
+                    slave_uuid,
+                    slave_speaker.name if slave_speaker else "Not found",
+                )
+
+            if not slave_speaker and slave_ip:
+                slave_speaker = wiim_data.get_speaker_by_ip(slave_ip)
+                _LOGGER.debug(
+                    "Master %s IP lookup for '%s': %s",
+                    self.name,
+                    slave_ip,
+                    slave_speaker.name if slave_speaker else "Not found",
+                )
+
+            if slave_speaker:
+                new_group_members.append(slave_speaker)
+                # Update slave's coordinator reference to this master
+                old_slave_coordinator = slave_speaker.coordinator_speaker
+                slave_speaker.coordinator_speaker = self
+                _LOGGER.info(
+                    "Master %s linked to slave %s (IP: %s) - slave coordinator: %s -> %s",
+                    self.name,
+                    slave_speaker.name,
+                    slave_ip,
+                    old_slave_coordinator.name if old_slave_coordinator else "None",
+                    self.name,
+                )
+            else:
+                _LOGGER.warning(
+                    "Master %s cannot find slave speaker for %s (IP: %s, UUID: %s) in registry",
+                    self.name,
+                    slave_name,
+                    slave_ip,
+                    slave_uuid,
+                )
+                _LOGGER.debug(
+                    "Available speaker IPs in registry: %s", [s.ip_address for s in wiim_data.speakers.values()]
+                )
+
+        # Update the group members list
+        old_count = len(self.group_members)
+        old_member_names = [s.name for s in self.group_members]
+        self.group_members = new_group_members
+        new_member_names = [s.name for s in new_group_members]
+
+        if old_count != len(new_group_members) or old_member_names != new_member_names:
+            _LOGGER.info(
+                "Master %s group membership changed: %d -> %d slaves (%s -> %s)",
+                self.name,
+                old_count,
+                len(new_group_members),
+                old_member_names,
+                new_member_names,
+            )
+        else:
+            _LOGGER.debug(
+                "Master %s group membership unchanged: %d slaves (%s)",
+                self.name,
+                len(new_group_members),
+                new_member_names,
+            )
+
+        _LOGGER.debug("=== MASTER GROUP STATE UPDATE END for %s ===", self.name)
+
+    def _update_slave_group_state(self, master_uuid: str | None, master_ip: str | None) -> None:
+        """Update group state for slave speakers.
+
+        CRITICAL: Slaves maintain reference to their master Speaker object.
+        """
+        _LOGGER.debug("=== SLAVE GROUP STATE UPDATE START for %s ===", self.name)
+        _LOGGER.debug("Slave %s processing master reference (UUID: %s, IP: %s)", self.name, master_uuid, master_ip)
+
+        # Clear group members list (slaves don't manage this)
+        old_group_count = len(self.group_members)
+        self.group_members = []
+        if old_group_count > 0:
+            _LOGGER.debug(
+                "Slave %s cleared %d group members (slaves don't manage group lists)", self.name, old_group_count
+            )
+
+        # Find master Speaker object
+        wiim_data = get_wiim_data(self.hass)
+        master_speaker = None
+
+        _LOGGER.debug("Slave %s available speakers in registry: %s", self.name, list(wiim_data.speakers.keys()))
+
+        # Try to find master by UUID first, then by IP
+        if master_uuid:
+            master_speaker = wiim_data.speakers.get(master_uuid)
+            _LOGGER.debug(
+                "Slave %s UUID lookup for master '%s': %s",
+                self.name,
+                master_uuid,
+                master_speaker.name if master_speaker else "Not found",
+            )
+
+        if not master_speaker and master_ip:
+            master_speaker = wiim_data.get_speaker_by_ip(master_ip)
+            _LOGGER.debug(
+                "Slave %s IP lookup for master '%s': %s",
+                self.name,
+                master_ip,
+                master_speaker.name if master_speaker else "Not found",
+            )
+
+        if master_speaker:
+            old_master = self.coordinator_speaker
+            self.coordinator_speaker = master_speaker
+
+            if old_master != master_speaker:
+                _LOGGER.info(
+                    "Slave %s master changed: %s -> %s",
+                    self.name,
+                    old_master.name if old_master else "None",
+                    master_speaker.name,
+                )
+            else:
+                _LOGGER.debug("Slave %s master unchanged: %s", self.name, master_speaker.name)
+        else:
+            if master_uuid or master_ip:
+                _LOGGER.warning(
+                    "Slave %s cannot find master speaker (Master UUID: %s, IP: %s) in registry",
+                    self.name,
+                    master_uuid,
+                    master_ip,
+                )
+                _LOGGER.debug(
+                    "Available speaker IPs in registry: %s", [s.ip_address for s in wiim_data.speakers.values()]
+                )
+            else:
+                _LOGGER.debug("Slave %s has no master UUID or IP specified", self.name)
+            # Keep existing coordinator_speaker reference if lookup fails
+            # This prevents breaking group state due to temporary lookup failures
+            if self.coordinator_speaker:
+                _LOGGER.debug(
+                    "Slave %s keeping existing master reference: %s", self.name, self.coordinator_speaker.name
+                )
+
+        _LOGGER.debug("=== SLAVE GROUP STATE UPDATE END for %s ===", self.name)
+
+    def _clear_group_state(self) -> None:
+        """Clear all group state for solo speakers."""
+        _LOGGER.debug("=== CLEAR GROUP STATE START for %s ===", self.name)
+
+        old_role = "master" if self.group_members else ("slave" if self.coordinator_speaker else "solo")
+        old_member_count = len(self.group_members)
+        old_coordinator = self.coordinator_speaker
+
+        if self.group_members or self.coordinator_speaker:
+            _LOGGER.debug(
+                "Clearing group state for solo speaker %s (was %s with %d members, coordinator: %s)",
+                self.name,
+                old_role,
+                old_member_count,
+                old_coordinator.name if old_coordinator else "None",
+            )
+
+        self.group_members = []
+        self.coordinator_speaker = None
+
+        _LOGGER.debug("=== CLEAR GROUP STATE END for %s ===", self.name)
 
     @property
     def available(self) -> bool:
@@ -369,26 +812,64 @@ class Speaker:
     def get_media_image_url(self) -> str | None:
         """Get media image URL.
 
-        The API parser already extracts cover art URLs from many fields
-        and sets them in the 'entity_picture' field when available.
+        Enhanced to prioritize coordinator's processed metadata where artwork URLs
+        are now systematically extracted and standardized to 'entity_picture'.
         """
         if not self.coordinator.data:
+            _LOGGER.debug("No coordinator data available for media image URL")
             return None
-        status = self.coordinator.data.get("status", {})
 
-        # Check entity_picture first - this is what the API parser sets
-        # when it finds cover art URLs from the device
-        return (
-            status.get("entity_picture")
-            or status.get("cover")
-            or status.get("cover_url")
-            or status.get("albumart")
-            or status.get("album_art")
-            or status.get("artwork_url")
-            or status.get("art_url")
-            or status.get("thumbnail")
-            or status.get("pic_url")
-        )
+        # PRIORITY 1: Check entity_picture from the processed metadata by the coordinator
+        # The enhanced coordinator now systematically finds artwork URLs and puts them here
+        metadata_from_coord = self.coordinator.data.get("metadata", {})
+        image_url = metadata_from_coord.get("entity_picture")
+
+        if image_url:
+            _LOGGER.debug("Found media image URL from coordinator metadata: %s for %s", image_url, self.name)
+            return image_url
+
+        # PRIORITY 2: Check status section entity_picture (coordinator might put it here too)
+        status_from_coord = self.coordinator.data.get("status", {})
+        image_url = status_from_coord.get("entity_picture")
+
+        if image_url:
+            _LOGGER.debug("Found media image URL from status entity_picture: %s for %s", image_url, self.name)
+            return image_url
+
+        # PRIORITY 3: Fallback to checking raw status fields
+        # (though coordinator should have already processed these into metadata.entity_picture)
+        fallback_fields = [
+            "cover",
+            "cover_url",
+            "albumart",
+            "albumArtURI",
+            "albumArtUri",
+            "albumarturi",
+            "art_url",
+            "artwork_url",
+            "pic_url",
+            "thumbnail",
+        ]
+
+        for field in fallback_fields:
+            image_url = status_from_coord.get(field)
+            if image_url:
+                _LOGGER.debug(
+                    "Found media image URL from fallback status field '%s': %s for %s", field, image_url, self.name
+                )
+                return image_url
+
+        # Debug: Log what fields are actually available
+        available_fields = {
+            k: v
+            for k, v in status_from_coord.items()
+            if any(art_field in k.lower() for art_field in ["cover", "art", "pic", "thumb", "image"])
+        }
+        if available_fields:
+            _LOGGER.debug("Available image-related fields in status for %s: %s", self.name, available_fields)
+
+        _LOGGER.debug("No media image URL found for %s", self.name)
+        return None
 
     # ===== SOURCE & AUDIO CONTROL METHODS =====
 
@@ -513,13 +994,9 @@ class Speaker:
         return entity_ids
 
     def _get_entity_id_for_speaker(self, speaker: Speaker) -> str | None:
-        """Find entity ID for a given speaker."""
+        """Find entity ID for a given speaker using O(1) lookup."""
         data = get_wiim_data(self.hass)
-        # Reverse lookup in entity_id_mappings
-        for entity_id, mapped_speaker in data.entity_id_mappings.items():
-            if mapped_speaker is speaker:
-                return entity_id
-        return None
+        return data.get_entity_id_for_speaker(speaker)
 
     def resolve_entity_ids_to_speakers(self, entity_ids: list[str]) -> list[Speaker]:
         """Convert entity IDs to Speaker objects."""
@@ -537,64 +1014,69 @@ class Speaker:
 
     # Group management methods
     async def async_join_group(self, speakers: list[Speaker]) -> None:
-        """Join speakers to this speaker as group master.
+        """Join speakers to this speaker as group master using LinkPlay multiroom API.
 
         This speaker becomes the master, provided speakers become slaves.
-
-        NOTE: The multiroom join command is not implemented yet.
-        The ConnectMasterAp command is for WiFi AP connection, not multiroom grouping.
+        Uses the documented LinkPlay multiroom commands from the API guide.
         """
         if not speakers:
             _LOGGER.warning("No speakers provided for group join")
             return
 
-        _LOGGER.info("Joining %d speakers to master %s", len(speakers), self.name)
+        _LOGGER.info("Creating multiroom group: %s (master) + %d slaves", self.name, len(speakers))
 
-        # TODO: Implement proper multiroom join commands
-        # The ConnectMasterAp command is for WiFi, not multiroom grouping
-        _LOGGER.error("Multiroom join not implemented - ConnectMasterAp is WiFi command, not grouping")
-        raise NotImplementedError("Multiroom join commands not implemented yet")
+        try:
+            # Step 1: Make this device a multiroom master
+            _LOGGER.debug("Setting %s as multiroom master", self.name)
+            await self.coordinator.client.create_group()  # Sends setMultiroom:Master
 
-        # try:
-        #     # Send ConnectMasterAp command to each slave
-        #     for slave_speaker in speakers:
-        #         if slave_speaker is self:
-        #             continue  # Skip self
+            # Step 2: Add each slave to the group using the new join_slave method
+            _LOGGER.debug("Adding %d slaves to group", len(speakers))
 
-        #         # Send join command to slave device
-        #         cmd = f"ConnectMasterAp:JoinGroupMaster:{self.ip_address}:wifi0.0.0.0"
-        #         _LOGGER.debug("Sending join command to %s: %s", slave_speaker.name, cmd)
+            successful_joins = 0
+            for slave_speaker in speakers:
+                if slave_speaker is self:
+                    continue  # Skip self
 
-        #         try:
-        #             await slave_speaker.coordinator.client.send_command(cmd)
-        #             _LOGGER.debug("Successfully sent join command to %s", slave_speaker.name)
-        #         except Exception as err:
-        #             _LOGGER.error("Failed to join speaker %s: %s", slave_speaker.name, err)
-        #             # Continue with other speakers
+                try:
+                    _LOGGER.debug("Joining slave %s to master %s", slave_speaker.name, self.name)
+                    # Use the new join_slave API method with setMultiroom:Slave:<master_ip>
+                    await slave_speaker.coordinator.client.join_slave(self.ip_address)
+                    successful_joins += 1
+                    _LOGGER.info("Successfully joined slave %s to master %s", slave_speaker.name, self.name)
+                except Exception as slave_err:
+                    _LOGGER.error("Failed to join slave %s: %s", slave_speaker.name, slave_err)
+                    # Continue with other slaves
 
-        #     # Update group states will happen via coordinator polling
-        #     # Request immediate refresh to verify group formation
-        #     await self.coordinator.async_request_refresh()
+            if successful_joins == 0:
+                raise Exception("Failed to join any slaves to the group")
 
-        #     # Also refresh slave coordinators to get updated state quickly
-        #     for slave_speaker in speakers:
-        #         if slave_speaker is not self:
-        #             try:
-        #                 await slave_speaker.coordinator.async_request_refresh()
-        #             except Exception as err:
-        #                 _LOGGER.debug("Could not refresh slave coordinator %s: %s", slave_speaker.name, err)
+            _LOGGER.info("Successfully created group with %d/%d slaves", successful_joins, len(speakers))
 
-        #     _LOGGER.info("Group join commands sent successfully")
+            # Refresh all coordinators to update group state
+            await self.coordinator.async_request_refresh()
 
-        # except Exception as err:
-        #     _LOGGER.error("Failed to join group: %s", err)
-        #     raise
+            for slave_speaker in speakers:
+                if slave_speaker is not self:
+                    try:
+                        await slave_speaker.coordinator.async_request_refresh()
+                    except Exception as refresh_err:
+                        _LOGGER.debug("Could not refresh slave coordinator %s: %s", slave_speaker.name, refresh_err)
+
+        except Exception as err:
+            _LOGGER.error("Failed to create multiroom group: %s", err)
+            # Try to cleanup - remove master status if group creation failed
+            try:
+                await self.coordinator.client.leave_group()  # Send multiroom:Ungroup
+            except Exception as cleanup_err:
+                _LOGGER.debug("Failed to cleanup after group creation failure: %s", cleanup_err)
+            raise
 
     async def async_leave_group(self) -> None:
-        """Remove this speaker from its group.
+        """Remove this speaker from its group using LinkPlay multiroom API.
 
         Handles both slave leaving group and master disbanding group.
-        Uses LinkPlay SlaveKickout or Ungroup API commands.
+        Uses documented LinkPlay SlaveKickout or Ungroup API commands.
         """
         _LOGGER.info("Speaker %s leaving group (current role: %s)", self.name, self.role)
 
@@ -602,91 +1084,42 @@ class Speaker:
             if self.role == "slave" and self.coordinator_speaker:
                 # Slave leaving: send SlaveKickout command to master
                 master = self.coordinator_speaker
-                cmd = f"multiroom:SlaveKickout:{self.ip_address}"
-                _LOGGER.debug("Sending slave kickout command to master %s: %s", master.name, cmd)
+                _LOGGER.debug("Sending slave kickout to master %s for slave %s", master.name, self.name)
 
-                await master.coordinator.client.send_command(cmd)
-                _LOGGER.info("Successfully sent leave command for slave %s", self.name)
+                # Use the documented SlaveKickout command on the master
+                await master.coordinator.client.kick_slave(self.ip_address)
+                _LOGGER.info("Successfully sent slave kickout command for %s", self.name)
 
                 # Refresh master coordinator to update group state
                 await master.coordinator.async_request_refresh()
 
             elif self.role == "master":
-                # Master leaving: disband entire group
-                cmd = "multiroom:Ungroup"
-                _LOGGER.debug("Sending ungroup command to master %s: %s", self.name, cmd)
+                # Master leaving: disband entire group using Ungroup command
+                _LOGGER.debug("Disbanding group for master %s", self.name)
 
-                await self.coordinator.client.send_command(cmd)
-                _LOGGER.info("Successfully sent ungroup command for master %s", self.name)
+                await self.coordinator.client.leave_group()  # Sends multiroom:Ungroup
+                _LOGGER.info("Successfully disbanded group for master %s", self.name)
 
-                # Refresh all slave coordinators to update their state
-                for slave in self.group_members:
-                    if slave is not self:
-                        try:
-                            await slave.coordinator.async_request_refresh()
-                        except Exception as err:
-                            _LOGGER.debug("Could not refresh slave coordinator %s: %s", slave.name, err)
+                # Refresh all former slave coordinators to update their state
+                if hasattr(self, "group_members") and self.group_members:
+                    for slave in self.group_members:
+                        if slave is not self:
+                            try:
+                                await slave.coordinator.async_request_refresh()
+                            except Exception as err:
+                                _LOGGER.debug("Could not refresh former slave coordinator %s: %s", slave.name, err)
 
             else:
                 _LOGGER.warning("Speaker %s not in a group (role: %s), nothing to leave", self.name, self.role)
                 return
 
-            # Request immediate refresh for this speaker
+            # Request immediate refresh for this speaker to update role
             await self.coordinator.async_request_refresh()
             _LOGGER.info("Group leave completed for %s", self.name)
 
         except Exception as err:
-            _LOGGER.error("Failed to leave group: %s", err)
+            _LOGGER.error("Failed to leave group for %s: %s", self.name, err)
             raise
-
-    async def _populate_from_coordinator_data(self) -> None:
-        """Populate speaker attributes from the latest coordinator data.
-
-        This method should be called after the coordinator has fetched new data.
-        """
-        if not self.coordinator.data:
-            _LOGGER.debug("Coordinator data not available for %s, skipping population", self.name)
-            return
-
-        device_info_data = self.coordinator.data.get("device_info", {})
-        status_data = self.coordinator.data.get("status", {})
-
-        # Update name if it has changed on the device
-        # The API might provide 'name', 'DeviceName', 'friendlyName', etc.
-        # Prefer name from device_info, then status, then keep existing.
-        api_device_name = (
-            device_info_data.get("name") or device_info_data.get("DeviceName") or status_data.get("name")
-        )  # Adjust keys as per actual API response
-
-        if api_device_name and self.name != api_device_name:
-            _LOGGER.info(
-                "Device name changed for %s: from '%s' to '%s'",
-                self.uuid,
-                self.name,
-                api_device_name,
-            )
-            self.name = api_device_name
-            # Update HA device registry if name changes
-            await self._update_device_registry_name()
-
-        self.model = device_info_data.get("model", self.model)
-        self.firmware = device_info_data.get("firmware", self.firmware)
-        self.mac_address = device_info_data.get("mac", self.mac_address)  # Ensure 'mac' key is correct
-        self.ip_address = self.coordinator.client.host  # IP can change, update from client
-
-        # The self._uuid is set from config_entry.unique_id and should be stable.
-        # We can verify if the API still reports the same UUID.
-        api_uuid = device_info_data.get("uuid")
-        if api_uuid and self._uuid != api_uuid:
-            _LOGGER.warning(
-                "Mismatch between stored UUID (%s) and API reported UUID (%s) for host %s. "
-                "The stored UUID from initial setup will be maintained. This might indicate an issue.",
-                self._uuid,
-                api_uuid,
-                self.ip_address,
-            )
-
-        # Group role and other attributes are updated by update_from_coordinator_data
 
     async def _update_device_registry_name(self) -> None:
         """Update the device name in the Home Assistant device registry."""

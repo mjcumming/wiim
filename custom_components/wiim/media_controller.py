@@ -15,6 +15,7 @@ and complex media player business logic.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -25,6 +26,10 @@ from .const import (
     CONF_VOLUME_STEP,
     DEFAULT_VOLUME_STEP,
     EQ_PRESET_MAP,
+    PLAY_MODE_NORMAL,
+    PLAY_MODE_REPEAT_ALL,
+    PLAY_MODE_REPEAT_ONE,
+    PLAY_MODE_SHUFFLE,
 )
 
 if TYPE_CHECKING:
@@ -57,6 +62,11 @@ class MediaPlayerController:
         self._volume_step = (
             speaker.coordinator.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP) / 100.0
         )  # Convert percentage to 0.0-1.0
+
+        # Media image caching (like LinkPlay integration)
+        self._media_image_url_cached: str | None = None
+        self._media_image_bytes: bytes | None = None
+        self._media_image_content_type: str | None = None
 
         self._logger.debug(
             "MediaPlayerController initialized for %s (volume_step=%.2f)",
@@ -315,21 +325,37 @@ class MediaPlayerController:
         """Set EQ preset.
 
         Args:
-            preset: EQ preset name
+            preset: EQ preset name (either internal key or display name)
         """
         try:
             self._logger.debug("Setting EQ preset '%s' for %s", preset, self.speaker.name)
 
-            # Map friendly preset names to WiiM preset IDs
-            preset_id = EQ_PRESET_MAP.get(preset)
-            if preset_id is None:
+            # Handle both internal keys and display names
+            from .const import EQ_PRESET_MAP
+
+            preset_key = None
+
+            # First, try direct key lookup (e.g., "bassreducer")
+            if preset in EQ_PRESET_MAP:
+                preset_key = preset
+            else:
+                # Try reverse lookup for display names (e.g., "Bass Reducer")
+                for key, display_name in EQ_PRESET_MAP.items():
+                    if preset == display_name or preset.lower() == display_name.lower():
+                        preset_key = key
+                        break
+
+            if preset_key is None:
+                available_keys = list(EQ_PRESET_MAP.keys())
+                available_names = list(EQ_PRESET_MAP.values())
                 raise ValueError(
-                    "Unknown EQ preset '{}' on {}. Available presets: {}".format(
-                        preset, self.speaker.name, ", ".join(EQ_PRESET_MAP.keys())
-                    )
+                    f"Unknown EQ preset '{preset}' on {self.speaker.name}. "
+                    f"Available keys: {available_keys}. "
+                    f"Available names: {available_names}"
                 )
 
-            await self.speaker.coordinator.client.set_eq_preset(preset_id)
+            # The API client expects the internal key, not the display name
+            await self.speaker.coordinator.client.set_eq_preset(preset_key)
 
         except Exception as err:
             self._logger.error("Failed to set EQ preset '%s': %s", preset, err)
@@ -342,14 +368,29 @@ class MediaPlayerController:
             shuffle: True to enable shuffle, False to disable
         """
         try:
+            self._logger.debug("=== SHUFFLE OPERATION START ===")
             self._logger.debug("Setting shuffle to %s for %s", shuffle, self.speaker.name)
+            self._logger.debug(
+                "Current speaker state: role=%s, available=%s", self.speaker.role, self.speaker.available
+            )
 
-            # Map boolean to WiiM shuffle mode string
-            shuffle_mode = "1" if shuffle else "0"
+            # Map boolean to WiiM shuffle mode constants (NOT string numbers!)
+            shuffle_mode = PLAY_MODE_SHUFFLE if shuffle else PLAY_MODE_NORMAL
+            self._logger.debug("Mapped shuffle=%s to mode constant='%s'", shuffle, shuffle_mode)
+
+            # Log what we're about to send to the API
+            self._logger.debug("About to call client.set_shuffle_mode('%s')", shuffle_mode)
+
             await self.speaker.coordinator.client.set_shuffle_mode(shuffle_mode)
 
+            self._logger.debug("Successfully sent shuffle command to device")
+            self._logger.debug("=== SHUFFLE OPERATION END ===")
+
         except Exception as err:
+            self._logger.error("=== SHUFFLE OPERATION FAILED ===")
             self._logger.error("Failed to set shuffle to %s: %s", shuffle, err)
+            self._logger.error("Error type: %s", type(err).__name__)
+            self._logger.error("=== SHUFFLE OPERATION END ===")
             raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
 
     async def set_repeat(self, repeat: str) -> None:
@@ -359,22 +400,38 @@ class MediaPlayerController:
             repeat: Repeat mode - "off", "one", "all"
         """
         try:
+            self._logger.debug("=== REPEAT OPERATION START ===")
             self._logger.debug("Setting repeat to '%s' for %s", repeat, self.speaker.name)
+            self._logger.debug(
+                "Current speaker state: role=%s, available=%s", self.speaker.role, self.speaker.available
+            )
 
-            # Map HA repeat modes to WiiM repeat modes
+            # Map HA repeat modes to WiiM repeat mode constants (NOT string numbers!)
             if repeat == "off":
-                repeat_mode = "0"
+                repeat_mode = PLAY_MODE_NORMAL
             elif repeat == "one":
-                repeat_mode = "1"
+                repeat_mode = PLAY_MODE_REPEAT_ONE
             elif repeat == "all":
-                repeat_mode = "2"
+                repeat_mode = PLAY_MODE_REPEAT_ALL
             else:
+                self._logger.error("Invalid repeat mode received: '%s'", repeat)
                 raise ValueError(f"Unknown repeat mode '{repeat}' on {self.speaker.name}. Valid modes: off, one, all")
+
+            self._logger.debug("Mapped repeat='%s' to mode constant='%s'", repeat, repeat_mode)
+
+            # Log what we're about to send to the API
+            self._logger.debug("About to call client.set_repeat_mode('%s')", repeat_mode)
 
             await self.speaker.coordinator.client.set_repeat_mode(repeat_mode)
 
+            self._logger.debug("Successfully sent repeat command to device")
+            self._logger.debug("=== REPEAT OPERATION END ===")
+
         except Exception as err:
+            self._logger.error("=== REPEAT OPERATION FAILED ===")
             self._logger.error("Failed to set repeat to '%s': %s", repeat, err)
+            self._logger.error("Error type: %s", type(err).__name__)
+            self._logger.error("=== REPEAT OPERATION END ===")
             raise HomeAssistantError(f"Failed to set repeat: {err}") from err
 
     def get_source_list(self) -> list[str]:
@@ -407,11 +464,45 @@ class MediaPlayerController:
 
     def get_shuffle_state(self) -> bool | None:
         """Get shuffle state."""
-        return self.speaker.get_shuffle_state()
+        try:
+            shuffle_state = self.speaker.get_shuffle_state()
+            self._logger.debug("Detected shuffle state: %s for %s", shuffle_state, self.speaker.name)
+
+            # Also log the raw coordinator data for debugging
+            if self.speaker.coordinator.data:
+                status = self.speaker.coordinator.data.get("status", {})
+                play_mode = status.get("play_mode")
+                playmode = status.get("playmode")
+                shuffle_field = status.get("shuffle")
+                self._logger.debug(
+                    "Raw shuffle data - play_mode='%s', playmode='%s', shuffle='%s'", play_mode, playmode, shuffle_field
+                )
+
+            return shuffle_state
+        except Exception as err:
+            self._logger.error("Error getting shuffle state: %s", err)
+            return None
 
     def get_repeat_mode(self) -> str | None:
         """Get repeat mode."""
-        return self.speaker.get_repeat_mode()
+        try:
+            repeat_mode = self.speaker.get_repeat_mode()
+            self._logger.debug("Detected repeat mode: '%s' for %s", repeat_mode, self.speaker.name)
+
+            # Also log the raw coordinator data for debugging
+            if self.speaker.coordinator.data:
+                status = self.speaker.coordinator.data.get("status", {})
+                play_mode = status.get("play_mode")
+                playmode = status.get("playmode")
+                repeat_field = status.get("repeat")
+                self._logger.debug(
+                    "Raw repeat data - play_mode='%s', playmode='%s', repeat='%s'", play_mode, playmode, repeat_field
+                )
+
+            return repeat_mode
+        except Exception as err:
+            self._logger.error("Error getting repeat mode: %s", err)
+            return None
 
     def get_sound_mode_list(self) -> list[str]:
         """Get available EQ presets."""
@@ -499,72 +590,6 @@ class MediaPlayerController:
             self._logger.error("Failed to get group leader: %s", err)
             return None
 
-    # ===== POWER CONTROL =====
-
-    async def turn_on(self) -> None:
-        """Turn device on."""
-        try:
-            self._logger.debug("Turning on %s", self.speaker.name)
-
-            await self.speaker.coordinator.client.set_power(True)
-
-        except Exception as err:
-            self._logger.error("Failed to turn on device: %s", err)
-            raise HomeAssistantError(f"Failed to turn on: {err}") from err
-
-    async def turn_off(self) -> None:
-        """Turn device off."""
-        try:
-            self._logger.debug("Turning off %s", self.speaker.name)
-
-            await self.speaker.coordinator.client.set_power(False)
-
-        except Exception as err:
-            self._logger.error("Failed to turn off device: %s", err)
-            raise HomeAssistantError(f"Failed to turn off: {err}") from err
-
-    async def toggle_power(self) -> None:
-        """Toggle power state."""
-        try:
-            self._logger.debug("Toggling power for %s", self.speaker.name)
-
-            await self.speaker.coordinator.client.toggle_power()
-
-        except Exception as err:
-            self._logger.error("Failed to toggle power: %s", err)
-            raise HomeAssistantError(f"Failed to toggle power: {err}") from err
-
-    def is_powered_on(self) -> bool:
-        """Get power state."""
-        try:
-            # Check if we have recent coordinator data (indicates device is responding)
-            if not self.speaker.coordinator.data:
-                return False
-
-            # Check if coordinator was successful recently
-            if not self.speaker.coordinator.last_update_success:
-                return False
-
-            # Check for explicit power status in data
-            status = self.speaker.coordinator.data.get("status", {})
-            power_state = status.get("power") or status.get("power_state")
-
-            if power_state is not None:
-                # Handle various power state formats
-                if isinstance(power_state, bool):
-                    return power_state
-                if isinstance(power_state, str):
-                    return power_state.lower() in ("1", "on", "true", "yes", "power_on")
-                if isinstance(power_state, int):
-                    return power_state != 0
-
-            # If no explicit power state, assume device is on if we have data
-            return True
-
-        except Exception as err:
-            self._logger.debug("Failed to determine power state: %s", err)
-            return False
-
     # ===== MEDIA METADATA =====
 
     def get_media_title(self) -> str | None:
@@ -590,6 +615,143 @@ class MediaPlayerController:
     def get_media_position_updated_at(self) -> float | None:
         """Get position update timestamp."""
         return self.speaker.get_media_position_updated_at()
+
+    def get_media_image_url(self) -> str | None:
+        """Get media image URL."""
+        return self.speaker.get_media_image_url()
+
+    async def get_media_image(self) -> tuple[bytes | None, str | None]:
+        """Fetch media image of current playing media.
+
+        This method handles:
+        - SSL certificate issues with self-signed certs
+        - Various image formats and content types
+        - Network timeouts and connection errors
+        - Large image handling with size limits
+        - Caching to avoid unnecessary re-downloads
+
+        Returns:
+            Tuple of (image_bytes, content_type) or (None, None) if unavailable.
+        """
+        image_url = self.get_media_image_url()
+        if not image_url:
+            self._logger.debug("No media image URL available for %s", self.speaker.name)
+            return None, None
+
+        # Check cache first (like LinkPlay integration)
+        if image_url == self._media_image_url_cached and self._media_image_bytes:
+            self._logger.debug("Returning cached media image for %s", self.speaker.name)
+            return self._media_image_bytes, self._media_image_content_type
+
+        try:
+            self._logger.debug("Fetching media image from: %s", image_url)
+
+            # Import here to avoid circular imports
+            from homeassistant.helpers.aiohttp_client import async_get_clientsession
+            import aiohttp
+            import ssl
+            from contextlib import suppress
+
+            # Use Home Assistant's shared session for efficiency
+            session = async_get_clientsession(self.hass)
+
+            # Create permissive SSL context for album art sources
+            # Many streaming services and WiiM devices use various SSL configurations
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            # Set reasonable timeout for image fetching (match LinkPlay's 5s)
+            timeout = aiohttp.ClientTimeout(total=5.0)
+
+            async with session.get(
+                image_url, timeout=timeout, ssl=ssl_context, headers={"User-Agent": "HomeAssistant/WiiM-Integration"}
+            ) as response:
+                if response.status != 200:
+                    self._logger.warning(
+                        "Failed to fetch media image for %s: HTTP %d", self.speaker.name, response.status
+                    )
+                    # Clear cache on failure
+                    self._media_image_url_cached = None
+                    self._media_image_bytes = None
+                    self._media_image_content_type = None
+                    return None, None
+
+                # Check content length to avoid downloading huge files
+                content_length = response.headers.get("Content-Length")
+                if content_length and int(content_length) > 10 * 1024 * 1024:  # 10MB limit
+                    self._logger.warning("Media image too large for %s: %s bytes", self.speaker.name, content_length)
+                    # Clear cache on failure
+                    self._media_image_url_cached = None
+                    self._media_image_bytes = None
+                    self._media_image_content_type = None
+                    return None, None
+
+                # Read image data
+                image_data = await response.read()
+
+                # Get content type, with fallback
+                content_type = response.headers.get("Content-Type", "image/jpeg")
+                if ";" in content_type:
+                    content_type = content_type.split(";")[0]  # Remove charset info
+
+                # Basic validation - ensure we got some data
+                if not image_data or len(image_data) == 0:
+                    self._logger.debug("Empty image data for %s", self.speaker.name)
+                    # Clear cache on failure
+                    self._media_image_url_cached = None
+                    self._media_image_bytes = None
+                    self._media_image_content_type = None
+                    return None, None
+
+                # Additional size check after download
+                if len(image_data) > 10 * 1024 * 1024:  # 10MB limit
+                    self._logger.warning(
+                        "Downloaded image too large for %s: %d bytes", self.speaker.name, len(image_data)
+                    )
+                    # Clear cache on failure
+                    self._media_image_url_cached = None
+                    self._media_image_bytes = None
+                    self._media_image_content_type = None
+                    return None, None
+
+                # Cache the result (like LinkPlay integration)
+                self._media_image_url_cached = image_url
+                self._media_image_bytes = image_data
+                self._media_image_content_type = content_type
+
+                self._logger.debug(
+                    "Successfully fetched and cached media image for %s: %d bytes, type: %s",
+                    self.speaker.name,
+                    len(image_data),
+                    content_type,
+                )
+
+                return image_data, content_type
+
+        except asyncio.TimeoutError:
+            self._logger.debug("Timeout fetching media image for %s from %s", self.speaker.name, image_url)
+            # Clear cache on failure
+            self._media_image_url_cached = None
+            self._media_image_bytes = None
+            self._media_image_content_type = None
+            return None, None
+
+        except (aiohttp.ClientError, ssl.SSLError) as err:
+            self._logger.debug("Network error fetching media image for %s: %s", self.speaker.name, err)
+            # Clear cache on failure
+            self._media_image_url_cached = None
+            self._media_image_bytes = None
+            self._media_image_content_type = None
+            return None, None
+
+        except Exception as err:
+            self._logger.warning("Unexpected error fetching media image for %s: %s", self.speaker.name, err)
+            # Clear cache on failure
+            self._media_image_url_cached = None
+            self._media_image_bytes = None
+            self._media_image_content_type = None
+            return None, None
 
     # ===== ADVANCED FEATURES =====
 

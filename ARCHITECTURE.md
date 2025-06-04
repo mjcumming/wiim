@@ -7,22 +7,51 @@ The WiiM integration follows a **pragmatic layered architecture** with clear sep
 ## Core Design Principles
 
 ### 1. Single Responsibility Principle
+
 Each class has ONE clear purpose and handles ONE aspect of the system.
 
 ### 2. Separation of Concerns - **SIMPLIFIED**
+
 - **Entity Layer**: HA interface only (thin wrapper)
 - **Controller Layer**: **Single controller** handling all media player complexity
 - **Business Layer**: Speaker state management and coordination
 - **API Layer**: Device communication
 
 ### 3. Pragmatic Controller Pattern
+
 **One MediaPlayerController** handles all complex media player functionality, avoiding unnecessary abstraction while maintaining testability.
 
 ### 4. Event-Driven Architecture
+
 State changes flow through the system via events, avoiding tight coupling.
 
 ### 5. Defensive Programming
+
 All operations have graceful fallbacks and error handling.
+
+## Design Decisions & Exclusions
+
+### Power Control - Intentionally Excluded ⚠️
+
+**Decision**: Power control is **intentionally excluded** from this integration.
+
+**Rationale**:
+
+- WiiM devices have **inconsistent power control implementation** across different models and firmware versions
+- Some devices don't support power control via API
+- Power states are often unreliable or incorrectly reported
+- Physical power buttons and auto-sleep functionality vary significantly between models
+- Network connectivity requirements conflict with true "off" states
+- Implementing power control would require device-specific workarounds that compromise reliability
+
+**Alternative**: Users should rely on:
+
+- Physical power buttons on devices
+- Auto-sleep functionality built into WiiM devices
+- Network-level controls (smart switches) if needed
+- WiiM's native power management features
+
+This decision prioritizes **reliable core functionality** over potentially problematic power features.
 
 ## Simplified Architecture Layers
 
@@ -42,7 +71,6 @@ All operations have graceful fallbacks and error handling.
 │  ├── Playback Logic (master/slave aware)                   │
 │  ├── Source Logic (EQ, shuffle, repeat)                    │
 │  ├── Group Logic (join/unjoin validation)                  │
-│  ├── Power Logic (on/off/toggle)                           │
 │  └── Media Logic (artwork, metadata)                       │
 ├─────────────────────────────────────────────────────────────┤
 │                     BUSINESS LAYER                          │
@@ -56,7 +84,7 @@ All operations have graceful fallbacks and error handling.
 │                   COORDINATION LAYER                        │
 ├─────────────────────────────────────────────────────────────┤
 │  WiiMCoordinator (coordinator.py)                          │
-│  ├── Adaptive Polling (1s playing, 5s idle)               │
+│  ├── Polling                                               │
 │  ├── API Capability Detection                              │
 │  ├── State Normalization                                   │
 │  └── Error Recovery                                        │
@@ -92,8 +120,10 @@ class MediaPlayerController:
     - Playback control with group awareness
     - Source selection with EQ and mode management
     - Group operations with validation and state sync
-    - Power control with device coordination
     - Media metadata and artwork handling
+
+    NOTE: Power control is intentionally excluded due to inconsistent
+    implementation across WiiM devices and firmware versions.
     """
 
     def __init__(self, speaker: Speaker):
@@ -185,22 +215,9 @@ class MediaPlayerController:
     def get_group_leader(self) -> str | None:
         """Get group leader entity ID"""
 
-    # ===== POWER CONTROL =====
-    async def turn_on(self) -> None:
-        """Turn device on"""
-
-    async def turn_off(self) -> None:
-        """Turn device off"""
-
-    async def toggle_power(self) -> None:
-        """Toggle power state"""
-
-    def is_powered_on(self) -> bool:
-        """Get power state"""
-
-    # ===== MEDIA METADATA =====
+    # ===== MEDIA METADATA & ARTWORK =====
     async def get_media_image(self) -> tuple[bytes, str] | None:
-        """Get album artwork with SSL handling"""
+        """Get album artwork with comprehensive SSL handling"""
 
     def get_media_title(self) -> str | None:
         """Get clean track title"""
@@ -344,6 +361,7 @@ wiim/
 ## Implementation Benefits
 
 ### What We Gain ✅
+
 - **Separation of Concerns**: Entity focuses on HA interface, controller on complex logic
 - **Testability**: Can unit test controller logic separately from HA entity
 - **Maintainability**: All media player complexity in one well-organized file
@@ -351,6 +369,7 @@ wiim/
 - **Debuggability**: One place to look for media player issues
 
 ### What We Avoid ❌
+
 - **Over-abstraction**: No unnecessary controller hierarchies
 - **Over-engineering**: No complex factory patterns or event systems
 - **Maintenance Overhead**: No multiple small files for simple functionality

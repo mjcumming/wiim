@@ -7,16 +7,18 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 # Import config_flow to make it available as a module attribute for tests
 from . import config_flow  # noqa: F401
-from .api import WiiMClient
+from .api import WiiMClient, WiiMConnectionError, WiiMError, WiiMTimeoutError
 from .const import (
+    CONF_ENABLE_EQ_CONTROLS,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
-    CONF_POLL_INTERVAL,
-    DEFAULT_POLL_INTERVAL,
+    CONF_ENABLE_NETWORK_MONITORING,
     DOMAIN,
+    FIXED_POLL_INTERVAL,
 )
 from .coordinator import WiiMCoordinator
 from .data import WiimData, get_or_create_speaker
@@ -32,6 +34,8 @@ CORE_PLATFORMS: list[Platform] = [
 # Essential optional platforms based on user configuration
 OPTIONAL_PLATFORMS: dict[str, Platform] = {
     CONF_ENABLE_MAINTENANCE_BUTTONS: Platform.BUTTON,
+    CONF_ENABLE_EQ_CONTROLS: Platform.SWITCH,
+    CONF_ENABLE_NETWORK_MONITORING: Platform.BINARY_SENSOR,
 }
 
 
@@ -41,13 +45,17 @@ def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
 
     # Add optional platforms based on user preferences
     for config_key, platform in OPTIONAL_PLATFORMS.items():
-        if entry.options.get(
-            config_key, config_key == CONF_ENABLE_MAINTENANCE_BUTTONS
-        ):  # Maintenance buttons default to True
+        # Maintenance buttons default to True, others default to False
+        default_enabled = config_key == CONF_ENABLE_MAINTENANCE_BUTTONS
+        if entry.options.get(config_key, default_enabled):
             platforms.append(platform)
             _LOGGER.debug("Enabling platform %s based on option %s", platform, config_key)
 
-    _LOGGER.info("Enabled platforms for %s: %s", entry.data["host"], [p.value for p in platforms])
+    _LOGGER.info(
+        "Enabled platforms for %s: %s",
+        entry.title or entry.data.get("host", entry.entry_id),
+        [p.value for p in platforms],
+    )
     return platforms
 
 
@@ -72,43 +80,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         client,
         entry=entry,
-        poll_interval=entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
     )
 
     _LOGGER.info(
-        "WiiM coordinator created for %s with %ds poll interval",
+        "WiiM coordinator created for %s with fixed %ds polling interval",
         entry.data["host"],
-        entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
+        FIXED_POLL_INTERVAL,
     )
 
-    # Initial data fetch
+    # Initial data fetch with proper error handling
     try:
         _LOGGER.info("Starting initial data fetch for %s", entry.data["host"])
         await coordinator.async_config_entry_first_refresh()
         _LOGGER.info("Initial data fetch completed for %s", entry.data["host"])
 
+    except WiiMTimeoutError as err:
+        _LOGGER.warning("Timeout fetching initial data from %s, will retry: %s", entry.data["host"], err)
+        raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
+    except WiiMConnectionError as err:
+        _LOGGER.warning("Connection error fetching initial data from %s, will retry: %s", entry.data["host"], err)
+        raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
+    except WiiMError as err:
+        _LOGGER.error("API error fetching initial data from %s: %s", entry.data["host"], err)
+        raise ConfigEntryNotReady(f"API error with WiiM device at {entry.data['host']}") from err
     except Exception as err:
-        _LOGGER.error("Failed to fetch initial data from %s: %s", entry.data["host"], err)
-        raise  # Re-raise to trigger SETUP_RETRY instead of SETUP_ERROR
+        _LOGGER.error("Unexpected error fetching initial data from %s: %s", entry.data["host"], err, exc_info=True)
+        raise  # Re-raise unexpected errors
 
-    # Create/update speaker with clean UUID
-    status_dict = coordinator.data.get("status", {}) if coordinator.data else {}
-
-    # Priority order for clean UUID generation:
-    # 1. Device UUID (if available)
-    # 2. MAC address (clean, no colons)
-    # 3. IP address as last resort
-    device_uuid = None
-    if uuid_from_device := status_dict.get("uuid"):
-        device_uuid = uuid_from_device
-    elif mac := status_dict.get("MAC"):
-        # Use MAC without colons as clean identifier
-        clean_mac = mac.lower().replace(":", "")
-        device_uuid = clean_mac
-    else:
-        # Fallback to IP-based UUID (clean format)
-        ip_clean = entry.data["host"].replace(".", "_")
-        device_uuid = ip_clean
+    # Use entry.unique_id as the stable device identifier
+    # This should be set correctly in config_flow.py from device UUID or MAC
+    device_uuid = entry.unique_id
+    if not device_uuid:
+        _LOGGER.error("No unique_id found in config entry for %s - this should not happen", entry.data["host"])
+        # Fallback logic for device_uuid only for logging - not for HA device registry
+        status_dict = coordinator.data.get("status", {}) if coordinator.data else {}
+        if uuid_from_device := status_dict.get("uuid"):
+            device_uuid = uuid_from_device
+        elif mac := status_dict.get("MAC"):
+            clean_mac = mac.lower().replace(":", "")
+            device_uuid = clean_mac
+        else:
+            # Last resort for logging only - never use for HA registry
+            device_uuid = entry.data["host"].replace(".", "_")
+            _LOGGER.warning("Using IP-based UUID for logging only: %s", device_uuid)
 
     speaker = get_or_create_speaker(hass, coordinator, entry)
     await speaker.async_setup(entry)

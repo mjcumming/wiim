@@ -12,7 +12,7 @@ from homeassistant.components.media_player import (
     MediaType,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .data import Speaker, get_speaker_from_config_entry
@@ -48,6 +48,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Create controller - this handles ALL media player complexity
         self.controller = MediaPlayerController(speaker)
 
+        # Optimistic state for immediate UI feedback
+        self._optimistic_volume: float | None = None
+        self._optimistic_muted: bool | None = None
+        self._optimistic_state: MediaPlayerState | None = None
+        self._optimistic_source: str | None = None
+        self._optimistic_shuffle: bool | None = None
+        self._optimistic_repeat: str | None = None
+
         _LOGGER.debug(
             "WiiMMediaPlayer initialized for %s with controller delegation",
             speaker.name,
@@ -71,8 +79,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.SELECT_SOUND_MODE
             | MediaPlayerEntityFeature.SHUFFLE_SET
             | MediaPlayerEntityFeature.REPEAT_SET
-            | MediaPlayerEntityFeature.TURN_ON
-            | MediaPlayerEntityFeature.TURN_OFF
             | MediaPlayerEntityFeature.GROUPING
         )
 
@@ -102,11 +108,17 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def volume_level(self) -> float | None:
         """Volume level of the media player (0..1)."""
+        # Use optimistic state if available for immediate feedback
+        if self._optimistic_volume is not None:
+            return self._optimistic_volume
         return self.controller.get_volume_level()
 
     @property
     def is_volume_muted(self) -> bool | None:
         """Boolean if volume is currently muted."""
+        # Use optimistic state if available for immediate feedback
+        if self._optimistic_muted is not None:
+            return self._optimistic_muted
         return self.controller.is_volume_muted()
 
     # ===== PLAYBACK PROPERTIES (delegate to controller) =====
@@ -114,6 +126,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState:
         """State of the media player."""
+        # Use optimistic state if available for immediate feedback
+        if self._optimistic_state is not None:
+            return self._optimistic_state
         return self.controller.get_playback_state()
 
     # ===== SOURCE PROPERTIES (delegate to controller) =====
@@ -121,6 +136,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def source(self) -> str | None:
         """Name of the current input source."""
+        # Use optimistic state if available for immediate feedback
+        if self._optimistic_source is not None:
+            return self._optimistic_source
         return self.controller.get_current_source()
 
     @property
@@ -141,11 +159,17 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def shuffle(self) -> bool | None:
         """Boolean if shuffle is enabled."""
+        # Use optimistic state if available for immediate feedback
+        if self._optimistic_shuffle is not None:
+            return self._optimistic_shuffle
         return self.controller.get_shuffle_state()
 
     @property
     def repeat(self) -> str | None:
         """Return current repeat mode."""
+        # Use optimistic state if available for immediate feedback
+        if self._optimistic_repeat is not None:
+            return self._optimistic_repeat
         return self.controller.get_repeat_mode()
 
     # ===== MEDIA PROPERTIES (delegate to controller) =====
@@ -186,6 +210,26 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """When the position was last updated."""
         return self.controller.get_media_position_updated_at()
 
+    @property
+    def media_image_url(self) -> str | None:
+        """Image url of current playing media."""
+        return self.controller.get_media_image_url()
+
+    @property
+    def media_image_remotely_accessible(self) -> bool:
+        """If the image url is remotely accessible."""
+        # WiiM devices serve images locally (HTTP or self-signed HTTPS)
+        # These are not directly accessible by web browsers, so HA must proxy them
+        return False
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        """Fetch media image of current playing media.
+
+        Returns:
+            Tuple of (image_bytes, content_type) or (None, None) if no image available.
+        """
+        return await self.controller.get_media_image()
+
     # ===== GROUP PROPERTIES (delegate to controller) =====
 
     @property
@@ -193,125 +237,332 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """List of group member entity IDs."""
         return self.controller.get_group_members()
 
-    # ===== VOLUME COMMANDS (delegate to controller) =====
+    # ===== OPTIMISTIC STATE MANAGEMENT =====
+
+    def _clear_optimistic_state(self) -> None:
+        """Clear optimistic state when real data is available."""
+        self._optimistic_volume = None
+        self._optimistic_muted = None
+        self._optimistic_state = None
+        self._optimistic_source = None
+        self._optimistic_shuffle = None
+        self._optimistic_repeat = None
+
+    async def _async_execute_command_with_immediate_refresh(self, command_name: str) -> None:
+        """Execute command with immediate polling for fast UI updates.
+
+        This provides much better UX than waiting 5 seconds for next poll cycle.
+        """
+        _LOGGER.debug("Command '%s' completed, requesting immediate refresh for %s", command_name, self.speaker.name)
+
+        # Request immediate coordinator refresh instead of waiting for next 5s cycle
+        await self.coordinator.async_request_refresh()
+
+        # Clear optimistic state since real data is coming
+        self._clear_optimistic_state()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle coordinator update - clear optimistic state when real data arrives."""
+        self._clear_optimistic_state()
+        # Call parent to handle normal coordinator entity lifecycle
+        super()._handle_coordinator_update()
+
+    # ===== VOLUME COMMANDS (optimistic updates + immediate refresh) =====
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0..1."""
-        await self.controller.set_volume(volume)
-        # Request coordinator refresh after volume change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_volume = volume
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.set_volume(volume)
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("set_volume")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_volume = None
+            self.async_write_ha_state()
+            raise
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute the volume."""
-        await self.controller.set_mute(mute)
-        # Request coordinator refresh after mute change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_muted = mute
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.set_mute(mute)
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("set_mute")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_muted = None
+            self.async_write_ha_state()
+            raise
 
     async def async_volume_up(self) -> None:
         """Volume up the media player."""
-        await self.controller.volume_up()
-        # Request coordinator refresh after volume change
-        await self.coordinator.async_request_refresh()
+        # Calculate new optimistic volume
+        current_volume = self.controller.get_volume_level() or 0.0
+        new_volume = min(1.0, current_volume + 0.05)  # 5% step
+
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_volume = new_volume
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.volume_up()
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("volume_up")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_volume = None
+            self.async_write_ha_state()
+            raise
 
     async def async_volume_down(self) -> None:
         """Volume down the media player."""
-        await self.controller.volume_down()
-        # Request coordinator refresh after volume change
-        await self.coordinator.async_request_refresh()
+        # Calculate new optimistic volume
+        current_volume = self.controller.get_volume_level() or 0.0
+        new_volume = max(0.0, current_volume - 0.05)  # 5% step
 
-    # ===== PLAYBACK COMMANDS (delegate to controller) =====
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_volume = new_volume
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.volume_down()
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("volume_down")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_volume = None
+            self.async_write_ha_state()
+            raise
+
+    # ===== PLAYBACK COMMANDS (optimistic updates + immediate refresh) =====
 
     async def async_media_play(self) -> None:
         """Send play command."""
-        await self.controller.play()
-        # Request coordinator refresh after playback change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_state = MediaPlayerState.PLAYING
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.play()
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("play")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise
 
     async def async_media_pause(self) -> None:
         """Send pause command."""
-        await self.controller.pause()
-        # Request coordinator refresh after playback change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_state = MediaPlayerState.PAUSED
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.pause()
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("pause")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise
 
     async def async_media_stop(self) -> None:
         """Send stop command."""
-        await self.controller.stop()
-        # Request coordinator refresh after playback change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_state = MediaPlayerState.IDLE
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.stop()
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("stop")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise
 
     async def async_media_next_track(self) -> None:
         """Send next track command."""
-        await self.controller.next_track()
-        # Request coordinator refresh after track change
-        await self.coordinator.async_request_refresh()
+        try:
+            # No predictable optimistic state for track changes
+            await self.controller.next_track()
+
+            # Immediate refresh for fast track info update
+            await self._async_execute_command_with_immediate_refresh("next_track")
+
+        except Exception:
+            raise
 
     async def async_media_previous_track(self) -> None:
         """Send previous track command."""
-        await self.controller.previous_track()
-        # Request coordinator refresh after track change
-        await self.coordinator.async_request_refresh()
+        try:
+            # No predictable optimistic state for track changes
+            await self.controller.previous_track()
+
+            # Immediate refresh for fast track info update
+            await self._async_execute_command_with_immediate_refresh("previous_track")
+
+        except Exception:
+            raise
 
     async def async_media_seek(self, position: float) -> None:
         """Send seek command."""
-        await self.controller.seek(position)
-        # Request coordinator refresh after seek
-        await self.coordinator.async_request_refresh()
+        try:
+            # No predictable optimistic state for seeking
+            await self.controller.seek(position)
 
-    # ===== SOURCE COMMANDS (delegate to controller) =====
+            # Immediate refresh for fast position update
+            await self._async_execute_command_with_immediate_refresh("seek")
+
+        except Exception:
+            raise
+
+    # ===== SOURCE COMMANDS (optimistic updates + immediate refresh) =====
 
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
-        await self.controller.select_source(source)
-        # Request coordinator refresh after source change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_source = source
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.select_source(source)
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("select_source")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_source = None
+            self.async_write_ha_state()
+            raise
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
         """Select sound mode."""
-        await self.controller.set_eq_preset(sound_mode)
-        # Request coordinator refresh after EQ change
-        await self.coordinator.async_request_refresh()
+        try:
+            # EQ changes don't have direct UI state, just refresh quickly
+            await self.controller.set_eq_preset(sound_mode)
+
+            # Immediate refresh for fast EQ update
+            await self._async_execute_command_with_immediate_refresh("select_sound_mode")
+
+        except Exception:
+            raise
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Enable/disable shuffle mode."""
-        await self.controller.set_shuffle(shuffle)
-        # Request coordinator refresh after shuffle change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_shuffle = shuffle
+        self.async_write_ha_state()
+
+        try:
+            # 2. Send command to device
+            await self.controller.set_shuffle(shuffle)
+
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("set_shuffle")
+
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_shuffle = None
+            self.async_write_ha_state()
+            raise
 
     async def async_set_repeat(self, repeat: str) -> None:
         """Set repeat mode."""
-        await self.controller.set_repeat(repeat)
-        # Request coordinator refresh after repeat change
-        await self.coordinator.async_request_refresh()
+        # 1. Optimistic update for immediate UI feedback
+        self._optimistic_repeat = repeat
+        self.async_write_ha_state()
 
-    # ===== POWER COMMANDS (delegate to controller) =====
+        try:
+            # 2. Send command to device
+            await self.controller.set_repeat(repeat)
 
-    async def async_turn_on(self) -> None:
-        """Turn the media player on."""
-        await self.controller.turn_on()
-        # Request coordinator refresh after power change
-        await self.coordinator.async_request_refresh()
+            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            await self._async_execute_command_with_immediate_refresh("set_repeat")
 
-    async def async_turn_off(self) -> None:
-        """Turn the media player off."""
-        await self.controller.turn_off()
-        # Request coordinator refresh after power change
-        await self.coordinator.async_request_refresh()
+        except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_repeat = None
+            self.async_write_ha_state()
+            raise
 
-    # ===== GROUP COMMANDS (delegate to controller) =====
+    # ===== GROUP COMMANDS (immediate refresh) =====
 
     async def async_join(self, group_members: list[str]) -> None:
         """Join speakers into a group."""
-        await self.controller.join_group(group_members)
-        # Request coordinator refresh after group change
-        await self.coordinator.async_request_refresh()
+        try:
+            await self.controller.join_group(group_members)
+
+            # Immediate refresh for fast group state update
+            await self._async_execute_command_with_immediate_refresh("join_group")
+
+        except Exception:
+            raise
 
     async def async_unjoin(self) -> None:
         """Remove this speaker from any group."""
-        await self.controller.leave_group()
-        # Request coordinator refresh after group change
-        await self.coordinator.async_request_refresh()
+        try:
+            await self.controller.leave_group()
 
-    # ===== MEDIA COMMANDS (delegate to controller) =====
+            # Immediate refresh for fast group state update
+            await self._async_execute_command_with_immediate_refresh("leave_group")
+
+        except Exception:
+            raise
+
+    async def async_unjoin_player(self) -> None:
+        """Remove this player from any group (HA core override).
+
+        Override the core implementation to directly use our async_unjoin method
+        instead of running unjoin_player in an executor.
+        """
+        _LOGGER.debug("async_unjoin_player called for %s", self.speaker.name)
+        await self.async_unjoin()
+
+    async def async_join_players(self, group_members: list[str]) -> None:
+        """Join this player with others (HA core override).
+
+        Override the core implementation to directly use our async_join method
+        instead of running join_players in an executor.
+        """
+        _LOGGER.debug("async_join_players called for %s with members: %s", self.speaker.name, group_members)
+        await self.async_join(group_members)
+
+    # ===== MEDIA COMMANDS (immediate refresh) =====
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         """Play a piece of media."""
@@ -320,27 +571,39 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             # For URLs, use play_url
             if media_type in [MediaType.URL, MediaType.MUSIC, "url"]:
                 await self.controller.play_url(media_id)
-                # Request coordinator refresh after playing media
-                await self.coordinator.async_request_refresh()
+
+                # Immediate refresh for fast media update
+                await self._async_execute_command_with_immediate_refresh("play_media")
+
             else:
                 _LOGGER.warning("Unsupported media type: %s", media_type)
         except Exception as err:
             _LOGGER.error("Failed to play media %s: %s", media_id, err)
             raise
 
-    # ===== ADVANCED COMMANDS (delegate to controller) =====
+    # ===== ADVANCED COMMANDS (immediate refresh) =====
 
     async def async_play_preset(self, preset: int) -> None:
         """Play a WiiM preset (1-6)."""
-        await self.controller.play_preset(preset)
-        # Request coordinator refresh after preset change
-        await self.coordinator.async_request_refresh()
+        try:
+            await self.controller.play_preset(preset)
+
+            # Immediate refresh for fast preset update
+            await self._async_execute_command_with_immediate_refresh("play_preset")
+
+        except Exception:
+            raise
 
     async def async_play_url(self, url: str) -> None:
         """Play a URL."""
-        await self.controller.play_url(url)
-        # Request coordinator refresh after URL play
-        await self.coordinator.async_request_refresh()
+        try:
+            await self.controller.play_url(url)
+
+            # Immediate refresh for fast URL play update
+            await self._async_execute_command_with_immediate_refresh("play_url")
+
+        except Exception:
+            raise
 
     # ===== APP NAME PROPERTY =====
 

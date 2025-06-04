@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
+from .const import FIXED_POLL_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,14 +36,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         client: WiiMClient,
         entry=None,
-        poll_interval: int = 5,  # Fixed 5-second polling
     ) -> None:
-        """Initialize the coordinator."""
+        """Initialize the coordinator with fixed 5-second polling."""
         super().__init__(
             hass,
             _LOGGER,
             name=f"WiiM {client.host}",
-            update_interval=timedelta(seconds=5),  # Fixed 5-second interval
+            update_interval=timedelta(seconds=FIXED_POLL_INTERVAL),  # Fixed interval
         )
         self.client = client
         self.hass = hass
@@ -66,8 +66,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._update_count = 0
 
         _LOGGER.info(
-            "[WiiM] Coordinator initialized for %s with fixed 5-second polling",
+            "Coordinator initialized for %s with fixed %d-second polling",
             client.host,
+            FIXED_POLL_INTERVAL,
         )
 
     @property
@@ -114,13 +115,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # It might internally call getStatusEx or other relevant endpoints.
             device_info = await self.client.get_device_info()
             if not device_info.get("uuid"):
-                # Fallback or error if UUID is critical and missing post-setup
-                _LOGGER.warning("Device UUID missing from get_device_info for %s", self.client.host)
-                # Optionally, try to get MAC as a fallback if it's used as part of the unique ID logic
-                # For consistency, the unique ID established in ConfigFlow should be the primary one.
-                # If the device_info from API doesn't have UUID, but we stored one in config_entry,
-                # we might want to inject it here or ensure client always provides it.
-                # For now, we assume client.get_device_info() is the source of truth for current state.
+                # Some devices don't provide UUID in their API responses - this is normal
+                # The integration uses the unique_id from config entry (set during discovery)
+                _LOGGER.debug(
+                    "Device API does not provide UUID for %s (using config entry unique_id instead)", self.client.host
+                )
+                # Note: The unique ID established in ConfigFlow is the primary one and is sufficient
+                # This missing API UUID does not affect integration functionality
             return device_info
         except WiiMError as err:
             _LOGGER.debug(
@@ -130,50 +131,79 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the WiiM device."""
-        try:
-            # Prioritize fetching essential data
-            player_status = await self._get_player_status()  # Assumed to return a rich status dict
-            device_info = await self._get_device_info_defensive()  # Ensure this includes 'uuid'
+        _LOGGER.debug("=== COORDINATOR UPDATE START for %s ===", self.client.host)
 
-            # Combine data, ensuring device_info (with uuid) is present
-            data: dict[str, Any] = {
-                "status": player_status,
-                "device_info": device_info,  # Contains uuid, name, model, fw, mac
-                "multiroom": {},
-                "metadata": {},
-                "eq": {},
+        try:
+            # Core data - always required
+            player_status = await self._get_player_status()
+            _LOGGER.debug("Player status result for %s: %s", self.client.host, player_status)
+
+            _LOGGER.debug("Step 2: Getting device info for %s", self.client.host)
+            device_info = await self._get_device_info_defensive()
+            _LOGGER.debug("Device info result for %s: %s", self.client.host, device_info)
+
+            # Additional data with defensive programming
+            _LOGGER.debug("Step 3: Getting multiroom info for %s", self.client.host)
+            multiroom_info = await self._get_multiroom_info_defensive()
+            _LOGGER.debug("Multiroom info result for %s: %s", self.client.host, multiroom_info)
+
+            _LOGGER.debug("Step 4: Getting track metadata for %s", self.client.host)
+            track_metadata = await self._get_track_metadata_defensive(player_status)
+            _LOGGER.debug("Track metadata result for %s: %s", self.client.host, track_metadata)
+
+            _LOGGER.debug("Step 5: Getting EQ info for %s", self.client.host)
+            eq_info = await self._get_eq_info_defensive()
+            _LOGGER.debug("EQ info result for %s: %s", self.client.host, eq_info)
+
+            # Detect role using the fetched data
+            _LOGGER.debug("Step 6: Detecting role for %s", self.client.host)
+            role = await self._detect_role_from_status_and_slaves(player_status, multiroom_info, device_info)
+            _LOGGER.debug("Detected role for %s: %s", self.client.host, role)
+
+            # Prepare polling data for diagnostic sensors
+            polling_data = {
+                "interval": self.update_interval.total_seconds(),
+                "is_playing": (player_status.get("play_status") or player_status.get("status", "")).lower() == "play",
+                "api_capabilities": {
+                    "statusex_supported": self._statusex_supported,
+                    "metadata_supported": self._metadata_supported,
+                    "eq_supported": self._eq_supported,
+                },
             }
 
-            # Ensure the UUID from device_info is consistently available
-            # The Speaker object will use this.
-            if "uuid" not in device_info and self.entry.data.get("uuid"):
-                # If API didn't return UUID but we have it from config entry, inject for consistency
-                # This scenario should ideally be avoided by robust API client.
-                data["device_info"]["uuid"] = self.entry.data.get("uuid")
+            # Comprehensive data dictionary
+            data: dict[str, Any] = {
+                "status": player_status,
+                "device_info": device_info,
+                "multiroom": multiroom_info,
+                "metadata": track_metadata,
+                "eq": eq_info,
+                "role": role,
+                "polling": polling_data,
+            }
+
+            # Inject UUID if missing
+            if "uuid" not in device_info and self.entry.unique_id:
+                data["device_info"]["uuid"] = self.entry.unique_id
                 _LOGGER.debug("Injected UUID from config entry as API did not provide one")
 
-            # Reset consecutive failures on success
-            self._consecutive_failures = 0
+            _LOGGER.debug("Step 7: Final coordinator data for %s: %s", self.client.host, data)
 
+            # Update speaker object with comprehensive data
+            _LOGGER.debug("Step 8: Updating speaker object for %s", self.client.host)
+            await self._update_speaker_object(data)
+
+            self._consecutive_failures = 0
+            _LOGGER.debug("=== COORDINATOR UPDATE SUCCESS for %s ===", self.client.host)
             return data
 
         except WiiMError as err:
             self._consecutive_failures += 1
-            _LOGGER.warning(
-                "[WiiM] %s: Update failed (attempt %d): %s",
-                self.client.host,
-                self._consecutive_failures,
-                err,
-            )
-
-            # Simple backoff: increase interval on failures
+            _LOGGER.error("=== COORDINATOR UPDATE FAILED for %s ===", self.client.host)
+            _LOGGER.error("Update failed for %s (attempt %d): %s", self.client.host, self._consecutive_failures, err)
+            # Simplified backoff
             if self._consecutive_failures >= 3:
-                backoff_interval = 15  # Fixed 15-second backoff
-                self.update_interval = timedelta(seconds=backoff_interval)
-            else:
-                # Reset to normal 5-second interval
-                self.update_interval = timedelta(seconds=5)
-
+                self.update_interval = timedelta(seconds=15)
             raise UpdateFailed(f"Error updating WiiM device: {err}") from err
 
     async def _get_multiroom_info_defensive(self) -> dict:
@@ -185,18 +215,26 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return {}
 
     async def _get_track_metadata_defensive(self, status: dict) -> dict:
-        """Get track metadata with graceful fallback when getMetaInfo fails."""
+        """Get track metadata with graceful fallback when getMetaInfo fails.
+
+        Enhanced to better extract cover art and media information.
+        """
         if self._metadata_supported is False:
             # Already know this device doesn't support getMetaInfo
             return self._extract_basic_metadata(status)
 
         try:
-            metadata = await self.client.get_meta_info()
-            if metadata and metadata.get("metaData"):
+            metadata_response = await self.client.get_meta_info()
+            if metadata_response and metadata_response.get("metaData"):
+                metadata = metadata_response["metaData"]
                 if self._metadata_supported is None:
                     self._metadata_supported = True
                     _LOGGER.debug("[WiiM] %s: getMetaInfo works - full metadata available", self.client.host)
-                return metadata["metaData"]
+
+                # Enhance metadata with cover art extraction
+                enhanced_metadata = self._enhance_metadata_with_artwork(metadata, status)
+                _LOGGER.debug("[WiiM] %s: Enhanced metadata: %s", self.client.host, enhanced_metadata)
+                return enhanced_metadata
         except WiiMError:
             if self._metadata_supported is None:
                 self._metadata_supported = False
@@ -205,8 +243,89 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Fallback: Extract basic metadata from player status
         return self._extract_basic_metadata(status)
 
+    def _enhance_metadata_with_artwork(self, metadata: dict, status: dict) -> dict:
+        """Enhance metadata with cover art information from multiple sources."""
+        # Start with the metadata from getMetaInfo
+        enhanced = metadata.copy()
+
+        # Extract cover art from multiple possible fields
+        artwork_fields = [
+            "cover",
+            "cover_url",
+            "albumart",
+            "albumArtURI",
+            "albumArtUri",
+            "albumarturi",
+            "art_url",
+            "artwork_url",
+            "pic_url",
+            "thumbnail",
+        ]
+
+        _LOGGER.debug("[WiiM] %s: Looking for artwork in metadata fields: %s", self.client.host, list(metadata.keys()))
+        _LOGGER.debug("[WiiM] %s: Looking for artwork in status fields: %s", self.client.host, list(status.keys()))
+
+        # Check metadata first, then status
+        artwork_url = None
+        found_in_source = None
+        found_in_field = None
+
+        # Check metadata first
+        for field in artwork_fields:
+            artwork_url = metadata.get(field)
+            if artwork_url:
+                found_in_source = "metadata"
+                found_in_field = field
+                _LOGGER.debug(
+                    "[WiiM] %s: Found artwork in metadata field '%s': %s", self.client.host, field, artwork_url
+                )
+                break
+
+        # Then check status if not found in metadata
+        if not artwork_url:
+            for field in artwork_fields:
+                artwork_url = status.get(field)
+                if artwork_url:
+                    found_in_source = "status"
+                    found_in_field = field
+                    _LOGGER.debug(
+                        "[WiiM] %s: Found artwork in status field '%s': %s", self.client.host, field, artwork_url
+                    )
+                    break
+
+        if artwork_url:
+            enhanced["entity_picture"] = artwork_url
+            enhanced["cover_url"] = artwork_url
+            _LOGGER.info(
+                "[WiiM] %s: Enhanced metadata with artwork from %s.%s: %s",
+                self.client.host,
+                found_in_source,
+                found_in_field,
+                artwork_url,
+            )
+        else:
+            _LOGGER.debug("[WiiM] %s: No artwork URL found in any known fields", self.client.host)
+            # Log available fields that might contain artwork for debugging
+            potential_artwork_fields = {}
+            for source_name, source_data in [("metadata", metadata), ("status", status)]:
+                for key, value in source_data.items():
+                    if any(art_term in key.lower() for art_term in ["cover", "art", "pic", "thumb", "image"]):
+                        potential_artwork_fields[f"{source_name}.{key}"] = value
+
+            if potential_artwork_fields:
+                _LOGGER.debug(
+                    "[WiiM] %s: Found potential artwork fields: %s", self.client.host, potential_artwork_fields
+                )
+
+        return enhanced
+
     def _extract_basic_metadata(self, status: dict) -> dict:
-        """Extract basic metadata from player status when getMetaInfo unavailable."""
+        """Extract basic metadata from player status when getMetaInfo unavailable.
+
+        Enhanced to extract cover art from status fields.
+        """
+        _LOGGER.debug("[WiiM] %s: Extracting basic metadata from status (getMetaInfo unavailable)", self.client.host)
+
         metadata = {}
         if status.get("title"):
             metadata["title"] = status["title"]
@@ -214,11 +333,66 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             metadata["artist"] = status["artist"]
         if status.get("album"):
             metadata["album"] = status["album"]
-        # Note: No album artwork available in basic status
+
+        _LOGGER.debug(
+            "[WiiM] %s: Basic metadata extracted: title='%s', artist='%s', album='%s'",
+            self.client.host,
+            metadata.get("title"),
+            metadata.get("artist"),
+            metadata.get("album"),
+        )
+
+        # Extract cover art from status if available
+        artwork_fields = [
+            "cover",
+            "cover_url",
+            "albumart",
+            "albumArtURI",
+            "albumArtUri",
+            "albumarturi",
+            "art_url",
+            "artwork_url",
+            "pic_url",
+            "thumbnail",
+        ]
+
+        artwork_found = False
+        for field in artwork_fields:
+            if status.get(field):
+                metadata["entity_picture"] = status[field]
+                metadata["cover_url"] = status[field]
+                _LOGGER.info(
+                    "[WiiM] %s: Found artwork in basic metadata from status field '%s': %s",
+                    self.client.host,
+                    field,
+                    status[field],
+                )
+                artwork_found = True
+                break
+
+        if not artwork_found:
+            _LOGGER.debug("[WiiM] %s: No artwork found in basic metadata extraction", self.client.host)
+            # Debug: show what fields are available that might contain artwork
+            potential_artwork_fields = {
+                k: v
+                for k, v in status.items()
+                if any(art_term in k.lower() for art_term in ["cover", "art", "pic", "thumb", "image"])
+            }
+            if potential_artwork_fields:
+                _LOGGER.debug(
+                    "[WiiM] %s: Available potential artwork fields in status: %s",
+                    self.client.host,
+                    potential_artwork_fields,
+                )
+
         return metadata
 
     async def _get_eq_info_defensive(self) -> dict:
-        """Get EQ info only if device supports it."""
+        """Get EQ info only if device supports it.
+
+        Enhanced to poll more frequently and extract EQ preset information
+        for proper sound mode functionality.
+        """
         if self._eq_supported is False:
             # Already know this device doesn't support EQ
             return {}
@@ -227,10 +401,17 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             eq_enabled = await self.client.get_eq_status()
             eq_info = {"eq_enabled": eq_enabled}
 
-            if eq_enabled:
-                eq_data = await self.client.get_eq()
-                if eq_data:
-                    eq_info.update(eq_data)
+            # Always try to get EQ data for preset information
+            eq_data = await self.client.get_eq()
+            if eq_data:
+                eq_info.update(eq_data)
+                # Extract EQ preset specifically for sound mode functionality
+                if "preset" in eq_data:
+                    eq_info["eq_preset"] = eq_data["preset"]
+                elif "EQ" in eq_data:
+                    eq_info["eq_preset"] = eq_data["EQ"]
+
+                _LOGGER.debug("[WiiM] %s: EQ data retrieved: %s", self.client.host, eq_data)
 
             if self._eq_supported is None:
                 self._eq_supported = True
@@ -267,57 +448,131 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_status = status.copy()
         return changed
 
-    async def _detect_role_from_status_and_slaves(self, status: dict, multiroom: dict) -> str:
-        """Detect device role using proper slaves API call."""
-        group_field = status.get("group", "0")
-        slave_count = multiroom.get("slave_count", 0)
+    async def _detect_role_from_status_and_slaves(self, status: dict, multiroom: dict, device_info: dict) -> str:
+        """Detect device role using proper slaves API call.
 
-        _LOGGER.warning(
-            "[WiiM] %s: Role detection details - group_field='%s', slave_count=%s",
-            self.client.host,
-            group_field,
-            slave_count,
+        CRITICAL FIX: Group information comes from device_info (getStatusEx), not status (getPlayerStatus).
+        We need to consolidate group fields from the proper source.
+        """
+        _LOGGER.debug("=== ROLE DETECTION START for %s ===", self.client.host)
+
+        # Extract fields for analysis - PRIORITY: device_info over status
+        # Group fields come from getStatusEx (device_info), not getPlayerStatus (status)
+        group_field = device_info.get("group", status.get("group", "0"))
+        master_uuid = device_info.get("master_uuid", status.get("master_uuid"))
+        master_ip = device_info.get("master_ip", status.get("master_ip"))
+        device_uuid = device_info.get("uuid", status.get("uuid"))
+        device_name = (
+            device_info.get("DeviceName")
+            or device_info.get("device_name")
+            or status.get("DeviceName")
+            or status.get("device_name", "Unknown")
         )
 
-        # Device is MASTER if it has slaves
+        slave_count = multiroom.get("slave_count", 0)
+        slaves_list = multiroom.get("slaves", [])
+
+        _LOGGER.debug("Role detection inputs for %s:", self.client.host)
+        _LOGGER.debug("  - device_name: '%s'", device_name)
+        _LOGGER.debug("  - device_uuid: '%s'", device_uuid)
+        _LOGGER.debug("  - group_field: '%s' (from device_info/status priority)", group_field)
+        _LOGGER.debug("  - slave_count: %s (from multiroom)", slave_count)
+        _LOGGER.debug("  - slaves_list: %s (from multiroom)", slaves_list)
+        _LOGGER.debug("  - master_uuid: '%s' (from device_info/status priority)", master_uuid)
+        _LOGGER.debug("  - master_ip: '%s' (from device_info/status priority)", master_ip)
+
+        # DETECTION LOGIC:
+        # 1. Device is MASTER if it has slaves (slave_count > 0)
+        # 2. Device is SLAVE if group field > 0 AND has master info
+        # 3. Device is SOLO otherwise
+
+        _LOGGER.debug("Applying role detection logic for %s:", self.client.host)
+
+        # Check for MASTER role first
         if slave_count > 0:
-            _LOGGER.warning("[WiiM] %s: Detected as MASTER because slave_count=%s > 0", self.client.host, slave_count)
-            return "master"
+            _LOGGER.info(
+                "ROLE DETECTION: %s (%s) is MASTER because slave_count=%s > 0",
+                self.client.host,
+                device_name,
+                slave_count,
+            )
+            _LOGGER.debug("Master %s has %d slaves: %s", self.client.host, slave_count, slaves_list)
+            role = "master"
 
-        # Device is SLAVE if group field > 0 (but no slaves, so it's following another master)
-        if group_field != "0":
-            _LOGGER.warning("[WiiM] %s: Detected as SLAVE because group='%s' != '0'", self.client.host, group_field)
-            return "slave"
+            # SYNC CLIENT STATE: Set client internal state for group operations
+            self.client._group_master = self.client.host  # Master points to itself
+            self.client._group_slaves = [
+                slave.get("ip") for slave in slaves_list if isinstance(slave, dict) and slave.get("ip")
+            ]
+            _LOGGER.debug(
+                "Synchronized client state: master=%s, slaves=%s", self.client._group_master, self.client._group_slaves
+            )
 
-        # Default to solo
-        _LOGGER.warning("[WiiM] %s: Detected as SOLO (default)", self.client.host)
-        return "solo"
+        # Check for SLAVE role
+        elif group_field != "0":
+            if master_uuid or master_ip:
+                _LOGGER.info(
+                    "ROLE DETECTION: %s (%s) is SLAVE because group='%s' != '0' and has master info (uuid='%s', ip='%s')",
+                    self.client.host,
+                    device_name,
+                    group_field,
+                    master_uuid,
+                    master_ip,
+                )
+                role = "slave"
 
-    async def _update_speaker_object(self, status: dict, multiroom: dict, role: str) -> None:
+                # SYNC CLIENT STATE: Set client to know it's a slave
+                self.client._group_master = master_ip  # Slave points to master IP
+                self.client._group_slaves = []  # Slaves don't manage slave lists
+                _LOGGER.debug("Synchronized client state: master=%s (slave mode)", self.client._group_master)
+
+            else:
+                _LOGGER.warning(
+                    "ROLE DETECTION: %s (%s) has group='%s' != '0' but NO master info - treating as SOLO (possible detection issue)",
+                    self.client.host,
+                    device_name,
+                    group_field,
+                )
+                role = "solo"
+
+                # SYNC CLIENT STATE: Clear client state for solo mode
+                self.client._group_master = None
+                self.client._group_slaves = []
+
+        # Default to SOLO
+        else:
+            _LOGGER.info(
+                "ROLE DETECTION: %s (%s) is SOLO (group='%s', slave_count=%s, no master info)",
+                self.client.host,
+                device_name,
+                group_field,
+                slave_count,
+            )
+            role = "solo"
+
+            # SYNC CLIENT STATE: Clear client state for solo mode
+            self.client._group_master = None
+            self.client._group_slaves = []
+
+        _LOGGER.debug("FINAL ROLE for %s (%s): %s", self.client.host, device_name, role.upper())
+        _LOGGER.debug("Client is_master property now returns: %s", self.client.is_master)
+        _LOGGER.debug("=== ROLE DETECTION END for %s ===", self.client.host)
+
+        return role
+
+    async def _update_speaker_object(self, status: dict) -> None:
         """Update Speaker object if it exists."""
         try:
             from .data import get_wiim_data
 
             wiim_data = get_wiim_data(self.hass)
-
-            # Find speaker for this coordinator
-            speaker = None
-            for spk in wiim_data.speakers.values():
-                if spk.coordinator is self:
-                    speaker = spk
-                    break
+            speaker = wiim_data.speakers.get(self.entry.unique_id)
 
             if speaker:
                 # Build data structure for speaker update
-                update_data = {
-                    "status": status,
-                    "multiroom": multiroom,
-                    "role": role,
-                }
-                speaker.update_from_coordinator_data(update_data)
+                speaker.update_from_coordinator_data(status)
 
         except Exception as speaker_err:
-            # Don't fail coordinator update if Speaker update fails
             _LOGGER.debug(
                 "[WiiM] %s: Speaker update failed: %s",
                 self.client.host,

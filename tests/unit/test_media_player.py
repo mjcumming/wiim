@@ -17,7 +17,7 @@ class TestWiiMMediaPlayer:
     @pytest.fixture
     def media_player(self, wiim_speaker):
         """Create a WiiM media player entity."""
-        from custom_components.wiim.platforms.media_player import WiiMMediaPlayer
+        from custom_components.wiim.media_player import WiiMMediaPlayer
 
         return WiiMMediaPlayer(wiim_speaker)
 
@@ -118,7 +118,7 @@ class TestMediaPlayerControls:
     @pytest.fixture
     def media_player(self, wiim_speaker):
         """Create a WiiM media player entity."""
-        from custom_components.wiim.platforms.media_player import WiiMMediaPlayer
+        from custom_components.wiim.media_player import WiiMMediaPlayer
 
         return WiiMMediaPlayer(wiim_speaker)
 
@@ -202,7 +202,7 @@ class TestMediaPlayerGrouping:
     @pytest.fixture
     def media_player(self, wiim_speaker):
         """Create a WiiM media player entity."""
-        from custom_components.wiim.platforms.media_player import WiiMMediaPlayer
+        from custom_components.wiim.media_player import WiiMMediaPlayer
 
         return WiiMMediaPlayer(wiim_speaker)
 
@@ -234,7 +234,7 @@ class TestMediaPlayerState:
     @pytest.fixture
     def media_player(self, wiim_speaker):
         """Create a WiiM media player entity."""
-        from custom_components.wiim.platforms.media_player import WiiMMediaPlayer
+        from custom_components.wiim.media_player import WiiMMediaPlayer
 
         return WiiMMediaPlayer(wiim_speaker)
 
@@ -284,7 +284,7 @@ class TestMediaPlayerSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry(self, hass, wiim_config_entry, wiim_speaker):
         """Test platform setup entry point."""
-        from custom_components.wiim.platforms.media_player import async_setup_entry
+        from custom_components.wiim.media_player import async_setup_entry
 
         # Mock the hass.data structure
         hass.data = {"wiim": {wiim_config_entry.entry_id: {"speaker": wiim_speaker}}}
