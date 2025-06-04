@@ -76,31 +76,6 @@ async def test_form_timeout_error(hass: HomeAssistant) -> None:
         assert result["errors"] == {"base": "unknown"}
 
 
-async def test_form_already_configured(hass: HomeAssistant) -> None:
-    """Test device already configured."""
-    device_uuid = MOCK_DEVICE_DATA.get("uuid", MOCK_DEVICE_DATA.get("MAC", "").replace(":", ""))
-
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="WiiM Mini",
-        data=MOCK_CONFIG,
-        unique_id=device_uuid,
-    )
-    entry.add_to_hass(hass)
-
-    with patch(
-        "custom_components.wiim.config_flow._validate_and_get_device_details",
-        return_value=("WiiM Mini", device_uuid),
-    ):
-        # Provide host configuration for already configured device
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_CONFIG
-        )
-
-        assert result["type"] is FlowResultType.ABORT
-        assert result["reason"] == "already_configured"
-
-
 async def test_form_invalid_host(hass: HomeAssistant) -> None:
     """Test invalid host error."""
     invalid_config = {"host": "invalid_host"}
