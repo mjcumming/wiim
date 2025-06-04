@@ -1,4 +1,4 @@
-# WiiM Integration Architecture Design v2.1 - SIMPLIFIED
+# WiiM Integration Architecture Design v2.1
 
 ## Overview
 
@@ -10,7 +10,7 @@ The WiiM integration follows a **pragmatic layered architecture** with clear sep
 
 Each class has ONE clear purpose and handles ONE aspect of the system.
 
-### 2. Separation of Concerns - **SIMPLIFIED**
+### 2. Separation of Concerns
 
 - **Entity Layer**: HA interface only (thin wrapper)
 - **Controller Layer**: **Single controller** handling all media player complexity
@@ -251,7 +251,7 @@ class MediaPlayerController:
         """Browse media for presets"""
 ```
 
-## Data Flow Architecture - **SIMPLIFIED**
+## Data Flow Architecture
 
 ### State Updates (Event-Driven)
 
@@ -328,7 +328,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         await self._async_execute_command_with_refresh("group")
 ```
 
-## File Organization - **SIMPLIFIED**
+## File Organization
 
 ```
 wiim/
