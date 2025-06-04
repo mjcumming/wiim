@@ -655,6 +655,13 @@ class Speaker:
                     "Available speaker IPs in registry: %s", [s.ip_address for s in wiim_data.speakers.values()]
                 )
 
+                # Trigger automatic discovery for missing slave devices
+                if slave_ip:
+                    _LOGGER.info(
+                        "Master %s triggering discovery for missing slave at %s (%s)", self.name, slave_ip, slave_name
+                    )
+                    self.hass.async_create_task(self._trigger_slave_discovery(slave_ip, slave_uuid, slave_name))
+
         # Update the group members list
         old_count = len(self.group_members)
         old_member_names = [s.name for s in self.group_members]
@@ -1366,6 +1373,52 @@ class Speaker:
                     )
         except Exception as err:
             _LOGGER.warning("Failed to update device registry name: %s", err)
+
+    async def _trigger_slave_discovery(self, ip: str, uuid: str | None, name: str) -> None:
+        """Trigger automatic discovery for a missing slave device."""
+        try:
+            _LOGGER.info("🔍 Master %s initiating automatic discovery for slave %s at %s", self.name, name, ip)
+
+            # Import here to avoid circular imports
+            from . import DOMAIN
+            from homeassistant import config_entries
+
+            # Check if we already have a config entry for this device
+            existing_entries = [
+                entry
+                for entry in self.hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(config_entries.CONF_HOST) == ip or (uuid and entry.data.get("uuid") == uuid)
+            ]
+
+            if existing_entries:
+                _LOGGER.debug("Slave device %s at %s already has config entry, skipping discovery", name, ip)
+                return
+
+            # Check for existing flows for this device
+            existing_flows = [
+                flow
+                for flow in self.hass.config_entries.flow.async_progress(DOMAIN)
+                if flow.get("context", {}).get("unique_id") == uuid or (ip in str(flow.get("handler", "")))
+            ]
+
+            if existing_flows:
+                _LOGGER.debug("Discovery flow already in progress for slave %s at %s, skipping", name, ip)
+                return
+
+            # Trigger a new discovery flow for the slave device
+            _LOGGER.info("✅ Creating discovery flow for slave %s at %s (UUID: %s)", name, ip, uuid)
+
+            # Create a user-initiated config flow that will validate and set up the device
+            self.hass.async_create_task(
+                self.hass.config_entries.flow.async_init(
+                    DOMAIN, context={"source": config_entries.SOURCE_USER}, data={config_entries.CONF_HOST: ip}
+                )
+            )
+
+            _LOGGER.info("🎉 Discovery flow initiated for slave %s at %s", name, ip)
+
+        except Exception as err:
+            _LOGGER.error("❌ Failed to trigger discovery for slave %s at %s: %s", name, ip, err)
 
 
 # Helper functions
