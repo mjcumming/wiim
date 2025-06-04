@@ -73,7 +73,7 @@ class TestSpeaker:
         assert wiim_speaker.name == "Test WiiM"
         assert wiim_speaker.model == "WiiM Mini"
         assert wiim_speaker.ip == "192.168.1.100"
-        assert wiim_speaker.mac_address == "aa:bb:cc:dd:ee:ff".replace(":", "")
+        assert wiim_speaker.mac_address == "aa:bb:cc:dd:ee:ff"  # Normalized format with colons
         assert wiim_speaker.firmware == "1.0.0"
         assert wiim_speaker.role == "solo"
 
@@ -84,12 +84,12 @@ class TestSpeaker:
         assert state == MediaPlayerState.IDLE
 
         # Test playing state
-        wiim_speaker.coordinator.data["status"]["status"] = "play"
+        wiim_speaker.coordinator.data["status"]["play_status"] = "play"
         state = wiim_speaker.get_playback_state()
         assert state == MediaPlayerState.PLAYING
 
         # Test paused state
-        wiim_speaker.coordinator.data["status"]["status"] = "pause"
+        wiim_speaker.coordinator.data["status"]["play_status"] = "pause"
         state = wiim_speaker.get_playback_state()
         assert state == MediaPlayerState.PAUSED
 
@@ -123,7 +123,7 @@ class TestSpeaker:
             "status": {
                 "DeviceName": "Updated WiiM",
                 "project": "WiiM Pro Plus",
-                "MAC": "new:mac:address",
+                "MAC": "112233445566",  # Valid hex MAC that normalizes to 11:22:33:44:55:66
                 "firmware": "2.0.0",
             },
             "role": "master",
@@ -133,7 +133,7 @@ class TestSpeaker:
 
         assert wiim_speaker.name == "Updated WiiM"
         assert wiim_speaker.model == "WiiM Pro Plus"
-        assert wiim_speaker.mac_address == "new:mac:address"
+        assert wiim_speaker.mac_address == "11:22:33:44:55:66"  # Normalized format with colons
         assert wiim_speaker.firmware == "2.0.0"
         assert wiim_speaker.role == "master"
 
@@ -164,10 +164,17 @@ class TestSpeakerGroupManagement:
 
     @pytest.mark.asyncio
     async def test_async_join_group(self, wiim_speaker, wiim_speaker_slave):
-        """Test group joining functionality is not implemented."""
-        # The join functionality is not implemented yet (ConnectMasterAp is WiFi, not grouping)
-        with pytest.raises(NotImplementedError, match="Multiroom join commands not implemented yet"):
-            await wiim_speaker.async_join_group([wiim_speaker_slave])
+        """Test group joining functionality."""
+        # Mock API calls for the join operation
+        wiim_speaker.coordinator.client.create_group = AsyncMock()
+        wiim_speaker_slave.coordinator.client.join_slave = AsyncMock()
+
+        # Test successful group creation
+        await wiim_speaker.async_join_group([wiim_speaker_slave])
+
+        # Verify API calls were made
+        wiim_speaker.coordinator.client.create_group.assert_called_once()
+        wiim_speaker_slave.coordinator.client.join_slave.assert_called_once_with(wiim_speaker.ip_address)
 
     @pytest.mark.asyncio
     async def test_async_leave_group_as_slave(self, wiim_speaker, wiim_speaker_slave):
@@ -179,14 +186,12 @@ class TestSpeakerGroupManagement:
         wiim_speaker.group_members = [wiim_speaker, wiim_speaker_slave]
 
         # Mock API calls
-        wiim_speaker.coordinator.client.send_command = AsyncMock()
+        wiim_speaker.coordinator.client.kick_slave = AsyncMock()
 
         await wiim_speaker_slave.async_leave_group()
 
         # Verify API call to master
-        wiim_speaker.coordinator.client.send_command.assert_called_once_with(
-            f"multiroom:SlaveKickout:{wiim_speaker_slave.ip}"
-        )
+        wiim_speaker.coordinator.client.kick_slave.assert_called_once_with(wiim_speaker_slave.ip_address)
 
     @pytest.mark.asyncio
     async def test_async_leave_group_as_master(self, wiim_speaker, wiim_speaker_slave):
@@ -197,19 +202,22 @@ class TestSpeakerGroupManagement:
         wiim_speaker.group_members = [wiim_speaker, wiim_speaker_slave]
 
         # Mock API calls
-        wiim_speaker.coordinator.client.send_command = AsyncMock()
+        wiim_speaker.coordinator.client.leave_group = AsyncMock()
 
         await wiim_speaker.async_leave_group()
 
         # Verify ungroup command
-        wiim_speaker.coordinator.client.send_command.assert_called_once_with("multiroom:Ungroup")
+        wiim_speaker.coordinator.client.leave_group.assert_called_once()
 
     def test_get_group_member_entity_ids(self, wiim_speaker, wiim_speaker_slave, wiim_data):
         """Test getting group member entity IDs."""
         # Set up group and entity mappings
+        wiim_speaker.role = "master"  # Must be master to have group members
         wiim_speaker.group_members = [wiim_speaker, wiim_speaker_slave]
-        wiim_data.entity_id_mappings["media_player.test_wiim"] = wiim_speaker
-        wiim_data.entity_id_mappings["media_player.test_slave"] = wiim_speaker_slave
+
+        # Set up bidirectional entity mappings
+        wiim_data.register_entity("media_player.test_wiim", wiim_speaker)
+        wiim_data.register_entity("media_player.test_slave", wiim_speaker_slave)
 
         entity_ids = wiim_speaker.get_group_member_entity_ids()
 
@@ -225,6 +233,10 @@ class TestHelperFunctions:
     def test_get_wiim_data(self, hass, wiim_data):
         """Test get_wiim_data helper function."""
         from custom_components.wiim.data import get_wiim_data
+        from custom_components.wiim.const import DOMAIN
+
+        # Set up hass.data structure that get_wiim_data expects
+        hass.data = {DOMAIN: {"data": wiim_data}}
 
         # Should return existing data
         result = get_wiim_data(hass)
@@ -233,12 +245,24 @@ class TestHelperFunctions:
     def test_get_or_create_speaker(self, hass, wiim_data, wiim_coordinator):
         """Test get_or_create_speaker helper function."""
         from custom_components.wiim.data import get_or_create_speaker
+        from custom_components.wiim.const import DOMAIN
+        from homeassistant.config_entries import ConfigEntry
+
+        # Set up hass.data structure that get_wiim_data expects
+        hass.data = {DOMAIN: {"data": wiim_data}}
+
+        # Create a mock config entry
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "new-uuid"
+        config_entry.data = {"host": "192.168.1.200"}
+        config_entry.options = {}
+        config_entry.title = "New Speaker"
 
         # Create new speaker
-        speaker = get_or_create_speaker(hass, "new-uuid", wiim_coordinator)
+        speaker = get_or_create_speaker(hass, wiim_coordinator, config_entry)
         assert speaker.uuid == "new-uuid"
         assert "new-uuid" in wiim_data.speakers
 
         # Get existing speaker
-        same_speaker = get_or_create_speaker(hass, "new-uuid", wiim_coordinator)
+        same_speaker = get_or_create_speaker(hass, wiim_coordinator, config_entry)
         assert same_speaker is speaker

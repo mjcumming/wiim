@@ -12,6 +12,13 @@ WiiM speakers use the LinkPlay protocol for synchronized multiroom audio. This i
 4. **Custom Services** - Advanced group management through Developer Tools
 5. **Script Templates** - Pre-made automation scripts
 
+### 🚀 Recent Improvements (v0.4.16+)
+
+✅ **Dramatically improved multiroom reliability** - Fixed critical API parsing bug that prevented proper group detection
+✅ **Faster group status updates** - Masters now correctly detect and manage slave devices
+✅ **Eliminated "Could not find master for slave" errors** - Slave devices reliably connect to their masters
+✅ **More stable group operations** - Join/unjoin commands work consistently across all device combinations
+
 ## 🔧 Understanding Multiroom
 
 ### How It Works

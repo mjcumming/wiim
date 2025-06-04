@@ -208,15 +208,45 @@ The ConnectMasterAp commands are for WiFi access point connections, not multiroo
 
 #### **Master's Slaves from getSlaveList**
 
+**CORRECT API FORMAT (Fixed in v2.1.0):**
+
 ```json
 {
-  "slaves": 2,
+  "slaves": 1, // Integer count (always present)
+  "wmrm_version": "4.2",
   "slave_list": [
-    { "uuid": "slave1", "ip": "192.168.1.101", "name": "Kitchen" },
-    { "uuid": "slave2", "ip": "192.168.1.102", "name": "Bedroom" }
+    // Array of slave objects (when slaves > 0)
+    {
+      "name": "Master Bedroom",
+      "uuid": "FF31F09EFFF1D2BB4FDE2B3F",
+      "ip": "192.168.1.116",
+      "version": "4.2",
+      "type": "WiiMu-A31",
+      "channel": 0,
+      "volume": 63,
+      "mute": 0,
+      "battery_percent": 0,
+      "battery_charging": 0
+    }
   ]
 }
 ```
+
+**Response when no slaves (standalone mode):**
+
+```json
+{
+  "slaves": 0,
+  "wmrm_version": "4.2"
+}
+```
+
+**CRITICAL PARSING FIX:**
+
+- Prior to v2.1.0, our integration incorrectly expected `slaves` to sometimes be a list
+- This caused the infamous "SLAVE LIST ISSUE: reports N slaves but slaves field is integer" error
+- **Fixed**: `slaves` is always an integer count, `slave_list` contains the actual slave objects
+- **Impact**: Multiroom group detection now works reliably
 
 ### **Group Implementation Strategy**
 
@@ -558,39 +588,121 @@ make stats
 
 ---
 
+## 🎵 **Multiroom Group Controls**
+
+### **Group Volume & Mute Entities**
+
+We provide dedicated entities for synchronized group control that solve the primary multiroom UX challenges:
+
+#### **Group Volume Control** (Number Platform)
+
+- **Entity Type**: `number` (slider)
+- **Availability**: Only when speaker is group master with active members
+- **Behavior**: Sets volume on all group members simultaneously
+- **Error Handling**: Continues if individual speakers fail, logs partial failures
+- **Dynamic Naming**: Shows group composition (e.g., "Main Floor + Kitchen Group Volume")
+
+#### **Group Mute Control** (Switch Platform)
+
+- **Entity Type**: `switch` (toggle)
+- **Availability**: Only when speaker is group master with active members
+- **Behavior**: Mutes/unmutes all group members simultaneously
+- **Coordination**: Uses `asyncio.gather()` for parallel execution across all speakers
+
+### **Implementation Architecture**
+
+#### **Entity Lifecycle Management**
+
+```python
+# Entities start hidden and become available based on group state
+_attr_entity_registry_enabled_default = False
+
+@property
+def available(self) -> bool:
+    """Only available when speaker is master with active group members."""
+    return (
+        self.speaker.available
+        and self.speaker.role == "master"
+        and len(self.speaker.group_members) > 0
+    )
+```
+
+#### **Synchronized Group Operations**
+
+```python
+async def async_set_native_value(self, value: float) -> None:
+    """Set volume for entire group simultaneously."""
+    tasks = []
+
+    # Master volume
+    tasks.append(self._set_speaker_volume(self.speaker, value, "master"))
+
+    # Slave volumes
+    for slave in self.speaker.group_members:
+        if slave != self.speaker:
+            tasks.append(self._set_speaker_volume(slave, value, "slave"))
+
+    # Execute all changes simultaneously
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+```
+
+### **User Experience Benefits**
+
+✅ **Solves Primary UX Problem**: Easy group volume control without entity confusion
+✅ **Smart Visibility**: Appears/disappears based on actual group state
+✅ **Rich Information**: State attributes show group membership and size
+✅ **Robust Error Handling**: Partial failures don't break group operations
+✅ **HA Conventions**: Proper platform separation (number/switch vs media_player)
+
+### **Phase 1 vs Phase 2 Strategy**
+
+**Phase 1 (Implemented)**: Group volume & mute controls
+
+- Addresses 80% of multiroom UX problems
+- Minimal complexity, maximum benefit
+- Individual media players still available for granular control
+
+**Phase 2 (Future)**: Virtual group media player
+
+- Complete group entity with unified playback control
+- Higher complexity, entity lifecycle management
+- Decision pending based on Phase 1 user feedback
+
+---
+
 ## 📊 **API Endpoint Reference**
 
 ### **Core Playback**
 
-| Command | Endpoint | Parameters | Response |
-|---------|----------|------------|----------|
-| Play | `setPlayerCmd:play` | None | "OK" |
-| Pause | `setPlayerCmd:pause` | None | "OK" |
-| Stop | `setPlayerCmd:stop` | None | "OK" |
-| Next | `setPlayerCmd:next` | None | "OK" |
-| Previous | `setPlayerCmd:prev` | None | "OK" |
-| Volume | `setPlayerCmd:vol:<level>` | level: 0-100 | "OK" |
-| Mute | `setPlayerCmd:mute:<state>` | state: 0/1 | "OK" |
-| Seek | `setPlayerCmd:seek:<position>` | position: seconds | "OK" |
+| Command  | Endpoint                       | Parameters        | Response |
+| -------- | ------------------------------ | ----------------- | -------- |
+| Play     | `setPlayerCmd:play`            | None              | "OK"     |
+| Pause    | `setPlayerCmd:pause`           | None              | "OK"     |
+| Stop     | `setPlayerCmd:stop`            | None              | "OK"     |
+| Next     | `setPlayerCmd:next`            | None              | "OK"     |
+| Previous | `setPlayerCmd:prev`            | None              | "OK"     |
+| Volume   | `setPlayerCmd:vol:<level>`     | level: 0-100      | "OK"     |
+| Mute     | `setPlayerCmd:mute:<state>`    | state: 0/1        | "OK"     |
+| Seek     | `setPlayerCmd:seek:<position>` | position: seconds | "OK"     |
 
 ### **Status Queries**
 
-| Command | Endpoint | Response Type | Notes |
-|---------|----------|---------------|-------|
-| Player Status | `getPlayerStatus` | JSON | Universal - always works |
-| Device Info | `getStatusEx` | JSON | WiiM enhanced - probe first |
-| Metadata | `getMetaInfo` | JSON | Often missing - have fallback |
-| Multiroom | `multiroom:getSlaveList` | JSON | Only works on masters |
+| Command       | Endpoint                 | Response Type | Notes                         |
+| ------------- | ------------------------ | ------------- | ----------------------------- |
+| Player Status | `getPlayerStatus`        | JSON          | Universal - always works      |
+| Device Info   | `getStatusEx`            | JSON          | WiiM enhanced - probe first   |
+| Metadata      | `getMetaInfo`            | JSON          | Often missing - have fallback |
+| Multiroom     | `multiroom:getSlaveList` | JSON          | Only works on masters         |
 
 ### **EQ Controls**
 
-| Command | Endpoint | Parameters | Notes |
-|---------|----------|------------|-------|
-| EQ Status | `EQGetStat` | None | May return {"status":"Failed"} |
-| EQ Enable | `EQOn` | None | Enable EQ processing |
-| EQ Disable | `EQOff` | None | Disable EQ processing |
-| Load Preset | `EQLoad:<preset>` | preset: "Flat", "Rock", etc. | Device-specific presets |
-| Get EQ | `getEQ` | None | Current EQ settings |
+| Command     | Endpoint          | Parameters                   | Notes                          |
+| ----------- | ----------------- | ---------------------------- | ------------------------------ |
+| EQ Status   | `EQGetStat`       | None                         | May return {"status":"Failed"} |
+| EQ Enable   | `EQOn`            | None                         | Enable EQ processing           |
+| EQ Disable  | `EQOff`           | None                         | Disable EQ processing          |
+| Load Preset | `EQLoad:<preset>` | preset: "Flat", "Rock", etc. | Device-specific presets        |
+| Get EQ      | `getEQ`           | None                         | Current EQ settings            |
 
 ---
 

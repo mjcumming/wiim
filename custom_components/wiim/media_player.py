@@ -41,25 +41,67 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     """
 
     def __init__(self, speaker: Speaker) -> None:
-        """Initialize media player entity."""
+        """Initialize the media player."""
         super().__init__(speaker)
-        self._attr_name = None  # Use cleaned device name from Speaker class
-
-        # Create controller - this handles ALL media player complexity
         self.controller = MediaPlayerController(speaker)
+        self._attr_unique_id = speaker.uuid
+        self._attr_name = speaker.name
 
-        # Optimistic state for immediate UI feedback
-        self._optimistic_volume: float | None = None
-        self._optimistic_muted: bool | None = None
+        # Optimistic state management for immediate UI feedback
         self._optimistic_state: MediaPlayerState | None = None
+        self._optimistic_volume: float | None = None
+        self._optimistic_mute: bool | None = None
         self._optimistic_source: str | None = None
         self._optimistic_shuffle: bool | None = None
         self._optimistic_repeat: str | None = None
+
+        # Track metadata for cache clearing
+        self._last_track_info: dict[str, Any] = {}
 
         _LOGGER.debug(
             "WiiMMediaPlayer initialized for %s with controller delegation",
             speaker.name,
         )
+
+    async def async_added_to_hass(self) -> None:
+        """Set up entity."""
+        await super().async_added_to_hass()
+        _LOGGER.debug("Media player %s registered", self.entity_id)
+
+    @callback
+    def async_write_ha_state(self) -> None:
+        """Write state to Home Assistant and clear image cache if track changed."""
+        # Check if track metadata changed to clear image cache
+        current_track_info = {
+            "title": self.media_title,
+            "artist": self.media_artist,
+            "album": self.media_album_name,
+            "image_url": self.media_image_url,
+        }
+
+        # Remove None values for comparison
+        current_track_info = {k: v for k, v in current_track_info.items() if v is not None}
+
+        if current_track_info != self._last_track_info:
+            # Track metadata changed - clear image cache to force refresh
+            # Only log important changes to reduce noise
+            for key in set(current_track_info.keys()) | set(self._last_track_info.keys()):
+                old_val = self._last_track_info.get(key)
+                new_val = current_track_info.get(key)
+                if old_val != new_val:
+                    if key == "image_url":
+                        _LOGGER.info(
+                            "🎨 Media player clearing image cache due to URL change: %s -> %s", old_val, new_val
+                        )
+                    elif key in ["title", "artist"]:
+                        # Only log title/artist changes at debug level to reduce noise
+                        _LOGGER.debug("🎵 Media player detected %s change: %s -> %s", key, old_val, new_val)
+
+            self.controller.clear_media_image_cache()
+            self._last_track_info = current_track_info.copy()
+
+        # Call parent to write state
+        super().async_write_ha_state()
 
     # ===== HOME ASSISTANT ENTITY PROPERTIES =====
 
@@ -117,8 +159,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def is_volume_muted(self) -> bool | None:
         """Boolean if volume is currently muted."""
         # Use optimistic state if available for immediate feedback
-        if self._optimistic_muted is not None:
-            return self._optimistic_muted
+        if self._optimistic_mute is not None:
+            return self._optimistic_mute
         return self.controller.is_volume_muted()
 
     # ===== PLAYBACK PROPERTIES (delegate to controller) =====
@@ -242,7 +284,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def _clear_optimistic_state(self) -> None:
         """Clear optimistic state when real data is available."""
         self._optimistic_volume = None
-        self._optimistic_muted = None
+        self._optimistic_mute = None
         self._optimistic_state = None
         self._optimistic_source = None
         self._optimistic_shuffle = None
@@ -292,7 +334,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute the volume."""
         # 1. Optimistic update for immediate UI feedback
-        self._optimistic_muted = mute
+        self._optimistic_mute = mute
         self.async_write_ha_state()
 
         try:
@@ -304,7 +346,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         except Exception:
             # Clear optimistic state on error so real state shows
-            self._optimistic_muted = None
+            self._optimistic_mute = None
             self.async_write_ha_state()
             raise
 

@@ -113,10 +113,8 @@ API_ENDPOINT_PLAY_PROMPT_URL = "/httpapi.asp?command=playPromptUrl:"
 
 # Multiroom Control
 API_ENDPOINT_GROUP_EXIT = "/httpapi.asp?command=multiroom:Ungroup"
-API_ENDPOINT_GROUP_CREATE = (
-    "/httpapi.asp?command=ConnectMasterAp:JoinGroupMaster:eth0.0.0.0:wifi0.0.0.0"  # May not be needed
-)
-API_ENDPOINT_GROUP_DELETE = "/httpapi.asp?command=multiroom:Ungroup"
+# No separate create command - devices become masters when others join them
+# Note: Both group exit (leave) and delete (disband) use the same multiroom:Ungroup command
 API_ENDPOINT_GROUP_SLAVES = "/httpapi.asp?command=multiroom:getSlaveList"
 API_ENDPOINT_GROUP_KICK = "/httpapi.asp?command=multiroom:SlaveKickout:"
 API_ENDPOINT_GROUP_SLAVE_MUTE = "/httpapi.asp?command=multiroom:SlaveMute:"

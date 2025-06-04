@@ -10,6 +10,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant `media_pl
 
 - 🎵 **Complete Media Control** - Play, pause, volume, source selection, presets
 - 🏠 **Multiroom Audio** - Synchronized playback across speaker groups
+- 🎚️ **Group Volume Controls** - Dedicated entities for synchronized group volume and mute
 - 🔧 **No Dependencies** - Uses only Home Assistant's built-in libraries
 - 🚀 **Auto-Discovery** - Automatically finds speakers on your network
 - ⚡ **Responsive** - Adaptive polling for immediate UI updates
@@ -108,16 +109,18 @@ automation:
 
 ## 🔧 Features Matrix
 
-| Feature          | Status | Notes                          |
-| ---------------- | ------ | ------------------------------ |
-| Play/Pause/Stop  | ✅     | Full transport control         |
-| Volume Control   | ✅     | Absolute and relative          |
-| Source Selection | ✅     | WiFi, Bluetooth, Line In, etc. |
-| Preset Buttons   | ✅     | Hardware buttons 1-6           |
-| Multiroom Groups | ✅     | Master/slave synchronization   |
-| Equalizer        | ✅     | 10-band EQ + presets           |
-| Auto Discovery   | ✅     | UPnP/SSDP + Zeroconf           |
-| Group Entities   | ✅     | Virtual group controllers      |
+| Feature          | Status | Notes                             |
+| ---------------- | ------ | --------------------------------- |
+| Play/Pause/Stop  | ✅     | Full transport control            |
+| Volume Control   | ✅     | Absolute and relative             |
+| Group Volume     | ✅     | Synchronized group volume control |
+| Group Mute       | ✅     | Synchronized group mute control   |
+| Source Selection | ✅     | WiFi, Bluetooth, Line In, etc.    |
+| Preset Buttons   | ✅     | Hardware buttons 1-6              |
+| Multiroom Groups | ✅     | Master/slave synchronization      |
+| Equalizer        | ✅     | 10-band EQ + presets              |
+| Auto Discovery   | ✅     | UPnP/SSDP + Zeroconf              |
+| Group Entities   | ✅     | Virtual group controllers         |
 
 ## 🤝 Community & Support
 

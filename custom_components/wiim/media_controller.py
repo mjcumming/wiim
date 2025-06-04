@@ -74,6 +74,17 @@ class MediaPlayerController:
             self._volume_step,
         )
 
+    def clear_media_image_cache(self) -> None:
+        """Clear the media image cache to force re-download on next request.
+
+        Called when track metadata changes to ensure cover art updates.
+        """
+        if self._media_image_url_cached or self._media_image_bytes:
+            self._logger.debug("Clearing media image cache for %s", self.speaker.name)
+            self._media_image_url_cached = None
+            self._media_image_bytes = None
+            self._media_image_content_type = None
+
     # ===== VOLUME CONTROL =====
 
     async def set_volume(self, volume: float) -> None:
@@ -505,12 +516,32 @@ class MediaPlayerController:
             return None
 
     def get_sound_mode_list(self) -> list[str]:
-        """Get available EQ presets."""
-        return list(EQ_PRESET_MAP.keys())
+        """Get available EQ presets (capitalized display names)."""
+        from .const import EQ_PRESET_MAP
+
+        return list(EQ_PRESET_MAP.values())  # Return display names: ["Flat", "Acoustic", "Bass"]
 
     def get_sound_mode(self) -> str | None:
         """Get current EQ preset."""
-        return self.speaker.get_sound_mode()
+        try:
+            sound_mode = self.speaker.get_sound_mode()
+            self._logger.debug("Detected sound mode: '%s' for %s", sound_mode, self.speaker.name)
+
+            # Also log the raw coordinator data for debugging
+            if self.speaker.coordinator.data:
+                status = self.speaker.coordinator.data.get("status", {})
+                eq_info = self.speaker.coordinator.data.get("eq", {})
+                eq_preset = status.get("eq_preset")
+                eq_field = status.get("eq")
+                eq_enabled = eq_info.get("eq_enabled")
+                self._logger.debug(
+                    "Raw EQ data - eq_preset='%s', eq='%s', eq_enabled='%s'", eq_preset, eq_field, eq_enabled
+                )
+
+            return sound_mode
+        except Exception as err:
+            self._logger.error("Error getting sound mode: %s", err)
+            return None
 
     # ===== GROUP MANAGEMENT =====
 
@@ -649,17 +680,14 @@ class MediaPlayerController:
             # Import here to avoid circular imports
             from homeassistant.helpers.aiohttp_client import async_get_clientsession
             import aiohttp
-            import ssl
             from contextlib import suppress
 
             # Use Home Assistant's shared session for efficiency
             session = async_get_clientsession(self.hass)
 
-            # Create permissive SSL context for album art sources
-            # Many streaming services and WiiM devices use various SSL configurations
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
+            # Use the existing SSL context from the WiiM client
+            # instead of creating a new one to avoid blocking calls
+            ssl_context = self.speaker.coordinator.client._get_ssl_context()
 
             # Set reasonable timeout for image fetching (match LinkPlay's 5s)
             timeout = aiohttp.ClientTimeout(total=5.0)
@@ -737,7 +765,7 @@ class MediaPlayerController:
             self._media_image_content_type = None
             return None, None
 
-        except (aiohttp.ClientError, ssl.SSLError) as err:
+        except aiohttp.ClientError as err:
             self._logger.debug("Network error fetching media image for %s: %s", self.speaker.name, err)
             # Clear cache on failure
             self._media_image_url_cached = None

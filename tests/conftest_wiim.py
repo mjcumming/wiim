@@ -118,6 +118,7 @@ def wiim_speaker(hass, wiim_coordinator, wiim_data):
 def wiim_speaker_slave(hass, wiim_data):
     """Create a test slave Speaker instance."""
     from custom_components.wiim.data import Speaker
+    from homeassistant.config_entries import ConfigEntry
 
     # Create mock coordinator for slave
     slave_coordinator = MagicMock()
@@ -134,7 +135,14 @@ def wiim_speaker_slave(hass, wiim_data):
     slave_coordinator.last_update_success = True
     slave_coordinator.async_request_refresh = AsyncMock()
 
-    speaker = Speaker(hass, "test-slave-uuid", slave_coordinator)
+    # Create a mock config entry for slave
+    config_entry = MagicMock(spec=ConfigEntry)
+    config_entry.unique_id = "test-slave-uuid"
+    config_entry.data = {"host": "192.168.1.101"}
+    config_entry.options = {}
+    config_entry.title = "Test Slave"
+
+    speaker = Speaker(hass, slave_coordinator, config_entry)
     speaker.ip = "192.168.1.101"
     speaker.name = "Test Slave"
     speaker.model = "WiiM Pro"

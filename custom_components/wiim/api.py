@@ -1,23 +1,29 @@
 """WiiM HTTP API client.
 
-This module provides a client for interacting with WiiM devices through their HTTP API.
-It implements all necessary functionality for controlling WiiM audio devices, including:
+Provides asynchronous methods for controlling WiiM and LinkPlay speakers.
+Handles multiple communication protocols and device variations defensively.
 
-- Basic playback controls (play, pause, stop, next/previous track)
-- Volume and mute control
-- Power management
-- Playback mode settings (repeat, shuffle)
-- Multiroom group management
-- Equalizer controls
-- Source selection
-- Device information retrieval
+Features:
+    - Multi-protocol auto-detection with HTTPS preference
+    - Device capability probing and graceful fallbacks
+    - Rich data normalization and consistent response formatting
+    - Comprehensive error handling and recovery strategies
 
-The client is designed to be used with Home Assistant's async architecture and provides
-a clean, type-hinted interface for all device operations.
+Security:
+    - Tries HTTPS first (ports 443, 4443), then HTTP (port 80) as fallback
+    - Handles device-specific SSL certificates with permissive context
+    - Maintains session security and proper cleanup
 
-WiiM devices primarily use HTTPS on port 443 via the API endpoint at
-``https://<ip>/httpapi.asp?command=...``. The client will automatically detect
-the correct protocol (HTTPS/HTTP) and handle SSL certificate issues with older devices.
+Reliability:
+    - Automatic protocol and port detection across device variations
+    - Defensive capability detection for enhanced features
+    - Graceful degradation when advanced endpoints are unavailable
+    - Rich error context for integration-level troubleshooting
+
+Usage:
+    async with WiiMClient("192.168.1.100") as client:
+        status = await client.get_player_status()
+        await client.play()
 """
 
 from __future__ import annotations
@@ -43,8 +49,6 @@ from .const import (
     API_ENDPOINT_EQ_PRESET,
     API_ENDPOINT_EQ_STATUS,
     API_ENDPOINT_FIRMWARE,
-    API_ENDPOINT_GROUP_CREATE,
-    API_ENDPOINT_GROUP_DELETE,
     API_ENDPOINT_GROUP_EXIT,
     API_ENDPOINT_GROUP_KICK,
     API_ENDPOINT_GROUP_SLAVE_MUTE,
@@ -173,8 +177,7 @@ class WiiMClient:
         - WiiMInvalidDataError: Malformed response data
 
     Security:
-        - Tries HTTP first (port 80) as most WiiM devices use HTTP
-        - Falls back to HTTPS (port 443) for devices that require it
+        - Tries HTTPS first (ports 443, 4443), then HTTP (port 80) as fallback
         - Handles device-specific SSL certificates with permissive context
         - Maintains session security and proper cleanup
     """
@@ -264,20 +267,20 @@ class WiiMClient:
     ) -> dict[str, Any]:
         """Make a request to the WiiM device with smart protocol detection.
 
-        Tries HTTP first (port 80), then HTTPS (port 443) as fallback.
-        Most WiiM devices use HTTP, not HTTPS.
+        Tries HTTPS first (ports 443, 4443), then HTTP (port 80) as fallback.
+        WiiM devices typically support HTTPS with self-signed certificates.
 
         Args:
-            endpoint: The API endpoint to call.
-            method: The HTTP method to use (default: GET).
-            **kwargs: Additional arguments to pass to the request.
+            endpoint: API endpoint path (e.g., "/httpapi.asp?command=getPlayerStatus")
+            method: HTTP method ("GET" or "POST")
+            **kwargs: Additional arguments passed to aiohttp
 
         Returns:
-            The parsed JSON response from the device.
+            Parsed JSON response from the device
 
         Raises:
-            WiiMRequestError: If there is an error communicating with the device.
-            WiiMResponseError: If the device returns an error response.
+            WiiMRequestError: Network/HTTP errors during request
+            WiiMError: Invalid response or parsing errors
         """
         if self._session is None or self._session.closed:
             # aiohttp>=3.9 requires a ClientTimeout object
@@ -400,27 +403,28 @@ class WiiMClient:
                 self._session = None
 
     async def get_status(self) -> dict[str, Any]:
-        """Get the current status of the WiiM device.
+        """Get the current device status using getStatusEx.
+
+        This method provides comprehensive device and group information but may have
+        limited playback details compared to get_player_status(). Use get_player_status()
+        for complete track information and playback state.
 
         Returns:
-            A dictionary containing the device's current status, including:
+            A dictionary containing normalized device status including:
             - volume: Current volume level (0-1)
             - mute: Current mute state
-            - power: Current power state
-            - play_status: Current playback state
-            - play_mode: Current play mode
-            - position: Current playback position in seconds
-            - duration: Total duration of current track in seconds
-            - source: Current audio source
-            - title: Current track title
-            - artist: Current track artist
-            - album: Current track album
+            - power: Current power state (may be unreliable)
+            - device_name: Device friendly name
+            - uuid: Device unique identifier
+            - firmware: Current firmware version
+            - project: Device model name
+            - group: Group membership info (critical for multiroom)
+            - master_uuid: Master device UUID (if slave)
             - wifi_rssi: Current WiFi signal strength
             - wifi_channel: Current WiFi channel
-            - device_model: Device model name
-            - device_name: Device friendly name
-            - device_id: Device unique identifier
-            - firmware: Current firmware version
+
+            Note: For complete playbook information (title, artist, album, position,
+            duration, etc.), use get_player_status() instead.
         """
         raw = await self._request(API_ENDPOINT_STATUS)
         return self._parse_player_status(raw)
@@ -465,9 +469,24 @@ class WiiMClient:
     async def set_power(self, power: bool) -> None:
         """Set the power state.
 
+        ⚠️ WARNING: Power control is unreliable and intentionally excluded from the WiiM integration.
+
+        This method is deprecated and should not be used because:
+        - WiiM devices have inconsistent power control across models/firmware
+        - Power states are often incorrectly reported
+        - Network connectivity conflicts with true "off" states
+        - Physical power buttons and auto-sleep vary significantly between models
+
+        Alternative: Use physical power buttons, auto-sleep features, or smart switches.
+
         Args:
             power: True to turn on, False to turn off.
         """
+        _LOGGER.warning(
+            "Power control is deprecated and unreliable on WiiM devices. "
+            "Use physical power buttons or smart switches instead. Host: %s",
+            self.host,
+        )
         await self._request(f"{API_ENDPOINT_POWER}{1 if power else 0}")
 
     async def set_repeat_mode(self, mode: str) -> None:
@@ -479,26 +498,35 @@ class WiiMClient:
         Raises:
             ValueError: If an invalid repeat mode is specified.
         """
-        _LOGGER.debug("=== API REPEAT MODE START ===")
-        _LOGGER.debug("set_repeat_mode called with mode='%s'", mode)
-        _LOGGER.debug("Valid modes are: %s", (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE))
+        _LOGGER.debug("🔁 API set_repeat_mode called with mode='%s' for %s", mode, self.host)
+        _LOGGER.debug("🔁 Valid modes are: %s", (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE))
 
         if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE):
-            _LOGGER.error("Invalid repeat mode validation failed: mode='%s'", mode)
+            _LOGGER.error("🔁 Invalid repeat mode validation failed: mode='%s'", mode)
             raise ValueError(f"Invalid repeat mode: {mode}")
 
         endpoint_url = f"{API_ENDPOINT_REPEAT}{mode}"
-        _LOGGER.debug("Constructed endpoint URL: '%s'", endpoint_url)
-        _LOGGER.debug("About to send HTTP request for repeat mode")
+        _LOGGER.debug("🔁 Constructed endpoint URL: '%s'", endpoint_url)
+        _LOGGER.debug("🔁 About to send HTTP request for repeat mode")
 
         try:
             result = await self._request(endpoint_url)
-            _LOGGER.debug("API repeat mode request successful, result: %s", result)
-            _LOGGER.debug("=== API REPEAT MODE SUCCESS ===")
+            _LOGGER.info("🔁 ✅ Repeat mode set successfully: %s -> %s (result: %s)", self.host, mode, result)
+
+            # Check if the change actually took effect by getting current status
+            try:
+                import asyncio
+
+                await asyncio.sleep(0.5)  # Give device time to update
+                status = await self.get_player_status()
+                loop_val = status.get("loop_mode") or status.get("loop")
+                _LOGGER.info("🔁 Status check after repeat mode change: loop_mode=%s", loop_val)
+            except Exception as check_err:
+                _LOGGER.debug("🔁 Could not check status after repeat mode change: %s", check_err)
+
         except Exception as err:
-            _LOGGER.error("=== API REPEAT MODE FAILED ===")
-            _LOGGER.error("HTTP request failed for repeat mode: %s", err)
-            _LOGGER.error("Failed endpoint URL was: '%s'", endpoint_url)
+            _LOGGER.error("🔁 ❌ HTTP request failed for repeat mode: %s", err)
+            _LOGGER.error("🔁 Failed endpoint URL was: '%s'", endpoint_url)
             raise
 
     async def set_shuffle_mode(self, mode: str) -> None:
@@ -510,30 +538,39 @@ class WiiMClient:
         Raises:
             ValueError: If an invalid shuffle mode is specified.
         """
-        _LOGGER.debug("=== API SHUFFLE MODE START ===")
-        _LOGGER.debug("set_shuffle_mode called with mode='%s'", mode)
-        _LOGGER.debug("Valid modes are: %s", (PLAY_MODE_NORMAL, PLAY_MODE_SHUFFLE, PLAY_MODE_SHUFFLE_REPEAT_ALL))
+        _LOGGER.debug("🔀 API set_shuffle_mode called with mode='%s' for %s", mode, self.host)
+        _LOGGER.debug("🔀 Valid modes are: %s", (PLAY_MODE_NORMAL, PLAY_MODE_SHUFFLE, PLAY_MODE_SHUFFLE_REPEAT_ALL))
 
         if mode not in (
             PLAY_MODE_NORMAL,
             PLAY_MODE_SHUFFLE,
             PLAY_MODE_SHUFFLE_REPEAT_ALL,
         ):
-            _LOGGER.error("Invalid shuffle mode validation failed: mode='%s'", mode)
+            _LOGGER.error("🔀 Invalid shuffle mode validation failed: mode='%s'", mode)
             raise ValueError(f"Invalid shuffle mode: {mode}")
 
         endpoint_url = f"{API_ENDPOINT_SHUFFLE}{mode}"
-        _LOGGER.debug("Constructed endpoint URL: '%s'", endpoint_url)
-        _LOGGER.debug("About to send HTTP request for shuffle mode")
+        _LOGGER.debug("🔀 Constructed endpoint URL: '%s'", endpoint_url)
+        _LOGGER.debug("🔀 About to send HTTP request for shuffle mode")
 
         try:
             result = await self._request(endpoint_url)
-            _LOGGER.debug("API shuffle mode request successful, result: %s", result)
-            _LOGGER.debug("=== API SHUFFLE MODE SUCCESS ===")
+            _LOGGER.info("🔀 ✅ Shuffle mode set successfully: %s -> %s (result: %s)", self.host, mode, result)
+
+            # Check if the change actually took effect by getting current status
+            try:
+                import asyncio
+
+                await asyncio.sleep(0.5)  # Give device time to update
+                status = await self.get_player_status()
+                loop_val = status.get("loop_mode") or status.get("loop")
+                _LOGGER.info("🔀 Status check after shuffle mode change: loop_mode=%s", loop_val)
+            except Exception as check_err:
+                _LOGGER.debug("🔀 Could not check status after shuffle mode change: %s", check_err)
+
         except Exception as err:
-            _LOGGER.error("=== API SHUFFLE MODE FAILED ===")
-            _LOGGER.error("HTTP request failed for shuffle mode: %s", err)
-            _LOGGER.error("Failed endpoint URL was: '%s'", endpoint_url)
+            _LOGGER.error("🔀 ❌ HTTP request failed for shuffle mode: %s", err)
+            _LOGGER.error("🔀 Failed endpoint URL was: '%s'", endpoint_url)
             raise
 
     async def seek(self, position: int) -> None:
@@ -561,46 +598,29 @@ class WiiMClient:
         return multiroom
 
     async def create_group(self) -> None:
-        """Create a multiroom group and become the master.
+        """Prepare device to become a multiroom master.
 
-        Based on LinkPlay documentation, there might not be an explicit "create master" command.
-        Instead, a device becomes a master when other devices join it.
-        For now, we'll try a simple approach and see if the device automatically becomes master
-        when slaves start joining it.
+        NOTE: In LinkPlay/WiiM, there is no explicit "create master" command.
+        A device becomes a master automatically when other devices join it using
+        the ConnectMasterAp:JoinGroupMaster command.
+
+        This method simply prepares the internal state - the actual group creation
+        happens when slave devices call join_slave() targeting this device.
         """
+        _LOGGER.debug("[WiiM] Preparing %s to become multiroom master (no API command needed)", self.host)
 
-        _LOGGER.debug("[WiiM] Creating multiroom group on %s", self.host)
+        # Update internal state optimistically - device will become master when slaves join
+        self._group_master = True
+        self._group_slaves = []  # Will be populated when slaves actually join
 
-        # Try the documented ConnectMasterAp command to see if it works for creating master
-        # If this fails, the device might automatically become master when slaves join
-        try:
-            resp = await self._request(API_ENDPOINT_GROUP_CREATE)
-            _LOGGER.debug("[WiiM] Group creation response on %s: %s", self.host, resp)
-
-            # Give the speaker a brief moment to switch roles
-            await asyncio.sleep(0.1)
-
-            # Update our internal bookkeeping
-            self._group_master = self.host
-            self._group_slaves = []
-            _LOGGER.debug("[WiiM] Group successfully created on %s", self.host)
-            return
-
-        except Exception as err:
-            _LOGGER.warning("[WiiM] ConnectMasterAp create command failed on %s: %s", self.host, err)
-            _LOGGER.info("[WiiM] Device %s may become master automatically when slaves join", self.host)
-
-            # Update our internal bookkeeping optimistically
-            self._group_master = self.host
-            self._group_slaves = []
-            return
+        _LOGGER.debug("[WiiM] %s prepared as potential multiroom master", self.host)
 
     async def delete_group(self) -> None:
         """Delete the current multiroom group."""
         if not self._group_master:
             raise WiiMError("Not part of a multiroom group")
         _LOGGER.debug("[WiiM] Deleting multiroom group on %s", self.host)
-        await self._request(API_ENDPOINT_GROUP_DELETE)
+        await self._request(API_ENDPOINT_GROUP_EXIT)
         self._group_master = None
         self._group_slaves = []
 
@@ -822,7 +842,20 @@ class WiiMClient:
         await self._request(f"{API_ENDPOINT_PRESET}{preset}")
 
     async def toggle_power(self) -> None:
-        """Toggle power state."""
+        """Toggle power state.
+
+        ⚠️ WARNING: Power control is deprecated and unreliable on WiiM devices.
+
+        This method should not be used due to inconsistent power control implementation
+        across different WiiM models and firmware versions. See set_power() for details.
+
+        Alternative: Use physical power buttons, auto-sleep features, or smart switches.
+        """
+        _LOGGER.warning(
+            "Power toggle is deprecated and unreliable on WiiM devices. "
+            "Use physical power buttons or smart switches instead. Host: %s",
+            self.host,
+        )
         status = await self.get_status()
         power = status.get("power", False)
         await self.set_power(not power)
@@ -851,22 +884,30 @@ class WiiMClient:
             - source: Current audio source
             - play_mode: Current play mode (normal/repeat/shuffle)
         """
-        _LOGGER.debug("=== API get_player_status START for %s ===", self.host)
+        _LOGGER.debug("API get_player_status START for %s", self.host)
 
         try:
-            _LOGGER.debug("Calling getPlayerStatus endpoint for %s", self.host)
+            _LOGGER.debug("Trying getPlayerStatus endpoint for %s", self.host)
             raw: dict[str, Any] = await self._request(API_ENDPOINT_PLAYER_STATUS)
-            _LOGGER.debug("Raw getPlayerStatus response for %s: %s", self.host, raw)
+            _LOGGER.debug("getPlayerStatus SUCCESS for %s", self.host)
 
         except WiiMError as err:
-            _LOGGER.warning("getPlayerStatus failed for %s, falling back to getStatusEx: %s", self.host, err)
+            _LOGGER.debug("getPlayerStatus FAILED for %s, falling back to getStatusEx: %s", self.host, err)
             # Fallback to basic status if player status fails
             raw = await self._request(API_ENDPOINT_STATUS)
-            _LOGGER.debug("Raw getStatusEx fallback response for %s: %s", self.host, raw)
+            _LOGGER.debug("getStatusEx fallback SUCCESS for %s", self.host)
+
+        # Debug log the raw play state only when it's unexpected
+        raw_status = raw.get("status")
+        if raw_status not in ["play", "pause", "stop"]:
+            _LOGGER.debug(
+                "Unexpected raw play state for %s - status='%s'",
+                self.host,
+                raw_status,
+            )
 
         parsed = self._parse_player_status(raw)
-        _LOGGER.debug("Parsed player status for %s: %s", self.host, parsed)
-        _LOGGER.debug("=== API get_player_status END for %s ===", self.host)
+        _LOGGER.debug("API get_player_status END for %s", self.host)
 
         return parsed
 
@@ -961,6 +1002,16 @@ class WiiMClient:
         data["artist"] = _hex_to_str(raw.get("Artist")) or raw.get("artist")
         data["album"] = _hex_to_str(raw.get("Album")) or raw.get("album")
 
+        # Log track changes for debugging
+        if data.get("title") and data["title"] != "Unknown":
+            current_track = f"{data.get('artist', 'Unknown')} - {data['title']}"
+            # Initialize _last_track if it doesn't exist
+            if not hasattr(self, "_last_track"):
+                self._last_track = None
+            if self._last_track != current_track:
+                _LOGGER.info("🎵 Track changed for %s: %s", self.host, current_track)
+                self._last_track = current_track
+
         # Power state (default to ON if not specified)
         data.setdefault("power", True)
 
@@ -997,19 +1048,40 @@ class WiiMClient:
         if "play_mode" not in data and "loop_mode" in data:
             try:
                 loop_val = int(data["loop_mode"])
+                _LOGGER.debug(
+                    "🔁🔀 Parsing play mode for %s: loop_mode=%s (raw: %s)", self.host, loop_val, data["loop_mode"]
+                )
             except (TypeError, ValueError):
                 loop_val = 4  # default = normal
+                _LOGGER.debug("🔁🔀 Invalid loop_mode for %s, defaulting to normal: %s", self.host, data["loop_mode"])
 
+            # Map loop_val to play_mode
             if loop_val == 0:
-                data["play_mode"] = PLAY_MODE_REPEAT_ALL
+                new_play_mode = PLAY_MODE_REPEAT_ALL
             elif loop_val == 1:
-                data["play_mode"] = PLAY_MODE_REPEAT_ONE
+                new_play_mode = PLAY_MODE_REPEAT_ONE
             elif loop_val == 2:
-                data["play_mode"] = PLAY_MODE_SHUFFLE_REPEAT_ALL
+                new_play_mode = PLAY_MODE_SHUFFLE_REPEAT_ALL
             elif loop_val == 3:
-                data["play_mode"] = PLAY_MODE_SHUFFLE
+                new_play_mode = PLAY_MODE_SHUFFLE
             else:
-                data["play_mode"] = PLAY_MODE_NORMAL
+                new_play_mode = PLAY_MODE_NORMAL
+
+            # Only log when play mode actually changes
+            if not hasattr(self, "_last_play_mode"):
+                self._last_play_mode = None
+
+            if self._last_play_mode != new_play_mode:
+                _LOGGER.info("🔁🔀 Set play_mode for %s: %s (loop_val=%s)", self.host, new_play_mode, loop_val)
+                self._last_play_mode = new_play_mode
+            else:
+                _LOGGER.debug("🔁🔀 Play mode unchanged for %s: %s (loop_val=%s)", self.host, new_play_mode, loop_val)
+
+            data["play_mode"] = new_play_mode
+        else:
+            # Log when we don't have loop_mode data
+            if "play_mode" not in data:
+                _LOGGER.debug("🔁🔀 No loop_mode field found for %s, no play_mode set", self.host)
 
         # Artwork URL – vendors use a **lot** of different keys.  Try the
         # known variants in priority order so the first *non-empty* match wins.
@@ -1041,10 +1113,19 @@ class WiiMClient:
         # Current *input* source – derived from ``mode`` field.  Not all
         # firmwares expose ``source`` directly; adding it here enables the
         # media-player UI to show e.g. "AirPlay" when streaming from iOS.
+        #
+        # SPECIAL CASE: mode="99" means multiroom follower, but we need to be
+        # role-aware. Masters should show actual source, slaves should mirror master.
         # ---------------------------------------------------------------
         mode_val = raw.get("mode")
         if mode_val is not None and "source" not in data:
-            data["source"] = self._MODE_MAP.get(str(mode_val), "unknown")
+            if str(mode_val) == "99":
+                # Mode 99 = multiroom participant - need role-aware handling
+                # For now, mark as unknown - will be resolved by role detection later
+                data["source"] = "multiroom"  # Temporary - will be resolved by coordinator
+                data["_multiroom_mode"] = True  # Flag for coordinator processing
+            else:
+                data["source"] = self._MODE_MAP.get(str(mode_val), "unknown")
 
         # ---------------------------------------------------------------
         # EQ preset – convert **numeric** codes to their textual alias so
@@ -1067,47 +1148,60 @@ class WiiMClient:
             response = await self._request(API_ENDPOINT_GROUP_SLAVES)
             _LOGGER.debug("Raw getSlaveList response for %s: %s", self.host, response)
 
-            # The response can contain either:
-            # - "slaves": <integer> (slave count)
-            # - "slaves": <list> (actual slave devices)
-            slaves_data = response.get("slaves", 0)
-            _LOGGER.debug("Extracted slaves_data for %s: %s (type: %s)", self.host, slaves_data, type(slaves_data))
+            # CORRECT PARSING according to WiiM API specification:
+            # - "slaves": integer count (always present)
+            # - "slave_list": array of slave objects (present when slaves > 0)
+            slaves_count = response.get("slaves", 0)
+            slave_list = response.get("slave_list", [])
 
-            # DIAGNOSTIC: Check for slave_count vs slaves field inconsistency
-            if "slave_count" in response:
-                _LOGGER.debug("Response also contains slave_count field: %s", response.get("slave_count"))
+            _LOGGER.debug(
+                "Parsed getSlaveList for %s: slaves_count=%d, slave_list=%s", self.host, slaves_count, slave_list
+            )
 
-            if isinstance(slaves_data, int):
-                # Response is just a count
-                result = {"slaves": [], "slave_count": slaves_data}
-                _LOGGER.debug("Parsed as slave count for %s: %d slaves", self.host, slaves_data)
+            # Validate the response format
+            if not isinstance(slaves_count, int):
+                _LOGGER.warning("Unexpected slaves count format for %s: %s (expected integer)", self.host, slaves_count)
+                slaves_count = 0
 
-                if slaves_data > 0:
-                    _LOGGER.warning(
-                        "SLAVE LIST ISSUE: %s reports %d slaves but slaves field is integer (no slave details provided)",
-                        self.host,
-                        slaves_data,
-                    )
+            if not isinstance(slave_list, list):
+                _LOGGER.warning("Unexpected slave_list format for %s: %s (expected list)", self.host, slave_list)
+                slave_list = []
 
-            elif isinstance(slaves_data, list):
-                # Response is actual slave list
-                result = {"slaves": slaves_data, "slave_count": len(slaves_data)}
-                _LOGGER.debug("Parsed as slave list for %s: %d slaves in list", self.host, len(slaves_data))
-                for i, slave in enumerate(slaves_data):
-                    _LOGGER.debug("Slave %d for %s: %s", i, self.host, slave)
-
-                # DIAGNOSTIC: Check if list is empty when count suggests slaves exist
-                if len(slaves_data) == 0 and response.get("slaves") != 0:
-                    _LOGGER.warning(
-                        "SLAVE LIST ISSUE: %s has empty slaves list but non-zero count in response", self.host
-                    )
-
-            else:
-                # Unknown format, default to empty
-                result = {"slaves": [], "slave_count": 0}
+            # Check for consistency between count and list
+            if slaves_count > 0 and len(slave_list) == 0:
                 _LOGGER.warning(
-                    "Unknown slaves_data format for %s: %s (type: %s)", self.host, slaves_data, type(slaves_data)
+                    "MULTIROOM INCONSISTENCY: %s reports %d slaves but slave_list is empty - master may have slaves that aren't responding",
+                    self.host,
+                    slaves_count,
                 )
+            elif slaves_count == 0 and len(slave_list) > 0:
+                _LOGGER.warning(
+                    "MULTIROOM INCONSISTENCY: %s reports 0 slaves but slave_list has %d entries",
+                    self.host,
+                    len(slave_list),
+                )
+            elif slaves_count != len(slave_list):
+                _LOGGER.warning(
+                    "MULTIROOM INCONSISTENCY: %s reports %d slaves but slave_list has %d entries",
+                    self.host,
+                    slaves_count,
+                    len(slave_list),
+                )
+
+            # Log detailed slave information for debugging
+            if slave_list:
+                _LOGGER.debug("Slave details for master %s:", self.host)
+                for i, slave in enumerate(slave_list):
+                    slave_name = slave.get("name", "Unknown")
+                    slave_ip = slave.get("ip", "Unknown")
+                    slave_uuid = slave.get("uuid", "Unknown")
+                    _LOGGER.debug("  Slave %d: name='%s', ip='%s', uuid='%s'", i, slave_name, slave_ip, slave_uuid)
+
+            result = {
+                "slave_count": slaves_count,
+                "slaves": slave_list,  # Use the actual slave list, not the count
+                "slave_list": slave_list,  # Also provide under the API field name for compatibility
+            }
 
             _LOGGER.debug("Final multiroom info for %s: %s", self.host, result)
             _LOGGER.debug("=== API get_multiroom_info SUCCESS for %s ===", self.host)
@@ -1119,7 +1213,7 @@ class WiiMClient:
             _LOGGER.debug(
                 "getSlaveList failed for %s: %s (likely not a master or no multiroom support)", self.host, err
             )
-            return {"slaves": [], "slave_count": 0}
+            return {"slaves": [], "slave_count": 0, "slave_list": []}
 
     async def get_slaves(self) -> list[str]:
         """Get list of slave device IPs.
@@ -1195,9 +1289,19 @@ class WiiMClient:
 
     async def get_meta_info(self) -> dict[str, Any]:
         """Get current track metadata including album art."""
+        _LOGGER.debug("Attempting getMetaInfo for %s", self.host)
         try:
             response = await self._request("/httpapi.asp?command=getMetaInfo")
-            return response.get("metaData", {})
+            _LOGGER.debug("getMetaInfo raw response for %s: %s", self.host, response)
+
+            if response and "metaData" in response:
+                metadata = response["metaData"]
+                _LOGGER.debug("Extracted metaData for %s: %s", self.host, metadata)
+                return {"metaData": metadata}  # Return in expected format
+            else:
+                _LOGGER.debug("getMetaInfo response missing metaData for %s", self.host)
+                return {}
+
         except Exception as e:
             # Devices with older firmware return plain "OK" instead of JSON.
             # Treat this as an expected condition rather than an error.

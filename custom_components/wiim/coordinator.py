@@ -160,6 +160,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             role = await self._detect_role_from_status_and_slaves(player_status, multiroom_info, device_info)
             _LOGGER.debug("Detected role for %s: %s", self.client.host, role)
 
+            # Resolve multiroom source and media info
+            _LOGGER.debug("Step 7: Resolving multiroom source and media for %s", self.client.host)
+            await self._resolve_multiroom_source_and_media(player_status, track_metadata, role)
+
             # Prepare polling data for diagnostic sensors
             polling_data = {
                 "interval": self.update_interval.total_seconds(),
@@ -182,15 +186,20 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "polling": polling_data,
             }
 
+            # Propagate EQ preset info to status for better sound mode detection
+            if eq_info.get("eq_preset"):
+                data["status"]["eq_preset"] = eq_info["eq_preset"]
+                _LOGGER.debug("Propagated EQ preset to status: %s", eq_info["eq_preset"])
+
             # Inject UUID if missing
             if "uuid" not in device_info and self.entry.unique_id:
                 data["device_info"]["uuid"] = self.entry.unique_id
                 _LOGGER.debug("Injected UUID from config entry as API did not provide one")
 
-            _LOGGER.debug("Step 7: Final coordinator data for %s: %s", self.client.host, data)
+            _LOGGER.debug("Step 8: Final coordinator data for %s: %s", self.client.host, data)
 
             # Update speaker object with comprehensive data
-            _LOGGER.debug("Step 8: Updating speaker object for %s", self.client.host)
+            _LOGGER.debug("Step 9: Updating speaker object for %s", self.client.host)
             await self._update_speaker_object(data)
 
             self._consecutive_failures = 0
@@ -218,33 +227,44 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Get track metadata with graceful fallback when getMetaInfo fails.
 
         Enhanced to better extract cover art and media information.
+        WiiM devices actually support getMetaInfo and provide cover art successfully.
         """
+        _LOGGER.debug("Getting track metadata for %s", self.client.host)
+
         if self._metadata_supported is False:
             # Already know this device doesn't support getMetaInfo
+            _LOGGER.debug("Device %s doesn't support getMetaInfo - using basic metadata", self.client.host)
             return self._extract_basic_metadata(status)
 
         try:
+            _LOGGER.debug("Attempting getMetaInfo for %s", self.client.host)
             metadata_response = await self.client.get_meta_info()
+            _LOGGER.debug("getMetaInfo response for %s: %s", self.client.host, metadata_response)
+
             if metadata_response and metadata_response.get("metaData"):
                 metadata = metadata_response["metaData"]
                 if self._metadata_supported is None:
                     self._metadata_supported = True
-                    _LOGGER.debug("[WiiM] %s: getMetaInfo works - full metadata available", self.client.host)
+                    _LOGGER.info("getMetaInfo works for %s - full metadata available", self.client.host)
 
                 # Enhance metadata with cover art extraction
                 enhanced_metadata = self._enhance_metadata_with_artwork(metadata, status)
-                _LOGGER.debug("[WiiM] %s: Enhanced metadata: %s", self.client.host, enhanced_metadata)
+                _LOGGER.debug("Enhanced metadata for %s: %s", self.client.host, enhanced_metadata)
                 return enhanced_metadata
-        except WiiMError:
+        except WiiMError as err:
             if self._metadata_supported is None:
                 self._metadata_supported = False
-                _LOGGER.info("[WiiM] %s: getMetaInfo not supported - using basic metadata", self.client.host)
+                _LOGGER.info("getMetaInfo not supported for %s: %s - using basic metadata", self.client.host, err)
 
         # Fallback: Extract basic metadata from player status
+        _LOGGER.debug("Using basic metadata fallback for %s", self.client.host)
         return self._extract_basic_metadata(status)
 
     def _enhance_metadata_with_artwork(self, metadata: dict, status: dict) -> dict:
-        """Enhance metadata with cover art information from multiple sources."""
+        """Enhance metadata with cover art information from multiple sources.
+
+        WiiM devices support cover art via getMetaInfo and albumArtURI fields.
+        """
         # Start with the metadata from getMetaInfo
         enhanced = metadata.copy()
 
@@ -260,71 +280,52 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "artwork_url",
             "pic_url",
             "thumbnail",
+            "image",
+            "coverart",
+            "cover_art",
+            "album_art",
+            "artworkUrl",
+            "imageUrl",
         ]
 
-        _LOGGER.debug("[WiiM] %s: Looking for artwork in metadata fields: %s", self.client.host, list(metadata.keys()))
-        _LOGGER.debug("[WiiM] %s: Looking for artwork in status fields: %s", self.client.host, list(status.keys()))
+        _LOGGER.debug("Looking for artwork in metadata for %s", self.client.host)
+        _LOGGER.debug("Metadata fields available: %s", list(metadata.keys()))
 
         # Check metadata first, then status
         artwork_url = None
-        found_in_source = None
-        found_in_field = None
 
         # Check metadata first
         for field in artwork_fields:
             artwork_url = metadata.get(field)
-            if artwork_url:
-                found_in_source = "metadata"
-                found_in_field = field
-                _LOGGER.debug(
-                    "[WiiM] %s: Found artwork in metadata field '%s': %s", self.client.host, field, artwork_url
-                )
+            if artwork_url and artwork_url != "un_known":  # Filter out invalid URLs
+                _LOGGER.info("🎨 Found artwork for %s in metadata field '%s': %s", self.client.host, field, artwork_url)
                 break
 
         # Then check status if not found in metadata
         if not artwork_url:
             for field in artwork_fields:
                 artwork_url = status.get(field)
-                if artwork_url:
-                    found_in_source = "status"
-                    found_in_field = field
-                    _LOGGER.debug(
-                        "[WiiM] %s: Found artwork in status field '%s': %s", self.client.host, field, artwork_url
+                if artwork_url and artwork_url != "un_known":
+                    _LOGGER.info(
+                        "🎨 Found artwork for %s in status field '%s': %s", self.client.host, field, artwork_url
                     )
                     break
 
-        if artwork_url:
+        if artwork_url and artwork_url != "un_known":
             enhanced["entity_picture"] = artwork_url
             enhanced["cover_url"] = artwork_url
-            _LOGGER.info(
-                "[WiiM] %s: Enhanced metadata with artwork from %s.%s: %s",
-                self.client.host,
-                found_in_source,
-                found_in_field,
-                artwork_url,
-            )
+            _LOGGER.info("✅ Enhanced metadata with artwork for %s: %s", self.client.host, artwork_url)
         else:
-            _LOGGER.debug("[WiiM] %s: No artwork URL found in any known fields", self.client.host)
-            # Log available fields that might contain artwork for debugging
-            potential_artwork_fields = {}
-            for source_name, source_data in [("metadata", metadata), ("status", status)]:
-                for key, value in source_data.items():
-                    if any(art_term in key.lower() for art_term in ["cover", "art", "pic", "thumb", "image"]):
-                        potential_artwork_fields[f"{source_name}.{key}"] = value
-
-            if potential_artwork_fields:
-                _LOGGER.debug(
-                    "[WiiM] %s: Found potential artwork fields: %s", self.client.host, potential_artwork_fields
-                )
+            _LOGGER.debug("❌ No valid artwork URL found for %s", self.client.host)
 
         return enhanced
 
     def _extract_basic_metadata(self, status: dict) -> dict:
         """Extract basic metadata from player status when getMetaInfo unavailable.
 
-        Enhanced to extract cover art from status fields.
+        HA will handle cover art fetching through its own mechanisms.
         """
-        _LOGGER.debug("[WiiM] %s: Extracting basic metadata from status (getMetaInfo unavailable)", self.client.host)
+        _LOGGER.debug("Extracting basic metadata from status for %s", self.client.host)
 
         metadata = {}
         if status.get("title"):
@@ -335,56 +336,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             metadata["album"] = status["album"]
 
         _LOGGER.debug(
-            "[WiiM] %s: Basic metadata extracted: title='%s', artist='%s', album='%s'",
+            "Basic metadata extracted for %s: title='%s', artist='%s', album='%s'",
             self.client.host,
             metadata.get("title"),
             metadata.get("artist"),
             metadata.get("album"),
         )
 
-        # Extract cover art from status if available
-        artwork_fields = [
-            "cover",
-            "cover_url",
-            "albumart",
-            "albumArtURI",
-            "albumArtUri",
-            "albumarturi",
-            "art_url",
-            "artwork_url",
-            "pic_url",
-            "thumbnail",
-        ]
-
-        artwork_found = False
-        for field in artwork_fields:
-            if status.get(field):
-                metadata["entity_picture"] = status[field]
-                metadata["cover_url"] = status[field]
-                _LOGGER.info(
-                    "[WiiM] %s: Found artwork in basic metadata from status field '%s': %s",
-                    self.client.host,
-                    field,
-                    status[field],
-                )
-                artwork_found = True
-                break
-
-        if not artwork_found:
-            _LOGGER.debug("[WiiM] %s: No artwork found in basic metadata extraction", self.client.host)
-            # Debug: show what fields are available that might contain artwork
-            potential_artwork_fields = {
-                k: v
-                for k, v in status.items()
-                if any(art_term in k.lower() for art_term in ["cover", "art", "pic", "thumb", "image"])
-            }
-            if potential_artwork_fields:
-                _LOGGER.debug(
-                    "[WiiM] %s: Available potential artwork fields in status: %s",
-                    self.client.host,
-                    potential_artwork_fields,
-                )
-
+        # Note: Cover art will be handled by Home Assistant's media browser and other mechanisms
         return metadata
 
     async def _get_eq_info_defensive(self) -> dict:
@@ -395,34 +354,52 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         if self._eq_supported is False:
             # Already know this device doesn't support EQ
+            _LOGGER.debug("[WiiM] %s: EQ not supported, skipping EQ info collection", self.client.host)
             return {}
 
         try:
+            _LOGGER.debug("[WiiM] %s: Collecting EQ information", self.client.host)
+
             eq_enabled = await self.client.get_eq_status()
             eq_info = {"eq_enabled": eq_enabled}
+            _LOGGER.debug("[WiiM] %s: EQ enabled status: %s", self.client.host, eq_enabled)
 
             # Always try to get EQ data for preset information
             eq_data = await self.client.get_eq()
             if eq_data:
                 eq_info.update(eq_data)
-                # Extract EQ preset specifically for sound mode functionality
-                if "preset" in eq_data:
-                    eq_info["eq_preset"] = eq_data["preset"]
-                elif "EQ" in eq_data:
-                    eq_info["eq_preset"] = eq_data["EQ"]
+                _LOGGER.debug("[WiiM] %s: Raw EQ data: %s", self.client.host, eq_data)
 
-                _LOGGER.debug("[WiiM] %s: EQ data retrieved: %s", self.client.host, eq_data)
+                # Extract EQ preset specifically for sound mode functionality
+                # Try multiple field names that different devices might use
+                eq_preset = None
+                for field_name in ["preset", "EQ", "eq_preset", "eq_mode", "sound_mode"]:
+                    if field_name in eq_data and eq_data[field_name] is not None:
+                        eq_preset = eq_data[field_name]
+                        _LOGGER.debug(
+                            "[WiiM] %s: Found EQ preset in field '%s': %s", self.client.host, field_name, eq_preset
+                        )
+                        break
+
+                if eq_preset is not None:
+                    eq_info["eq_preset"] = eq_preset
+                    _LOGGER.info("[WiiM] %s: Current EQ preset detected: %s", self.client.host, eq_preset)
+                else:
+                    _LOGGER.debug("[WiiM] %s: No EQ preset found in EQ data", self.client.host)
 
             if self._eq_supported is None:
                 self._eq_supported = True
                 _LOGGER.debug("[WiiM] %s: EQ endpoints work", self.client.host)
 
+            _LOGGER.debug("[WiiM] %s: Final EQ info: %s", self.client.host, eq_info)
             return eq_info
 
-        except WiiMError:
+        except WiiMError as err:
             if self._eq_supported is None:
                 self._eq_supported = False
-                _LOGGER.info("[WiiM] %s: EQ not supported by device", self.client.host)
+                _LOGGER.info("[WiiM] %s: EQ not supported by device: %s", self.client.host, err)
+            else:
+                _LOGGER.debug("[WiiM] %s: EQ request failed: %s", self.client.host, err)
             return {}
 
     def _should_update_device_info(self) -> bool:
@@ -456,6 +433,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         _LOGGER.debug("=== ROLE DETECTION START for %s ===", self.client.host)
 
+        # Get current role for comparison to reduce logging
+        current_role = self.get_current_role()
+
         # Extract fields for analysis - PRIORITY: device_info over status
         # Group fields come from getStatusEx (device_info), not getPlayerStatus (status)
         group_field = device_info.get("group", status.get("group", "0"))
@@ -480,6 +460,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.debug("  - slaves_list: %s (from multiroom)", slaves_list)
         _LOGGER.debug("  - master_uuid: '%s' (from device_info/status priority)", master_uuid)
         _LOGGER.debug("  - master_ip: '%s' (from device_info/status priority)", master_ip)
+        _LOGGER.debug("  - current_role: '%s'", current_role)
 
         # DETECTION LOGIC:
         # 1. Device is MASTER if it has slaves (slave_count > 0)
@@ -490,13 +471,16 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Check for MASTER role first
         if slave_count > 0:
-            _LOGGER.info(
-                "ROLE DETECTION: %s (%s) is MASTER because slave_count=%s > 0",
-                self.client.host,
-                device_name,
-                slave_count,
-            )
-            _LOGGER.debug("Master %s has %d slaves: %s", self.client.host, slave_count, slaves_list)
+            if current_role != "master":  # Only log when role actually changes
+                _LOGGER.info(
+                    "ROLE DETECTION: %s (%s) is MASTER because slave_count=%s > 0",
+                    self.client.host,
+                    device_name,
+                    slave_count,
+                )
+                _LOGGER.debug("Master %s has %d slaves: %s", self.client.host, slave_count, slaves_list)
+            else:
+                _LOGGER.debug("Role confirmed as MASTER for %s (slave_count=%s)", self.client.host, slave_count)
             role = "master"
 
             # SYNC CLIENT STATE: Set client internal state for group operations
@@ -511,14 +495,17 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Check for SLAVE role
         elif group_field != "0":
             if master_uuid or master_ip:
-                _LOGGER.info(
-                    "ROLE DETECTION: %s (%s) is SLAVE because group='%s' != '0' and has master info (uuid='%s', ip='%s')",
-                    self.client.host,
-                    device_name,
-                    group_field,
-                    master_uuid,
-                    master_ip,
-                )
+                if current_role != "slave":  # Only log when role actually changes
+                    _LOGGER.info(
+                        "ROLE DETECTION: %s (%s) is SLAVE because group='%s' != '0' and has master info (uuid='%s', ip='%s')",
+                        self.client.host,
+                        device_name,
+                        group_field,
+                        master_uuid,
+                        master_ip,
+                    )
+                else:
+                    _LOGGER.debug("Role confirmed as SLAVE for %s", self.client.host)
                 role = "slave"
 
                 # SYNC CLIENT STATE: Set client to know it's a slave
@@ -541,13 +528,16 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Default to SOLO
         else:
-            _LOGGER.info(
-                "ROLE DETECTION: %s (%s) is SOLO (group='%s', slave_count=%s, no master info)",
-                self.client.host,
-                device_name,
-                group_field,
-                slave_count,
-            )
+            if current_role != "solo":  # Only log when role actually changes
+                _LOGGER.info(
+                    "ROLE DETECTION: %s (%s) is SOLO (group='%s', slave_count=%s, no master info)",
+                    self.client.host,
+                    device_name,
+                    group_field,
+                    slave_count,
+                )
+            else:
+                _LOGGER.debug("Role confirmed as SOLO for %s", self.client.host)
             role = "solo"
 
             # SYNC CLIENT STATE: Clear client state for solo mode
@@ -627,3 +617,133 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def friendly_name(self) -> str:
         """Return friendly name for the device."""
         return self.device_name
+
+    async def _resolve_multiroom_source_and_media(self, status: dict, metadata: dict, role: str) -> None:
+        """Resolve source and media info for multiroom devices.
+
+        Masters: Resolve actual source from multiroom mode
+        Slaves: Mirror master's media information
+        """
+        _LOGGER.debug("=== MULTIROOM SOURCE RESOLUTION START for %s (role: %s) ===", self.client.host, role)
+
+        # Check if this device is in multiroom mode
+        if not status.get("_multiroom_mode"):
+            _LOGGER.debug("Device %s not in multiroom mode, no source resolution needed", self.client.host)
+            return
+
+        if role == "master":
+            await self._resolve_master_source(status)
+        elif role == "slave":
+            await self._mirror_master_media(status, metadata)
+        else:
+            _LOGGER.debug("Solo device %s in multiroom mode - keeping multiroom source", self.client.host)
+
+        _LOGGER.debug("=== MULTIROOM SOURCE RESOLUTION END for %s ===", self.client.host)
+
+    async def _resolve_master_source(self, status: dict) -> None:
+        """Resolve actual source for master device in multiroom.
+
+        Masters in multiroom mode (mode=99) need to show their actual source,
+        not "follower". We'll try to determine this from other status fields.
+        """
+        _LOGGER.debug("Resolving actual source for master %s", self.client.host)
+
+        # Try to get actual source from additional API calls or status fields
+        # For now, we'll try some common approaches:
+
+        # Option 1: Check if there's a different mode field or source indicator
+        actual_source = None
+
+        # Look for other source indicators in the status
+        if status.get("title") and status.get("title") != "Unknown":
+            # If we have actual track info, guess source from pattern or default to network
+            if "spotify" in str(status.get("title", "")).lower():
+                actual_source = "spotify"
+            elif status.get("duration", 0) > 0:
+                actual_source = "wifi"  # Streaming content
+            else:
+                actual_source = "network"
+        else:
+            actual_source = "network"  # Default for masters with no clear source
+
+        status["source"] = actual_source
+        _LOGGER.info("Resolved master %s source: multiroom -> %s", self.client.host, actual_source)
+
+    async def _mirror_master_media(self, status: dict, metadata: dict) -> None:
+        """Mirror master's media information for slave device.
+
+        Slaves should show what the master is playing, not their own local state.
+        """
+        _LOGGER.debug("Mirroring master media info for slave %s", self.client.host)
+
+        # Get the master device's information
+        from .data import get_wiim_data
+
+        wiim_data = get_wiim_data(self.hass)
+
+        # Find master by looking at our group state
+        # We need to find which device is the master of our group
+        master_speaker = None
+        for speaker_uuid, speaker in wiim_data.speakers.items():
+            if speaker.role == "master" and self.client.host != speaker.ip_address:
+                # Check if this master has our device as a slave
+                slave_ips = [s.ip_address for s in speaker.group_members if s.ip_address == self.client.host]
+                if slave_ips:
+                    master_speaker = speaker
+                    break
+
+        if master_speaker:
+            _LOGGER.debug("Found master %s for slave %s", master_speaker.name, self.client.host)
+
+            # Mirror master's media information
+            if master_speaker.coordinator.data:
+                master_status = master_speaker.coordinator.data.get("status", {})
+                master_metadata = master_speaker.coordinator.data.get("metadata", {})
+
+                # Store what we're about to mirror for comparison
+                master_source = master_status.get("source")
+                master_title = master_status.get("title")
+                master_play_status = master_status.get("play_status")
+
+                # Check against last mirrored state to avoid repetitive logging
+                if not hasattr(self, "_last_mirrored_state"):
+                    self._last_mirrored_state = {}
+
+                last_state = self._last_mirrored_state.get(self.client.host, {})
+                state_key = f"{master_source}|{master_title}|{master_play_status}"
+
+                should_log = last_state.get("state_key") != state_key
+
+                # Mirror key media fields from master
+                media_fields = ["title", "artist", "album", "source", "play_status", "position", "duration"]
+                for field in media_fields:
+                    if field in master_status:
+                        status[field] = master_status[field]
+
+                # Mirror metadata (including cover art)
+                for key, value in master_metadata.items():
+                    metadata[key] = value
+
+                # Only log media mirroring when state actually changes (first time or when content changes)
+                if should_log:
+                    _LOGGER.debug(
+                        "Slave %s now mirroring master %s media info (source: %s, track: %s)",
+                        self.client.host,
+                        master_speaker.name,
+                        master_source,
+                        master_title,
+                    )
+                    # Update last mirrored state
+                    self._last_mirrored_state[self.client.host] = {"state_key": state_key}
+                else:
+                    _LOGGER.debug(
+                        "Slave %s continuing to mirror master %s (no state changes)",
+                        self.client.host,
+                        master_speaker.name,
+                    )
+            else:
+                _LOGGER.warning("Master %s has no coordinator data to mirror", master_speaker.name)
+        else:
+            _LOGGER.warning("Could not find master for slave %s", self.client.host)
+            # Fallback: just change source from "multiroom" to "follower" for clarity
+            status["source"] = "follower"

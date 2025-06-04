@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.16] - 2025-01-08
+
+### 🎯 CRITICAL FIX: Multiroom Group Detection
+
+- **Fixed critical API parsing bug in `getSlaveList` response handling**
+- **Root Cause**: Integration incorrectly expected `slaves` field to sometimes be a list
+- **Actual API Format**: `slaves` is always integer count, `slave_list` is the array of slave objects
+- **Impact**: Multiroom master/slave detection now works reliably
+
+### Fixed
+
+- **Eliminated "SLAVE LIST ISSUE: reports N slaves but slaves field is integer" errors**
+- Masters now correctly populate `group_members` from `slave_list` array
+- Slave devices can now properly find their master speakers in the registry
+- "Could not find master for slave" errors resolved
+- Multiroom group operations (join/unjoin/volume sync) now function correctly
+
+### Technical Details
+
+- Updated `get_multiroom_info()` to parse API response according to WiiM specification
+- `slaves`: Integer count of slave devices (always present)
+- `slave_list`: Array of slave objects with name, IP, UUID, etc. (present when slaves > 0)
+- Added comprehensive validation and consistency checking
+- Enhanced logging shows detailed slave information for debugging
+
+### API Documentation Updated
+
+- **API_GUIDE.md** updated with correct `getSlaveList` response format
+- Added examples of both populated and empty slave list responses
+- Documented the parsing fix and its impact on multiroom functionality
+
+### Breaking Changes
+
+- None for users - this is a pure bug fix that makes multiroom features work as intended
+- Developers: `get_multiroom_info()` now returns properly structured data
+
 ## [0.4.15] - 2025-01-06
 
 ### Fixed

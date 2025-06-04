@@ -30,15 +30,21 @@ class TestWiiMMediaPlayer:
     def test_supported_features(self, media_player):
         """Test media player supported features."""
         expected_features = (
-            MediaPlayerEntityFeature.PLAY
+            MediaPlayerEntityFeature.VOLUME_SET
+            | MediaPlayerEntityFeature.VOLUME_MUTE
+            | MediaPlayerEntityFeature.VOLUME_STEP
+            | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
-            | MediaPlayerEntityFeature.VOLUME_SET
-            | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.NEXT_TRACK
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
-            | MediaPlayerEntityFeature.SEEK
+            | MediaPlayerEntityFeature.SELECT_SOURCE
+            | MediaPlayerEntityFeature.SELECT_SOUND_MODE
+            | MediaPlayerEntityFeature.SHUFFLE_SET
+            | MediaPlayerEntityFeature.REPEAT_SET
             | MediaPlayerEntityFeature.GROUPING
+            | MediaPlayerEntityFeature.SEEK  # Added conditionally
+            | MediaPlayerEntityFeature.PLAY_MEDIA  # Added conditionally
         )
         assert media_player.supported_features == expected_features
 

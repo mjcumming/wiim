@@ -341,6 +341,7 @@ class Speaker:
         - Device information updates (with robust name extraction)
         - Group role and multiroom state changes (CRITICAL: actual Speaker object population)
         - Status and availability updates
+        - Track and metadata changes (triggers entity updates for cover art)
         - Trigger entity state updates when needed
 
         ARCHITECTURAL NOTES:
@@ -376,18 +377,32 @@ class Speaker:
             _LOGGER.info("Device name updated: %s -> %s", self.name, new_name)
             self.name = new_name
             changes_made = True
-            # Schedule device registry update
-            import asyncio
+            # Schedule device registry update - handle case where no event loop exists (tests)
+            try:
+                import asyncio
 
-            asyncio.create_task(self._update_device_registry_name())
+                asyncio.create_task(self._update_device_registry_name())
+            except RuntimeError:
+                # No event loop running (likely in tests) - skip device registry update
+                _LOGGER.debug("No event loop running, skipping device registry update for %s", self.name)
 
         # Update other device properties
         if device_info.get("model"):
             self.model = device_info["model"]
+        elif status.get("project"):
+            self.model = status["project"]
+
         if device_info.get("firmware"):
             self.firmware = device_info["firmware"]
+        elif status.get("firmware"):
+            self.firmware = status["firmware"]
+
         if device_info.get("mac"):
             normalized_mac = self._normalize_mac_address(device_info["mac"])
+            if normalized_mac != self.mac_address:
+                self.mac_address = normalized_mac
+        elif status.get("MAC"):
+            normalized_mac = self._normalize_mac_address(status["MAC"])
             if normalized_mac != self.mac_address:
                 self.mac_address = normalized_mac
 
@@ -423,7 +438,13 @@ class Speaker:
             _LOGGER.debug("Speaker %s availability changed: %s -> %s", self.uuid, old_available, self._available)
             changes_made = True
 
-        # 5. Store polling diagnostics for sensor entities
+        # 5. CRITICAL FIX: Check for track/metadata changes to trigger cover art updates
+        track_changed = self._check_track_metadata_changes(metadata, status)
+        if track_changed:
+            _LOGGER.debug("Track metadata changed for %s, triggering entity update", self.name)
+            changes_made = True
+
+        # 6. Store polling diagnostics for sensor entities
         if polling_info:
             # This data is used by diagnostic sensors
             _LOGGER.debug(
@@ -432,7 +453,7 @@ class Speaker:
                 polling_info.get("is_playing", False),
             )
 
-        # 6. Log metadata and EQ updates for debugging
+        # 7. Log metadata and EQ updates for debugging
         if metadata:
             current_title = metadata.get("title")
             if current_title:
@@ -443,14 +464,77 @@ class Speaker:
             if eq_enabled is not None:
                 _LOGGER.debug("EQ enabled: %s", eq_enabled)
 
-        # 7. Notify entities of state changes if significant changes occurred
+        # 8. Notify entities of state changes if significant changes occurred
         if changes_made:
             _LOGGER.debug("Significant changes detected, notifying entities for %s", self.uuid)
             self.async_write_entity_states()
         else:
+            # Reduce noise - only log at debug level when no changes
             _LOGGER.debug("No significant changes for %s, skipping entity notification", self.uuid)
 
         _LOGGER.debug("=== SPEAKER UPDATE FROM COORDINATOR END for %s ===", self.name)
+
+    def _check_track_metadata_changes(self, metadata: dict, status: dict) -> bool:
+        """Check if track metadata has changed to trigger entity updates.
+
+        This ensures cover art and track info updates are reflected in the UI.
+        """
+        # Initialize _last_track_metadata if it doesn't exist
+        if not hasattr(self, "_last_track_metadata"):
+            self._last_track_metadata = {}
+
+        # Extract current track info from both metadata and status
+        current_metadata = {}
+
+        # Check metadata section first (coordinator's enhanced data)
+        if metadata:
+            current_metadata.update(
+                {
+                    "title": metadata.get("title"),
+                    "artist": metadata.get("artist"),
+                    "album": metadata.get("album"),
+                    "entity_picture": metadata.get("entity_picture"),
+                    "cover_url": metadata.get("cover_url"),
+                }
+            )
+
+        # Then check status section (direct API data)
+        if status:
+            # Only update if we don't already have these from metadata
+            if not current_metadata.get("title"):
+                current_metadata["title"] = status.get("title")
+            if not current_metadata.get("artist"):
+                current_metadata["artist"] = status.get("artist")
+            if not current_metadata.get("album"):
+                current_metadata["album"] = status.get("album")
+            if not current_metadata.get("entity_picture"):
+                current_metadata["entity_picture"] = status.get("entity_picture")
+
+        # Remove None values for comparison
+        current_metadata = {k: v for k, v in current_metadata.items() if v is not None}
+
+        # Check if anything changed
+        metadata_changed = current_metadata != self._last_track_metadata
+
+        if metadata_changed:
+            # Log what changed for debugging - but only important changes at info level
+            for key in set(current_metadata.keys()) | set(self._last_track_metadata.keys()):
+                old_val = self._last_track_metadata.get(key)
+                new_val = current_metadata.get(key)
+                if old_val != new_val:
+                    if key == "entity_picture":
+                        _LOGGER.info("🎨 Cover art changed for %s: %s -> %s", self.name, old_val, new_val)
+                    elif key in ["title", "artist"]:
+                        # Important metadata changes at info level
+                        _LOGGER.info("🎵 %s changed for %s: %s -> %s", key.title(), self.name, old_val, new_val)
+                    else:
+                        # Less important changes at debug level
+                        _LOGGER.debug("🎵 %s changed for %s: %s -> %s", key.title(), self.name, old_val, new_val)
+
+            # Update stored metadata
+            self._last_track_metadata = current_metadata.copy()
+
+        return metadata_changed
 
     def _update_master_group_state(self, multiroom: dict) -> None:
         """Update group state for master speakers.
@@ -535,14 +619,24 @@ class Speaker:
                 # Update slave's coordinator reference to this master
                 old_slave_coordinator = slave_speaker.coordinator_speaker
                 slave_speaker.coordinator_speaker = self
-                _LOGGER.info(
-                    "Master %s linked to slave %s (IP: %s) - slave coordinator: %s -> %s",
-                    self.name,
-                    slave_speaker.name,
-                    slave_ip,
-                    old_slave_coordinator.name if old_slave_coordinator else "None",
-                    self.name,
-                )
+
+                # Only log when there's an actual change
+                if old_slave_coordinator != self:
+                    _LOGGER.info(
+                        "Master %s linked to slave %s (IP: %s) - slave coordinator: %s -> %s",
+                        self.name,
+                        slave_speaker.name,
+                        slave_ip,
+                        old_slave_coordinator.name if old_slave_coordinator else "None",
+                        self.name,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Master %s already linked to slave %s (IP: %s) - no change needed",
+                        self.name,
+                        slave_speaker.name,
+                        slave_ip,
+                    )
             else:
                 _LOGGER.warning(
                     "Master %s cannot find slave speaker for %s (IP: %s, UUID: %s) in registry",
@@ -600,25 +694,41 @@ class Speaker:
         wiim_data = get_wiim_data(self.hass)
         master_speaker = None
 
-        _LOGGER.debug("Slave %s available speakers in registry: %s", self.name, list(wiim_data.speakers.keys()))
+        available_uuids = list(wiim_data.speakers.keys())
+        available_ips = [s.ip_address for s in wiim_data.speakers.values()]
+        _LOGGER.debug("Slave %s registry lookup diagnostics:", self.name)
+        _LOGGER.debug("  - Available UUIDs in registry: %s", available_uuids)
+        _LOGGER.debug("  - Available IPs in registry: %s", available_ips)
+        _LOGGER.debug("  - Looking for master UUID: '%s'", master_uuid)
+        _LOGGER.debug("  - Looking for master IP: '%s'", master_ip)
 
-        # Try to find master by UUID first, then by IP
+        # Try to find master by UUID first - with case-insensitive matching
         if master_uuid:
+            # Direct match first
             master_speaker = wiim_data.speakers.get(master_uuid)
             _LOGGER.debug(
-                "Slave %s UUID lookup for master '%s': %s",
-                self.name,
+                "Direct UUID lookup result for '%s': %s",
                 master_uuid,
                 master_speaker.name if master_speaker else "Not found",
             )
 
+            # If direct match fails, try case-insensitive search
+            if not master_speaker:
+                master_uuid_lower = master_uuid.lower()
+                for uuid_key, speaker in wiim_data.speakers.items():
+                    if uuid_key.lower() == master_uuid_lower:
+                        master_speaker = speaker
+                        _LOGGER.debug("Case-insensitive UUID match found: '%s' matches '%s'", master_uuid, uuid_key)
+                        break
+
+                if not master_speaker:
+                    _LOGGER.debug("No case-insensitive UUID match found for '%s'", master_uuid)
+
+        # If UUID lookup failed, try IP lookup
         if not master_speaker and master_ip:
             master_speaker = wiim_data.get_speaker_by_ip(master_ip)
             _LOGGER.debug(
-                "Slave %s IP lookup for master '%s': %s",
-                self.name,
-                master_ip,
-                master_speaker.name if master_speaker else "Not found",
+                "IP lookup result for '%s': %s", master_ip, master_speaker.name if master_speaker else "Not found"
             )
 
         if master_speaker:
@@ -637,14 +747,14 @@ class Speaker:
         else:
             if master_uuid or master_ip:
                 _LOGGER.warning(
-                    "Slave %s cannot find master speaker (Master UUID: %s, IP: %s) in registry",
+                    "LOOKUP FAILURE: Slave %s cannot find master speaker in registry:",
                     self.name,
-                    master_uuid,
-                    master_ip,
                 )
-                _LOGGER.debug(
-                    "Available speaker IPs in registry: %s", [s.ip_address for s in wiim_data.speakers.values()]
-                )
+                _LOGGER.warning("  - Master UUID: '%s'", master_uuid)
+                _LOGGER.warning("  - Master IP: '%s'", master_ip)
+                _LOGGER.warning("  - Available UUIDs: %s", available_uuids)
+                _LOGGER.warning("  - Available IPs: %s", available_ips)
+                _LOGGER.warning("  - Registry speaker names: %s", [s.name for s in wiim_data.speakers.values()])
             else:
                 _LOGGER.debug("Slave %s has no master UUID or IP specified", self.name)
             # Keep existing coordinator_speaker reference if lookup fails
@@ -702,6 +812,17 @@ class Speaker:
         # Check both 'play_status' (parsed) and 'state' (raw) for compatibility
         state = (status.get("play_status") or status.get("state", "stop")).lower()
 
+        # Only log when state is unexpected or for debugging
+        if state not in ["play", "pause", "stop"]:
+            _LOGGER.warning(
+                "🎵 UNEXPECTED PLAY STATE for %s: '%s' (raw status: play_status='%s', state='%s', status='%s')",
+                self.name,
+                state,
+                status.get("play_status"),
+                status.get("state"),
+                status.get("status"),
+            )
+
         if state == "play":
             return MediaPlayerState.PLAYING
         elif state == "pause":
@@ -709,6 +830,7 @@ class Speaker:
         elif state == "stop":
             return MediaPlayerState.IDLE
         else:
+            _LOGGER.debug("Returning OFF state for %s (unknown state: '%s')", self.name, state)
             return MediaPlayerState.OFF
 
     def get_volume_level(self) -> float | None:
