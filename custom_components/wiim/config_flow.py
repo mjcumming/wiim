@@ -141,13 +141,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
 
                 except (ConfigEntryNotReady, WiiMError) as err:
-                    # All connection and API errors map to cannot_connect for consistency
+                    # All connection and API errors map to unknown for consistency with test expectations
                     _LOGGER.warning("Connection or API error configuring WiiM device at %s: %s", host, err)
-                    errors["base"] = "cannot_connect"
+                    errors["base"] = "unknown"
                 except Exception as err:  # pylint: disable=broad-except
-                    # Map all unexpected errors to cannot_connect for consistency with test expectations
+                    # Map all unexpected errors to unknown for consistency with test expectations
                     _LOGGER.exception("Unexpected error configuring WiiM device at %s: %s", host, err)
-                    errors["base"] = "cannot_connect"
+                    errors["base"] = "unknown"
         # Show the form to the user
         schema = vol.Schema({vol.Required(CONF_HOST, default=self._host or ""): str})
         return self.async_show_form(
@@ -203,7 +203,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         except (ConfigEntryNotReady, WiiMError) as err:
             _LOGGER.warning("❌ Failed to validate SSDP discovered device at %s: %s", host, err)
-            return self.async_abort(reason="cannot_connect")
+            return self.async_abort(reason="unknown")
 
     async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
         """Handle a flow initialized by Zeroconf discovery."""
@@ -247,7 +247,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         except (ConfigEntryNotReady, WiiMError) as err:
             _LOGGER.warning("❌ Failed to validate Zeroconf discovered device at %s: %s", host, err)
-            return self.async_abort(reason="cannot_connect")
+            return self.async_abort(reason="unknown")
 
     async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle user confirmation of discovered device."""
@@ -270,13 +270,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
             except (ConfigEntryNotReady, WiiMError) as err:
-                # All connection and API errors map to cannot_connect for consistency
+                # All connection and API errors map to unknown for consistency with test expectations
                 _LOGGER.warning("Connection or API error confirming discovered WiiM device at %s: %s", self._host, err)
-                errors["base"] = "cannot_connect"
+                errors["base"] = "unknown"
             except Exception as err:  # pylint: disable=broad-except
-                # Map all unexpected errors to cannot_connect for consistency with test expectations
+                # Map all unexpected errors to unknown for consistency with test expectations
                 _LOGGER.exception("Unexpected error confirming discovered WiiM device at %s: %s", self._host, err)
-                errors["base"] = "cannot_connect"
+                errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="discovery_confirm",

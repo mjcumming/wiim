@@ -63,6 +63,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -1387,7 +1388,7 @@ class Speaker:
             existing_entries = [
                 entry
                 for entry in self.hass.config_entries.async_entries(DOMAIN)
-                if entry.data.get(config_entries.CONF_HOST) == ip or (uuid and entry.data.get("uuid") == uuid)
+                if entry.data.get(CONF_HOST) == ip or (uuid and entry.data.get("uuid") == uuid)
             ]
 
             if existing_entries:
@@ -1411,7 +1412,7 @@ class Speaker:
             # Create a user-initiated config flow that will validate and set up the device
             self.hass.async_create_task(
                 self.hass.config_entries.flow.async_init(
-                    DOMAIN, context={"source": config_entries.SOURCE_USER}, data={config_entries.CONF_HOST: ip}
+                    DOMAIN, context={"source": config_entries.SOURCE_USER}, data={CONF_HOST: ip}
                 )
             )
 

@@ -288,7 +288,7 @@ class WiiMClient:
         Tries HTTPS first (ports 443, 4443), then HTTP (port 80) as fallback.
         WiiM devices typically support HTTPS with self-signed certificates.
         If a specific port was discovered (e.g., from SSDP/Zeroconf), that port
-        takes priority over default ports, unless it's a known discovery port.
+        takes priority over default ports.
 
         Args:
             endpoint: API endpoint path (e.g., "/httpapi.asp?command=getPlayerStatus")
@@ -309,35 +309,24 @@ class WiiMClient:
 
         kwargs.setdefault("headers", HEADERS)
 
-        # Known discovery/UPnP ports that should NOT be used for API calls
-        discovery_ports = {49152, 59152, 1900, 5353}
-
-        # If we have a discovered port that's NOT a discovery port, use it
-        if hasattr(self, "_discovered_port") and self._discovered_port and self.port not in discovery_ports:
+        # If we have a discovered port, prioritize that
+        if hasattr(self, "_discovered_port") and self._discovered_port:
             # For discovered ports, try both HTTPS and HTTP on the same port
             protocols_to_try = [
                 ("https", self.port, self._get_ssl_context()),  # Discovered port with HTTPS
                 ("http", self.port, None),  # Discovered port with HTTP
             ]
-            _LOGGER.debug("Using discovered API port %d for %s", self.port, self._host)
+            _LOGGER.debug("Using discovered port %d for %s", self.port, self._host)
         else:
-            # Default behavior: try common WiiM API ports
+            # Default behavior: try common WiiM ports
             protocols_to_try = [
                 ("https", 443, self._get_ssl_context()),  # HTTPS primary
                 ("https", 4443, self._get_ssl_context()),  # HTTPS alternate port
                 ("http", 80, None),  # HTTP fallback
             ]
 
-            # If discovered port is a discovery port, log it and use standard ports
-            if hasattr(self, "_discovered_port") and self._discovered_port and self.port in discovery_ports:
-                _LOGGER.debug(
-                    "Discovered port %d for %s is a discovery port, using standard API ports instead",
-                    self.port,
-                    self._host,
-                )
-
-            # If user specified a custom port that's not a discovery port, try that with both protocols first
-            if self.port not in (80, 443) and self.port not in discovery_ports:
+            # If user specified a custom port, try that with both protocols first
+            if self.port not in (80, 443):
                 protocols_to_try.insert(0, ("https", self.port, self._get_ssl_context()))
                 protocols_to_try.insert(1, ("http", self.port, None))
 
