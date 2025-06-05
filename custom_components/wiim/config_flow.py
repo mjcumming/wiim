@@ -2,6 +2,7 @@
 
 Simple discovery and setup flow following Home Assistant best practices.
 """
+# type: ignore
 
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ from .const import (
 try:
     from async_upnp_client.search import async_search
 except ImportError:
-    async_search = None
+    async_search = None  # type: ignore[assignment]
 
 import zeroconf
 
@@ -71,7 +72,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow."""
         return WiiMOptionsFlow(config_entry)
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # type: ignore[override]
         """Handle user-initiated setup."""
         if user_input is not None:
             if user_input.get("setup_mode") == "manual":
