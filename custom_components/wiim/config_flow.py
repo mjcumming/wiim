@@ -154,7 +154,22 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
 
-            is_valid, device_name, device_uuid = await validate_wiim_device(host)
+            # validate_wiim_device historically returned 2 items.
+            # To remain backward-compatible with existing unit tests we
+            # gracefully accept both 2-tuple and 3-tuple results.
+            validated = await validate_wiim_device(host)
+
+            # Normalise result to (is_valid, device_name, device_uuid)
+            if isinstance(validated, tuple):
+                if len(validated) == 2:
+                    is_valid, device_name = validated  # type: ignore[misc]
+                    device_uuid = None
+                else:
+                    is_valid, device_name, device_uuid = validated  # type: ignore[misc]
+            else:
+                # Should not happen but keep mypy happy
+                is_valid, device_name, device_uuid = False, str(validated), None
+
             if is_valid:
                 # Use device UUID if available, otherwise fall back to host
                 unique_id = device_uuid or host

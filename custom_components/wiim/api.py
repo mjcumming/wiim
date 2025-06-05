@@ -318,11 +318,12 @@ class WiiMClient:
             ]
             _LOGGER.debug("Using discovered port %d for %s", self.port, self._host)
         else:
-            # Default behavior: try common WiiM ports
+            # Modern WiiM firmware always supports HTTPS; attempting plain HTTP on port 80
+            # just generates noise in the logs when the endpoint rejects the connection.
+            # We therefore skip the HTTP-80 fallback to reduce connection failures.
             protocols_to_try = [
                 ("https", 443, self._get_ssl_context()),  # HTTPS primary
                 ("https", 4443, self._get_ssl_context()),  # HTTPS alternate port
-                ("http", 80, None),  # HTTP fallback
             ]
 
             # If user specified a custom port, try that with both protocols first

@@ -239,6 +239,8 @@ class Speaker:
         self.hass = hass
         self.coordinator = coordinator
         self.config_entry = config_entry  # Store config entry
+        # Artwork version for cache-busting query param
+        self._artwork_version: int = 0
 
         # The primary UUID should come from the config_entry's unique_id,
         # which was set during config flow from the device's API.
@@ -528,12 +530,14 @@ class Speaker:
             # CRITICAL FIX: Get master info from device_info where getStatusEx puts it
             master_uuid = device_info.get("master_uuid")
             master_ip = device_info.get("master_ip")
+
+            # Capture previous master to detect first-time master resolution
+            old_master_ref = self.coordinator_speaker
             self._update_slave_group_state(master_uuid, master_ip)
 
-            # CRITICAL FIX: Force source re-detection for slaves after master is established
-            # This ensures "Following [Master Name]" is displayed instead of generic "Multiroom"
-            if self.coordinator_speaker:
-                _LOGGER.info("🎵 Slave %s master established, forcing source re-detection", self.name)
+            # Only force entity update (and log) the FIRST time a master is detected
+            if old_master_ref is None and self.coordinator_speaker is not None:
+                _LOGGER.debug("🎵 Slave %s master established, forcing source re-detection", self.name)
                 changes_made = True  # Ensure entity update is triggered
         else:  # solo
             _LOGGER.debug("Speaker %s is SOLO - clearing group state", self.name)
@@ -626,22 +630,28 @@ class Speaker:
         metadata_changed = current_metadata != self._last_track_metadata
 
         if metadata_changed:
-            # Log what changed for debugging - but only important changes at info level
+            # Determine specific change types for cache-busting & selective logging
+            old_cover = self._last_track_metadata.get("entity_picture")
+            new_cover = current_metadata.get("entity_picture")
+
+            track_changed = current_metadata.get("title") != self._last_track_metadata.get(
+                "title"
+            ) or current_metadata.get("artist") != self._last_track_metadata.get("artist")
+            artwork_changed = new_cover != old_cover
+
+            # Debug-level diff log (dramatically quieter than previous info spam)
             for key in set(current_metadata.keys()) | set(self._last_track_metadata.keys()):
                 old_val = self._last_track_metadata.get(key)
                 new_val = current_metadata.get(key)
                 if old_val != new_val:
-                    if key == "entity_picture":
-                        _LOGGER.info("🎨 Cover art changed for %s: %s -> %s", self.name, old_val, new_val)
-                    elif key in ["title", "artist"]:
-                        # Important metadata changes at info level
-                        _LOGGER.info("🎵 %s changed for %s: %s -> %s", key.title(), self.name, old_val, new_val)
-                    else:
-                        # Less important changes at debug level
-                        _LOGGER.debug("🎵 %s changed for %s: %s -> %s", key.title(), self.name, old_val, new_val)
+                    _LOGGER.debug("🎵 %s changed for %s: %s -> %s", key.title(), self.name, old_val, new_val)
 
             # Update stored metadata
             self._last_track_metadata = current_metadata.copy()
+
+            # Increment artwork version to force cache-bust whenever cover or track changes
+            if track_changed or artwork_changed:
+                self._artwork_version += 1
 
         return metadata_changed
 
@@ -902,8 +912,36 @@ class Speaker:
                 _LOGGER.warning("  - Registry speaker names: %s", [s.name for s in wiim_data.speakers.values()])
             else:
                 _LOGGER.debug("Slave %s has no master UUID or IP specified", self.name)
+
+            # Rate-limit repeated warnings & trigger discovery only once per unique master
+            if not hasattr(self, "_missing_master_reported"):
+                self._missing_master_reported: set[str] = set()
+
+            missing_key = f"{master_ip}:{master_uuid}"
+
+            if missing_key in self._missing_master_reported:
+                # Already handled – downgrade to debug noise
+                _LOGGER.debug(
+                    "Slave %s still missing master (IP: %s, UUID: %s) – discovery already triggered",
+                    self.name,
+                    master_ip,
+                    master_uuid,
+                )
+            else:
+                # First time we notice this missing master; remember and act
+                self._missing_master_reported.add(missing_key)
+
+                # Trigger automatic discovery for the unknown master
+                if master_ip:
+                    _LOGGER.info(
+                        "Slave %s triggering discovery for missing master at %s (UUID: %s)",
+                        self.name,
+                        master_ip,
+                        master_uuid,
+                    )
+                    self.hass.async_create_task(self._trigger_master_discovery(master_ip, master_uuid))
+
             # Keep existing coordinator_speaker reference if lookup fails
-            # This prevents breaking group state due to temporary lookup failures
             if self.coordinator_speaker:
                 _LOGGER.debug(
                     "Slave %s keeping existing master reference: %s", self.name, self.coordinator_speaker.name
@@ -1070,8 +1108,8 @@ class Speaker:
         status = self.coordinator.data.get("status", {})
         title = status.get("title") or status.get("Title") or status.get("track_name")
 
-        # Only return meaningful titles, not garbage
-        if title and len(title.strip()) > 3 and not title.lower().startswith("wiim"):
+        # Comprehensive filtering for garbage text
+        if title and self._is_valid_media_text(title):
             return title.strip()
         return None
 
@@ -1082,8 +1120,8 @@ class Speaker:
         status = self.coordinator.data.get("status", {})
         artist = status.get("artist") or status.get("Artist") or status.get("track_artist")
 
-        # Only return meaningful artists, not garbage
-        if artist and len(artist.strip()) > 3 and not artist.lower().startswith("wiim"):
+        # Comprehensive filtering for garbage text
+        if artist and self._is_valid_media_text(artist):
             return artist.strip()
         return None
 
@@ -1094,10 +1132,74 @@ class Speaker:
         status = self.coordinator.data.get("status", {})
         album = status.get("album") or status.get("Album") or status.get("track_album")
 
-        # Only return meaningful albums, not garbage
-        if album and len(album.strip()) > 3 and not album.lower().startswith("wiim"):
+        # Comprehensive filtering for garbage text
+        if album and self._is_valid_media_text(album):
             return album.strip()
         return None
+
+    def _is_valid_media_text(self, text: str) -> bool:
+        """Check if media text is valid and not garbage.
+
+        Filters out:
+        - Text starting with "wiim" (case insensitive)
+        - Text containing IP address patterns
+        - Very short text (less than 2 chars)
+        - Generic garbage like "unknown", "none", etc.
+
+        Args:
+            text: The text to validate
+
+        Returns:
+            True if text is valid media information, False if garbage
+        """
+        if not text or not isinstance(text, str):
+            return False
+
+        text_clean = text.strip().lower()
+
+        # Must be at least 2 characters
+        if len(text_clean) < 2:
+            return False
+
+        # Filter out text starting with "wiim" (catches "wiim 192 168 1 68" etc.)
+        if text_clean.startswith("wiim"):
+            return False
+
+        # Filter out text containing IP address patterns
+        import re
+
+        ip_pattern = r"\b\d{1,3}[\s\.]?\d{1,3}[\s\.]?\d{1,3}[\s\.]?\d{1,3}\b"
+        if re.search(ip_pattern, text_clean):
+            return False
+
+        # Filter out generic garbage values
+        garbage_values = {
+            "unknown",
+            "unknow",  # common misspelling in some LinkPlay firmware
+            "none",
+            "null",
+            "undefined",
+            "n/a",
+            "na",
+            "not available",
+            "no data",
+            "empty",
+            "---",
+            "...",
+            "loading",
+            "buffering",
+            "connecting",
+            "error",
+        }
+        if text_clean in garbage_values:
+            return False
+
+        # Filter out purely numeric or mostly numeric text (likely technical IDs)
+        if text_clean.replace(" ", "").replace(".", "").replace("-", "").replace("_", "").isdigit():
+            return False
+
+        # Text passes all filters
+        return True
 
     def get_media_duration(self) -> int | None:
         """Get track duration in seconds."""
@@ -1153,16 +1255,18 @@ class Speaker:
         image_url = metadata_from_coord.get("entity_picture")
 
         if image_url:
-            _LOGGER.debug("Found media image URL from coordinator metadata: %s for %s", image_url, self.name)
-            return image_url
+            image_url_busted = self._append_cache_bust(image_url)
+            _LOGGER.debug("Found media image URL from coordinator metadata: %s for %s", image_url_busted, self.name)
+            return image_url_busted
 
         # PRIORITY 2: Check status section entity_picture (coordinator might put it here too)
         status_from_coord = self.coordinator.data.get("status", {})
         image_url = status_from_coord.get("entity_picture")
 
         if image_url:
-            _LOGGER.debug("Found media image URL from status entity_picture: %s for %s", image_url, self.name)
-            return image_url
+            image_url_busted = self._append_cache_bust(image_url)
+            _LOGGER.debug("Found media image URL from status entity_picture: %s for %s", image_url_busted, self.name)
+            return image_url_busted
 
         # PRIORITY 3: Fallback to checking raw status fields
         # (though coordinator should have already processed these into metadata.entity_picture)
@@ -1182,13 +1286,14 @@ class Speaker:
         for artwork_field in fallback_fields:
             image_url = status_from_coord.get(artwork_field)
             if image_url:
+                image_url_busted = self._append_cache_bust(image_url)
                 _LOGGER.debug(
                     "Found media image URL from fallback status field '%s': %s for %s",
                     artwork_field,
-                    image_url,
+                    image_url_busted,
                     self.name,
                 )
-                return image_url
+                return image_url_busted
 
         # Debug: Log what fields are actually available
         available_fields = {
@@ -1201,6 +1306,11 @@ class Speaker:
 
         _LOGGER.debug("No media image URL found for %s", self.name)
         return None
+
+    def _append_cache_bust(self, url: str) -> str:
+        """Append cache-busting query param using artwork version."""
+        sep = "&" if "?" in url else "?"
+        return f"{url}{sep}v={self._artwork_version}"
 
     # ===== SOURCE & AUDIO CONTROL METHODS =====
 
@@ -1601,6 +1711,54 @@ class Speaker:
 
         except Exception as err:
             _LOGGER.error("❌ Failed to trigger discovery for slave %s at %s: %s", name, ip, err)
+
+    async def _trigger_master_discovery(self, ip: str, uuid: str | None) -> None:
+        """Trigger automatic discovery flow for a missing master speaker."""
+        try:
+            _LOGGER.info("🔍 Slave %s initiating automatic discovery for master at %s", self.name, ip)
+            from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
+
+            # Check for existing config entries matching this master
+            existing_entries = [
+                entry
+                for entry in self.hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(CONF_HOST) == ip or (uuid and entry.unique_id == uuid)
+            ]
+            if existing_entries:
+                _LOGGER.debug("Master device at %s already has a config entry, skipping discovery", ip)
+                return
+
+            # Check for ongoing flows to avoid duplicates
+            existing_flows = [
+                flow
+                for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+                if flow.get("context", {}).get("unique_id") in {uuid, ip}
+            ]
+            if existing_flows:
+                _LOGGER.debug("Discovery flow already in progress for master at %s, skipping", ip)
+                return
+
+            # Fire the integration discovery flow
+            discovery_data = {
+                CONF_HOST: ip,
+                "device_name": "Unknown Master Speaker",
+                "device_uuid": uuid,
+                "discovery_source": "master_detection",
+            }
+
+            _LOGGER.info("✅ Creating automatic discovery flow for master at %s (UUID: %s)", ip, uuid)
+            self.hass.async_create_task(
+                self.hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={
+                        "source": SOURCE_INTEGRATION_DISCOVERY,
+                        "unique_id": uuid or ip,
+                    },
+                    data=discovery_data,
+                )
+            )
+        except Exception as err:
+            _LOGGER.error("❌ Failed to trigger discovery for master at %s: %s", ip, err)
 
 
 # Helper functions

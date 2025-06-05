@@ -64,6 +64,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             speaker.name,
         )
 
+    @property
+    def name(self) -> str:
+        """Return the name of the entity (device name only)."""
+        # Ensures media_player entity_id shares the same base slug as other entities
+        # (e.g. media_player.main_floor_speakers) by providing Home Assistant with
+        # a concrete name during initial entity_id generation.
+        return self.speaker.name
+
     async def async_added_to_hass(self) -> None:
         """Set up entity."""
         await super().async_added_to_hass()
@@ -98,7 +106,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 new_val = current_track_info.get(key)
                 if old_val != new_val:
                     if key == "image_url":
-                        _LOGGER.info(
+                        _LOGGER.debug(
                             "🎨 Media player clearing image cache due to URL change: %s -> %s", old_val, new_val
                         )
                     elif key in ["title", "artist"]:
@@ -108,7 +116,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             # WiiM devices often keep the same URL but change the image content
             if track_changed or image_url_changed:
                 if track_changed and not image_url_changed and current_track_info.get("image_url"):
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "🎨 Media player forcing image cache clear - track changed but URL stayed same (WiiM behavior)"
                     )
                 self.controller.clear_media_image_cache()
@@ -677,12 +685,12 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # First try explicit streaming service field
         streaming_service = status.get("streaming_service")
-        if streaming_service and not streaming_service.lower().startswith("wiim"):
+        if streaming_service and self._is_valid_app_name(streaming_service):
             return streaming_service
 
         # Fallback to source mapping for streaming services
         source = status.get("source")
-        if source and not source.lower().startswith("wiim"):
+        if source and self._is_valid_app_name(source):
             # Map known streaming services to friendly names
             streaming_map = {
                 "spotify": "Spotify",
@@ -700,6 +708,66 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # Return None instead of garbage - this will hide the field
         return None
+
+    def _is_valid_app_name(self, text: str) -> bool:
+        """Check if app name text is valid and not garbage.
+
+        Uses same comprehensive filtering as media text to prevent
+        "wiim 192 168 1 68" and similar garbage from showing up.
+
+        Args:
+            text: The text to validate
+
+        Returns:
+            True if text is valid app/service name, False if garbage
+        """
+        if not text or not isinstance(text, str):
+            return False
+
+        text_clean = text.strip().lower()
+
+        # Must be at least 2 characters
+        if len(text_clean) < 2:
+            return False
+
+        # Filter out text starting with "wiim" (catches "wiim 192 168 1 68" etc.)
+        if text_clean.startswith("wiim"):
+            return False
+
+        # Filter out text containing IP address patterns
+        import re
+
+        ip_pattern = r"\b\d{1,3}[\s\.]?\d{1,3}[\s\.]?\d{1,3}[\s\.]?\d{1,3}\b"
+        if re.search(ip_pattern, text_clean):
+            return False
+
+        # Filter out generic garbage values
+        garbage_values = {
+            "unknown",
+            "none",
+            "null",
+            "undefined",
+            "n/a",
+            "na",
+            "not available",
+            "no data",
+            "empty",
+            "---",
+            "...",
+            "loading",
+            "buffering",
+            "connecting",
+            "error",
+        }
+        if text_clean in garbage_values:
+            return False
+
+        # Filter out purely numeric text (likely technical IDs)
+        if text_clean.replace(" ", "").replace(".", "").replace("-", "").replace("_", "").isdigit():
+            return False
+
+        # Text passes all filters
+        return True
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

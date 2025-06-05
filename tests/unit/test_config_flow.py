@@ -14,10 +14,10 @@ from tests.const import MOCK_CONFIG
 
 
 async def test_form(hass: HomeAssistant) -> None:
-    """Test we get the initial choice form."""
+    """Test we get the manual entry form directly (setup mode choice was removed)."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "manual"  # Goes directly to manual entry now
     assert result["errors"] is None or result["errors"] == {}
 
 
@@ -27,13 +27,8 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
         "custom_components.wiim.config_flow.validate_wiim_device",
         return_value=(True, "WiiM Mini"),
     ):
-        # Start the flow and choose manual entry
+        # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"
 
@@ -52,13 +47,8 @@ async def test_form_connection_error(hass: HomeAssistant) -> None:
         "custom_components.wiim.config_flow.validate_wiim_device",
         return_value=(False, "192.168.1.100"),
     ):
-        # Start the flow and choose manual entry
+        # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"
 
@@ -76,13 +66,8 @@ async def test_form_timeout_error(hass: HomeAssistant) -> None:
         "custom_components.wiim.config_flow.validate_wiim_device",
         return_value=(False, "192.168.1.100"),
     ):
-        # Start the flow and choose manual entry
+        # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"
 
@@ -100,13 +85,8 @@ async def test_form_invalid_host(hass: HomeAssistant) -> None:
         "custom_components.wiim.config_flow.validate_wiim_device",
         return_value=(False, "invalid_host"),
     ):
-        # Start the flow and choose manual entry
+        # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"
 
@@ -139,13 +119,8 @@ async def test_enhanced_device_naming_master(hass: HomeAssistant) -> None:
         "custom_components.wiim.config_flow.validate_wiim_device",
         return_value=(True, "Living Room"),
     ):
-        # Start the flow and choose manual entry
+        # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"
 
@@ -164,13 +139,8 @@ async def test_enhanced_device_naming_slave(hass: HomeAssistant) -> None:
         "custom_components.wiim.config_flow.validate_wiim_device",
         return_value=(True, "Kitchen"),
     ):
-        # Start the flow and choose manual entry
+        # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"
 
@@ -181,36 +151,6 @@ async def test_enhanced_device_naming_slave(hass: HomeAssistant) -> None:
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert "Kitchen" in result["title"]
         assert result["data"][CONF_HOST] == "192.168.1.101"
-
-
-async def test_user_step_discovery_choice(hass: HomeAssistant) -> None:
-    """Test user can choose discovery mode."""
-    with patch(
-        "custom_components.wiim.config_flow.async_search",
-        return_value=None,  # Mock UPnP search to return nothing
-    ):
-        # Start the flow
-        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose discovery - when no devices found, goes to manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "discovery"})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "manual"  # Goes to manual when no devices found
-
-
-async def test_user_step_manual_choice(hass: HomeAssistant) -> None:
-    """Test user can choose manual entry."""
-    # Start the flow
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "user"
-
-    # Choose manual
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "manual"
 
 
 async def test_abort_already_configured(hass: HomeAssistant) -> None:
@@ -228,13 +168,8 @@ async def test_abort_already_configured(hass: HomeAssistant) -> None:
         "custom_components.wiim.config_flow.validate_wiim_device",
         return_value=(True, "WiiM Mini"),
     ):
-        # Start the flow and choose manual entry
+        # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        # Choose manual entry
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"setup_mode": "manual"})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"
 
