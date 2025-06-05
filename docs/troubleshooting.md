@@ -1,88 +1,18 @@
-# Troubleshooting Guide
+# WiiM Integration - Troubleshooting
 
-This guide helps resolve common issues with the WiiM Audio integration.
+Quick solutions for common issues with the WiiM Audio integration.
 
-## HACS Download Issues
+## 🚨 Common Issues & Quick Fixes
 
-### Problem: "Got status code 404" Download Error
+### HACS Download Issues
 
-**Error Message**:
-
-```
-Download failed - Got status code 404 when trying to download
-https://github.com/mjcumming/wiim/releases/download/v0.3.0/wiim.zip
-```
-
-**Root Cause**: HACS is trying to download an older version (v0.3.0) that doesn't have a proper ZIP file attached.
+**Error**: "Got status code 404" when downloading from HACS
 
 **Solutions**:
 
-1. **Force Latest Version**:
-
-   - HACS → Integrations → WiiM Audio → ⋮ menu → **Redownload**
-   - Select **v0.3.2** or latest version
-   - Restart Home Assistant
-
-2. **Clear HACS Cache**:
-
-   - Settings → System → **Restart Home Assistant**
-   - HACS → Integrations → Try install again
-
-3. **Manual Installation** (if HACS fails):
-
-   - Download latest `wiim.zip` from [GitHub Releases](https://github.com/mjcumming/wiim/releases/latest)
-   - Extract to `/config/custom_components/wiim/`
-   - Restart Home Assistant
-
-4. **Complete Reinstall**:
-   - Remove integration from HACS and Home Assistant
-   - Fresh install from HACS with latest version
-
-### Problem: "Integration 'wiim' not found"
-
-This error occurs when the integration isn't properly loaded:
-
-**Solutions**:
-
-- Verify files are in `/config/custom_components/wiim/`
-- Check manifest.json is valid
-- Restart Home Assistant after installation
-- Clear browser cache (Ctrl+F5)
-
----
-
-## Quick Diagnostics
-
-### Check Integration Status
-
-1. **Settings** → **Devices & Services** → **WiiM Audio**
-2. Look for error messages or unavailable devices
-3. Check entity states in **Developer Tools** → **States**
-
-### Basic Network Test
-
-```bash
-# Test connectivity to your speakers
-ping 192.168.1.100  # Replace with your speaker IP
-telnet 192.168.1.100 8080  # Test HTTP port
-```
-
-### Enable Debug Logging
-
-```yaml
-# configuration.yaml
-logger:
-  default: warning
-  logs:
-    custom_components.wiim: debug
-    custom_components.wiim.api: debug
-    custom_components.wiim.coordinator: debug
-    custom_components.wiim.config_flow: debug
-```
-
----
-
-## Installation Issues
+1. **Force Latest Version**: HACS → Integrations → WiiM Audio → ⋮ → **Redownload** → Select latest version
+2. **Clear HACS Cache**: Restart Home Assistant, then try HACS install again
+3. **Manual Installation**: Download from [GitHub Releases](https://github.com/mjcumming/wiim/releases/latest), extract to `/config/custom_components/wiim/`
 
 ### Integration Not Found
 
@@ -90,510 +20,281 @@ logger:
 
 **Solutions**:
 
-- **Clear Cache**: Hard refresh browser (Ctrl+F5)
-- **Restart HA**: **Settings** → **System** → **Restart**
-- **Check Files**: Verify integration files in `/config/custom_components/wiim/`
-- **HACS**: Ensure HACS installation completed successfully
+- Clear browser cache (Ctrl+F5) and refresh
+- Restart Home Assistant: **Settings** → **System** → **Restart**
+- Verify files are in `/config/custom_components/wiim/`
+- Check integration loaded: **Settings** → **System** → **Logs** (look for "wiim" entries)
 
-**Verify Installation**:
-
-```bash
-# Check file structure
-ls -la /config/custom_components/wiim/
-# Should show: __init__.py, manifest.json, etc.
-```
-
-### HACS Download Failed
-
-**Problem**: HACS shows "Download failed" error
-
-**Solutions**:
-
-- **Network**: Check internet connectivity
-- **Retry**: Wait 5-10 minutes and try again
-- **GitHub**: Check if GitHub is accessible
-- **Manual**: Use manual installation as fallback
-
-**HACS Troubleshooting**:
-
-1. **HACS Logs**: Check HACS section in HA logs
-2. **Rate Limits**: GitHub API rate limiting (wait 1 hour)
-3. **Repository**: Verify repository URL is correct
-
-### Files in Wrong Location
-
-**Problem**: Integration installed but not recognized
-
-**Correct Structure**:
-
-```
-/config/
-├── custom_components/
-│   └── wiim/
-│       ├── __init__.py
-│       ├── manifest.json
-│       ├── config_flow.py
-│       ├── media_player.py
-│       ├── api.py
-│       ├── coordinator.py
-│       └── ...
-└── configuration.yaml
-```
-
-**Common Mistakes**:
-
-- Files in `/config/wiim/` instead of `/config/custom_components/wiim/`
-- Missing `custom_components` directory
-- Extra folder level: `/config/custom_components/wiim/wiim/`
-
----
-
-## Discovery Issues
-
-### No Devices Found
+### No Devices Discovered
 
 **Problem**: Auto-discovery finds no speakers
 
-**Network Troubleshooting**:
+**Quick Checks**:
 
-1. **Same Subnet**: Ensure HA and speakers on same network
-2. **VLAN**: Check VLAN configuration allows multicast
-3. **Firewall**: Allow UPnP/SSDP traffic (port 1900)
-4. **WiFi**: Verify speakers connected to correct WiFi network
+- Ensure Home Assistant and speakers on same network/VLAN
+- Check firewall allows UPnP/SSDP traffic (port 1900)
+- Verify speakers have network connectivity (can you ping them?)
 
-**Manual Discovery**:
+**Solutions**:
+
+1. **Use Manual Setup**: Settings → Add Integration → Enter speaker IP directly
+2. **Find Speaker IPs**: Check router DHCP table or use WiiM app → Settings → About
+3. **Network Test**: `ping 192.168.1.100` (replace with speaker IP)
+
+### Speakers Show as Unavailable
+
+**Problem**: Devices discovered but show unavailable
+
+**Common Causes & Fixes**:
+
+- **IP Changed**: Speaker got new DHCP address → Use DHCP reservations
+- **Network Issues**: Check switch/router → Power cycle network equipment
+- **SSL Problems**: Integration handles certificates automatically → No action needed
+
+**Quick Fix**: Remove and re-add device with current IP address
+
+## 🔧 Multiroom Issues
+
+### Groups Not Working
+
+**Problem**: Speakers won't group or keep disconnecting
+
+**Essential Checks**:
 
 ```yaml
-# Find speaker IPs
-nmap -sn 192.168.1.0/24 | grep -B2 -A1 "WiiM\|LinkPlay"
-
-# Test speaker HTTP API
-curl -k https://192.168.1.100/httpapi.asp?command=getStatusEx
+# Check role sensors to understand group state
+sensor.living_room_multiroom_role: "Master"
+sensor.kitchen_multiroom_role: "Slave"
+sensor.bedroom_multiroom_role: "Solo"
 ```
 
 **Solutions**:
 
-- Use manual IP configuration instead of auto-discovery
-- Check router DHCP table for speaker IPs
-- Use WiiM app to find speaker network information
-- Temporarily disable firewall to test
+1. **Firmware**: Update all speakers to same firmware version
+2. **Network**: Ensure multicast traffic allowed between devices
+3. **IP Stability**: Use DHCP reservations for all speakers
+4. **Signal**: Improve WiFi signal strength/quality
 
-### Discovery Finds Wrong Devices
+### Group Volume Jumps
 
-**Problem**: Integration detects non-WiiM devices
+**Problem**: Volume changes unexpectedly in groups
 
-**Filtering**:
+**Understanding**: Group volume = maximum member volume, changes apply relatively
 
-- Integration automatically filters for WiiM/LinkPlay devices
-- False positives should be ignored during setup
-- Only select actual WiiM speakers in setup wizard
-
-### Speaker Shows as Unavailable
-
-**Problem**: Device discovered but shows unavailable
-
-**Network Issues**:
-
-- **IP Changed**: Speaker got new IP from DHCP
-- **Network**: Connectivity issues between HA and speaker
-- **SSL**: Certificate problems (integration handles this)
-
-**Solutions**:
-
-1. **Reconfigure**: Remove and re-add device with current IP
-2. **Static IP**: Set DHCP reservation for speaker
-3. **Network**: Check switch/router configuration
-4. **Power Cycle**: Restart speaker and HA
-
----
-
-## Connection Problems
-
-### Session Closed Errors
-
-**Problem**: `RuntimeError: Session is closed` in logs
-
-**Explanation**: HTTP session interrupted during HA restart or network issues
-
-**Solutions**:
-
-- **Automatic**: Integration automatically recovers
-- **Manual**: Restart integration if persistent
-- **Network**: Check network stability
-
-**Prevention**:
-
-- Use stable network connection
-- Avoid frequent HA restarts during speaker use
-- Consider wired connection for HA server
-
-### SSL Certificate Issues
-
-**Problem**: SSL/TLS connection errors
-
-**Built-in Handling**:
-
-- Integration includes WiiM certificate
-- Automatically falls back to insecure mode
-- No user action typically required
-
-**Manual Solutions**:
+**Example**:
 
 ```yaml
-# Force debug logging for SSL issues
-logger:
-  logs:
-    custom_components.wiim.api: debug
-    aiohttp.client: debug
+# Before: Master 80%, Slave 40% → Group shows 80%
+# Set group to 50% → Master 50%, Slave 25% (scaled proportionally)
 ```
 
-### Timeout Errors
+**Solution**: Use individual speaker controls for fine-tuning
 
-**Problem**: Requests timing out frequently
+### Role Sensor Issues
 
-**Causes**:
+**Problem**: Speakers show wrong roles or "unknown"
 
-- **Network Congestion**: Too much traffic
-- **Distance**: Speaker too far from WiFi access point
-- **Interference**: WiFi interference on 2.4GHz
-
-**Solutions**:
-
-- **Polling Interval**: Increase to 10-15 seconds
-- **Network**: Improve WiFi signal strength
-- **Channel**: Change WiFi channel to less congested frequency
-- **Access Point**: Add WiFi access point closer to speakers
-
----
-
-## Multiroom Issues
-
-### Group Entity Not Appearing
-
-**Problem**: Group entity never shows up
-
-**Checklist**:
-
-- [x] Group entity enabled in device options
-- [x] Device is actually master (has slaves)
-- [x] Integration restarted after enabling
-- [x] Entity not disabled in entity registry
-
-**Debugging**:
+**Debug Steps**:
 
 ```yaml
-# Check device options
-Settings → Devices & Services → WiiM Audio → Configure
+# Check entity states
+Developer Tools → States → Search "multiroom_role"
 
-# Check entity registry
-Developer Tools → States → search "group"
-
-# Check coordinator data
-Developer Tools → States → media_player.your_speaker
-# Look for group_role: "master"
-```
-
-### Volume Jumps Unexpectedly
-
-**Problem**: Group volume changes dramatically
-
-**Understanding Group Volume**:
-
-- Group volume = maximum volume of all members
-- Changes apply relatively to maintain balance
-- Not absolute volume setting
-
-**Example Issue**:
-
-```yaml
-# Before: Master 100%, Slave 20%
-# Group shows: 100% (maximum)
-# Set group to 50%
-# After: Master 50%, Slave 10% (scaled proportionally)
-```
-
-**Solutions**:
-
-- Use individual speaker controls for fine-tuning
-- Understand relative volume behavior is by design
-- Check group entity attributes for individual volumes
-
-### Speakers Keep Leaving Groups
-
-**Problem**: Groups unstable, speakers disconnect
-
-**Network Causes**:
-
-- **WiFi Issues**: Poor signal, interference
-- **IP Changes**: DHCP reassigning addresses
-- **Timing**: Network delays causing sync issues
-
-**Solutions**:
-
-1. **Static IPs**: Use DHCP reservations
-2. **WiFi**: Improve signal strength/quality
-3. **Firmware**: Update speaker firmware
-4. **Network**: Check for packet loss
-
-**Network Diagnostics**:
-
-```bash
-# Test stability
-ping -c 100 192.168.1.100  # Check packet loss
-mtr 192.168.1.100         # Network path analysis
-```
-
-### Master/Slave Role Confusion
-
-**Problem**: Speakers show wrong roles
-
-**Role Detection**:
-
-- Integration polls `multiroom:getSlaveList` endpoint
-- Role determined by presence in slave lists
-- Updates within 5-10 seconds of changes
-
-**Manual Reset**:
-
-```yaml
-# Force role refresh
+# Force refresh
 service: homeassistant.reload_config_entry
 target:
   entity_id: media_player.speaker_name
 ```
 
----
+## 🌐 Network Troubleshooting
 
-## Audio Issues
+### Connection Errors
 
-### No Sound from Speakers
+**Quick Network Tests**:
 
-**Problem**: Control works but no audio
+```bash
+# Test basic connectivity
+ping 192.168.1.100
+
+# Test HTTP port
+curl -k "https://192.168.1.100/httpapi.asp?command=getStatusEx"
+
+# Check UPnP/SSDP traffic
+# Ensure port 1900 is open and multicast allowed
+```
+
+**Common Fixes**:
+
+- **Firewall**: Temporarily disable to test
+- **VLANs**: Ensure HA and speakers on same VLAN
+- **WiFi**: Move closer to access point or add WiFi extender
+
+### SSL Certificate Errors
+
+**Problem**: SSL/TLS connection failures
+
+**Good News**: Integration automatically handles WiiM's self-signed certificates
+
+**If Issues Persist**:
+
+- Integration falls back to HTTP automatically
+- Check logs for specific SSL errors
+- Verify speaker firmware is updated
+
+## 📱 Control Issues
+
+### Media Controls Not Working
 
 **Basic Checks**:
 
-- **Volume**: Check speaker volume levels
-- **Mute**: Verify speakers not muted
-- **Source**: Check selected audio source
-- **Input**: Verify audio input/stream
+1. **Speaker State**: Is device powered on and responsive?
+2. **Network**: Can you control via WiiM app?
+3. **Integration**: Check for errors in HA logs
 
-**WiiM App Test**:
-
-1. Use official WiiM app to test audio
-2. If WiiM app works, issue is HA integration
-3. If WiiM app fails, issue is speaker/network
-
-### Audio Out of Sync
-
-**Problem**: Multiroom speakers not synchronized
-
-**LinkPlay Sync**:
-
-- Sync handled by LinkPlay protocol
-- Integration doesn't control sync timing
-- Issues usually network-related
-
-**Solutions**:
-
-- **Network**: Improve WiFi quality
-- **Interference**: Reduce 2.4GHz interference
-- **Regroup**: Remove and re-add speakers to group
-- **Firmware**: Update all speaker firmware
-
-### EQ/Sound Settings Not Working
-
-**Problem**: Equalizer controls have no effect
-
-**EQ Support**:
-
-- Not all speakers support EQ
-- Check `sound_mode_list` attribute
-- Some firmware versions have limited EQ
-
-**Debugging**:
+**Test Commands**:
 
 ```yaml
-# Check EQ support
-Developer Tools → States → media_player.speaker
-# Look for: sound_mode_list, eq_enabled attributes
-
-# Test EQ manually
-service: wiim.set_eq
+# Test basic controls in Developer Tools → Services
+service: media_player.volume_set
 target:
-  entity_id: media_player.speaker
+  entity_id: media_player.living_room
 data:
-  preset: "rock"
+  volume_level: 0.5
 ```
 
----
+### Audio But No Control
 
-## Performance Issues
-
-### High CPU Usage
-
-**Problem**: Integration using excessive CPU
-
-**Causes**:
-
-- **Polling**: Too frequent status updates
-- **Groups**: Many speakers in complex groups
-- **Errors**: Repeated connection failures
+**Problem**: Music plays but HA controls don't work
 
 **Solutions**:
 
-1. **Increase Intervals**: Set polling to 10-15 seconds
-2. **Simplify Groups**: Reduce group complexity
-3. **Fix Networks**: Resolve connection issues
+1. **WiiM App Test**: If WiiM app works, issue is integration
+2. **API Test**: Try manual API call (see above)
+3. **Restart Integration**: Settings → Integrations → WiiM → Restart
 
-### Slow Response Times
+### EQ/Source Issues
 
-**Problem**: Commands take long to execute
+**Problem**: Equalizer or source selection not working
 
-**Optimization**:
-
-```yaml
-# Device-specific settings
-Settings → Devices → Configure
-
-Polling Interval: 10 seconds    # Reduce load
-Volume Step: 5%                 # Reasonable increment
-Group Entity: Only if needed    # Reduce entities
-```
-
-### Memory Usage Growing
-
-**Problem**: Integration memory usage increases over time
-
-**Monitoring**:
+**Check Support**:
 
 ```yaml
-# Monitor integration performance
-Developer Tools → Statistics
-# Look for custom_components.wiim memory usage
+# View available options in entity attributes
+Developer Tools → States → media_player.speaker_name
+# Look for: sound_mode_list, source_list
 ```
 
-**Solutions**:
+**Note**: Not all speakers support all features
 
-- Restart Home Assistant monthly
-- Check for memory leaks in logs
-- Report persistent issues to GitHub
+## 🐛 Debug Information
 
----
+### Enable Debug Logging
 
-## Advanced Troubleshooting
-
-### Raw API Testing
-
-Test speaker APIs directly:
-
-```bash
-# Basic status
-curl -k "https://192.168.1.100/httpapi.asp?command=getStatusEx"
-
-# Multiroom info
-curl -k "https://192.168.1.100/httpapi.asp?command=multiroom:getSlaveList"
-
-# Set volume
-curl -k "https://192.168.1.100/httpapi.asp?command=setPlayerCmd:vol:50"
-
-# Play/pause
-curl -k "https://192.168.1.100/httpapi.asp?command=setPlayerCmd:play"
-curl -k "https://192.168.1.100/httpapi.asp?command=setPlayerCmd:pause"
-```
-
-### Integration State Inspection
+Add to `configuration.yaml`:
 
 ```yaml
-# Check coordinator data
-Developer Tools → States →
-# Search for: sensor.speaker_name_*
-
-# Check internal state
-Developer Tools → Template →
-{{ state_attr('media_player.speaker_name', 'group_members') }}
-{{ state_attr('media_player.speaker_name', 'group_role') }}
-```
-
-### Network Packet Capture
-
-For complex network issues:
-
-```bash
-# Capture UPnP/SSDP traffic
-sudo tcpdump -i any port 1900
-
-# Capture HTTP API traffic
-sudo tcpdump -i any host 192.168.1.100 and port 8080
-```
-
----
-
-## Getting Help
-
-### Before Reporting Issues
-
-1. **Enable Debug Logging** (see above)
-2. **Reproduce Issue** with logging enabled
-3. **Check Logs** for relevant error messages
-4. **Test Basic Connectivity** (ping, curl)
-5. **Try WiiM App** to isolate integration vs speaker issues
-
-### Information to Include
-
-When reporting issues, provide:
-
-- **Home Assistant version**
-- **Integration version**
-- **Speaker model(s)**
-- **Network setup** (WiFi, VLANs, etc.)
-- **Relevant log entries**
-- **Steps to reproduce**
-
-### Community Resources
-
-- **GitHub Issues**: [Report bugs/features](https://github.com/mjcumming/wiim/issues)
-- **HA Community**: [Ask questions](https://community.home-assistant.io/)
-- **Documentation**: [Integration guides](../README.md)
-
-### Debug Data Collection
-
-```yaml
-# Full debug logging
 logger:
-  default: info
   logs:
     custom_components.wiim: debug
-    homeassistant.components.media_player: debug
-    homeassistant.helpers.entity_platform: debug
+    custom_components.wiim.api: debug
+    custom_components.wiim.coordinator: debug
 ```
 
-**Log Locations**:
+### View Logs
 
 - **UI**: Settings → System → Logs
 - **File**: `/config/home-assistant.log`
 - **Docker**: `docker logs homeassistant`
 
----
+### Key Log Patterns
 
-## Preventive Measures
+Look for these in logs:
+
+```
+ERROR custom_components.wiim.api: Connection failed
+WARNING custom_components.wiim.coordinator: Device offline
+INFO custom_components.wiim: Group state changed
+```
+
+## 🔄 Reset & Recovery
+
+### Integration Reset
+
+1. **Remove Integration**: Settings → Integrations → WiiM → Delete
+2. **Clear Cache**: Restart Home Assistant
+3. **Reinstall**: Add integration fresh
+4. **Reconfigure**: Set up devices again
+
+### Network Reset
+
+1. **Power Cycle**: Restart speakers, router, HA
+2. **WiFi Reset**: Reconnect speakers to WiFi
+3. **IP Reset**: Clear DHCP leases, assign new IPs
+4. **Test**: Verify basic connectivity before HA setup
+
+### Factory Reset Speaker
+
+**Last Resort**: If speaker completely unresponsive
+
+1. Use WiiM app or hardware reset procedure
+2. Reconfigure speaker network settings
+3. Re-add to Home Assistant
+
+## 📞 Getting Help
+
+### Before Reporting Issues
+
+1. **Enable Debug Logging** (see above)
+2. **Reproduce Issue** with logging enabled
+3. **Check Network**: Test basic connectivity
+4. **Try WiiM App**: Verify issue isn't speaker-related
+
+### Information to Include
+
+- Home Assistant version
+- Integration version
+- Speaker model(s)
+- Network setup details
+- Relevant log entries
+- Steps to reproduce
+
+### Community Resources
+
+- **GitHub Issues**: [Report bugs](https://github.com/mjcumming/wiim/issues)
+- **HA Community**: [Get help](https://community.home-assistant.io/)
+- **Discussions**: [Feature requests](https://github.com/mjcumming/wiim/discussions)
+
+## 🎯 Prevention Tips
 
 ### Network Best Practices
 
-- Use DHCP reservations for speakers
-- Ensure strong WiFi signal coverage
-- Keep speakers on same subnet as HA
-- Monitor network performance regularly
+- Use DHCP reservations for stable IPs
+- Ensure strong WiFi coverage for all speakers
+- Keep HA and speakers on same subnet
+- Allow multicast/UPnP traffic
 
 ### Integration Maintenance
 
-- Update integration regularly
+- Update integration regularly via HACS
 - Monitor logs for warnings
-- Test multiroom functionality monthly
-- Keep speaker firmware updated
+- Test multiroom after HA updates
+- Keep speaker firmware current
 
-### Home Assistant Health
+### Quick Health Check
 
-- Regular HA updates
-- Monitor system resources
-- Backup configuration regularly
-- Use supervision monitoring if available
+```yaml
+# Test basic functionality monthly
+service: media_player.volume_set
+target:
+  entity_id: media_player.living_room
+data:
+  volume_level: 0.3
+
+# Check role sensors
+Developer Tools → States → Search "multiroom_role"
+
+# Verify network connectivity
+ping [speaker_ip]
+```
+
+Most issues resolve with network improvements or integration restart. For complex problems, enable debug logging and check the logs for specific error messages.

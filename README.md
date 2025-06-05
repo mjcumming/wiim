@@ -181,12 +181,6 @@ The integration provides many service calls for advanced control:
 - `wiim.reboot_device` - Reboot the device
 - `wiim.sync_time` - Sync device time with Home Assistant
 
-### Diagnostic Services
-
-- `wiim.diagnose_entities` - Run diagnostic checks
-- `wiim.cleanup_stale_entities` - Clean up orphaned entities
-- `wiim.auto_maintain` - Automated maintenance tasks
-
 ## Troubleshooting
 
 ### Connection Issues
@@ -196,62 +190,17 @@ The integration provides many service calls for advanced control:
 3. **Update Firmware**: Ensure your WiiM device has the latest firmware
 4. **Restart Devices**: Try restarting both Home Assistant and your WiiM device
 
-### LinkPlay Conflicts
-
-If you see errors mentioning "linkplay" or connection failures to port 80:
-
-1. Disable the built-in LinkPlay integration (see above)
-2. Remove any existing LinkPlay entities
-3. Restart Home Assistant
-4. Re-add your devices using this WiiM integration
-
 ### Group Management Issues
 
 - Ensure all devices are on the same firmware version
 - Check that devices are on the same network subnet
 - Try disbanding and recreating groups if sync issues occur
 
-### Entity Cleanup
-
-If you have duplicate or orphaned entities:
-
-1. Use the `wiim.diagnose_entities` service to identify issues
-2. Use `wiim.cleanup_stale_entities` to remove orphaned entities
-3. For severe issues, use `wiim.nuclear_reset_entities` (removes ALL WiiM entities)
-
 ## Support
 
 - **GitHub Issues**: https://github.com/mjcumming/wiim/issues
 - **Home Assistant Community**: Search for "WiiM" in the community forums
 - **Documentation**: Full documentation available in the GitHub repository
-
-## Version History
-
-### 0.4.7
-
-- Resolved GitHub release workflow issue where release already existed
-- Fixed persistent tag conflict in automated release process
-- All fixes from previous versions included
-
-### 0.4.6
-
-- Resolved GitHub release workflow tag conflict issue
-- Fixed version tag mismatch in release process
-- All fixes from 0.4.5 included
-
-### 0.4.5
-
-- Fixed `join_players` method to prevent NotImplementedError
-- Improved error handling for group operations
-- Added timeout protection for async operations
-- Enhanced documentation for LinkPlay conflicts
-
-### 0.4.4
-
-- Enhanced multiroom group management
-- Improved device discovery and status parsing
-- Better error handling and logging
-- Added comprehensive service calls
 
 ## Contributing
 

@@ -1485,6 +1485,8 @@ def get_or_create_speaker(hass: HomeAssistant, coordinator: WiiMCoordinator, con
     """Get existing speaker or create new one."""
     data = get_wiim_data(hass)
     uuid = config_entry.unique_id
+    if uuid is None:
+        raise ValueError(f"Config entry {config_entry.entry_id} has no unique_id")
     if uuid not in data.speakers:
         data.speakers[uuid] = Speaker(hass, coordinator, config_entry)
         _LOGGER.debug("Created new speaker: %s", uuid)

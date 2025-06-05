@@ -1,3 +1,3 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the WiiM Audio integration will be documented in this file.

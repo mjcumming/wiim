@@ -59,7 +59,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._device_info = None
 
         # Track device info update timing (every 30-60 seconds)
-        self._last_device_info_update = 0
+        self._last_device_info_update = 0.0
         self._device_info_interval = 30
 
         # Debug: Track update calls
@@ -499,7 +499,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # SYNC CLIENT STATE: Set client internal state for group operations
             self.client._group_master = self.client.host  # Master points to itself
             self.client._group_slaves = [
-                slave.get("ip") for slave in slaves_list if isinstance(slave, dict) and slave.get("ip")
+                slave["ip"] for slave in slaves_list if isinstance(slave, dict) and slave.get("ip") is not None
             ]
             _LOGGER.debug(
                 "Synchronized client state: master=%s, slaves=%s", self.client._group_master, self.client._group_slaves
@@ -720,7 +720,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # Check against last mirrored state to avoid repetitive logging
                 if not hasattr(self, "_last_mirrored_state"):
-                    self._last_mirrored_state = {}
+                    self._last_mirrored_state: dict[str, dict[str, str]] = {}
 
                 last_state = self._last_mirrored_state.get(self.client.host, {})
                 state_key = f"{master_source}|{master_title}|{master_play_status}"

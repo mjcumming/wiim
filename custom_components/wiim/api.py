@@ -431,6 +431,45 @@ class WiiMClient:
             finally:
                 self._session = None
 
+    async def validate_connection(self) -> bool:
+        """Simple connection validation for discovery/config flow.
+
+        Returns:
+            True if device responds to basic API call, False otherwise.
+        """
+        try:
+            await self.get_player_status()
+            return True
+        except WiiMError:
+            return False
+
+    async def get_device_name(self) -> str:
+        """Get device name for discovery/config flow.
+
+        Simple method that tries to get device name from DeviceName field,
+        falling back to IP address. No complex multiroom status or multiple
+        API endpoint attempts - keeps config flow fast and simple.
+
+        Returns:
+            Device name or IP address as fallback.
+        """
+        try:
+            # Try player status first (fastest)
+            status = await self.get_player_status()
+            if name := status.get("DeviceName"):
+                return name.strip()
+
+            # Try device info as fallback
+            info = await self.get_device_info()
+            if name := info.get("DeviceName") or info.get("device_name"):
+                return name.strip()
+
+        except WiiMError:
+            _LOGGER.debug("Failed to get device name for %s, using IP", self.host)
+
+        # Always fallback to IP
+        return self.host
+
     async def get_status(self) -> dict[str, Any]:
         """Get the current device status using getStatusEx.
 
