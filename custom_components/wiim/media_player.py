@@ -45,7 +45,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         super().__init__(speaker)
         self.controller = MediaPlayerController(speaker)
         self._attr_unique_id = speaker.uuid
-        self._attr_name = speaker.name
+        # Set name to None so HA uses device name directly for entity_id
+        # This prevents duplication like media_player.master_bedroom_master_bedroom
+        self._attr_name = None
 
         # Optimistic state management for immediate UI feedback
         self._optimistic_state: MediaPlayerState | None = None
@@ -66,7 +68,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     async def async_added_to_hass(self) -> None:
         """Set up entity."""
         await super().async_added_to_hass()
-        _LOGGER.debug("Media player %s registered", self.entity_id)
+        _LOGGER.debug("Media player %s registered with entity_id %s", self.speaker.name, self.entity_id)
 
     @callback
     def async_write_ha_state(self) -> None:

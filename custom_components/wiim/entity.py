@@ -17,8 +17,6 @@ _LOGGER = logging.getLogger(__name__)
 class WiimEntity(CoordinatorEntity):
     """Base class for all WiiM entities (like SonosEntity)."""
 
-    _attr_has_entity_name = True  # Use device name for clean entity IDs
-
     def __init__(self, speaker: Speaker) -> None:
         """Initialize with speaker reference."""
         # Initialize coordinator entity with speaker's coordinator
@@ -39,9 +37,9 @@ class WiimEntity(CoordinatorEntity):
         # Call parent first to register as coordinator listener
         await super().async_added_to_hass()
 
-        # Register in central mapping for O(1) lookups
+        # Register in central mapping for O(1) lookups using proper method
         data = get_wiim_data(self.hass)
-        data.entity_id_mappings[self.entity_id] = self.speaker
+        data.register_entity(self.entity_id, self.speaker)
 
         # Listen for speaker state changes (event-driven pattern)
         self.async_on_remove(
@@ -57,7 +55,7 @@ class WiimEntity(CoordinatorEntity):
     async def async_will_remove_from_hass(self) -> None:
         """Clean up entity registration."""
         data = get_wiim_data(self.hass)
-        data.entity_id_mappings.pop(self.entity_id, None)
+        data.unregister_entity(self.entity_id)
         _LOGGER.debug("Entity %s unregistered", self.entity_id)
 
     async def _async_execute_command_with_refresh(self, command_type: str) -> None:

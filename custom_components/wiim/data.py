@@ -1376,24 +1376,24 @@ class Speaker:
         return data.get_entity_id_for_speaker(speaker)
 
     def resolve_entity_ids_to_speakers(self, entity_ids: list[str]) -> list[Speaker]:
-        """Convert entity IDs to Speaker objects."""
+        """Convert entity IDs to Speaker objects with enhanced error reporting."""
         data = get_wiim_data(self.hass)
         speakers = []
+        failed_entities = []
 
         for entity_id in entity_ids:
             speaker = data.get_speaker_by_entity_id(entity_id)
             if speaker:
                 speakers.append(speaker)
             else:
-                # Log available entities for debugging
-                available_count = len(data.entity_id_mappings)
-                _LOGGER.warning(
-                    "Could not resolve entity_id '%s' to speaker. Available entities: %d", entity_id, available_count
-                )
-                # Show sample of available entities for debugging
-                if available_count > 0:
-                    sample_entities = list(data.entity_id_mappings.keys())[:3]
-                    _LOGGER.debug("Sample available entity IDs: %s", sample_entities)
+                failed_entities.append(entity_id)
+
+        # Log basic error info for debugging
+        if failed_entities:
+            available_count = len(data.entity_id_mappings)
+            _LOGGER.warning(
+                "Could not resolve entity_ids %s to speakers. Available entities: %d", failed_entities, available_count
+            )
 
         return speakers
 

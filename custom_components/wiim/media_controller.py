@@ -556,15 +556,14 @@ class MediaPlayerController:
             # Validate and resolve entity IDs to Speaker objects
             speakers = self.speaker.resolve_entity_ids_to_speakers(group_members)
             if not speakers:
-                self._logger.warning("No valid speakers found for entity IDs: %s", group_members)
-                # Check if entity IDs are properly formatted
                 from .data import get_wiim_data
 
                 data = get_wiim_data(self.hass)
-                available_entities = list(data.entity_id_mappings.keys())
-                self._logger.debug("Available entity IDs: %s", available_entities[:5])  # Show first 5
-                raise ValueError(
-                    f"No valid speakers found in group member list {group_members}. Available: {len(available_entities)} entities"
+                available_count = len(data.entity_id_mappings)
+
+                self._logger.warning("No valid speakers found for entity IDs: %s", group_members)
+                raise HomeAssistantError(
+                    f"No valid speakers found in group member list {group_members}. Available: {available_count} entities"
                 )
 
             # Filter out self from the list if present
