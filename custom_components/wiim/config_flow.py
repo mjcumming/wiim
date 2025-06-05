@@ -206,14 +206,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> FlowResult:
         """Handle Zeroconf discovery."""
         host = discovery_info.host
-        _LOGGER.warning("🔍 ZEROCONF DISCOVERY called for host: %s", host)
+        _LOGGER.info("🔍 ZEROCONF DISCOVERY called for host: %s", host)
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
         if not is_valid:
             _LOGGER.warning("🔍 ZEROCONF DISCOVERY validation failed for host: %s", host)
             return self.async_abort(reason="cannot_connect")
 
-        _LOGGER.warning("🔍 ZEROCONF DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
+        _LOGGER.info("🔍 ZEROCONF DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
 
         # Use device UUID if available, otherwise fall back to host
         unique_id = device_uuid or host
@@ -226,7 +226,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
         """Handle SSDP discovery."""
-        _LOGGER.warning("🔍 SSDP DISCOVERY called with: %s", discovery_info.ssdp_location)
+        _LOGGER.info("🔍 SSDP DISCOVERY called with: %s", discovery_info.ssdp_location)
 
         if not discovery_info.ssdp_location:
             _LOGGER.warning("🔍 SSDP DISCOVERY aborted: no ssdp_location")
@@ -237,14 +237,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.warning("🔍 SSDP DISCOVERY aborted: no host from %s", discovery_info.ssdp_location)
             return self.async_abort(reason="no_host")
 
-        _LOGGER.warning("🔍 SSDP DISCOVERY extracted host: %s", host)
+        _LOGGER.info("🔍 SSDP DISCOVERY extracted host: %s", host)
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
         if not is_valid:
             _LOGGER.warning("🔍 SSDP DISCOVERY validation failed for host: %s", host)
             return self.async_abort(reason="cannot_connect")
 
-        _LOGGER.warning("🔍 SSDP DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
+        _LOGGER.info("🔍 SSDP DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
 
         # Use device UUID if available, otherwise fall back to host
         unique_id = device_uuid or host
@@ -261,7 +261,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_name = discovery_info.get("device_name", "Unknown Device")
         device_uuid = discovery_info.get("device_uuid")
 
-        _LOGGER.warning("🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s)", device_name, host, device_uuid)
+        _LOGGER.info("🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s)", device_name, host, device_uuid)
 
         if not host:
             _LOGGER.warning("🔍 INTEGRATION DISCOVERY aborted: no host")
@@ -283,7 +283,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Store data for discovery confirmation
         self.data = {CONF_HOST: host, "name": final_name}
 
-        _LOGGER.warning("🔍 INTEGRATION DISCOVERY completed for %s at %s", final_name, host)
+        _LOGGER.info("🔍 INTEGRATION DISCOVERY completed for %s at %s", final_name, host)
         _LOGGER.info("Integration discovery completed for %s at %s", final_name, host)
         return await self.async_step_discovery_confirm()
 
@@ -297,7 +297,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Set title placeholders here where the UI actually processes them
         self.context["title_placeholders"] = {"name": self.data["name"]}
-        _LOGGER.warning("🔍 DISCOVERY CONFIRM set title_placeholders: %s", {"name": self.data["name"]})
+        _LOGGER.info("🔍 DISCOVERY CONFIRM set title_placeholders: %s", {"name": self.data["name"]})
 
         self._set_confirm_only()
         return self.async_show_form(
