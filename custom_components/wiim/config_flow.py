@@ -229,8 +229,6 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Store data for discovery confirmation
         self.data = {CONF_HOST: host, "name": device_name}
-        self.context["title_placeholders"] = {"name": device_name}
-        _LOGGER.warning("🔍 ZEROCONF DISCOVERY set title_placeholders: %s", {"name": device_name})
         return await self.async_step_discovery_confirm()
 
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
@@ -262,8 +260,6 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Store data for discovery confirmation
         self.data = {CONF_HOST: host, "name": device_name}
-        self.context["title_placeholders"] = {"name": device_name}
-        _LOGGER.warning("🔍 SSDP DISCOVERY set title_placeholders: %s", {"name": device_name})
         return await self.async_step_discovery_confirm()
 
     async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> FlowResult:
@@ -293,9 +289,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Store data for discovery confirmation
         self.data = {CONF_HOST: host, "name": final_name}
-        self.context["title_placeholders"] = {"name": final_name}
 
-        _LOGGER.warning("🔍 INTEGRATION DISCOVERY set title_placeholders: %s", {"name": final_name})
+        _LOGGER.warning("🔍 INTEGRATION DISCOVERY completed for %s at %s", final_name, host)
         _LOGGER.info("Integration discovery completed for %s at %s", final_name, host)
         return await self.async_step_discovery_confirm()
 
@@ -306,6 +301,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 title=self.data["name"],
                 data={CONF_HOST: self.data[CONF_HOST]},
             )
+
+        # Set title placeholders here where the UI actually processes them
+        self.context["title_placeholders"] = {"name": self.data["name"]}
+        _LOGGER.warning("🔍 DISCOVERY CONFIRM set title_placeholders: %s", {"name": self.data["name"]})
 
         self._set_confirm_only()
         return self.async_show_form(
