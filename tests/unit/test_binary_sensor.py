@@ -6,7 +6,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wiim.const import DOMAIN
 
-from .const import MOCK_CONFIG, MOCK_DEVICE_DATA
+from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 
 async def test_binary_sensor_setup(hass: HomeAssistant, bypass_get_data) -> None:

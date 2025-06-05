@@ -7,7 +7,7 @@ from custom_components.wiim import DOMAIN
 from custom_components.wiim.api import WiiMError
 from custom_components.wiim.coordinator import WiiMCoordinator
 
-from .const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
+from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
 async def test_coordinator_initialization(hass: HomeAssistant, mock_wiim_client) -> None:

@@ -8,7 +8,7 @@ import pytest
 
 from custom_components.wiim.api import WiiMClient
 
-from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
+from tests.const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
 @pytest.mark.asyncio

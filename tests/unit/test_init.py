@@ -9,7 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wiim.const import DOMAIN
 
-from .const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
+from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
 # Removed test_setup_entry_successful and test_unload_entry as they test
