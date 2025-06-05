@@ -33,7 +33,7 @@ DOMAIN = "wiim"
 
 # Integration metadata
 NAME = "WiiM"
-VERSION = "1.0.10"
+VERSION = "1.0.11"
 ATTRIBUTION = "Integration created by Michael Cumming @mjcumming"
 
 # Config keys
