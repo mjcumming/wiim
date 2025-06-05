@@ -239,7 +239,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_discovery(self, discovery_info: dict[str, Any] | None = None) -> FlowResult:
         """Handle automatic discovery of WiiM devices."""
         errors: dict[str, str] = {}
 
@@ -247,12 +247,12 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Perform discovery
             self._discovered_hosts = await self._discover_upnp_hosts()
 
-        if user_input is not None:
-            if "no_devices_manual" in user_input:
+        if discovery_info is not None:
+            if "no_devices_manual" in discovery_info:
                 # User wants manual entry after discovery found nothing
                 return await self.async_step_manual()
 
-            selected = user_input[CONF_HOST]
+            selected = discovery_info[CONF_HOST]
 
             # Check if user selected manual entry from the dropdown
             if selected == "📝 Enter IP address manually":
