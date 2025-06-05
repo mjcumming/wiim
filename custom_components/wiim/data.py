@@ -1309,6 +1309,8 @@ class Speaker:
 
     def _append_cache_bust(self, url: str) -> str:
         """Append cache-busting query param using artwork version."""
+        if self._artwork_version == 0:
+            return url
         sep = "&" if "?" in url else "?"
         return f"{url}{sep}v={self._artwork_version}"
 

@@ -59,6 +59,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # HA convention: Use device name as entity name
         self._attr_name = None
 
+        # Override unique_id to match raw speaker UUID (tests expect this)
+        self._attr_unique_id = self.speaker.uuid
+
         _LOGGER.debug(
             "WiiMMediaPlayer initialized for %s with controller delegation",
             speaker.name,
