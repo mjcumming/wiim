@@ -146,7 +146,7 @@ class Speaker:
         # The primary UUID should come from the config_entry's unique_id,
         # which was set during config flow from the device's API.
         # This ensures the Speaker's UUID is the one Home Assistant uses for tracking.
-        self._uuid: str = self.config_entry.unique_id
+        self._uuid: str = self.config_entry.unique_id or ""
         if not self._uuid:
             # This should not happen if config flow is correct
             _LOGGER.error(
@@ -488,7 +488,7 @@ class Speaker:
         """
         # Initialize _last_track_metadata if it doesn't exist
         if not hasattr(self, "_last_track_metadata"):
-            self._last_track_metadata = {}
+            self._last_track_metadata: dict[str, Any] = {}
 
         # Extract current track info from both metadata and status
         current_metadata = {}
@@ -553,7 +553,7 @@ class Speaker:
 
         # Initialize missing slaves tracking if not already present
         if not hasattr(self, "_missing_slaves_reported"):
-            self._missing_slaves_reported = set()
+            self._missing_slaves_reported: set[str] = set()
 
         slave_list = multiroom.get("slave_list", [])
         slave_count = multiroom.get("slave_count", 0)

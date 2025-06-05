@@ -639,7 +639,7 @@ class WiiMClient:
         _LOGGER.debug("[WiiM] Preparing %s to become multiroom master (no API command needed)", self.host)
 
         # Update internal state optimistically - device will become master when slaves join
-        self._group_master = True
+        self._group_master = self.host  # Set to own IP when becoming master
         self._group_slaves = []  # Will be populated when slaves actually join
 
         _LOGGER.debug("[WiiM] %s prepared as potential multiroom master", self.host)

@@ -54,7 +54,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._eq_supported: bool | None = None
 
         # Device state tracking
-        self._last_status = {}
+        self._last_status: dict[str, Any] = {}
         self._consecutive_failures = 0
         self._device_info = None
 
@@ -166,7 +166,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Prepare polling data for diagnostic sensors
             polling_data = {
-                "interval": self.update_interval.total_seconds(),
+                "interval": self.update_interval.total_seconds() if self.update_interval else 0,
                 "is_playing": (player_status.get("play_status") or player_status.get("status", "")).lower() == "play",
                 "api_capabilities": {
                     "statusex_supported": self._statusex_supported,
