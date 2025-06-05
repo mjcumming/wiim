@@ -88,22 +88,76 @@ __all__ = [
 class WiimData:
     """Central registry for all WiiM speakers (like SonosData).
 
-    Enhanced with bidirectional entity mapping for O(1) performance.
+    Enhanced with comprehensive O(1) lookups for UUID, IP, and entity_id.
     """
 
     hass: HomeAssistant
-    speakers: dict[str, Speaker] = field(default_factory=dict)
-    entity_id_mappings: dict[str, Speaker] = field(default_factory=dict)
-    speaker_to_entity_mappings: dict[Speaker, str] = field(default_factory=dict)
+    speakers: dict[str, Speaker] = field(default_factory=dict)  # UUID -> Speaker
+    entity_id_mappings: dict[str, Speaker] = field(default_factory=dict)  # entity_id -> Speaker
+    speaker_to_entity_mappings: dict[Speaker, str] = field(default_factory=dict)  # Speaker -> entity_id
+    ip_mappings: dict[str, Speaker] = field(default_factory=dict)  # IP -> Speaker (NEW)
     discovery_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
+    def get_speaker_by_uuid(self, uuid: str) -> Speaker | None:
+        """Find speaker by UUID (O(1) lookup).
+
+        This is the primary key lookup since speakers dict is keyed by UUID.
+        """
+        return self.speakers.get(uuid)
+
     def get_speaker_by_ip(self, ip: str) -> Speaker | None:
-        """Find speaker by IP address."""
-        return next((s for s in self.speakers.values() if s.ip_address == ip), None)
+        """Find speaker by IP address (O(1) lookup)."""
+        return self.ip_mappings.get(ip)
 
     def get_speaker_by_entity_id(self, entity_id: str) -> Speaker | None:
-        """Find speaker by entity ID."""
+        """Find speaker by entity ID (O(1) lookup)."""
         return self.entity_id_mappings.get(entity_id)
+
+    def register_speaker(self, speaker: Speaker) -> None:
+        """Register speaker with all lookup indices.
+
+        Ensures consistent cross-referencing between UUID, IP, and entity_id.
+        """
+        uuid = speaker.uuid
+        ip = speaker.ip_address
+
+        # Primary storage by UUID
+        self.speakers[uuid] = speaker
+
+        # IP address mapping for multiroom lookups
+        if ip:
+            # Remove old IP mapping if speaker IP changed
+            old_ip = None
+            for existing_ip, existing_speaker in self.ip_mappings.items():
+                if existing_speaker is speaker and existing_ip != ip:
+                    old_ip = existing_ip
+                    break
+            if old_ip:
+                self.ip_mappings.pop(old_ip, None)
+                _LOGGER.debug("Updated IP mapping for %s: %s -> %s", speaker.name, old_ip, ip)
+
+            self.ip_mappings[ip] = speaker
+
+        _LOGGER.debug("Registered speaker %s: UUID=%s, IP=%s", speaker.name, uuid, ip)
+
+    def unregister_speaker(self, speaker: Speaker) -> None:
+        """Remove speaker from all lookup indices."""
+        uuid = speaker.uuid
+        ip = speaker.ip_address
+
+        # Remove from primary storage
+        self.speakers.pop(uuid, None)
+
+        # Remove IP mapping
+        if ip:
+            self.ip_mappings.pop(ip, None)
+
+        # Remove entity mapping
+        entity_id = self.speaker_to_entity_mappings.pop(speaker, None)
+        if entity_id:
+            self.entity_id_mappings.pop(entity_id, None)
+
+        _LOGGER.debug("Unregistered speaker %s: UUID=%s, IP=%s", speaker.name, uuid, ip)
 
     def register_entity(self, entity_id: str, speaker: Speaker) -> None:
         """Register bidirectional entity ID to Speaker mapping."""
@@ -119,6 +173,49 @@ class WiimData:
     def get_entity_id_for_speaker(self, speaker: Speaker) -> str | None:
         """Get entity ID for speaker (O(1) lookup)."""
         return self.speaker_to_entity_mappings.get(speaker)
+
+    def validate_speaker_mappings(self) -> dict[str, list[str]]:
+        """Validate all speaker mappings for consistency.
+
+        Returns dict of issues found for debugging.
+        """
+        issues = {"missing_ip_mappings": [], "orphaned_ip_mappings": [], "inconsistent_entity_mappings": []}
+
+        # Check that all speakers have IP mappings
+        for uuid, speaker in self.speakers.items():
+            if speaker.ip_address and speaker.ip_address not in self.ip_mappings:
+                issues["missing_ip_mappings"].append(f"{speaker.name} ({uuid}) missing IP {speaker.ip_address}")
+
+        # Check for orphaned IP mappings
+        for ip, speaker in self.ip_mappings.items():
+            if speaker.uuid not in self.speakers:
+                issues["orphaned_ip_mappings"].append(f"IP {ip} -> orphaned speaker {speaker.name}")
+
+        # Check entity mapping consistency
+        for entity_id, speaker in self.entity_id_mappings.items():
+            if self.speaker_to_entity_mappings.get(speaker) != entity_id:
+                issues["inconsistent_entity_mappings"].append(
+                    f"Entity {entity_id} -> {speaker.name} mapping inconsistency"
+                )
+
+        return issues
+
+    def update_speaker_ip(self, speaker: Speaker, new_ip: str) -> None:
+        """Update speaker's IP address and refresh lookup indices."""
+        old_ip = speaker.ip_address
+
+        # Remove old IP mapping
+        if old_ip and old_ip in self.ip_mappings:
+            self.ip_mappings.pop(old_ip, None)
+
+        # Update speaker's IP
+        speaker.ip_address = new_ip
+
+        # Add new IP mapping
+        if new_ip:
+            self.ip_mappings[new_ip] = speaker
+
+        _LOGGER.debug("Updated speaker %s IP mapping: %s -> %s", speaker.name, old_ip, new_ip)
 
 
 class Speaker:
@@ -192,6 +289,11 @@ class Speaker:
         """
         await self._populate_device_info()
         await self._register_ha_device(entry)
+
+        # Ensure speaker is properly registered in all lookup indices
+        wiim_data = get_wiim_data(self.hass)
+        wiim_data.register_speaker(self)
+
         _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
     def _extract_device_name(self, status: dict) -> str:
@@ -608,7 +710,7 @@ class Speaker:
             # Try to find slave by UUID first, then by IP
             slave_speaker = None
             if slave_uuid:
-                slave_speaker = wiim_data.speakers.get(slave_uuid)
+                slave_speaker = wiim_data.get_speaker_by_uuid(slave_uuid)
                 _LOGGER.debug(
                     "Master %s UUID lookup for '%s': %s",
                     self.name,
@@ -747,10 +849,10 @@ class Speaker:
 
         # Try to find master by UUID first - with case-insensitive matching
         if master_uuid:
-            # Direct match first
-            master_speaker = wiim_data.speakers.get(master_uuid)
+            # Use new O(1) UUID lookup
+            master_speaker = wiim_data.get_speaker_by_uuid(master_uuid)
             _LOGGER.debug(
-                "Direct UUID lookup result for '%s': %s",
+                "UUID lookup result for '%s': %s",
                 master_uuid,
                 master_speaker.name if master_speaker else "Not found",
             )
@@ -1512,6 +1614,7 @@ def get_or_create_speaker(hass: HomeAssistant, coordinator: WiiMCoordinator, con
     if uuid is None:
         raise ValueError(f"Config entry {config_entry.entry_id} has no unique_id")
     if uuid not in data.speakers:
-        data.speakers[uuid] = Speaker(hass, coordinator, config_entry)
+        speaker = Speaker(hass, coordinator, config_entry)
+        data.register_speaker(speaker)  # Use new registration method
         _LOGGER.debug("Created new speaker: %s", uuid)
     return data.speakers[uuid]

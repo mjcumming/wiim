@@ -24,6 +24,15 @@ class TestWiimData:
         assert "test-speaker-uuid" in wiim_data.speakers
         assert wiim_data.speakers["test-speaker-uuid"] is wiim_speaker
 
+    def test_get_speaker_by_uuid(self, wiim_data, wiim_speaker):
+        """Test UUID-based speaker lookup."""
+        result = wiim_data.get_speaker_by_uuid("test-speaker-uuid")
+        assert result is wiim_speaker
+
+        # Test non-existent UUID
+        result = wiim_data.get_speaker_by_uuid("non-existent-uuid")
+        assert result is None
+
     def test_get_speaker_by_ip(self, wiim_data, wiim_speaker):
         """Test IP-based speaker lookup."""
         result = wiim_data.get_speaker_by_ip("192.168.1.100")
@@ -61,7 +70,7 @@ class TestSpeaker:
         """Test Speaker property access."""
         assert wiim_speaker.name == "Test WiiM"
         assert wiim_speaker.model == "WiiM Mini"
-        assert wiim_speaker.ip == "192.168.1.100"
+        assert wiim_speaker.ip_address == "192.168.1.100"
         assert wiim_speaker.available is True
 
     @pytest.mark.asyncio
@@ -72,7 +81,7 @@ class TestSpeaker:
 
         assert wiim_speaker.name == "Test WiiM"
         assert wiim_speaker.model == "WiiM Mini"
-        assert wiim_speaker.ip == "192.168.1.100"
+        assert wiim_speaker.ip_address == "192.168.1.100"
         assert wiim_speaker.mac_address == "aa:bb:cc:dd:ee:ff"  # Normalized format with colons
         assert wiim_speaker.firmware == "1.0.0"
         assert wiim_speaker.role == "solo"

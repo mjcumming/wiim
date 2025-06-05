@@ -102,13 +102,13 @@ def wiim_speaker(hass, wiim_coordinator, wiim_data):
     config_entry.title = "Test WiiM"
 
     speaker = Speaker(hass, wiim_coordinator, config_entry)
-    speaker.ip = "192.168.1.100"
+    speaker.ip_address = "192.168.1.100"  # Use correct attribute name
     speaker.name = "Test WiiM"
     speaker.model = "WiiM Mini"
     speaker.role = "solo"
 
-    # Add to registry
-    wiim_data.speakers["test-speaker-uuid"] = speaker
+    # Add to registry using new registration method
+    wiim_data.register_speaker(speaker)
     hass.data = {"wiim": {"data": wiim_data}}
 
     return speaker
@@ -143,13 +143,13 @@ def wiim_speaker_slave(hass, wiim_data):
     config_entry.title = "Test Slave"
 
     speaker = Speaker(hass, slave_coordinator, config_entry)
-    speaker.ip = "192.168.1.101"
+    speaker.ip_address = "192.168.1.101"  # Use correct attribute name
     speaker.name = "Test Slave"
     speaker.model = "WiiM Pro"
     speaker.role = "slave"
 
-    # Add to registry
-    wiim_data.speakers["test-slave-uuid"] = speaker
+    # Add to registry using new registration method
+    wiim_data.register_speaker(speaker)
 
     return speaker
 
