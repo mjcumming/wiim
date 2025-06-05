@@ -1,7 +1,6 @@
 {
-  "title": "WiiM Audio (LinkPlay)",
   "config": {
-    "flow_title": "Legg til WiiM-høyttaler",
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "🎵 Legg til WiiM-høyttaler",

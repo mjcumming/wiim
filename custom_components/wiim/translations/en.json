@@ -1,5 +1,4 @@
 {
-  "title": "WiiM Audio (LinkPlay)",
   "config": {
     "flow_title": "{name}",
     "step": {
