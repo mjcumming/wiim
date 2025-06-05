@@ -3,26 +3,38 @@
     "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "🎵 Ajouter un haut-parleur WiiM",
-        "description": "Entrez l'adresse IP de votre appareil WiiM. Vous pouvez la trouver dans le panneau d'administration de votre routeur ou dans l'application WiiM Home sous Paramètres de l'appareil → Informations réseau.",
+        "description": "Saisissez l'adresse IP de votre appareil WiiM. Vous pouvez la trouver dans le panneau d'administration de votre routeur ou dans l'application WiiM Home sous Paramètres de l'appareil → Infos réseau.",
         "data": {
           "host": "Adresse IP de l'appareil"
         }
       },
+      "manual": {
+        "title": "Ajouter un appareil WiiM",
+        "description": "Saisissez l'adresse IP de votre appareil WiiM.\n\nVous pouvez la trouver dans :\n• Le panneau d'administration de votre routeur\n• Application WiiM Home → Paramètres → Infos réseau\n• Applications de scan réseau\n\nExemple : {example_ip}",
+        "data": {
+          "host": "Adresse IP de l'appareil"
+        }
+      },
+      "discovery": {
+        "description": "{count} appareil(s) WiiM trouvé(s). Sélectionnez un appareil à ajouter :",
+        "data": {
+          "host": "Appareil"
+        }
+      },
       "discovery_confirm": {
-        "title": "🎵 Haut-parleur WiiM découvert",
-        "description": "Souhaitez-vous configurer {name} ?",
-        "data": {}
+        "title": "Ajouter {name} ?",
+        "description": "Voulez-vous ajouter cet appareil WiiM à Home Assistant ?\n\nAppareil : **{name}**"
       }
     },
     "error": {
-      "no_host": "Veuillez entrer une adresse IP valide",
-      "cannot_connect": "❌ Échec de la connexion. Veuillez vérifier que l'adresse IP est correcte et que votre appareil WiiM est allumé et connecté au même réseau que Home Assistant.",
-      "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer ou consulter les journaux de Home Assistant pour plus de détails."
+      "cannot_connect": "Impossible de se connecter à l'appareil WiiM. Veuillez vérifier :\n• L'adresse IP est correcte\n• L'appareil est allumé\n• L'appareil est connecté à votre réseau\n• Aucun pare-feu ne bloque la connexion",
+      "invalid_host": "Format d'adresse IP invalide",
+      "no_host": "Aucune adresse IP d'appareil fournie"
     },
     "abort": {
-      "already_configured": "Cet appareil WiiM est déjà configuré dans Home Assistant",
-      "no_host": "Aucun hôte valide trouvé dans les informations de découverte"
+      "already_configured": "Cet appareil WiiM est déjà configuré",
+      "cannot_connect": "Impossible de se connecter à l'appareil",
+      "no_host": "Aucun appareil trouvé"
     }
   },
   "options": {

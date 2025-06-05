@@ -3,26 +3,38 @@
     "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "🎵 Add WiiM Speaker",
         "description": "Enter your WiiM device's IP address. You can find this in your router's admin panel or the WiiM Home app under Device Settings → Network Info.",
         "data": {
           "host": "Device IP Address"
         }
       },
+      "manual": {
+        "title": "Add WiiM Device",
+        "description": "Enter your WiiM device's IP address.\n\nYou can find this in:\n• Your router's admin panel\n• WiiM Home app → Device Settings → Network Info\n• Network scanner apps\n\nExample: {example_ip}",
+        "data": {
+          "host": "Device IP Address"
+        }
+      },
+      "discovery": {
+        "description": "Found {count} WiiM device(s). Select a device to add:",
+        "data": {
+          "host": "Device"
+        }
+      },
       "discovery_confirm": {
-        "title": "🎵 WiiM Speaker Discovered",
-        "description": "Do you want to set up {name}?",
-        "data": {}
+        "title": "Add {name}?",
+        "description": "Do you want to add this WiiM device to Home Assistant?\n\nDevice: **{name}**"
       }
     },
     "error": {
-      "no_host": "Please enter a valid IP address",
-      "cannot_connect": "❌ Connection failed. Please check that the IP address is correct and your WiiM device is powered on and connected to the same network as Home Assistant.",
-      "unknown": "An unexpected error occurred. Please try again or check the Home Assistant logs for details."
+      "cannot_connect": "Unable to connect to the WiiM device. Please check:\n• IP address is correct\n• Device is powered on\n• Device is connected to your network\n• No firewall blocking the connection",
+      "invalid_host": "Invalid IP address format",
+      "no_host": "No device IP address provided"
     },
     "abort": {
-      "already_configured": "This WiiM device is already configured in Home Assistant",
-      "no_host": "No valid host found in discovery information"
+      "already_configured": "This WiiM device is already configured",
+      "cannot_connect": "Cannot connect to device",
+      "no_host": "No device found"
     }
   },
   "options": {

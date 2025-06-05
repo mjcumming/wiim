@@ -87,23 +87,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return WiiMOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # type: ignore[override]
-        """Handle user-initiated setup."""
-        if user_input is not None:
-            if user_input.get("setup_mode") == "manual":
-                return await self.async_step_manual()
-            else:
-                return await self.async_step_discovery()
-
-        # Show setup method choice
-        schema = vol.Schema(
-            {
-                vol.Required("setup_mode", default="discovery"): vol.In(
-                    {"discovery": "Automatic discovery", "manual": "Manual IP entry"}
-                )
-            }
-        )
-
-        return self.async_show_form(step_id="user", data_schema=schema)
+        """Handle user-initiated setup - go straight to manual entry."""
+        # Skip the setup mode choice and go directly to manual entry
+        # since autodiscovery often fails and manual is more reliable
+        return await self.async_step_manual()
 
     async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle automatic discovery."""
@@ -161,7 +148,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_manual()
 
     async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle manual IP entry."""
+        """Handle manual IP entry with improved UX."""
         errors = {}
 
         if user_input is not None:
@@ -177,8 +164,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 errors["base"] = "cannot_connect"
 
-        schema = vol.Schema({vol.Required(CONF_HOST): str})
-        return self.async_show_form(step_id="manual", data_schema=schema, errors=errors)
+        schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of your WiiM device"): str})
+
+        return self.async_show_form(
+            step_id="manual",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"example_ip": "192.168.1.100"},
+        )
 
     async def _discover_devices(self) -> dict[str, str]:
         """Discover WiiM devices via UPnP."""

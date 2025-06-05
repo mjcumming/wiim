@@ -3,26 +3,38 @@
     "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "🎵 Legg til WiiM-høyttaler",
         "description": "Skriv inn IP-adressen til WiiM-enheten din. Du finner denne i ruterens administrasjonspanel eller i WiiM Home-appen under Enhetsinnstillinger → Nettverksinformasjon.",
         "data": {
           "host": "Enhets IP-adresse"
         }
       },
+      "manual": {
+        "title": "Legg til WiiM-enhet",
+        "description": "Skriv inn IP-adressen til WiiM-enheten din.\n\nDu finner denne i:\n• Ruterens administrasjonspanel\n• WiiM Home-app → Enhetsinnstillinger → Nettverksinformasjon\n• Nettverksskanner-apper\n\nEksempel: {example_ip}",
+        "data": {
+          "host": "Enhets IP-adresse"
+        }
+      },
+      "discovery": {
+        "description": "Fant {count} WiiM-enhet(er). Velg en enhet å legge til:",
+        "data": {
+          "host": "Enhet"
+        }
+      },
       "discovery_confirm": {
-        "title": "🎵 WiiM-høyttaler oppdaget",
-        "description": "Ønsker du å sette opp {name}?",
-        "data": {}
+        "title": "Legg til {name}?",
+        "description": "Vil du legge til denne WiiM-enheten i Home Assistant?\n\nEnhet: **{name}**"
       }
     },
     "error": {
-      "no_host": "Vennligst skriv inn en gyldig IP-adresse",
-      "cannot_connect": "❌ Tilkobling mislyktes. Kontroller at IP-adressen er riktig og at WiiM-enheten er påslått og koblet til samme nettverk som Home Assistant.",
-      "unknown": "En uventet feil oppstod. Prøv igjen eller sjekk Home Assistant-loggene for detaljer."
+      "cannot_connect": "Kan ikke koble til WiiM-enheten. Sjekk følgende:\n• IP-adressen er riktig\n• Enheten er slått på\n• Enheten er koblet til nettverket ditt\n• Ingen brannmur blokkerer tilkoblingen",
+      "invalid_host": "Ugyldig IP-adresse format",
+      "no_host": "Ingen enhets IP-adresse oppgitt"
     },
     "abort": {
-      "already_configured": "Denne WiiM-enheten er allerede konfigurert i Home Assistant",
-      "no_host": "Ingen gyldig vert funnet i oppdagelsesinformasjon"
+      "already_configured": "Denne WiiM-enheten er allerede konfigurert",
+      "cannot_connect": "Kan ikke koble til enheten",
+      "no_host": "Ingen enhet funnet"
     }
   },
   "options": {
