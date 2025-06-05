@@ -551,6 +551,10 @@ class Speaker:
         """
         _LOGGER.debug("=== MASTER GROUP STATE UPDATE START for %s ===", self.name)
 
+        # Initialize missing slaves tracking if not already present
+        if not hasattr(self, "_missing_slaves_reported"):
+            self._missing_slaves_reported = set()
+
         slave_list = multiroom.get("slave_list", [])
         slave_count = multiroom.get("slave_count", 0)
         slaves_field = multiroom.get("slaves", [])
@@ -626,7 +630,7 @@ class Speaker:
 
                 # Clear from missing slaves tracking since we found it
                 missing_slave_key = f"{slave_ip}:{slave_uuid}"
-                if hasattr(self, "_missing_slaves_reported") and missing_slave_key in self._missing_slaves_reported:
+                if missing_slave_key in self._missing_slaves_reported:
                     self._missing_slaves_reported.discard(missing_slave_key)
                     _LOGGER.debug("Cleared missing slave tracking for %s - now found in registry", slave_name)
 
@@ -654,8 +658,6 @@ class Speaker:
             else:
                 # Track missing slaves to avoid spam logging and repeated discovery attempts
                 missing_slave_key = f"{slave_ip}:{slave_uuid}"
-                if not hasattr(self, "_missing_slaves_reported"):
-                    self._missing_slaves_reported = set()
 
                 if missing_slave_key not in self._missing_slaves_reported:
                     _LOGGER.warning(
