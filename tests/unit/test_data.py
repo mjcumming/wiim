@@ -55,6 +55,36 @@ class TestWiimData:
         result = wiim_data.get_speaker_by_entity_id("media_player.nonexistent")
         assert result is None
 
+    def test_validate_speaker_mappings(self, wiim_data, wiim_speaker):
+        """Test speaker mapping validation."""
+        # Should have no issues since speaker is properly registered
+        issues = wiim_data.validate_speaker_mappings()
+        assert len(issues["missing_ip_mappings"]) == 0
+        assert len(issues["orphaned_ip_mappings"]) == 0
+        assert len(issues["inconsistent_entity_mappings"]) == 0
+
+    def test_register_speaker_updates_ip_mapping(self, wiim_data, hass, wiim_coordinator):
+        """Test that registering a speaker updates IP mappings correctly."""
+        from custom_components.wiim.data import Speaker
+        from homeassistant.config_entries import ConfigEntry
+
+        # Create a new speaker with different IP
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "new-speaker-uuid"
+        config_entry.data = {"host": "192.168.1.200"}
+        config_entry.title = "New Speaker"
+
+        speaker = Speaker(hass, wiim_coordinator, config_entry)
+        speaker.ip_address = "192.168.1.200"
+
+        # Register speaker
+        wiim_data.register_speaker(speaker)
+
+        # Verify all lookups work
+        assert wiim_data.get_speaker_by_uuid("new-speaker-uuid") is speaker
+        assert wiim_data.get_speaker_by_ip("192.168.1.200") is speaker
+        assert "new-speaker-uuid" in wiim_data.speakers
+
 
 class TestSpeaker:
     """Test Speaker class functionality."""
