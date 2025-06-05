@@ -1126,6 +1126,14 @@ class Speaker:
         if text_lower in garbage_patterns:
             return False
 
+        # Filter out "wiim" followed by IP address with spaces (e.g., "wiim 192 168 1 68")
+        if text_lower.startswith("wiim "):
+            remainder = text_lower[5:].strip()
+            # Check if it looks like an IP with spaces (4 numbers separated by spaces)
+            parts = remainder.split()
+            if len(parts) == 4 and all(part.isdigit() and 0 <= int(part) <= 255 for part in parts):
+                return False
+
         # Filter out UUID-like patterns (wiim + hex string)
         if text_lower.startswith("wiim ") and len(text_lower) > 20:
             uuid_part = text_lower[5:].strip()
