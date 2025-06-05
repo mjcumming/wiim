@@ -120,45 +120,113 @@ async def _async_validate_host(host: str) -> None:
 
 
 async def _get_enhanced_device_name(client: WiiMClient, fallback_host: str) -> str:
-    """Get device name with role information for better identification during setup."""
+    """Get device name with role information for better identification during setup.
+
+    Enhanced to extract the best possible user-friendly device name from multiple API sources.
+    This matches the quality of device naming seen in the LinkPlay integration.
+    """
     device_name = fallback_host  # fallback to IP/host
 
     # Try multiple endpoints to get the best device name
     try:
+        # First try getStatusEx which has the most comprehensive device info
         status_info = await client.get_status()
-        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
 
-        # Check if device is a group master and enhance the name accordingly
-        try:
-            multiroom_info = await client.get_multiroom_info()
-            slave_list = multiroom_info.get("slave_list", [])
+        # Priority order for device name extraction (user-friendly names first):
+        # 1. DeviceName - Primary device name set by user
+        # 2. device_name - Alternative device name field
+        # 3. ssid - Device hotspot/WiFi name (often user-friendly like "Main Floor Speakers")
+        # 4. friendlyName - UPnP friendly name
+        # 5. name - Generic name field
 
-            # If device has slaves, it's a master - add master indicator
-            if slave_list and len(slave_list) > 0:
-                slave_count = len(slave_list)
-                device_name = f"{device_name} (Master of {slave_count} device{'s' if slave_count != 1 else ''})"
-                _LOGGER.debug(
-                    "Enhanced name for master device %s: %s with %d slaves", fallback_host, device_name, slave_count
-                )
-            # Check for slave status using multiroom type
-            elif str(multiroom_info.get("type")) == "1":
-                # This is a slave device - could enhance with master info but keep it simple for setup
-                device_name = f"{device_name} (In Group)"
-                _LOGGER.debug("Enhanced name for slave device %s: %s", fallback_host, device_name)
+        potential_names = [
+            status_info.get("DeviceName"),
+            status_info.get("device_name"),
+            status_info.get("ssid"),  # This often contains user-friendly names!
+            status_info.get("friendlyName"),
+            status_info.get("name"),
+        ]
 
-        except WiiMError:
-            # Multiroom info not available, use basic name
-            pass
+        # Find the first non-empty, meaningful name
+        for name_candidate in potential_names:
+            if name_candidate and str(name_candidate).strip():
+                # Clean up the name
+                clean_name = str(name_candidate).strip()
+
+                # Skip empty, generic, or IP-like names
+                if (
+                    clean_name
+                    and clean_name.lower() not in ["unknown", "none", "", "wiim", "linkplay"]
+                    and not clean_name.replace(".", "").replace(":", "").isdigit()  # Skip IP addresses
+                    and len(clean_name) > 1
+                ):
+                    device_name = clean_name
+                    _LOGGER.debug(
+                        "Found good device name from field: %s = '%s'",
+                        potential_names.index(name_candidate),
+                        device_name,
+                    )
+                    break
+
+        # If we got a good name, enhance it with group role information
+        if device_name != fallback_host:
+            try:
+                multiroom_info = await client.get_multiroom_info()
+                slave_list = multiroom_info.get("slave_list", [])
+
+                # If device has slaves, it's a master - add master indicator
+                if slave_list and len(slave_list) > 0:
+                    slave_count = len(slave_list)
+                    device_name = f"{device_name} (Master of {slave_count} device{'s' if slave_count != 1 else ''})"
+                    _LOGGER.debug(
+                        "Enhanced master device name %s -> %s with %d slaves", fallback_host, device_name, slave_count
+                    )
+                # Check for slave status using multiroom type
+                elif str(multiroom_info.get("type")) == "1":
+                    # This is a slave device - keep it simple for setup
+                    device_name = f"{device_name} (In Group)"
+                    _LOGGER.debug("Enhanced slave device name %s -> %s", fallback_host, device_name)
+
+            except WiiMError:
+                # Multiroom info not available, use basic name
+                pass
 
     except WiiMError:
-        # get_status failed, try get_device_info
+        # get_status failed, try get_device_info as fallback
         try:
             device_info = await client.get_device_info()
-            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+
+            # Same priority extraction from device_info
+            potential_names = [
+                device_info.get("DeviceName"),
+                device_info.get("device_name"),
+                device_info.get("ssid"),
+                device_info.get("friendlyName"),
+                device_info.get("name"),
+            ]
+
+            for name_candidate in potential_names:
+                if name_candidate and str(name_candidate).strip():
+                    clean_name = str(name_candidate).strip()
+                    if (
+                        clean_name
+                        and clean_name.lower() not in ["unknown", "none", "", "wiim", "linkplay"]
+                        and not clean_name.replace(".", "").replace(":", "").isdigit()
+                        and len(clean_name) > 1
+                    ):
+                        device_name = clean_name
+                        _LOGGER.debug("Found fallback device name: %s", device_name)
+                        break
+
         except WiiMError:
             # Both failed, stick with fallback
-            pass
+            _LOGGER.debug("All device name extraction methods failed for %s, using host as name", fallback_host)
 
+    # If we still have the fallback host, make it more user-friendly
+    if device_name == fallback_host:
+        device_name = f"WiiM Speaker ({fallback_host})"
+
+    _LOGGER.info("Final device name for %s: '%s'", fallback_host, device_name)
     return device_name
 
 

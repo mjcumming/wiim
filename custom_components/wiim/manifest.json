@@ -10,6 +10,7 @@
   "issue_tracker": "https://github.com/gryzznaut/ha-wiim/issues",
   "quality_scale": "gold",
   "requirements": ["aiohttp"],
+  "icon": "mdi:speaker-wireless",
   "ssdp": [
     {
       "manufacturer": "WiiM",
@@ -37,6 +38,6 @@
       "st": "urn:schemas-upnp-org:service:ConnectionManager:1"
     }
   ],
-  "version": "1.0.11",
+  "version": "1.0.12",
   "zeroconf": [{ "type": "_linkplay._tcp.local." }]
 }
