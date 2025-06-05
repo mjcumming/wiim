@@ -63,10 +63,17 @@ def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
 
-    # Create central data registry
+    # Create central data registry ONLY if it doesn't exist
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
-    hass.data[DOMAIN]["data"] = WiimData(hass)
+
+    # CRITICAL FIX: Only create WiimData if it doesn't exist
+    # This prevents wiping out existing speaker registrations during auto-discovery
+    if "data" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["data"] = WiimData(hass)
+        _LOGGER.debug("Created new WiimData registry")
+    else:
+        _LOGGER.debug("Reusing existing WiimData registry with %d speakers", len(hass.data[DOMAIN]["data"].speakers))
 
     # Create client and coordinator
     session = async_get_clientsession(hass)
