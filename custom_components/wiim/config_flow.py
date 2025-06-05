@@ -227,6 +227,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except AbortFlow:
                 # Let abort exceptions pass through (for already_configured, etc.)
                 raise
+            except TimeoutError:
+                _LOGGER.error("[WiiM] Timeout error during manual config for %s", host)
+                errors["base"] = "timeout"
             except Exception as e:
                 _LOGGER.error("[WiiM] Error during manual config: %s", e)
                 errors["base"] = "unknown"
