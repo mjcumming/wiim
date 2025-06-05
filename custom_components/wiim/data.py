@@ -1064,91 +1064,40 @@ class Speaker:
     # ===== MEDIA METADATA METHODS =====
 
     def get_media_title(self) -> str | None:
-        """Get current track title with garbage text filtering."""
+        """Get current track title."""
         if not self.coordinator.data:
             return None
         status = self.coordinator.data.get("status", {})
         title = status.get("title") or status.get("Title") or status.get("track_name")
 
-        # Filter out garbage text that shouldn't be displayed
-        if title and self._is_valid_media_text(title):
-            return title
+        # Only return meaningful titles, not garbage
+        if title and len(title.strip()) > 3 and not title.lower().startswith("wiim"):
+            return title.strip()
         return None
 
     def get_media_artist(self) -> str | None:
-        """Get current artist name with garbage text filtering."""
+        """Get current artist name."""
         if not self.coordinator.data:
             return None
         status = self.coordinator.data.get("status", {})
         artist = status.get("artist") or status.get("Artist") or status.get("track_artist")
 
-        # Filter out garbage text that shouldn't be displayed
-        if artist and self._is_valid_media_text(artist):
-            return artist
+        # Only return meaningful artists, not garbage
+        if artist and len(artist.strip()) > 3 and not artist.lower().startswith("wiim"):
+            return artist.strip()
         return None
 
     def get_media_album(self) -> str | None:
-        """Get current album name with garbage text filtering."""
+        """Get current album name."""
         if not self.coordinator.data:
             return None
         status = self.coordinator.data.get("status", {})
         album = status.get("album") or status.get("Album") or status.get("track_album")
 
-        # Filter out garbage text that shouldn't be displayed
-        if album and self._is_valid_media_text(album):
-            return album
+        # Only return meaningful albums, not garbage
+        if album and len(album.strip()) > 3 and not album.lower().startswith("wiim"):
+            return album.strip()
         return None
-
-    def _is_valid_media_text(self, text: str) -> bool:
-        """Check if text is valid media information (not garbage/technical identifier).
-
-        Returns False for garbage text that shouldn't be displayed in UI.
-        """
-        if not text or not text.strip():
-            return False
-
-        text_lower = text.lower().strip()
-
-        # Filter out common garbage/placeholder text from WiiM devices
-        garbage_patterns = [
-            "unknow",  # Common WiiM garbage text
-            "unknown",
-            "n/a",
-            "none",
-            "null",
-            "undefined",
-            "default",
-            "system",
-            "device",
-            "player",
-        ]
-
-        if text_lower in garbage_patterns:
-            return False
-
-        # Filter out "wiim" followed by IP address with spaces (e.g., "wiim 192 168 1 68")
-        if text_lower.startswith("wiim "):
-            remainder = text_lower[5:].strip()
-            # Check if it looks like an IP with spaces (4 numbers separated by spaces)
-            parts = remainder.split()
-            if len(parts) == 4 and all(part.isdigit() and 0 <= int(part) <= 255 for part in parts):
-                return False
-
-        # Filter out UUID-like patterns (wiim + hex string)
-        if text_lower.startswith("wiim ") and len(text_lower) > 20:
-            uuid_part = text_lower[5:].strip()
-            if len(uuid_part) >= 20 and all(c in "0123456789abcdef" for c in uuid_part.replace("-", "")):
-                return False
-
-        # Filter out long hex strings (32+ chars of just hex)
-        if len(text_lower) >= 32 and all(c in "0123456789abcdef-" for c in text_lower):
-            return False
-
-        # Filter out very short strings that are likely technical
-        if len(text.strip()) <= 2:
-            return False
-
-        return True
 
     def get_media_duration(self) -> int | None:
         """Get track duration in seconds."""
