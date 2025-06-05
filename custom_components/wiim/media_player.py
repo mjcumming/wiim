@@ -664,12 +664,12 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # First try explicit streaming service field
         streaming_service = status.get("streaming_service")
-        if streaming_service:
+        if streaming_service and not streaming_service.lower().startswith("wiim"):
             return streaming_service
 
         # Fallback to source mapping for streaming services
         source = status.get("source")
-        if source:
+        if source and not source.lower().startswith("wiim"):
             # Map known streaming services to friendly names
             streaming_map = {
                 "spotify": "Spotify",
@@ -685,6 +685,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             if source_lower in streaming_map:
                 return streaming_map[source_lower]
 
+        # Return None instead of garbage - this will hide the field
         return None
 
     @property
