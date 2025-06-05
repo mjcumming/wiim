@@ -59,7 +59,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
@@ -1426,7 +1426,7 @@ class Speaker:
             # Check for existing flows for this device
             existing_flows = [
                 flow
-                for flow in self.hass.config_entries.flow.async_progress(DOMAIN)
+                for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN)
                 if flow.get("context", {}).get("unique_id") == uuid or flow.get("context", {}).get("unique_id") == ip
             ]
 
