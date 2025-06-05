@@ -12,7 +12,7 @@
       },
       "discovery_confirm": {
         "title": "🎵 WiiM-høyttaler oppdaget",
-        "description": "En WiiM-høyttaler ble oppdaget på {host}. Ønsker du å legge den til i Home Assistant?",
+        "description": "Ønsker du å sette opp {name}?",
         "data": {}
       }
     },

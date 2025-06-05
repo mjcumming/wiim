@@ -15,6 +15,8 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api import WiiMClient
 from .const import (
@@ -33,24 +35,35 @@ try:
 except ImportError:
     async_search = None  # type: ignore[assignment]
 
-import zeroconf
-
 _LOGGER = logging.getLogger(__name__)
 
 
-async def validate_wiim_device(host: str) -> tuple[bool, str]:
-    """Validate device and get name.
+async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
+    """Validate device and get info.
 
     Returns:
-        Tuple of (is_valid, device_name)
+        Tuple of (is_valid, device_name, device_uuid)
     """
     client = WiiMClient(host)
     try:
         if not await client.validate_connection():
-            return False, host
+            return False, host, None
 
         device_name = await client.get_device_name()
-        return True, device_name
+
+        # Get device UUID from status (like LinkPlay does)
+        device_uuid = None
+        try:
+            status = await client.get_player_status()
+            if uuid := status.get("uuid"):
+                device_uuid = uuid
+            elif mac := status.get("MAC"):
+                # Use MAC as backup UUID (normalized)
+                device_uuid = mac.lower().replace(":", "")
+        except Exception:
+            _LOGGER.debug("Could not get device UUID for %s", host)
+
+        return True, device_name, device_uuid
     finally:
         await client.close()
 
@@ -63,6 +76,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize."""
         self._discovered_devices: dict[str, str] = {}
+        self.data: dict[str, Any] = {}
 
     @staticmethod
     @callback
@@ -114,12 +128,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_manual()
 
             # Validate and create entry
-            await self.async_set_unique_id(host)
-            self._abort_if_unique_id_configured()
-
-            is_valid, device_name = await validate_wiim_device(host)
+            is_valid, device_name, device_uuid = await validate_wiim_device(host)
             if not is_valid:
                 return self.async_abort(reason="cannot_connect")
+
+            # Use device UUID if available, otherwise fall back to host
+            unique_id = device_uuid or host
+            await self.async_set_unique_id(unique_id)
+            self._abort_if_unique_id_configured()
 
             return self.async_create_entry(title=device_name, data={CONF_HOST: host})
 
@@ -151,11 +167,12 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
 
-            await self.async_set_unique_id(host)
-            self._abort_if_unique_id_configured()
-
-            is_valid, device_name = await validate_wiim_device(host)
+            is_valid, device_name, device_uuid = await validate_wiim_device(host)
             if is_valid:
+                # Use device UUID if available, otherwise fall back to host
+                unique_id = device_uuid or host
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=device_name, data={CONF_HOST: host})
             else:
                 errors["base"] = "cannot_connect"
@@ -180,7 +197,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not host or host in discovered or host in known_hosts:
                 return
 
-            is_valid, device_name = await validate_wiim_device(host)
+            is_valid, device_name, _ = await validate_wiim_device(host)
             if is_valid:
                 discovered[host] = device_name
 
@@ -193,54 +210,91 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return discovered
 
-    async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
+    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> FlowResult:
         """Handle Zeroconf discovery."""
         host = discovery_info.host
 
-        await self.async_set_unique_id(host)
-        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
-
-        is_valid, device_name = await validate_wiim_device(host)
+        is_valid, device_name, device_uuid = await validate_wiim_device(host)
         if not is_valid:
             return self.async_abort(reason="cannot_connect")
 
-        self.context["title_placeholders"] = {"name": device_name, "host": host}
-        return await self.async_step_confirm()
+        # Use device UUID if available, otherwise fall back to host
+        unique_id = device_uuid or host
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
-    async def async_step_ssdp(self, discovery_info: dict[str, Any]) -> FlowResult:
+        # Store data for discovery confirmation
+        self.data = {CONF_HOST: host, "name": device_name}
+        self.context["title_placeholders"] = {"name": device_name}
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
         """Handle SSDP discovery."""
-        host = None
-        for key in ["_host", "ssdp_location", "LOCATION", "location"]:
-            if val := discovery_info.ssdp_headers.get(key):
-                if key == "_host":
-                    host = val
-                else:
-                    host = urlparse(val).hostname
-                break
+        if not discovery_info.ssdp_location:
+            return self.async_abort(reason="no_host")
+
+        host = urlparse(discovery_info.ssdp_location).hostname
+        if not host:
+            return self.async_abort(reason="no_host")
+
+        is_valid, device_name, device_uuid = await validate_wiim_device(host)
+        if not is_valid:
+            return self.async_abort(reason="cannot_connect")
+
+        # Use device UUID if available, otherwise fall back to host
+        unique_id = device_uuid or host
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+        # Store data for discovery confirmation
+        self.data = {CONF_HOST: host, "name": device_name}
+        self.context["title_placeholders"] = {"name": device_name}
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> FlowResult:
+        """Handle integration discovery (automatic slave discovery)."""
+        host = discovery_info.get(CONF_HOST)
+        device_name = discovery_info.get("device_name", "Unknown Device")
+        device_uuid = discovery_info.get("device_uuid")
 
         if not host:
             return self.async_abort(reason="no_host")
 
-        await self.async_set_unique_id(host)
-        self._abort_if_unique_id_configured()
+        _LOGGER.debug("Integration discovery for device %s at %s (UUID: %s)", device_name, host, device_uuid)
 
-        is_valid, device_name = await validate_wiim_device(host)
+        # Validate the device is still reachable
+        is_valid, validated_name, validated_uuid = await validate_wiim_device(host)
         if not is_valid:
+            _LOGGER.warning("Integration discovery failed validation for %s at %s", device_name, host)
             return self.async_abort(reason="cannot_connect")
 
-        self.context["title_placeholders"] = {"name": device_name, "host": host}
-        return await self.async_step_confirm()
+        # Use validated data (more accurate than discovery data)
+        final_name = validated_name or device_name
+        final_uuid = validated_uuid or device_uuid or host
 
-    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        await self.async_set_unique_id(final_uuid)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+        # Store data for discovery confirmation
+        self.data = {CONF_HOST: host, "name": final_name}
+        self.context["title_placeholders"] = {"name": final_name}
+
+        _LOGGER.info("Integration discovery completed for %s at %s", final_name, host)
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Confirm discovery."""
         if user_input is not None:
-            placeholders = self.context.get("title_placeholders", {})
             return self.async_create_entry(
-                title=placeholders.get("name", f"WiiM {placeholders.get('host', '')}"),
-                data={CONF_HOST: placeholders.get("host")},
+                title=self.data["name"],
+                data={CONF_HOST: self.data[CONF_HOST]},
             )
 
-        return self.async_show_form(step_id="confirm")
+        self._set_confirm_only()
+        return self.async_show_form(
+            step_id="discovery_confirm",
+            description_placeholders={"name": self.data["name"]},
+        )
 
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):

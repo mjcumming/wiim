@@ -12,7 +12,7 @@
       },
       "discovery_confirm": {
         "title": "🎵 Haut-parleur WiiM découvert",
-        "description": "Un haut-parleur WiiM a été découvert à l'adresse {host}. Souhaitez-vous l'ajouter à Home Assistant ?",
+        "description": "Souhaitez-vous configurer {name} ?",
         "data": {}
       }
     },

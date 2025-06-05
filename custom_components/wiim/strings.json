@@ -1,7 +1,7 @@
 {
   "title": "WiiM Audio (LinkPlay)",
   "config": {
-    "flow_title": "Add WiiM Speaker",
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "🎵 Add WiiM Speaker",
@@ -12,7 +12,7 @@
       },
       "discovery_confirm": {
         "title": "🎵 WiiM Speaker Discovered",
-        "description": "A WiiM speaker was discovered at {host}. Would you like to add it to Home Assistant?",
+        "description": "Do you want to set up {name}?",
         "data": {}
       }
     },
