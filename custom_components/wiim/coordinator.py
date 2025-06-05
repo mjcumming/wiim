@@ -697,16 +697,38 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Find master by looking at our group state
         # We need to find which device is the master of our group
         master_speaker = None
-        for _speaker_uuid, speaker in wiim_data.speakers.items():
-            if speaker.role == "master" and self.client.host != speaker.ip_address:
-                # Check if this master has our device as a slave
-                slave_ips = [s.ip_address for s in speaker.group_members if s.ip_address == self.client.host]
-                if slave_ips:
+
+        # First try to find master using device status master_ip field
+        device_status = self.data.get("status", {}) if self.data else {}
+        master_ip = device_status.get("master_ip")
+
+        if master_ip:
+            # Look for speaker with this IP address
+            for _speaker_uuid, speaker in wiim_data.speakers.items():
+                if speaker.ip_address == master_ip and speaker.role == "master":
                     master_speaker = speaker
+                    _LOGGER.debug("Found master %s by IP %s for slave %s", speaker.name, master_ip, self.client.host)
                     break
 
+        # Fallback: search through all masters to find one that has us as a slave
+        if not master_speaker:
+            for _speaker_uuid, speaker in wiim_data.speakers.items():
+                if speaker.role == "master" and self.client.host != speaker.ip_address:
+                    # Check if this master has our device as a slave
+                    try:
+                        slave_ips = [s.ip_address for s in speaker.group_members if hasattr(s, "ip_address")]
+                        if self.client.host in slave_ips:
+                            master_speaker = speaker
+                            _LOGGER.debug(
+                                "Found master %s by group membership for slave %s", speaker.name, self.client.host
+                            )
+                            break
+                    except Exception as group_err:
+                        _LOGGER.debug("Error checking group members for %s: %s", speaker.name, group_err)
+                        continue
+
         if master_speaker:
-            _LOGGER.debug("Found master %s for slave %s", master_speaker.name, self.client.host)
+            _LOGGER.debug("Successfully found master %s for slave %s", master_speaker.name, self.client.host)
 
             # Mirror master's media information
             if master_speaker.coordinator.data:
@@ -757,6 +779,20 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 _LOGGER.warning("Master %s has no coordinator data to mirror", master_speaker.name)
         else:
-            _LOGGER.warning("Could not find master for slave %s", self.client.host)
+            # Rate limit this warning to reduce log spam
+            if not hasattr(self, "_last_master_warning_time"):
+                self._last_master_warning_time = 0
+
+            import time
+
+            current_time = time.time()
+            if current_time - self._last_master_warning_time > 60:  # Only warn once per minute
+                _LOGGER.warning(
+                    "Could not find master for slave %s (suppressing further warnings for 60s)", self.client.host
+                )
+                self._last_master_warning_time = current_time
+            else:
+                _LOGGER.debug("Could not find master for slave %s (warning suppressed)", self.client.host)
+
             # Fallback: just change source from "multiroom" to "follower" for clarity
             status["source"] = "follower"

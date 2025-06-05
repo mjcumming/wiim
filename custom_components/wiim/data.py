@@ -888,6 +888,7 @@ class Speaker:
             "start",  # Playback starting
             "transitioning",
             "transition",  # Generic transition
+            "none",  # No active state - treat as idle
         }
 
         if state in transitional_states:
@@ -896,14 +897,29 @@ class Speaker:
             return MediaPlayerState.IDLE
 
         # Handle unknown states (log warning but don't spam)
-        _LOGGER.warning(
-            "🎵 UNKNOWN PLAY STATE for %s: '%s' (raw status: play_status='%s', state='%s', status='%s')",
-            self.name,
-            state,
-            status.get("play_status"),
-            status.get("state"),
-            status.get("status"),
-        )
+        # Rate limit unknown state warnings to reduce log spam
+        if not hasattr(self, "_last_unknown_state_warning"):
+            self._last_unknown_state_warning = {}
+
+        import time
+
+        current_time = time.time()
+        warning_key = f"{state}_{self.name}"
+
+        if (
+            current_time - self._last_unknown_state_warning.get(warning_key, 0) > 300
+        ):  # Only warn once per 5 minutes per state per device
+            _LOGGER.warning(
+                "🎵 UNKNOWN PLAY STATE for %s: '%s' (raw status: play_status='%s', state='%s', status='%s') - suppressing further warnings for 5min",
+                self.name,
+                state,
+                status.get("play_status"),
+                status.get("state"),
+                status.get("status"),
+            )
+            self._last_unknown_state_warning[warning_key] = current_time
+        else:
+            _LOGGER.debug("🎵 Unknown play state '%s' for %s (warning suppressed)", state, self.name)
         return MediaPlayerState.OFF
 
     def get_volume_level(self) -> float | None:
@@ -1267,7 +1283,15 @@ class Speaker:
             if speaker:
                 speakers.append(speaker)
             else:
-                _LOGGER.warning("Could not resolve entity_id to speaker: %s", entity_id)
+                # Log available entities for debugging
+                available_count = len(data.entity_id_mappings)
+                _LOGGER.warning(
+                    "Could not resolve entity_id '%s' to speaker. Available entities: %d", entity_id, available_count
+                )
+                # Show sample of available entities for debugging
+                if available_count > 0:
+                    sample_entities = list(data.entity_id_mappings.keys())[:3]
+                    _LOGGER.debug("Sample available entity IDs: %s", sample_entities)
 
         return speakers
 
