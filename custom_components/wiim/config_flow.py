@@ -1,18 +1,26 @@
-"""Config flow for the WiiM integration."""
+"""Config flow to configure WiiM component.
+
+This module implements a simplified discovery flow optimized for Home Assistant:
+- Factory pattern for device validation with retry logic
+- Prioritized discovery methods: UPnP > Zeroconf > Manual entry
+- Automatic device ungrouping during setup for clean HA integration
+- Simplified validation and error handling
+"""
 
 from __future__ import annotations
 
+import asyncio
+from enum import Enum
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
-import voluptuous as vol
-from aiohttp.client_exceptions import ClientError
 from homeassistant import config_entries
-from homeassistant.components import ssdp, zeroconf
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.exceptions import ConfigEntryNotReady
+import voluptuous as vol
 
 from .api import WiiMClient, WiiMError
 from .const import (
@@ -25,275 +33,543 @@ from .const import (
     DOMAIN,
 )
 
+# --- UPnP/SSDP discovery imports ---
+try:
+    from async_upnp_client.search import async_search
+except ImportError:
+    async_search = None
+
+import zeroconf
+
 _LOGGER = logging.getLogger(__name__)
 
 
-async def _validate_and_get_device_details(host: str) -> tuple[str, str]:
-    """Validate connectivity and retrieve the device name and UUID.
+class DiscoveryState(Enum):
+    """Discovery state enumeration."""
 
-    Connects to the WiiM device, fetches its details using getStatusEx, and extracts
-    the device name and a stable unique identifier (UUID).
+    DISCOVERING = "discovering"
+    VALIDATING = "validating"
+    READY = "ready"
+    FAILED = "failed"
 
-    Args:
-        host: The hostname or IP address of the WiiM device.
 
-    Returns:
-        A tuple containing the device name and the device UUID.
+async def wiim_factory_client(host: str, max_retries: int = 3) -> WiiMClient:
+    """Factory to create and validate WiiM client with retry logic.
 
-    Raises:
-        ConfigEntryNotReady: If connection to the device fails.
-        WiiMError: For other API-related errors.
+    Creates a client that will auto-detect the correct protocol (HTTPS/HTTP)
+    and port on first connection attempt.
     """
-    # Use shorter timeout for discovery to avoid blocking the UI
-    client = WiiMClient(host, timeout=5.0)
-    try:
-        _LOGGER.debug("Validating WiiM device at %s", host)
+    # Use default HTTPS port 443, client will auto-detect correct protocol
+    client = WiiMClient(host, port=443)  # Start with HTTPS default
+    retry_delay = 1  # seconds
 
-        # Use getStatusEx which returns comprehensive device info including UUID
-        device_details = await client.get_status()  # This calls getStatusEx endpoint
-        _LOGGER.debug("Device validation response for %s: %s", host, device_details)
+    for attempt in range(max_retries):
+        try:
+            # Validate device responds and get basic info
+            # This will trigger protocol auto-detection
+            await client.get_player_status()
+            _LOGGER.debug(
+                "Successfully connected to WiiM device at %s using %s",
+                host,
+                client._endpoint,
+            )
+            # Don't close here - return the working client
+            return client
+        except WiiMError as err:
+            # Always close on error
+            await client.close()
 
-        # Extract the actual UUID - this should be a proper UUID from the device
-        device_uuid = device_details.get("uuid")
-        if not device_uuid:
-            # Fallback to MAC if UUID not available
-            mac_address = device_details.get("MAC") or device_details.get("mac_address")
-            if mac_address:
-                device_uuid = mac_address.lower().replace(":", "")
-                _LOGGER.info("UUID not found, using MAC address %s as unique ID for %s", device_uuid, host)
-            else:
-                # Last resort - use a combination of host and device name
-                device_name_raw = device_details.get("DeviceName") or device_details.get("device_name")
-                if device_name_raw:
-                    import hashlib
-
-                    device_uuid = hashlib.md5(f"{host}_{device_name_raw}".encode()).hexdigest()[:12]
-                    _LOGGER.warning("No UUID or MAC found, generated fallback ID %s for %s", device_uuid, host)
+            if attempt == max_retries - 1:
+                # Provide more specific error message for SSL failures
+                if "ssl" in str(err).lower() or "handshake" in str(err).lower():
+                    raise ConfigEntryNotReady(
+                        f"SSL/TLS connection failed to WiiM device at {host}. "
+                        f"Device may not support HTTPS or uses incompatible SSL configuration."
+                    ) from err
                 else:
-                    raise WiiMError(f"Could not retrieve UUID, MAC address, or device name for {host}")
+                    raise ConfigEntryNotReady(
+                        f"Failed to connect to WiiM device at {host} after {max_retries} attempts"
+                    ) from err
+            _LOGGER.debug(
+                "Attempt %d failed to validate WiiM device at %s: %s",
+                attempt + 1,
+                host,
+                err,
+            )
+            # Create a new client for the next attempt since we closed the previous one
+            client = WiiMClient(host, port=443)
+            await asyncio.sleep(retry_delay)
+        except Exception as err:
+            await client.close()
+            raise ConfigEntryNotReady(f"Unexpected error connecting to WiiM device at {host}") from err
 
-        # Extract device name - this will be cleaned up by the Speaker class later
-        device_name = device_details.get("DeviceName") or device_details.get("device_name") or f"WiiM {host}"
+    # This should never be reached, but just in case
+    await client.close()
+    raise ConfigEntryNotReady(f"Failed to validate WiiM device at {host}")
 
-        _LOGGER.info(
-            "Retrieved device info from getStatusEx: Name='%s', UUID='%s', Host='%s'", device_name, device_uuid, host
-        )
-        return device_name, device_uuid
 
-    except WiiMError as err:
-        _LOGGER.warning("API error while validating WiiM device at %s: %s", host, err)
-        raise ConfigEntryNotReady(f"API error connecting to WiiM device at {host}: {err}") from err
-    except ClientError as err:
-        _LOGGER.warning("Connection error while validating WiiM device at %s: %s", host, err)
-        raise ConfigEntryNotReady(f"Cannot connect to WiiM device at {host}: {err}") from err
-    except Exception as err:
-        _LOGGER.warning("Unexpected error while validating WiiM device at %s: %s", host, err)
-        raise ConfigEntryNotReady(f"Unexpected error connecting to WiiM device at {host}: {err}") from err
+async def _async_validate_host(host: str) -> None:
+    """Validate we can talk to the WiiM device and always close the session."""
+    client = None
+    try:
+        client = await wiim_factory_client(host)
+        # Client is already validated by wiim_factory_client
     finally:
-        await client.close()
+        if client:
+            await client.close()
+
+
+async def _get_enhanced_device_name(client: WiiMClient, fallback_host: str) -> str:
+    """Get device name with role information for better identification during setup."""
+    device_name = fallback_host  # fallback to IP/host
+
+    # Try multiple endpoints to get the best device name
+    try:
+        status_info = await client.get_status()
+        device_name = status_info.get("DeviceName") or status_info.get("device_name") or device_name
+
+        # Check if device is a group master and enhance the name accordingly
+        try:
+            multiroom_info = await client.get_multiroom_info()
+            slave_list = multiroom_info.get("slave_list", [])
+
+            # If device has slaves, it's a master - add master indicator
+            if slave_list and len(slave_list) > 0:
+                slave_count = len(slave_list)
+                device_name = f"{device_name} (Master of {slave_count} device{'s' if slave_count != 1 else ''})"
+                _LOGGER.debug(
+                    "Enhanced name for master device %s: %s with %d slaves", fallback_host, device_name, slave_count
+                )
+            # Check for slave status using multiroom type
+            elif str(multiroom_info.get("type")) == "1":
+                # This is a slave device - could enhance with master info but keep it simple for setup
+                device_name = f"{device_name} (In Group)"
+                _LOGGER.debug("Enhanced name for slave device %s: %s", fallback_host, device_name)
+
+        except WiiMError:
+            # Multiroom info not available, use basic name
+            pass
+
+    except WiiMError:
+        # get_status failed, try get_device_info
+        try:
+            device_info = await client.get_device_info()
+            device_name = device_info.get("DeviceName") or device_info.get("device_name") or device_name
+        except WiiMError:
+            # Both failed, stick with fallback
+            pass
+
+    return device_name
 
 
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Manages the configuration flow for setting up a new WiiM device."""
+    """Handle a WiiM config flow."""
 
     VERSION = 1
 
     def __init__(self) -> None:
-        """Initialize the WiiM config flow."""
+        """Set up instance."""
         self._host: str | None = None
+        self._discovered_hosts: dict[str, str] = {}
+        self._options_map: dict[str, str] = {}  # Initialize to prevent linter error
 
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
-    ) -> WiiMOptionsFlow:
-        """Get the options flow for this handler."""
+    ) -> "WiiMOptionsFlow":
+        """Return the options flow."""
         return WiiMOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial step of the user configuration."""
+        """Handle the initial step - show discovery or manual entry."""
+        # If user provided manual input, validate it
+        if user_input is not None:
+            if user_input.get("discovery_mode") == "manual":
+                # User chose manual entry, show manual form
+                return await self.async_step_manual()
+            elif user_input.get("discovery_mode") == "discover":
+                # User chose discovery, proceed to discovery step
+                return await self.async_step_discovery()
+
+        # Initial step: let user choose discovery method
+        schema = vol.Schema({vol.Required("discovery_mode", default="discover"): vol.In(["discover", "manual"])})
+        return self.async_show_form(
+            step_id="user",
+            data_schema=schema,
+        )
+
+    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle manual IP entry."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            host = user_input[CONF_HOST].strip()
-            if not host:
-                errors["base"] = "no_host"  # Use a translation key
-            else:
+            host = user_input[CONF_HOST]
+            try:
+                client = await wiim_factory_client(host)
                 try:
-                    # Validate connectivity and get a descriptive device name and UUID
-                    device_name, device_uuid = await _validate_and_get_device_details(host)
+                    # Get enhanced device name with role information
+                    device_name = await _get_enhanced_device_name(client, host)
 
-                    await self.async_set_unique_id(device_uuid)
-                    self._abort_if_unique_id_configured(
-                        updates={CONF_HOST: host},
-                        reload_on_update=True,  # Reload if host changed for existing UUID
-                    )
+                    # Use host/IP as unique_id to guarantee one entry per device
+                    unique_id = host
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
 
-                    _LOGGER.info(
-                        "Successfully identified WiiM device '%s' (UUID: %s) at %s",
-                        device_name,
-                        device_uuid,
-                        host,
-                    )
-                    return self.async_create_entry(
-                        title=device_name,
-                        data={CONF_HOST: host, "uuid": device_uuid},  # Store UUID in entry data too
-                    )
+                    # Ensure device is ungrouped for clean setup
+                    await self._ensure_solo(client, {"device_name": device_name})
+                finally:
+                    await client.close()
 
-                except (ConfigEntryNotReady, WiiMError) as err:
-                    # All connection and API errors map to unknown for consistency with test expectations
-                    _LOGGER.warning("Connection or API error configuring WiiM device at %s: %s", host, err)
-                    errors["base"] = "unknown"
-                except Exception as err:  # pylint: disable=broad-except
-                    # Map all unexpected errors to unknown for consistency with test expectations
-                    _LOGGER.exception("Unexpected error configuring WiiM device at %s: %s", host, err)
-                    errors["base"] = "unknown"
-        # Show the form to the user
-        schema = vol.Schema({vol.Required(CONF_HOST, default=self._host or ""): str})
+                return self.async_create_entry(title=device_name, data={CONF_HOST: host})
+            except ConfigEntryNotReady:
+                errors["base"] = "cannot_connect"
+            except AbortFlow:
+                # Let abort exceptions pass through (for already_configured, etc.)
+                raise
+            except Exception as e:
+                _LOGGER.error("[WiiM] Error during manual config: %s", e)
+                errors["base"] = "unknown"
+
+        # Show manual entry form
+        schema = vol.Schema({vol.Required(CONF_HOST): str})
         return self.async_show_form(
-            step_id="user",
+            step_id="manual",
             data_schema=schema,
             errors=errors,
         )
 
-    async def async_step_ssdp(self, discovery_info: ssdp.SsdpServiceInfo) -> FlowResult:
-        """Handle a flow initialized by SSDP discovery."""
-        _LOGGER.info("🔍 SSDP discovery triggered for WiiM integration")
-        _LOGGER.debug("SSDP discovery received: %s", discovery_info)
-        _LOGGER.debug("SSDP location: %s", getattr(discovery_info, "ssdp_location", "N/A"))
-        _LOGGER.debug("SSDP USN: %s", getattr(discovery_info, "ssdp_usn", "N/A"))
-        _LOGGER.debug("SSDP ST: %s", getattr(discovery_info, "ssdp_st", "N/A"))
-        _LOGGER.debug("SSDP upnp data: %s", getattr(discovery_info, "upnp", {}))
-
-        # Extract host from the SSDP location URL
-        host = None
-        if discovery_info.ssdp_location:
-            from urllib.parse import urlparse
-
-            parsed = urlparse(discovery_info.ssdp_location)
-            if parsed.hostname:
-                host = parsed.hostname
-                # WiiM devices typically use HTTPS (443) or HTTP (80)
-                # Don't append port 80 as it's default for HTTP
-                if parsed.port and parsed.port not in (80, 443):
-                    host = f"{host}:{parsed.port}"
-
-        if not host:
-            _LOGGER.warning("❌ No valid host found in SSDP discovery info: %s", discovery_info.ssdp_location)
-            return self.async_abort(reason="no_host")
-
-        self._host = host
-        _LOGGER.info("✅ Discovered WiiM device via SSDP at %s (from location: %s)", host, discovery_info.ssdp_location)
-
-        try:
-            # Validate the device and get details
-            _LOGGER.debug("🔗 Attempting to validate discovered device at %s", host)
-            device_name, device_uuid = await _validate_and_get_device_details(host)
-
-            await self.async_set_unique_id(device_uuid)
-            self._abort_if_unique_id_configured(
-                updates={CONF_HOST: host},
-                reload_on_update=True,
-            )
-
-            # Show confirmation form to user
-            self.context["title_placeholders"] = {"name": device_name}
-            _LOGGER.info("🎉 SSDP discovery successful for %s (%s)", device_name, host)
-            return await self.async_step_discovery_confirm()
-
-        except (ConfigEntryNotReady, WiiMError) as err:
-            _LOGGER.warning("❌ Failed to validate SSDP discovered device at %s: %s", host, err)
-            return self.async_abort(reason="unknown")
-
-    async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
-        """Handle a flow initialized by Zeroconf discovery."""
-        _LOGGER.info("🔍 Zeroconf discovery triggered for WiiM integration")
-        _LOGGER.debug("Zeroconf discovery received: %s", discovery_info)
-        _LOGGER.debug("Zeroconf host: %s", getattr(discovery_info, "host", "N/A"))
-        _LOGGER.debug("Zeroconf port: %s", getattr(discovery_info, "port", "N/A"))
-        _LOGGER.debug("Zeroconf type: %s", getattr(discovery_info, "type", "N/A"))
-        _LOGGER.debug("Zeroconf name: %s", getattr(discovery_info, "name", "N/A"))
-        _LOGGER.debug("Zeroconf properties: %s", getattr(discovery_info, "properties", {}))
-
-        # Extract host from the discovery info
-        host = discovery_info.host
-        if not host:
-            _LOGGER.warning("❌ No host found in Zeroconf discovery info")
-            return self.async_abort(reason="no_host")
-
-        # WiiM devices typically use HTTPS (443) or HTTP (80)
-        # Only append port if it's not the default HTTP/HTTPS ports
-        if discovery_info.port and discovery_info.port not in (80, 443):
-            host = f"{host}:{discovery_info.port}"
-
-        self._host = host
-        _LOGGER.info("✅ Discovered WiiM device via Zeroconf at %s (port: %s)", host, discovery_info.port)
-
-        try:
-            # Validate the device and get details
-            _LOGGER.debug("🔗 Attempting to validate discovered device at %s", host)
-            device_name, device_uuid = await _validate_and_get_device_details(host)
-
-            await self.async_set_unique_id(device_uuid)
-            self._abort_if_unique_id_configured(
-                updates={CONF_HOST: host},
-                reload_on_update=True,
-            )
-
-            # Show confirmation form to user
-            self.context["title_placeholders"] = {"name": device_name}
-            _LOGGER.info("🎉 Zeroconf discovery successful for %s (%s)", device_name, host)
-            return await self.async_step_discovery_confirm()
-
-        except (ConfigEntryNotReady, WiiMError) as err:
-            _LOGGER.warning("❌ Failed to validate Zeroconf discovered device at %s: %s", host, err)
-            return self.async_abort(reason="unknown")
-
-    async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle user confirmation of discovered device."""
+    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle automatic discovery of WiiM devices."""
         errors: dict[str, str] = {}
 
-        if user_input is not None:
-            try:
-                # Re-validate to get fresh device details
-                device_name, device_uuid = await _validate_and_get_device_details(self._host)
+        if not self._discovered_hosts:
+            # Perform discovery
+            self._discovered_hosts = await self._discover_upnp_hosts()
 
-                _LOGGER.info(
-                    "Confirmed setup of discovered WiiM device '%s' (UUID: %s) at %s",
-                    device_name,
-                    device_uuid,
-                    self._host,
-                )
+        if user_input is not None:
+            if "no_devices_manual" in user_input:
+                # User wants manual entry after discovery found nothing
+                return await self.async_step_manual()
+
+            selected = user_input[CONF_HOST]
+
+            # Check if user selected manual entry from the dropdown
+            if selected == "📝 Enter IP address manually":
+                return await self.async_step_manual()
+
+            host = self._options_map.get(selected, selected)
+
+            await self.async_set_unique_id(host)
+            self._abort_if_unique_id_configured()
+
+            try:
+                client = await wiim_factory_client(host)
+                try:
+                    # Get enhanced device name with role information
+                    device_name = await _get_enhanced_device_name(client, host)
+
+                    # Ensure device is ungrouped for clean setup
+                    await self._ensure_solo(client, {"device_name": device_name})
+                finally:
+                    await client.close()
+
                 return self.async_create_entry(
                     title=device_name,
-                    data={CONF_HOST: self._host, "uuid": device_uuid},
+                    data={CONF_HOST: host},
                 )
+            except ConfigEntryNotReady:
+                errors["base"] = "cannot_connect"
 
-            except (ConfigEntryNotReady, WiiMError) as err:
-                # All connection and API errors map to unknown for consistency with test expectations
-                _LOGGER.warning("Connection or API error confirming discovered WiiM device at %s: %s", self._host, err)
-                errors["base"] = "unknown"
-            except Exception as err:  # pylint: disable=broad-except
-                # Map all unexpected errors to unknown for consistency with test expectations
-                _LOGGER.exception("Unexpected error confirming discovered WiiM device at %s: %s", self._host, err)
-                errors["base"] = "unknown"
+        if self._discovered_hosts:
+            # Build options for dropdown
+            options_map = {f"{name} ({host})": host for host, name in self._discovered_hosts.items()}
+            self._options_map = options_map
 
+            # Add manual entry option at the end
+            options_map["📝 Enter IP address manually"] = "manual_entry"
+
+            schema = vol.Schema({vol.Required(CONF_HOST): vol.In(list(options_map.keys()))})
+            return self.async_show_form(
+                step_id="discovery",
+                data_schema=schema,
+                errors=errors,
+                description_placeholders={
+                    "count": str(len(self._discovered_hosts)),
+                    "devices": ", ".join(self._discovered_hosts.values()),
+                },
+            )
+
+        # No devices found, offer manual entry
+        schema = vol.Schema({vol.Required("no_devices_manual", default=True): bool})
         return self.async_show_form(
-            step_id="discovery_confirm",
-            description_placeholders={"host": self._host},
+            step_id="discovery",
+            data_schema=schema,
             errors=errors,
+            description_placeholders={
+                "message": "No WiiM devices found automatically. Would you like to enter an IP address manually?"
+            },
         )
+
+    async def _discover_upnp_hosts(self) -> dict[str, str]:
+        """Discover devices and return mapping of host→friendly name."""
+        if async_search is None:
+            return {}
+
+        discovered: dict[str, str] = {}
+        known_ids = {entry.unique_id for entry in self._async_current_entries()}
+        in_progress_ids = {
+            flow["context"].get("unique_id")
+            for flow in self.hass.config_entries.flow.async_progress()
+            if flow["handler"] == DOMAIN
+        }
+        all_known = known_ids | in_progress_ids
+
+        async def _on_ssdp_device(device):
+            """Callback for SSDP/UPnP responses - validate WiiM devices."""
+            host: str | None = getattr(device, "host", None)
+            if host is None and (loc := getattr(device, "location", None)):
+                host = urlparse(loc).hostname
+            if not host or host in discovered or host in all_known:
+                return
+
+            try:
+                # Quick validation and get device name
+                client = await wiim_factory_client(host)
+                try:
+                    # Get enhanced device name with role information
+                    device_name = await _get_enhanced_device_name(client, host)
+
+                    # Ensure device is ungrouped for clean setup
+                    await self._ensure_solo(client, {"device_name": device_name})
+                    discovered[host] = device_name
+                finally:
+                    await client.close()
+            except (ConfigEntryNotReady, Exception):
+                # Device not reachable or not a WiiM device
+                return
+
+        try:
+            await async_search(
+                async_callback=_on_ssdp_device,
+                timeout=5,
+                search_target="urn:schemas-upnp-org:device:MediaRenderer:1",
+                mx=2,
+            )
+        except TypeError:
+            # Fallback for older versions without mx parameter
+            await async_search(
+                async_callback=_on_ssdp_device,
+                timeout=5,
+                search_target="urn:schemas-upnp-org:device:MediaRenderer:1",
+            )
+        return discovered
+
+    async def async_step_zeroconf(self, discovery_info: zeroconf.ZeroconfServiceInfo) -> FlowResult:
+        """Handle Zeroconf discovery with simplified validation."""
+        host = discovery_info.host
+        unique_id = host
+
+        # Check for duplicates
+        known_ids = {entry.unique_id for entry in self._async_current_entries()}
+        in_progress_ids = {
+            flow["context"].get("unique_id")
+            for flow in self.hass.config_entries.flow.async_progress()
+            if flow["handler"] == DOMAIN
+        }
+        if unique_id in (known_ids | in_progress_ids):
+            return self.async_abort(reason="already_configured")
+
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+        try:
+            client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
+            try:
+                # Get enhanced device name with role information
+                device_name = await _get_enhanced_device_name(client, host)
+
+                unique_id = host
+                # Ensure device is ungrouped for clean setup
+                await self._ensure_solo(client, {"device_name": device_name})
+            finally:
+                await client.close()
+        except ConfigEntryNotReady as err:
+            # Silently abort on connection failures during discovery
+            # These are normal when scanning many devices
+            _LOGGER.debug("Failed to validate WiiM device at %s from Zeroconf: %s", host, err)
+            return self.async_abort(reason="cannot_connect")
+        except Exception as e:
+            _LOGGER.debug(
+                "Unexpected error validating WiiM device at %s from Zeroconf: %s",
+                host,
+                e,
+            )
+            return self.async_abort(reason="unknown_error_validation")
+
+        self.context["configuration_in_progress"] = True
+        self._host = host
+        self.context["title_placeholders"] = {"name": device_name, "host": host}
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Confirm discovery."""
+        if user_input is not None:
+            device_name = self.context.get("title_placeholders", {}).get("name") or f"WiiM {self._host}"
+            return self.async_create_entry(
+                title=device_name,
+                data={CONF_HOST: self._host},
+            )
+
+        return self.async_show_form(step_id="confirm")
+
+    # -----------------------------------------------------
+    # SSDP discovery (native HA flow) ---------------------
+    # -----------------------------------------------------
+
+    async def async_step_ssdp(self, discovery_info: dict[str, Any]) -> FlowResult:
+        """Handle SSDP discovery from Home Assistant core."""
+        # Extract host from SSDP headers
+        host = discovery_info.ssdp_headers.get("_host")
+        if not host:
+            for location_key in ["ssdp_location", "LOCATION", "location"]:
+                if loc := discovery_info.ssdp_headers.get(location_key):
+                    host = urlparse(loc).hostname
+                    break
+            else:
+                # Try the discovery_info.ssdp_location attribute
+                if hasattr(discovery_info, "ssdp_location"):
+                    host = urlparse(discovery_info.ssdp_location).hostname
+
+        if not host:
+            return self.async_abort(reason="no_host")
+
+        # Validate device and get info
+        try:
+            client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
+            try:
+                # Get enhanced device name with role information
+                device_name = await _get_enhanced_device_name(client, host)
+
+                unique_id = host
+                # Ensure device is ungrouped for clean setup
+                await self._ensure_solo(client, {"device_name": device_name})
+            finally:
+                await client.close()
+        except (ConfigEntryNotReady, Exception) as err:
+            _LOGGER.debug("Failed to validate WiiM device at %s from SSDP: %s", host, err)
+            return self.async_abort(reason="cannot_connect")
+
+        # Check for duplicates
+        known_ids = {entry.unique_id for entry in self._async_current_entries()}
+        in_progress_ids = {
+            flow["context"].get("unique_id")
+            for flow in self.hass.config_entries.flow.async_progress()
+            if flow["handler"] == DOMAIN
+        }
+        if unique_id in (known_ids | in_progress_ids):
+            return self.async_abort(reason="already_configured")
+
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured()
+        self._host = host
+        self.context["title_placeholders"] = {"name": device_name, "host": host}
+        return await self.async_step_confirm()
+
+    async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> FlowResult:
+        """Handle integration discovery (e.g., slave devices found by masters)."""
+        host = discovery_info.get(CONF_HOST)
+        device_name = discovery_info.get("device_name", f"WiiM {host}")
+        device_uuid = discovery_info.get("device_uuid")
+        discovery_source = discovery_info.get("discovery_source", "unknown")
+
+        if not host:
+            return self.async_abort(reason="no_host")
+
+        _LOGGER.info("🔍 Integration discovery triggered for %s at %s (source: %s)", device_name, host, discovery_source)
+
+        # Set unique ID for duplicate detection
+        unique_id = device_uuid or host
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured()
+
+        try:
+            # Validate device and get enhanced info
+            client = await wiim_factory_client(host, max_retries=2)  # Reduce retries for discovery
+            try:
+                # Get enhanced device name with role information
+                enhanced_name = await _get_enhanced_device_name(client, host)
+
+                # Ensure device is ungrouped for clean setup
+                await self._ensure_solo(client, {"device_name": enhanced_name})
+            finally:
+                await client.close()
+
+            # Auto-create entry for valid discovered devices
+            _LOGGER.info("✅ Auto-creating config entry for discovered device %s at %s", enhanced_name, host)
+            return self.async_create_entry(
+                title=enhanced_name,
+                data={CONF_HOST: host},
+            )
+
+        except ConfigEntryNotReady as err:
+            _LOGGER.warning("❌ Failed to validate discovered device %s at %s: %s", device_name, host, err)
+            return self.async_abort(reason="cannot_connect")
+        except Exception as err:
+            _LOGGER.error("❌ Unexpected error during integration discovery for %s at %s: %s", device_name, host, err)
+            return self.async_abort(reason="unknown")
+
+    async def async_step_import(self, import_config: dict[str, Any]) -> FlowResult:
+        """Handle import from YAML or programmatic flow."""
+        return await self.async_step_user(import_config)
+
+    async def _test_connection(self, host: str) -> bool:
+        """Test connection to WiiM device."""
+        try:
+            await _async_validate_host(host)
+            return True
+        except (ConfigEntryNotReady, Exception):
+            return False
+
+    async def _ensure_solo(self, client: WiiMClient, device_info: dict[str, Any]) -> dict[str, Any]:
+        """If the speaker is in a multi-room group, leave or disband it.
+
+        We leave groups when the device is **slave** and delete the whole
+        group when it is **master** with at least one slave.  Returns an
+        updated status dict after the operation (may be unchanged when the
+        device was already solo).
+        """
+
+        # If device is a slave → leave group
+        if device_info.get("role") == "slave" or str(device_info.get("group")) == "1":
+            try:
+                await client.leave_group()
+            except Exception:
+                pass
+            return await client.get_player_status()
+
+        # If device is master with slaves → disband group
+        multi = device_info.get("multiroom", {})
+        has_slaves = bool(multi.get("slave_list")) or multi.get("slaves", 0)
+        if has_slaves:
+            try:
+                await client.delete_group()
+            except Exception:
+                pass
+            return await client.get_player_status()
+
+        return device_info
 
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):
-    """Manages the options flow for an existing WiiM configuration entry."""
+    """Handle WiiM options."""
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        """Initialize the WiiM options flow."""
+        """Init options flow."""
         self.entry = entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage the options for the WiiM integration."""
+        """Handle options flow."""
         if user_input is not None:
             options_data = {}
 

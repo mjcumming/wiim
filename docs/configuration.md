@@ -143,8 +143,11 @@ supported_features:
 
 **Custom Services:**
 
-- `media_player.play_preset` - Hardware preset buttons 1-6
-- `media_player.toggle_power` - Standby control
+- `wiim.play_preset` - Play hardware preset buttons (1-6)
+- `wiim.play_url` - Play media from URL
+- `wiim.play_playlist` - Play M3U playlists
+- `wiim.set_eq` - Set equalizer presets or custom values
+- `wiim.play_notification` - Play notification sounds
 - `wiim.reboot_device` - Device maintenance
 - `wiim.sync_time` - Clock synchronization
 

@@ -623,6 +623,13 @@ class Speaker:
 
             if slave_speaker:
                 new_group_members.append(slave_speaker)
+
+                # Clear from missing slaves tracking since we found it
+                missing_slave_key = f"{slave_ip}:{slave_uuid}"
+                if hasattr(self, "_missing_slaves_reported") and missing_slave_key in self._missing_slaves_reported:
+                    self._missing_slaves_reported.discard(missing_slave_key)
+                    _LOGGER.debug("Cleared missing slave tracking for %s - now found in registry", slave_name)
+
                 # Update slave's coordinator reference to this master
                 old_slave_coordinator = slave_speaker.coordinator_speaker
                 slave_speaker.coordinator_speaker = self
@@ -645,23 +652,43 @@ class Speaker:
                         slave_ip,
                     )
             else:
-                _LOGGER.warning(
-                    "Master %s cannot find slave speaker for %s (IP: %s, UUID: %s) in registry",
-                    self.name,
-                    slave_name,
-                    slave_ip,
-                    slave_uuid,
-                )
-                _LOGGER.debug(
-                    "Available speaker IPs in registry: %s", [s.ip_address for s in wiim_data.speakers.values()]
-                )
+                # Track missing slaves to avoid spam logging and repeated discovery attempts
+                missing_slave_key = f"{slave_ip}:{slave_uuid}"
+                if not hasattr(self, "_missing_slaves_reported"):
+                    self._missing_slaves_reported = set()
 
-                # Trigger automatic discovery for missing slave devices
-                if slave_ip:
-                    _LOGGER.info(
-                        "Master %s triggering discovery for missing slave at %s (%s)", self.name, slave_ip, slave_name
+                if missing_slave_key not in self._missing_slaves_reported:
+                    _LOGGER.warning(
+                        "Master %s cannot find slave speaker for %s (IP: %s, UUID: %s) in registry - triggering auto-discovery",
+                        self.name,
+                        slave_name,
+                        slave_ip,
+                        slave_uuid,
                     )
-                    self.hass.async_create_task(self._trigger_slave_discovery(slave_ip, slave_uuid, slave_name))
+                    _LOGGER.debug(
+                        "Available speaker IPs in registry: %s", [s.ip_address for s in wiim_data.speakers.values()]
+                    )
+
+                    # Mark as reported to avoid spam
+                    self._missing_slaves_reported.add(missing_slave_key)
+
+                    # Trigger automatic discovery for missing slave devices
+                    if slave_ip:
+                        _LOGGER.info(
+                            "Master %s triggering discovery for missing slave at %s (%s)",
+                            self.name,
+                            slave_ip,
+                            slave_name,
+                        )
+                        self.hass.async_create_task(self._trigger_slave_discovery(slave_ip, slave_uuid, slave_name))
+                else:
+                    # Already reported and discovery triggered, just debug log
+                    _LOGGER.debug(
+                        "Master %s still missing slave %s (IP: %s) - discovery already triggered",
+                        self.name,
+                        slave_name,
+                        slave_ip,
+                    )
 
         # Update the group members list
         old_count = len(self.group_members)
@@ -1381,14 +1408,13 @@ class Speaker:
             _LOGGER.info("🔍 Master %s initiating automatic discovery for slave %s at %s", self.name, name, ip)
 
             # Import here to avoid circular imports
-            from . import DOMAIN
-            from homeassistant import config_entries
+            from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 
             # Check if we already have a config entry for this device
             existing_entries = [
                 entry
                 for entry in self.hass.config_entries.async_entries(DOMAIN)
-                if entry.data.get(CONF_HOST) == ip or (uuid and entry.data.get("uuid") == uuid)
+                if entry.data.get(CONF_HOST) == ip or (uuid and entry.unique_id == uuid)
             ]
 
             if existing_entries:
@@ -1399,24 +1425,36 @@ class Speaker:
             existing_flows = [
                 flow
                 for flow in self.hass.config_entries.flow.async_progress(DOMAIN)
-                if flow.get("context", {}).get("unique_id") == uuid or (ip in str(flow.get("handler", "")))
+                if flow.get("context", {}).get("unique_id") == uuid or flow.get("context", {}).get("unique_id") == ip
             ]
 
             if existing_flows:
                 _LOGGER.debug("Discovery flow already in progress for slave %s at %s, skipping", name, ip)
                 return
 
-            # Trigger a new discovery flow for the slave device
-            _LOGGER.info("✅ Creating discovery flow for slave %s at %s (UUID: %s)", name, ip, uuid)
+            # Trigger automatic integration discovery flow for the slave device
+            _LOGGER.info("✅ Creating automatic discovery flow for slave %s at %s (UUID: %s)", name, ip, uuid)
 
-            # Create a user-initiated config flow that will validate and set up the device
+            discovery_data = {
+                CONF_HOST: ip,
+                "device_name": name,
+                "device_uuid": uuid,
+                "discovery_source": "slave_detection",
+            }
+
+            # Create integration discovery flow - this will be handled by async_step_integration_discovery
             self.hass.async_create_task(
                 self.hass.config_entries.flow.async_init(
-                    DOMAIN, context={"source": config_entries.SOURCE_USER}, data={CONF_HOST: ip}
+                    DOMAIN,
+                    context={
+                        "source": SOURCE_INTEGRATION_DISCOVERY,
+                        "unique_id": uuid or ip,  # Use UUID if available, fallback to IP
+                    },
+                    data=discovery_data,
                 )
             )
 
-            _LOGGER.info("🎉 Discovery flow initiated for slave %s at %s", name, ip)
+            _LOGGER.info("🎉 Automatic discovery flow initiated for slave %s at %s", name, ip)
 
         except Exception as err:
             _LOGGER.error("❌ Failed to trigger discovery for slave %s at %s: %s", name, ip, err)

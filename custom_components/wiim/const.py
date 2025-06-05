@@ -39,6 +39,7 @@ ATTRIBUTION = "Integration created by the WiiM community"
 # Config keys
 CONF_HOST = "host"
 CONF_VOLUME_STEP = "volume_step"
+CONF_POLL_INTERVAL = "poll_interval"
 
 # User-friendly option names (for UI)
 CONF_STATUS_UPDATE_INTERVAL = "status_update_interval"
@@ -55,6 +56,7 @@ CONF_ENABLE_EQ_CONTROLS = "enable_eq_controls"
 # Defaults
 DEFAULT_PORT = 443  # HTTPS - like python-linkplay
 DEFAULT_TIMEOUT = 10  # seconds
+DEFAULT_POLL_INTERVAL = 5  # seconds - for config options
 # Fixed polling interval - HA compliant, easily changeable
 FIXED_POLL_INTERVAL = 5  # seconds - hard-coded 5s polling for all devices
 DEFAULT_VOLUME_STEP = 0.05  # 5%
