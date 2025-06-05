@@ -34,7 +34,7 @@ DOMAIN = "wiim"
 # Integration metadata
 NAME = "WiiM"
 VERSION = "1.0.10"
-ATTRIBUTION = "Integration created by the WiiM community"
+ATTRIBUTION = "Integration created by mjcumming"
 
 # Config keys
 CONF_HOST = "host"
