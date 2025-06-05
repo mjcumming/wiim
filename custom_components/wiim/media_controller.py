@@ -15,7 +15,6 @@ and complex media player business logic.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -678,8 +677,8 @@ class MediaPlayerController:
             self._logger.debug("Fetching media image from: %s", image_url)
 
             # Import here to avoid circular imports
-            from homeassistant.helpers.aiohttp_client import async_get_clientsession
             import aiohttp
+            from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
             # Use Home Assistant's shared session for efficiency
             session = async_get_clientsession(self.hass)
@@ -756,7 +755,7 @@ class MediaPlayerController:
 
                 return image_data, content_type
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.debug("Timeout fetching media image for %s from %s", self.speaker.name, image_url)
             # Clear cache on failure
             self._media_image_url_cached = None

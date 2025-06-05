@@ -697,7 +697,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Find master by looking at our group state
         # We need to find which device is the master of our group
         master_speaker = None
-        for speaker_uuid, speaker in wiim_data.speakers.items():
+        for _speaker_uuid, speaker in wiim_data.speakers.items():
             if speaker.role == "master" and self.client.host != speaker.ip_address:
                 # Check if this master has our device as a slave
                 slave_ips = [s.ip_address for s in speaker.group_members if s.ip_address == self.client.host]
