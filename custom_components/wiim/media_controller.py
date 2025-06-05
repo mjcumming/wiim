@@ -655,8 +655,32 @@ class MediaPlayerController:
         return self.speaker.get_media_position_updated_at()
 
     def get_media_image_url(self) -> str | None:
-        """Get media image URL."""
-        return self.speaker.get_media_image_url()
+        """Get media image URL with cache-busting for track changes.
+
+        WiiM devices often keep the same artwork URL but change the image content.
+        We add a cache-busting parameter to force Home Assistant to refetch the image.
+        """
+        base_url = self.speaker.get_media_image_url()
+        if not base_url:
+            return None
+
+        # Get current track info for cache-busting
+        title = self.speaker.get_media_title()
+        artist = self.speaker.get_media_artist()
+
+        # If we have track info, create a cache-busting parameter
+        if title or artist:
+            # Create a simple hash from track info to use as cache buster
+            import hashlib
+
+            track_info = f"{title or 'unknown'}_{artist or 'unknown'}"
+            cache_buster = hashlib.md5(track_info.encode()).hexdigest()[:8]
+
+            # Add cache-busting parameter to URL
+            separator = "&" if "?" in base_url else "?"
+            return f"{base_url}{separator}cb={cache_buster}"
+
+        return base_url
 
     async def get_media_image(self) -> tuple[bytes | None, str | None]:
         """Fetch media image of current playing media.
