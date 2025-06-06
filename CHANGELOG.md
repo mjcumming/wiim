@@ -25,3 +25,11 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 ### Changed
 
 - Bump version for release automation workflow validation.
+
+## [0.0.3] - 2025-06-06
+
+### Changed
+
+- Re-enabled automatic release and release drafter GitHub workflows.
+- Assets are now published as `wiim.zip` to satisfy HACS downloader.
+- Version bumped to `0.0.3`.
