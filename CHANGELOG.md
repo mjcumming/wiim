@@ -78,3 +78,10 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 ### Fixed
 
 - Release asset now includes LICENSE and README at root so license badge renders correctly in HACS.
+
+## [0.0.10] - 2025-06-06
+
+### Changed
+
+- Disabled auto-release workflow; releases now occur only via manual Git tag (`release.yml`).
+- No code changes.

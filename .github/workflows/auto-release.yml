@@ -1,13 +1,13 @@
 # Enable automatic release workflow
-name: Auto Release
+name: Auto Release (DISABLED)
 
 on:
-  push:
-    branches:
-      - main
-      - master
-    paths:
-      - "custom_components/wiim/manifest.json"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Manual run only — auto-release disabled"
+        required: false
+        type: string
 
 jobs:
   check-version:
@@ -69,8 +69,19 @@ jobs:
             echo "Tag v${{ needs.check-version.outputs.version }} does not exist"
           fi
 
+      - name: Check if release already exists
+        id: release-check
+        run: |
+          if gh release view "v${{ needs.check-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release v${{ needs.check-version.outputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release v${{ needs.check-version.outputs.version }} does not exist"
+          fi
+
       - name: Create ZIP file
-        if: steps.tag-check.outputs.exists == 'false'
+        if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
           zip -r wiim.zip custom_components/wiim/ LICENSE README.md --exclude "*/__pycache__/*" --exclude "*.pyc"
           ls -la wiim.zip
@@ -93,7 +104,7 @@ jobs:
           fi
 
       - name: Create Release with GitHub CLI
-        if: steps.tag-check.outputs.exists == 'false'
+        if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES: ${{ steps.changelog.outputs.changelog }}
@@ -105,7 +116,7 @@ jobs:
             wiim.zip
 
       - name: Success notification
-        if: steps.tag-check.outputs.exists == 'false'
+        if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
           echo "🎉 Successfully created release v${{ needs.check-version.outputs.version }}"
           echo "📦 ZIP file uploaded as wiim.zip"
