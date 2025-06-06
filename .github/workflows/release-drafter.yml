@@ -1,35 +1,18 @@
-# DISABLED: This workflow was creating draft releases on every push
-name: Draft a release note (DISABLED)
+# Enable Release Drafter workflow
+name: Draft a release note
 
-# Disabled workflow - only runs manually and does nothing
 on:
-  workflow_dispatch:
-    inputs:
-      disabled:
-        description: 'This workflow is disabled'
-        default: true
-        type: boolean
+  push:
+    branches:
+      - main
+      - master
 
 jobs:
-  disabled:
-    name: Workflow Disabled
+  draft_release:
+    name: Release Drafter
     runs-on: ubuntu-latest
     steps:
-      - name: Workflow disabled
-        run: echo "This workflow has been disabled to prevent automatic draft releases"
-
-# Original workflow commented out below:
-# on:
-#   push:
-#     branches:
-#       - main
-#       - master
-# jobs:
-#   draft_release:
-#     name: Release Drafter
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Run release-drafter
-#         uses: release-drafter/release-drafter@v6.1.0
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run release-drafter
+        uses: release-drafter/release-drafter@v6.1.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
