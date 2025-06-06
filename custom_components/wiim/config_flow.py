@@ -2,7 +2,7 @@
 
 Simple discovery and setup flow following Home Assistant best practices.
 """
-# type: ignore
+# mypy: ignore-errors
 
 from __future__ import annotations
 

@@ -59,7 +59,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._device_info = None
 
         # Track device info update timing (every 30-60 seconds)
-        self._last_device_info_update = 0.0
+        self._last_device_info_update = 0.0  # type: ignore[assignment]
         self._device_info_interval = 30
 
         # Debug: Track update calls
@@ -419,7 +419,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Check if we should update device info (every 30-60 seconds)."""
         now = time.time()
         if now - self._last_device_info_update >= self._device_info_interval:
-            self._last_device_info_update = now
+            self._last_device_info_update = now  # type: ignore[assignment]
             return True
         return False
 

@@ -42,3 +42,13 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 - Added missing type annotations to eliminate mypy runtime warnings.
 - Ignored strict HA typing overrides in `config_flow.py` (#type: ignore).
 - Version bumped to `0.0.4`.
+
+## [0.0.5] - 2025-06-06
+
+### Changed
+
+- Bumped version for HACS release.
+
+### Fixed
+
+- Coordinator typing clean-up to satisfy mypy.
