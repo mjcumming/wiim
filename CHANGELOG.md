@@ -3,6 +3,14 @@
 All notable changes to the WiiM Audio integration will be documented in this file.
 
 
+## [0.0.14] - 2025-06-06
+
+### Fixed
+
+- Fixed auto-release workflow properly enabled with push trigger
+- Auto-releases now work on manifest.json version changes
+
+
 ## [0.0.13] - 2025-06-06
 
 ### Fixed
