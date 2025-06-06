@@ -1,11 +1,16 @@
 # Enable automatic release workflow
-name: Auto Release (DISABLED)
+name: Auto Release
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "custom_components/wiim/manifest.json"
   workflow_dispatch:
     inputs:
       reason:
-        description: "Manual run only — auto-release disabled"
+        description: "Manual trigger reason"
         required: false
         type: string
 
