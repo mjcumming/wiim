@@ -2,15 +2,10 @@
 name: Auto Release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "custom_components/wiim/manifest.json"
   workflow_dispatch:
     inputs:
       reason:
-        description: "Manual trigger reason"
+        description: "Manual run only — auto-release disabled"
         required: false
         type: string
 
@@ -88,10 +83,7 @@ jobs:
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
-          cd custom_components
-          zip -r ../wiim.zip wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
-          cd ..
-          zip wiim.zip LICENSE README.md
+          zip -r wiim.zip custom_components/wiim/ LICENSE README.md --exclude "*/__pycache__/*" --exclude "*.pyc"
           ls -la wiim.zip
 
       - name: Extract changelog for this version

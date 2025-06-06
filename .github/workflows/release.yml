@@ -27,7 +27,10 @@ jobs:
 
       - name: Create ZIP file
         run: |
-          zip -r wiim.zip custom_components/wiim/ LICENSE README.md --exclude "*/__pycache__/*" --exclude "*.pyc"
+          cd custom_components
+          zip -r ../wiim.zip wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          cd ..
+          zip wiim.zip LICENSE README.md
 
       - name: Extract changelog for this version
         id: changelog

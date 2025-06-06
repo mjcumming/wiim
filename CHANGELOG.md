@@ -3,6 +3,15 @@
 All notable changes to the WiiM Audio integration will be documented in this file.
 
 
+## [0.0.15] - 2025-06-06
+
+### Fixed
+
+- **CRITICAL: Fixed ZIP directory structure for HACS compatibility**
+- ZIP now contains wiim/ at root instead of custom_components/wiim/
+- HACS will now properly install integration to /config/custom_components/wiim/
+
+
 ## [0.0.14] - 2025-06-06
 
 ### Fixed
