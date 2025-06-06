@@ -2,6 +2,15 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+
+## [0.0.13] - 2025-06-06
+
+### Fixed
+
+- Fixed missing `release.yml` workflow for manual tag-based releases
+- Auto-release workflow properly enabled and monitoring manifest.json changes
+- Both workflows now create proper HACS-compatible ZIP structure
+
 ## [0.0.1] - 2025-06-06
 
 ### Added
