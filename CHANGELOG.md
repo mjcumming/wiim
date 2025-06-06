@@ -91,3 +91,9 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 ### Fixed
 
 - README license badge now points to absolute GitHub URL so it displays correctly inside Home Assistant UI.
+
+## [0.0.12] - 2025-06-06
+
+### Maintenance
+
+- No functional changes; tagged to align latest metadata and disable auto-release workflow.
