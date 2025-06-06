@@ -1,13 +1,13 @@
 {
   "domain": "wiim",
   "name": "WiiM",
-  "codeowners": ["@gryzznaut"],
+  "codeowners": ["@mjcumming"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/gryzznaut/ha-wiim",
+  "documentation": "https://github.com/mjcumming/wiim",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/gryzznaut/ha-wiim/issues",
+  "issue_tracker": "https://github.com/mjcumming/wiim/issues",
   "quality_scale": "gold",
   "requirements": ["aiohttp"],
   "icon": "mdi:speaker-wireless",
@@ -38,6 +38,6 @@
       "st": "urn:schemas-upnp-org:service:ConnectionManager:1"
     }
   ],
-  "version": "0.0.7",
+  "version": "0.0.8",
   "zeroconf": [{ "type": "_linkplay._tcp.local." }]
 }

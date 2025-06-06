@@ -66,3 +66,9 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 
 - Release workflows now package `custom_components/wiim/` path inside ZIP, matching HACS expectations.
 - Version bump to trigger re-release.
+
+## [0.0.8] - 2025-06-06
+
+### Changed
+
+- Updated `codeowners` to `@mjcumming` so HACS shows correct maintainer.
