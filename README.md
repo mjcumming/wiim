@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
-[![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](LICENSE)
+[![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
 
 Transform your WiiM and LinkPlay speakers into powerful Home Assistant `media_player` entities with full multiroom support, no additional dependencies required.
 

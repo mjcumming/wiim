@@ -85,3 +85,9 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 
 - Disabled auto-release workflow; releases now occur only via manual Git tag (`release.yml`).
 - No code changes.
+
+## [0.0.11] - 2025-06-06
+
+### Fixed
+
+- README license badge now points to absolute GitHub URL so it displays correctly inside Home Assistant UI.
