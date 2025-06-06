@@ -52,3 +52,10 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 ### Fixed
 
 - Coordinator typing clean-up to satisfy mypy.
+
+## [0.0.6] - 2025-06-06
+
+### Fixed
+
+- Ensure release ZIP structure (`wiim/` at archive root) so HACS extracts into `custom_components/wiim` and Home Assistant can load the integration, eliminating "Integration 'wiim' not found" startup error.
+- No functional code changes.
