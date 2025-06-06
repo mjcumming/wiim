@@ -92,7 +92,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # since autodiscovery often fails and manual is more reliable
         return await self.async_step_manual()
 
-    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # type: ignore[override]
         """Handle automatic discovery."""
         if not self._discovered_devices:
             # Run discovery

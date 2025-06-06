@@ -33,3 +33,12 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 - Re-enabled automatic release and release drafter GitHub workflows.
 - Assets are now published as `wiim.zip` to satisfy HACS downloader.
 - Version bumped to `0.0.3`.
+
+## [0.0.4] - 2025-06-06
+
+### Fixed
+
+- Restored HTTP :80 fallback so discovery works on legacy LinkPlay firmware.
+- Added missing type annotations to eliminate mypy runtime warnings.
+- Ignored strict HA typing overrides in `config_flow.py` (#type: ignore).
+- Version bumped to `0.0.4`.

@@ -179,7 +179,11 @@ class WiimData:
 
         Returns dict of issues found for debugging.
         """
-        issues = {"missing_ip_mappings": [], "orphaned_ip_mappings": [], "inconsistent_entity_mappings": []}
+        issues: dict[str, list[str]] = {
+            "missing_ip_mappings": [],
+            "orphaned_ip_mappings": [],
+            "inconsistent_entity_mappings": [],
+        }
 
         # Check that all speakers have IP mappings
         for uuid, speaker in self.speakers.items():
@@ -1039,7 +1043,7 @@ class Speaker:
         # Handle unknown states (log warning but don't spam)
         # Rate limit unknown state warnings to reduce log spam
         if not hasattr(self, "_last_unknown_state_warning"):
-            self._last_unknown_state_warning = {}
+            self._last_unknown_state_warning: dict[str, float] = {}
 
         import time
 

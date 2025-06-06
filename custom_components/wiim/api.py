@@ -318,12 +318,16 @@ class WiiMClient:
             ]
             _LOGGER.debug("Using discovered port %d for %s", self.port, self._host)
         else:
-            # Modern WiiM firmware always supports HTTPS; attempting plain HTTP on port 80
-            # just generates noise in the logs when the endpoint rejects the connection.
-            # We therefore skip the HTTP-80 fallback to reduce connection failures.
+            # Standard probing order: try secure HTTPS ports first, then fall
+            # back to *plain* HTTP on port 80 as a last resort so older
+            # LinkPlay builds without TLS still work.  This adds one extra
+            # connection attempt only when the secure ones failed, keeping
+            # the log noise minimal while regaining compatibility.
+
             protocols_to_try = [
                 ("https", 443, self._get_ssl_context()),  # HTTPS primary
-                ("https", 4443, self._get_ssl_context()),  # HTTPS alternate port
+                ("https", 4443, self._get_ssl_context()),  # HTTPS alternate
+                ("http", 80, None),  # HTTP fallback (legacy)
             ]
 
             # If user specified a custom port, try that with both protocols first
