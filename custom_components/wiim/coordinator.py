@@ -680,7 +680,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             actual_source = "network"  # Default for masters with no clear source
 
         status["source"] = actual_source
-        _LOGGER.info("Resolved master %s source: multiroom -> %s", self.client.host, actual_source)
+        _LOGGER.debug("Resolved master %s source: multiroom -> %s", self.client.host, actual_source)
 
     async def _mirror_master_media(self, status: dict, metadata: dict) -> None:
         """Mirror master's media information for slave device.

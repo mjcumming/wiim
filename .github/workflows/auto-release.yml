@@ -72,8 +72,7 @@ jobs:
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false'
         run: |
-          # Correct root structure for HACS
-          zip -r wiim.zip custom_components/wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          zip -r wiim.zip custom_components/wiim/ LICENSE README.md --exclude "*/__pycache__/*" --exclude "*.pyc"
           ls -la wiim.zip
 
       - name: Extract changelog for this version

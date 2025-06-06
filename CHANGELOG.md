@@ -72,3 +72,9 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 ### Changed
 
 - Updated `codeowners` to `@mjcumming` so HACS shows correct maintainer.
+
+## [0.0.9] - 2025-06-06
+
+### Fixed
+
+- Release asset now includes LICENSE and README at root so license badge renders correctly in HACS.

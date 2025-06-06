@@ -27,8 +27,7 @@ jobs:
 
       - name: Create ZIP file
         run: |
-          # Package with correct root path so HACS extracts to custom_components/wiim
-          zip -r wiim.zip custom_components/wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          zip -r wiim.zip custom_components/wiim/ LICENSE README.md --exclude "*/__pycache__/*" --exclude "*.pyc"
 
       - name: Extract changelog for this version
         id: changelog

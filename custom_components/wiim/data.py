@@ -1357,7 +1357,7 @@ class Speaker:
             )
             if self.coordinator_speaker:
                 following_text = f"Following {self.coordinator_speaker.name}"
-                _LOGGER.info("🎵 Slave %s showing source: '%s'", self.name, following_text)
+                _LOGGER.debug("🎵 Slave %s showing source: '%s'", self.name, following_text)
                 return following_text
             else:
                 _LOGGER.warning("🎵 Slave %s has no coordinator_speaker, showing generic source", self.name)
@@ -1382,7 +1382,7 @@ class Speaker:
 
         source = mode_map.get(str(mode))
         if source:
-            _LOGGER.info("🎵 Source from mode='%s' -> '%s' for %s (role: %s)", mode, source, self.name, self.role)
+            _LOGGER.debug("🎵 Source from mode='%s' -> '%s' for %s (role: %s)", mode, source, self.name, self.role)
             return source
         else:
             _LOGGER.warning("🎵 Unknown mode '%s' for %s", mode, self.name)
