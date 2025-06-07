@@ -117,11 +117,11 @@ jobs:
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
-          # remove any old artifacts
-          rm -f wiim.zip
-          # Package exactly what HACS expects: custom_components/wiim/**
-          zip -r wiim.zip custom_components/wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
-          # Optionally include top-level metadata files (README & LICENSE)
+          # Build zip so that the root of the archive is the integration directory itself (wiim/)
+          cd custom_components
+          zip -r ../wiim.zip wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          cd ..
+          # Optionally include metadata files
           zip wiim.zip LICENSE README.md
 
       - name: Extract changelog for this version
