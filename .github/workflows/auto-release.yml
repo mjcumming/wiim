@@ -88,8 +88,12 @@ jobs:
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
+          # remove any old artifacts
+          rm -f wiim.zip
+          rm -rf release
+          # prepare top-level integration folder
           mkdir -p release/wiim
-          cp -r custom_components/wiim release/wiim
+          cp -r custom_components/wiim/* release/wiim/
           cp LICENSE README.md release/
           cd release
           zip -r ../wiim.zip . --exclude "*/__pycache__/*" --exclude "*.pyc"
