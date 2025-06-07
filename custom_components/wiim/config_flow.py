@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
-    """Validate device and get info.
+    """Validate device and get info using proven LinkPlay UUID pattern.
 
     Returns:
         Tuple of (is_valid, device_name, device_uuid)
@@ -51,19 +51,23 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
 
         device_name = await client.get_device_name()
 
-        # Get device UUID from status (like LinkPlay does)
-        device_uuid = None
-        try:
-            status = await client.get_player_status()
-            if uuid := status.get("uuid"):
-                device_uuid = uuid
-            elif mac := status.get("MAC"):
-                # Use MAC as backup UUID (normalized)
-                device_uuid = mac.lower().replace(":", "")
-        except Exception:
-            _LOGGER.debug("Could not get device UUID for %s", host)
-
+        # PROVEN PATTERN: Use getStatusEx exactly like working libraries
+        device_info = await client.get_device_info()  # Calls getStatusEx
+        
+        # PROVEN PATTERN: Extract UUID from "uuid" field like HA Core does
+        device_uuid = device_info.get("uuid")
+        
+        if not device_uuid:
+            # PROVEN PATTERN: Fail setup if no UUID (like HA Core)
+            _LOGGER.error("LinkPlay device at %s did not provide UUID in getStatusEx response", host)
+            return False, host, None
+            
+        _LOGGER.debug("Successfully extracted UUID for %s: %s", host, device_uuid)
         return True, device_name, device_uuid
+        
+    except Exception as err:
+        _LOGGER.error("Failed to validate LinkPlay device at %s: %s", host, err)
+        return False, host, None
     finally:
         await client.close()
 
@@ -116,12 +120,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Validate and create entry
             is_valid, device_name, device_uuid = await validate_wiim_device(host)
-            if not is_valid:
+            if not is_valid or not device_uuid:
                 return self.async_abort(reason="cannot_connect")
 
-            # Use device UUID if available, otherwise fall back to host
-            unique_id = device_uuid or host
-            await self.async_set_unique_id(unique_id)
+            # PROVEN PATTERN: Use UUID as unique_id (like HA Core)
+            await self.async_set_unique_id(device_uuid)
             self._abort_if_unique_id_configured()
 
             return self.async_create_entry(title=device_name, data={CONF_HOST: host})
@@ -170,14 +173,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Should not happen but keep mypy happy
                 is_valid, device_name, device_uuid = False, str(validated), None
 
-            if is_valid:
-                # Use device UUID if available, otherwise fall back to host
-                unique_id = device_uuid or host
-                await self.async_set_unique_id(unique_id)
+            if is_valid and device_uuid:
+                # PROVEN PATTERN: Use UUID as unique_id (like HA Core)
+                await self.async_set_unique_id(device_uuid)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=device_name, data={CONF_HOST: host})
             else:
-                errors["base"] = "cannot_connect"
+                # PROVEN PATTERN: Show clear error when UUID extraction fails
+                errors["base"] = "no_uuid" if is_valid else "cannot_connect"
 
         schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of your WiiM device"): str})
 
@@ -224,15 +227,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.info("🔍 ZEROCONF DISCOVERY called for host: %s", host)
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
-        if not is_valid:
+        if not is_valid or not device_uuid:
             _LOGGER.warning("🔍 ZEROCONF DISCOVERY validation failed for host: %s", host)
             return self.async_abort(reason="cannot_connect")
 
         _LOGGER.info("🔍 ZEROCONF DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
 
-        # Use device UUID if available, otherwise fall back to host
-        unique_id = device_uuid or host
-        await self.async_set_unique_id(unique_id)
+        # PROVEN PATTERN: Use UUID as unique_id (like HA Core)
+        await self.async_set_unique_id(device_uuid)
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
         # Store data for discovery confirmation
@@ -255,15 +257,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.info("🔍 SSDP DISCOVERY extracted host: %s", host)
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
-        if not is_valid:
+        if not is_valid or not device_uuid:
             _LOGGER.warning("🔍 SSDP DISCOVERY validation failed for host: %s", host)
             return self.async_abort(reason="cannot_connect")
 
         _LOGGER.info("🔍 SSDP DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
 
-        # Use device UUID if available, otherwise fall back to host
-        unique_id = device_uuid or host
-        await self.async_set_unique_id(unique_id)
+        # PROVEN PATTERN: Use UUID as unique_id (like HA Core)
+        await self.async_set_unique_id(device_uuid)
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
         # Store data for discovery confirmation
@@ -284,14 +285,15 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Validate the device is still reachable
         is_valid, validated_name, validated_uuid = await validate_wiim_device(host)
-        if not is_valid:
+        if not is_valid or not validated_uuid:
             _LOGGER.warning("Integration discovery failed validation for %s at %s", device_name, host)
             return self.async_abort(reason="cannot_connect")
 
         # Use validated data (more accurate than discovery data)
         final_name = validated_name or device_name
-        final_uuid = validated_uuid or device_uuid or host
+        final_uuid = validated_uuid
 
+        # PROVEN PATTERN: Use UUID as unique_id (like HA Core)
         await self.async_set_unique_id(final_uuid)
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
