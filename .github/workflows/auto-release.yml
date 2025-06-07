@@ -118,9 +118,12 @@ jobs:
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
           rm -f wiim.zip
-          # Package exactly what HACS expects: custom_components/wiim/**
-          zip -r wiim.zip custom_components/wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
-          # Optionally include metadata files at ZIP root
+          # HACS with zip_release: true expects integration files at ZIP root
+          # HACS creates custom_components/wiim/ and extracts ZIP contents there
+          cd custom_components/wiim
+          zip -r ../../wiim.zip . --exclude "*/__pycache__/*" --exclude "*.pyc"
+          cd ../../
+          # Add metadata files at ZIP root (optional)
           zip wiim.zip LICENSE README.md
 
       - name: Extract changelog for this version
