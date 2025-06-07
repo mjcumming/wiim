@@ -89,7 +89,7 @@ jobs:
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
           mkdir -p release/custom_components
-          cp -r custom_components/<integration-name> release/custom_components/
+          cp -r custom_components/wiim release/custom_components/
           cp LICENSE README.md release/
           cd release
           zip -r ../wiim.zip . --exclude "*/__pycache__/*" --exclude "*.pyc"
