@@ -118,11 +118,9 @@ jobs:
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
           rm -f wiim.zip
-          # Make the integration directory the DEST on install; zip only its contents
-          cd custom_components/wiim
-          zip -r ../../wiim.zip . --exclude "*/__pycache__/*" --exclude "*.pyc"
-          cd ../../
-          # Optionally include metadata files
+          # Package exactly what HACS expects: custom_components/wiim/**
+          zip -r wiim.zip custom_components/wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          # Optionally include metadata files at ZIP root
           zip wiim.zip LICENSE README.md
 
       - name: Extract changelog for this version
