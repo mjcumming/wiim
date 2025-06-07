@@ -94,8 +94,7 @@ jobs:
           cd release
           zip -r ../wiim.zip . --exclude "*/__pycache__/*" --exclude "*.pyc"
           cd ..
-          ls -la wiim.zip
-
+ 
       - name: Extract changelog for this version
         if: steps.tag-check.outputs.exists == 'false'
         id: changelog
