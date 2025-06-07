@@ -117,11 +117,10 @@ jobs:
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
-          # Build zip so that the root of the archive is the integration directory itself (wiim/)
-          cd custom_components
-          zip -r ../wiim.zip wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
-          cd ..
-          # Optionally include metadata files
+          rm -f wiim.zip
+          # Package with correct root: custom_components/wiim/**
+          zip -r wiim.zip custom_components/wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          # Optionally include metadata files at the root of the archive
           zip wiim.zip LICENSE README.md
 
       - name: Extract changelog for this version
