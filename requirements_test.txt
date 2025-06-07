@@ -21,3 +21,4 @@ async-upnp-client==0.44.0
 
 # Code quality
 flake8>=6.0.0
+ruff>=0.4.2

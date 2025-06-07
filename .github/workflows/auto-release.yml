@@ -53,8 +53,37 @@ jobs:
             echo "Version unchanged"
           fi
 
-  release:
+  tests:
     needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_test.txt
+
+      - name: Ruff lint
+        run: |
+          ruff check custom_components/wiim --line-length 120
+
+      - name: Flake8 lint
+        run: |
+          flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
+
+      - name: Run pytest
+        run: |
+          pytest tests/ --cov=custom_components/wiim --cov-report=xml
+
+  release:
+    needs: [check-version, tests]
     if: needs.check-version.outputs.version-changed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -90,15 +119,11 @@ jobs:
         run: |
           # remove any old artifacts
           rm -f wiim.zip
-          rm -rf release
-          # prepare top-level integration folder
-          mkdir -p release/wiim
-          cp -r custom_components/wiim/* release/wiim/
-          cp LICENSE README.md release/
-          cd release
-          zip -r ../wiim.zip . --exclude "*/__pycache__/*" --exclude "*.pyc"
-          cd ..
- 
+          # Package exactly what HACS expects: custom_components/wiim/**
+          zip -r wiim.zip custom_components/wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          # Optionally include top-level metadata files (README & LICENSE)
+          zip wiim.zip LICENSE README.md
+
       - name: Extract changelog for this version
         if: steps.tag-check.outputs.exists == 'false'
         id: changelog
