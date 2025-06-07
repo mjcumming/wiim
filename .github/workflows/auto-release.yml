@@ -88,10 +88,12 @@ jobs:
       - name: Create ZIP file
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
         run: |
-          cd custom_components
-          zip -r ../wiim.zip wiim/ --exclude "*/__pycache__/*" --exclude "*.pyc"
+          mkdir -p release/custom_components
+          cp -r custom_components/<integration-name> release/custom_components/
+          cp LICENSE README.md release/
+          cd release
+          zip -r ../wiim.zip . --exclude "*/__pycache__/*" --exclude "*.pyc"
           cd ..
-          zip wiim.zip LICENSE README.md
           ls -la wiim.zip
 
       - name: Extract changelog for this version
