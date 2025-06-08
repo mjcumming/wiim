@@ -395,7 +395,7 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         current_volume_step_decimal = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
         volume_step_percent = int(current_volume_step_decimal * 100)
 
-        current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, True)
+        current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, False)
         current_diagnostic_entities = self.entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False)
         current_debug_logging = self.entry.options.get(CONF_DEBUG_LOGGING, False)
 

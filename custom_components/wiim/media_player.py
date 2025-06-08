@@ -14,6 +14,7 @@ from homeassistant.components.media_player import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.debounce import Debouncer
 
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
@@ -62,6 +63,10 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Override unique_id to match raw speaker UUID (tests expect this)
         self._attr_unique_id = self.speaker.uuid
 
+        # Debouncer for high-frequency volume changes (slider drags)
+        self._volume_debouncer: Debouncer | None = None
+        self._pending_volume: float | None = None
+
         _LOGGER.debug(
             "WiiMMediaPlayer initialized for %s with controller delegation",
             speaker.name,
@@ -79,6 +84,16 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Set up entity."""
         await super().async_added_to_hass()
         _LOGGER.debug("Media player %s registered with entity_id %s", self.speaker.name, self.entity_id)
+
+        # Create debouncer lazily once hass is available
+        if self._volume_debouncer is None:
+            self._volume_debouncer = Debouncer(
+                self.hass,
+                _LOGGER,
+                cooldown=0.4,          # max 1 cmd / 0.4 s  (~2.5 Hz)
+                immediate=False,
+                function=self._send_volume_debounced,
+            )
 
     @callback
     def async_write_ha_state(self) -> None:
@@ -344,15 +359,32 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         self._optimistic_volume = volume
         self.async_write_ha_state()
 
+        # 2. Debounce the actual send to avoid flooding device
+        self._pending_volume = volume
+
+        # Ensure debouncer exists (in case set_volume called before added_to_hass)
+        if self._volume_debouncer is None:
+            self._volume_debouncer = Debouncer(
+                self.hass,
+                _LOGGER,
+                cooldown=0.4,
+                immediate=False,
+                function=self._send_volume_debounced,
+            )
+
+        await self._volume_debouncer.async_call()
+
+    async def _send_volume_debounced(self) -> None:
+        """Send the last requested volume to the device (debounced)."""
+        if self._pending_volume is None:
+            return
+
         try:
-            # 2. Send command to device
-            await self.controller.set_volume(volume)
-
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("set_volume")
-
+            await self.controller.set_volume(self._pending_volume)
+            # Immediate refresh to confirm actual device state
+            await self._async_execute_command_with_immediate_refresh("set_volume_debounced")
         except Exception:
-            # Clear optimistic state on error so real state shows
+            # Clear optimistic state so UI snaps back
             self._optimistic_volume = None
             self.async_write_ha_state()
             raise

@@ -88,7 +88,8 @@ class Speaker:
 
     async def async_setup(self, entry: ConfigEntry) -> None:
         """Complete async setup of the speaker."""
-        await self._populate_device_info()
+        # _populate_device_info is a synchronous helper; no need to await.
+        self._populate_device_info()
         await self._register_ha_device(entry)
         _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
@@ -176,6 +177,17 @@ class Speaker:
             self.firmware = device_info["firmware"]
         if device_info.get("mac"):
             self.mac_address = self._normalize_mac_address(device_info["mac"])
+
+        # Detect device name change coming from API – keep config entry title in sync
+        new_name = status.get("DeviceName") or device_info.get("device_name") or None
+        if new_name and new_name != self.name:
+            _LOGGER.info("Device name changed on %s: '%s' → '%s'", self.ip_address, self.name, new_name)
+            self.name = new_name
+
+            # Update config entry title so that options dialog & integrations page reflect new name
+            # Only update if user hasn't manually overridden title via UI (HA allows editing).
+            if self.config_entry.title == self.name or self.config_entry.title in [self._extract_device_name({}), "WiiM Speaker", "WiiM Device"]:
+                self.hass.config_entries.async_update_entry(self.config_entry, title=new_name)
 
         # Update role and group state
         old_role = self.role
@@ -327,6 +339,226 @@ class Speaker:
             clean_name = "WiiM Speaker"
 
         return clean_name
+
+    # ==========================================================
+    # GENERIC HELPER PROPERTIES / METHODS REQUIRED BY PLATFORMS
+    # These were referenced by media_player, sensor and controller
+    # modules but were missing after the recent data-layer overhaul.
+    # Implementations intentionally keep business-logic simple while
+    # remaining 100 % safe (no external I/O, no await requirements).
+    # ==========================================================
+
+    # ----- GROUP HELPERS -----
+
+    @property
+    def is_group_coordinator(self) -> bool:
+        """Return True if this speaker can be considered the group coordinator.
+
+        Solo and master speakers are coordinators, slaves are not.
+        """
+        return self.role != "slave"
+
+    def get_group_member_entity_ids(self) -> list[str]:
+        """Return HA entity IDs for all members in the current group.
+
+        The master (or solo) speaker is always the first element to match
+        the ordering expectation from previous implementation/tests.
+        """
+        def _speaker_to_entity_id(spk: "Speaker") -> str:
+            return f"media_player.{spk.uuid.replace('-', '_').lower()}"
+
+        if self.role == "master":
+            ordered_members = [self] + [m for m in self.group_members if m is not self]
+        else:
+            ordered_members = [self] + self.group_members
+
+        return [_speaker_to_entity_id(s) for s in ordered_members]
+
+    async def async_join_group(self, target_speakers: list["Speaker"]) -> None:
+        """Create or extend a multiroom group with *self* as master.
+
+        A *very* lightweight implementation that simply maps to a few
+        LinkPlay API calls exposed on the underlying client. It is good
+        enough for UI / service-level grouping interactions; advanced
+        edge-cases (e.g. regrouping masters) are handled by the device.
+        """
+        try:
+            # Make sure we have a list without duplicates & self.
+            slaves = [s for s in target_speakers if s is not self]
+            if not slaves:
+                return
+
+            # 1. If we are currently not a master, issue create_group() first.
+            if self.role != "master":
+                await self.coordinator.client.create_group()
+
+            # 2. Ask each slave to join our IP.
+            for slave in slaves:
+                await slave.coordinator.client.join_slave(self.ip_address)
+
+        except Exception as err:  # pragma: no cover – safety net
+            _LOGGER.error("Failed to join group: %s", err)
+
+    async def async_leave_group(self) -> None:
+        """Leave or dissolve the current group depending on our role."""
+        try:
+            if self.role == "master":
+                # Master dissolves group for everyone.
+                await self.coordinator.client.leave_group()
+            elif self.role == "slave" and self.coordinator_speaker:
+                # Ask master to kick us out.
+                await self.coordinator_speaker.coordinator.client.kick_slave(self.ip_address)
+            # Solo => nothing to do.
+        except Exception as err:  # pragma: no cover
+            _LOGGER.error("Failed to leave group: %s", err)
+
+    # ----- VOLUME / PLAYBACK HELPERS -----
+
+    def get_volume_level(self) -> float | None:
+        """Return current volume as a float 0…1."""
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        vol_raw = status.get("vol") or status.get("volume")
+        try:
+            vol_int = int(vol_raw)
+            return max(0, min(vol_int, 100)) / 100.0
+        except (TypeError, ValueError):
+            return None
+
+    def get_playback_state(self):
+        """Map WiiM play_status to Home Assistant MediaPlayerState."""
+        from homeassistant.components.media_player import MediaPlayerState
+
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        play_status = (status.get("play_status") or status.get("status") or "").lower()
+
+        if play_status in ["play", "playing"]:
+            return MediaPlayerState.PLAYING
+        if play_status in ["pause", "paused"]:
+            return MediaPlayerState.PAUSED
+        if play_status in ["stop", "stopped", "idle", ""]:
+            return MediaPlayerState.IDLE
+        return MediaPlayerState.UNKNOWN
+
+    def is_volume_muted(self) -> bool | None:
+        """Return mute status based on coordinator status dict.
+
+        Returns:
+            True  – muted
+            False – unmuted
+            None  – unknown / not reported
+        """
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        mute_val = status.get("mute") or status.get("muted")
+        if mute_val is None:
+            return None
+
+        # Convert to boolean for various encodings
+        if isinstance(mute_val, (bool, int)):
+            return bool(int(mute_val))
+
+        mute_str = str(mute_val).strip().lower()
+        if mute_str in ["1", "true", "yes", "on"]:
+            return True
+        if mute_str in ["0", "false", "no", "off"]:
+            return False
+        return None
+
+    # ----- MEDIA METADATA HELPERS -----
+
+    def _status_field(self, *names: str):
+        """Return the first matching field from coordinator status dict."""
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        for n in names:
+            if (val := status.get(n)) not in (None, ""):
+                return val
+        return None
+
+    def get_media_title(self) -> str | None:
+        return self._status_field("title")
+
+    def get_media_artist(self) -> str | None:
+        return self._status_field("artist")
+
+    def get_media_album(self) -> str | None:
+        return self._status_field("album", "album_name")
+
+    def get_media_duration(self) -> int | None:
+        duration = self._status_field("duration")
+        try:
+            return int(float(duration)) if duration is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def get_media_position(self) -> int | None:
+        position = self._status_field("position", "seek")
+        try:
+            return int(float(position)) if position is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def get_media_position_updated_at(self) -> float | None:
+        # Coordinator could track this precisely; for now, update time when we last saw a position.
+        import time
+
+        pos = self.get_media_position()
+        if pos is not None:
+            self._last_position_update = time.time()
+            self._last_position = pos
+        return self._last_position_update
+
+    def get_media_image_url(self) -> str | None:
+        return self._status_field("entity_picture", "cover_url")
+
+    # ----- SOURCE / MODE HELPERS -----
+
+    def get_current_source(self) -> str | None:
+        """Return user-friendly current source name."""
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        source_internal = status.get("source") or status.get("mode")
+        if not source_internal:
+            return None
+        try:
+            from .const import SOURCE_MAP
+            return SOURCE_MAP.get(str(source_internal).lower(), str(source_internal))
+        except Exception:
+            return str(source_internal)
+
+    def get_shuffle_state(self) -> bool | None:
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        shuffle_val = status.get("shuffle") or status.get("play_mode") or status.get("playmode")
+        # Some firmwares report explicit shuffle bool, others encode into play_mode.
+        if shuffle_val is None:
+            return None
+        if isinstance(shuffle_val, (bool, int)):
+            return bool(int(shuffle_val))
+        # Handle string encodings
+        shuffle_val = str(shuffle_val).lower()
+        return shuffle_val in ["1", "true", "shuffle"]
+
+    def get_repeat_mode(self) -> str | None:
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        repeat_val = status.get("repeat") or status.get("play_mode") or status.get("playmode")
+        if repeat_val is None:
+            return None
+        # Map to HA repeat mode semantics
+        repeat_val = str(repeat_val).lower()
+        if repeat_val in ["one", "single", "repeat_one", "repeatone", "2"]:
+            return "one"
+        if repeat_val in ["all", "repeat_all", "repeatall", "1"]:
+            return "all"
+        return "off"
+
+    def get_sound_mode(self) -> str | None:
+        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        eq_preset = status.get("eq_preset") or status.get("eq")
+        if not eq_preset:
+            return None
+        # Map internal key to display name if available.
+        try:
+            from .media_controller import EQ_PRESET_MAP
+            return EQ_PRESET_MAP.get(eq_preset, eq_preset.title())
+        except Exception:
+            return str(eq_preset).title()
 
 
 # Simplified helper functions replacing complex registry

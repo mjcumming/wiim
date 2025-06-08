@@ -85,7 +85,7 @@ class WiiMGroupVolumeControl(WiimEntity, NumberEntity):
 
         Only available when speaker is master with active group members.
         """
-        return self.speaker.available and self.speaker.role == "master" and len(self.speaker.group_members) > 0
+        return self.speaker.available and self.speaker.role == "master"
 
     @property
     def native_value(self) -> float | None:

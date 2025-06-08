@@ -84,9 +84,9 @@ class WiiMGroupMuteControl(WiimEntity, SwitchEntity):
     def available(self) -> bool:
         """Return if entity is available.
 
-        Only available when speaker is master with active group members.
+        Only available when speaker is master.
         """
-        return self.speaker.available and self.speaker.role == "master" and len(self.speaker.group_members) > 0
+        return self.speaker.available and self.speaker.role == "master"
 
     @property
     def is_on(self) -> bool | None:

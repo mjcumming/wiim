@@ -46,8 +46,8 @@ def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
 
     # Add optional platforms based on user preferences
     for config_key, platform in OPTIONAL_PLATFORMS.items():
-        # Maintenance buttons default to True, others default to False
-        default_enabled = config_key == CONF_ENABLE_MAINTENANCE_BUTTONS
+        # All optional platforms default to disabled unless the user opts in
+        default_enabled = False
         if entry.options.get(config_key, default_enabled):
             platforms.append(platform)
             _LOGGER.debug("Enabling platform %s based on option %s", platform, config_key)
