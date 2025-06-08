@@ -32,9 +32,9 @@ from .const import (
 )
 
 if TYPE_CHECKING:
-    from .data import Speaker, get_all_speakers
+    from .data import Speaker
 else:
-    from .data import get_all_speakers
+    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -555,12 +555,12 @@ class MediaPlayerController:
 
             # Validate and resolve entity IDs to Speaker objects using new architecture
             from .data import get_all_speakers
-            
+
             all_speakers = get_all_speakers(self.hass)
             speakers = []
-            
+
             for entity_id in group_members:
-                # Extract media_player.xxx -> xxx for UUID lookup, or try direct entity lookup  
+                # Extract media_player.xxx -> xxx for UUID lookup, or try direct entity lookup
                 speaker_found = False
                 for speaker in all_speakers:
                     # Check if this speaker's entity would match the entity_id
@@ -569,10 +569,10 @@ class MediaPlayerController:
                         speakers.append(speaker)
                         speaker_found = True
                         break
-                
+
                 if not speaker_found:
                     self._logger.debug("Could not resolve entity ID %s to speaker", entity_id)
-            
+
             if not speakers:
                 self._logger.warning("No valid speakers found for entity IDs: %s", group_members)
                 raise HomeAssistantError(

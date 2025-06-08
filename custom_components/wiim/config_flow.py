@@ -53,18 +53,18 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
 
         # PROVEN PATTERN: Use getStatusEx exactly like working libraries
         device_info = await client.get_device_info()  # Calls getStatusEx
-        
+
         # PROVEN PATTERN: Extract UUID from "uuid" field like HA Core does
         device_uuid = device_info.get("uuid")
-        
+
         if not device_uuid:
             # PROVEN PATTERN: Fail setup if no UUID (like HA Core)
             _LOGGER.error("LinkPlay device at %s did not provide UUID in getStatusEx response", host)
             return False, host, None
-            
+
         _LOGGER.debug("Successfully extracted UUID for %s: %s", host, device_uuid)
         return True, device_name, device_uuid
-        
+
     except Exception as err:
         _LOGGER.error("Failed to validate LinkPlay device at %s: %s", host, err)
         return False, host, None
@@ -278,7 +278,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_uuid = discovery_info.get("device_uuid")
         discovery_source = discovery_info.get("discovery_source")
 
-        _LOGGER.info("🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s, source: %s)", 
+        _LOGGER.info("🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s, source: %s)",
                      device_name, host, device_uuid, discovery_source)
 
         # Handle missing device discovery (no IP provided)
@@ -317,10 +317,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            
+
             # Validate device and check UUID matches
             is_valid, validated_name, validated_uuid = await validate_wiim_device(host)
-            
+
             if not is_valid:
                 errors["base"] = "cannot_connect"
             elif validated_uuid != device_uuid:

@@ -570,7 +570,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # In v2.0.0 simplified architecture, get speaker directly from config entry
             speaker = get_speaker_from_config_entry(self.hass, self.entry)
-            
+
             # Build data structure for speaker update
             speaker.update_from_coordinator_data(status)
 

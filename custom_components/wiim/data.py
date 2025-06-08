@@ -20,11 +20,9 @@ This follows cursor rules: simple, composable, < 200 LOC modules.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
@@ -32,7 +30,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DOMAIN, EQ_PRESET_MAP
+from .const import DOMAIN
 
 if TYPE_CHECKING:
     from .coordinator import WiiMCoordinator
@@ -42,7 +40,7 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = [
     "Speaker",
     "get_speaker_from_config_entry",
-    "find_speaker_by_uuid", 
+    "find_speaker_by_uuid",
     "find_speaker_by_ip",
     "get_all_speakers",
 ]
@@ -60,7 +58,7 @@ class Speaker:
         self.hass = hass
         self.coordinator = coordinator
         self.config_entry = config_entry
-        
+
         # Use config entry unique_id as speaker UUID (set by config flow)
         self._uuid: str = self.config_entry.unique_id or ""
         if not self._uuid:
@@ -163,10 +161,7 @@ class Speaker:
         )
 
     def update_from_coordinator_data(self, data: dict) -> None:
-        """Update speaker state from coordinator data.
-        
-        Simplified version focusing on essential updates only.
-        """
+        """Update speaker state from coordinator data."""
         if not data:
             return
 
@@ -208,7 +203,7 @@ class Speaker:
         """Update group state for master speakers using simple lookups."""
         slave_list = multiroom.get("slave_list", [])
         self.coordinator_speaker = None  # Masters don't have coordinators
-        
+
         # Find slave speakers using simple iteration
         new_group_members = []
         for slave_info in slave_list:
@@ -233,7 +228,7 @@ class Speaker:
                 slave_speaker.coordinator_speaker = self
             else:
                 # Missing slave - trigger discovery
-                _LOGGER.warning("Master %s cannot find slave %s (IP: %s, UUID: %s)", 
+                _LOGGER.warning("Master %s cannot find slave %s (IP: %s, UUID: %s)",
                               self.name, slave_name, slave_ip, slave_uuid)
                 if slave_uuid:
                     self.hass.async_create_task(
@@ -245,7 +240,7 @@ class Speaker:
     def _update_slave_group_state(self, master_uuid: str | None) -> None:
         """Update group state for slave speakers using simple lookups."""
         self.group_members = []  # Slaves don't manage groups
-        
+
         if master_uuid:
             master_speaker = find_speaker_by_uuid(self.hass, master_uuid)
             if master_speaker:
@@ -266,7 +261,7 @@ class Speaker:
         """Trigger discovery flow for missing device."""
         try:
             from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
-            
+
             # Check if already have config entry
             existing = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, device_uuid)
             if existing:
@@ -281,7 +276,7 @@ class Speaker:
                 return
 
             _LOGGER.info("Creating discovery flow for missing device: %s (%s)", device_name, device_uuid)
-            
+
             await self.hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY, "unique_id": device_uuid},
@@ -350,7 +345,7 @@ def find_speaker_by_uuid(hass: HomeAssistant, uuid: str) -> Speaker | None:
     """Find speaker by UUID using config entry iteration."""
     if not uuid:
         return None
-    
+
     entry = hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, uuid)
     if entry and entry.entry_id in hass.data.get(DOMAIN, {}):
         return get_speaker_from_config_entry(hass, entry)
@@ -361,7 +356,7 @@ def find_speaker_by_ip(hass: HomeAssistant, ip: str) -> Speaker | None:
     """Find speaker by IP address using config entry iteration."""
     if not ip:
         return None
-        
+
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.data.get(CONF_HOST) == ip and entry.entry_id in hass.data.get(DOMAIN, {}):
             return get_speaker_from_config_entry(hass, entry)
@@ -381,14 +376,14 @@ def update_speaker_ip(hass: HomeAssistant, speaker: Speaker, new_ip: str) -> Non
     """Update speaker IP address through config entry system."""
     if speaker.ip_address == new_ip:
         return
-    
+
     _LOGGER.info("Updating speaker %s IP: %s -> %s", speaker.name, speaker.ip_address, new_ip)
-    
+
     # Update config entry
     hass.config_entries.async_update_entry(
         speaker.config_entry,
         data={**speaker.config_entry.data, CONF_HOST: new_ip}
     )
-    
+
     # Update speaker object
     speaker.ip_address = new_ip
