@@ -2,7 +2,14 @@
 
 ## Overview
 
-The WiiM integration follows a **pragmatic layered architecture** with clear separation of concerns, avoiding over-engineering while maintaining clean code structure.
+The WiiM integration follows a **simplified pragmatic architecture** with clear separation of concerns, avoiding over-engineering while maintaining clean code structure.
+
+**Key Simplifications in v2.1:**
+- Removed complex WiimData registry system
+- Config entries are the source of truth (like HA Core LinkPlay integration)
+- Simple speaker lookups via config entry iteration (2-4 devices = negligible overhead)
+- Missing device discovery through integration flows
+- Standard HA coordinator pattern throughout
 
 ## Core Design Principles
 
@@ -53,6 +60,72 @@ All operations have graceful fallbacks and error handling.
 
 This decision prioritizes **reliable core functionality** over potentially problematic power features.
 
+## Speaker Management Simplification (v2.1)
+
+### What Changed
+
+**BEFORE v2.1 (Complex Registry):**
+- WiimData registry with O(1) lookups and bidirectional mappings
+- Complex speaker registration/unregistration 
+- Custom registry validation and maintenance
+- Entity ID to Speaker mappings
+- IP address conflict resolution
+
+**AFTER v2.1 (Simple Lookups):**
+- Config entries as single source of truth
+- Simple iteration for speaker lookups (2-4 devices)
+- Standard HA config entry updates for IP changes
+- Missing device discovery through integration flows
+
+### Why We Simplified
+
+Following **cursor rules** and **HA Core LinkPlay patterns**:
+
+✅ **Performance**: 2-4 devices = negligible overhead for iteration
+✅ **Simplicity**: Less code to maintain and debug
+✅ **Standards**: Uses standard HA config entry system
+✅ **Reliability**: Less custom code = fewer bugs
+✅ **Testability**: Easier to test simple functions than complex registry
+
+### New Speaker Lookup Pattern
+
+```python
+# Simple helper functions replace complex registry
+def find_speaker_by_uuid(hass: HomeAssistant, uuid: str) -> Speaker | None:
+    """Find speaker by UUID using config entry iteration."""
+    entry = hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, uuid)
+    if entry and entry.entry_id in hass.data.get(DOMAIN, {}):
+        return get_speaker_from_config_entry(hass, entry)
+    return None
+
+def find_speaker_by_ip(hass: HomeAssistant, ip: str) -> Speaker | None:
+    """Find speaker by IP address using config entry iteration."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.data.get(CONF_HOST) == ip:
+            return get_speaker_from_config_entry(hass, entry)
+    return None
+```
+
+### Missing Device Discovery
+
+When speakers detect missing group members, they trigger discovery flows:
+
+```python
+async def _trigger_missing_device_discovery(self, device_uuid: str, device_name: str):
+    """Trigger discovery flow for missing device."""
+    await self.hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_INTEGRATION_DISCOVERY, "unique_id": device_uuid},
+        data={
+            "device_uuid": device_uuid,
+            "device_name": device_name,
+            "discovery_source": "missing_device",
+        }
+    )
+```
+
+This creates a config flow where users can provide the IP address for known UUIDs.
+
 ## Simplified Architecture Layers
 
 ```
@@ -75,11 +148,18 @@ This decision prioritizes **reliable core functionality** over potentially probl
 ├─────────────────────────────────────────────────────────────┤
 │                     BUSINESS LAYER                          │
 ├─────────────────────────────────────────────────────────────┤
-│  Speaker (data.py)                                         │
+│  Speaker (data.py) - SIMPLIFIED v2.1                      │
 │  ├── Device State Management                               │
-│  ├── Group Membership                                      │
+│  ├── Group Membership (simple lookup)                     │
 │  ├── Role Detection (master/slave/solo)                    │
+│  ├── Missing Device Discovery                              │
 │  └── State Change Events                                   │
+│                                                             │
+│  Helper Functions (data.py)                                │
+│  ├── find_speaker_by_uuid() - config entry iteration      │
+│  ├── find_speaker_by_ip() - config entry iteration        │
+│  ├── get_all_speakers() - config entry iteration          │
+│  └── update_speaker_ip() - config entry updates           │
 ├─────────────────────────────────────────────────────────────┤
 │                   COORDINATION LAYER                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -363,25 +443,32 @@ wiim/
 ### What We Gain ✅
 
 - **Separation of Concerns**: Entity focuses on HA interface, controller on complex logic
-- **Testability**: Can unit test controller logic separately from HA entity
+- **Testability**: Can unit test controller logic separately from HA entity  
 - **Maintainability**: All media player complexity in one well-organized file
+- **Simplified Speaker Management**: Config entries as source of truth (like HA Core)
+- **Standard HA Patterns**: No custom registry, standard config entry updates
+- **Automatic Discovery**: Missing devices trigger helpful discovery flows
 - **Performance**: No unnecessary abstraction layers or complex delegation chains
-- **Debuggability**: One place to look for media player issues
+- **Debuggability**: One place to look for media player issues, simple speaker lookups
 
 ### What We Avoid ❌
 
-- **Over-abstraction**: No unnecessary controller hierarchies
-- **Over-engineering**: No complex factory patterns or event systems
+- **Over-abstraction**: No unnecessary controller hierarchies or complex registries
+- **Over-engineering**: No complex factory patterns, event systems, or bidirectional mappings
 - **Maintenance Overhead**: No multiple small files for simple functionality
-- **Performance Overhead**: No deep delegation chains
+- **Custom Systems**: No custom registry when HA's config entries work perfectly
+- **Performance Overhead**: No deep delegation chains or O(1) optimizations for 2-4 devices
 
 ## Next Steps
 
-This simplified architecture provides:
+This simplified architecture (v2.1) provides:
 ✅ **Clear separation** without over-engineering
 ✅ **Testable components** with practical boundaries
 ✅ **Maintainable codebase** with logical organization
+✅ **Standard HA patterns** throughout (config entries as source of truth)
+✅ **Simple speaker management** without custom registries
+✅ **Automatic discovery** for missing group devices
 ✅ **Fast implementation** with minimal abstraction
-✅ **Easy debugging** with centralized logic
+✅ **Easy debugging** with centralized logic and simple lookups
 
-The single controller pattern gives us all the benefits of separation while avoiding unnecessary complexity.
+The combination of single controller pattern + simplified speaker management gives us all the benefits of clean architecture while following Home Assistant standards and cursor rules.

@@ -272,12 +272,18 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_discovery_confirm()
 
     async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> FlowResult:
-        """Handle integration discovery (automatic slave discovery)."""
+        """Handle integration discovery (automatic slave discovery and missing devices)."""
         host = discovery_info.get(CONF_HOST)
         device_name = discovery_info.get("device_name", "Unknown Device")
         device_uuid = discovery_info.get("device_uuid")
+        discovery_source = discovery_info.get("discovery_source")
 
-        _LOGGER.info("🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s)", device_name, host, device_uuid)
+        _LOGGER.info("🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s, source: %s)", 
+                     device_name, host, device_uuid, discovery_source)
+
+        # Handle missing device discovery (no IP provided)
+        if discovery_source == "missing_device":
+            return await self.async_step_missing_device()
 
         if not host:
             _LOGGER.warning("🔍 INTEGRATION DISCOVERY aborted: no host")
@@ -301,8 +307,44 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.data = {CONF_HOST: host, "name": final_name}
 
         _LOGGER.info("🔍 INTEGRATION DISCOVERY completed for %s at %s", final_name, host)
-        _LOGGER.info("Integration discovery completed for %s at %s", final_name, host)
         return await self.async_step_discovery_confirm()
+
+    async def async_step_missing_device(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle missing device discovery - user provides IP for known UUID."""
+        errors = {}
+        device_uuid = self.context.get("unique_id")
+        device_name = self.data.get("device_name", f"Device {device_uuid[:8]}...")
+
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            
+            # Validate device and check UUID matches
+            is_valid, validated_name, validated_uuid = await validate_wiim_device(host)
+            
+            if not is_valid:
+                errors["base"] = "cannot_connect"
+            elif validated_uuid != device_uuid:
+                errors["base"] = "uuid_mismatch"
+                _LOGGER.warning("UUID mismatch: expected %s, got %s", device_uuid, validated_uuid)
+            else:
+                # Success - create entry
+                await self.async_set_unique_id(device_uuid)
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title=validated_name, data={CONF_HOST: host})
+
+        schema = vol.Schema({
+            vol.Required(CONF_HOST, description="IP address of the missing device"): str
+        })
+
+        return self.async_show_form(
+            step_id="missing_device",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "device_name": device_name,
+                "device_uuid": device_uuid[:8] + "..." if device_uuid else "Unknown"
+            }
+        )
 
     async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Confirm discovery."""
