@@ -9,7 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN  # Make sure DOMAIN is imported
-from .data import Speaker, get_wiim_data
+from .data import Speaker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,9 +37,8 @@ class WiimEntity(CoordinatorEntity):
         # Call parent first to register as coordinator listener
         await super().async_added_to_hass()
 
-        # Register in central mapping for O(1) lookups using proper method
-        data = get_wiim_data(self.hass)
-        data.register_entity(self.entity_id, self.speaker)
+        # In v2.0.0 simplified architecture, no central entity registry needed
+        # HA config entries are the source of truth
 
         # Listen for speaker state changes (event-driven pattern)
         self.async_on_remove(
@@ -54,8 +53,7 @@ class WiimEntity(CoordinatorEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up entity registration."""
-        data = get_wiim_data(self.hass)
-        data.unregister_entity(self.entity_id)
+        # In v2.0.0 simplified architecture, no central entity registry cleanup needed
         _LOGGER.debug("Entity %s unregistered", self.entity_id)
 
     async def _async_execute_command_with_refresh(self, command_type: str) -> None:

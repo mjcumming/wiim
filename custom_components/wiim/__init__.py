@@ -20,7 +20,7 @@ from .const import (
     FIXED_POLL_INTERVAL,
 )
 from .coordinator import WiiMCoordinator
-from .data import WiimData, get_or_create_speaker
+from .data import Speaker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,17 +63,9 @@ def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
 
-    # Create central data registry ONLY if it doesn't exist
+    # Simplified v2.0.0 architecture: no custom registry, just use HA config entries
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
-
-    # CRITICAL FIX: Only create WiimData if it doesn't exist
-    # This prevents wiping out existing speaker registrations during auto-discovery
-    if "data" not in hass.data[DOMAIN]:
-        hass.data[DOMAIN]["data"] = WiimData(hass)
-        _LOGGER.debug("Created new WiimData registry")
-    else:
-        _LOGGER.debug("Reusing existing WiimData registry with %d speakers", len(hass.data[DOMAIN]["data"].speakers))
 
     # Create client and coordinator
     session = async_get_clientsession(hass)
@@ -115,24 +107,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Unexpected error fetching initial data from %s: %s", entry.data["host"], err, exc_info=True)
         raise  # Re-raise unexpected errors
 
-    # Use entry.unique_id as the stable device identifier
-    # This should be set correctly in config_flow.py from device UUID or MAC
-    device_uuid = entry.unique_id
-    if not device_uuid:
-        _LOGGER.error("No unique_id found in config entry for %s - this should not happen", entry.data["host"])
-        # Fallback logic for device_uuid only for logging - not for HA device registry
-        status_dict = coordinator.data.get("status", {}) if coordinator.data else {}
-        if uuid_from_device := status_dict.get("uuid"):
-            device_uuid = uuid_from_device
-        elif mac := status_dict.get("MAC"):
-            clean_mac = mac.lower().replace(":", "")
-            device_uuid = clean_mac
-        else:
-            # Last resort for logging only - never use for HA registry
-            device_uuid = entry.data["host"].replace(".", "_")
-            _LOGGER.warning("Using IP-based UUID for logging only: %s", device_uuid)
-
-    speaker = get_or_create_speaker(hass, coordinator, entry)
+    # Create speaker object using simplified pattern
+    speaker = Speaker(hass, coordinator, entry)
     await speaker.async_setup(entry)
 
     # Store references for platforms
@@ -152,7 +128,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info(
         "WiiM integration setup complete for %s (UUID: %s) with %d platforms",
         speaker.name,
-        device_uuid,
+        entry.unique_id or "unknown",
         len(enabled_platforms),
     )
     return True

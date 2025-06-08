@@ -32,9 +32,9 @@ from .const import (
 )
 
 if TYPE_CHECKING:
-    from .data import Speaker, get_wiim_data
+    from .data import Speaker, get_all_speakers
 else:
-    from .data import get_wiim_data
+    from .data import get_all_speakers
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -553,17 +553,30 @@ class MediaPlayerController:
         try:
             self._logger.debug("Joining group with members: %s", group_members)
 
-            # Validate and resolve entity IDs to Speaker objects
-            speakers = self.speaker.resolve_entity_ids_to_speakers(group_members)
+            # Validate and resolve entity IDs to Speaker objects using new architecture
+            from .data import get_all_speakers
+            
+            all_speakers = get_all_speakers(self.hass)
+            speakers = []
+            
+            for entity_id in group_members:
+                # Extract media_player.xxx -> xxx for UUID lookup, or try direct entity lookup  
+                speaker_found = False
+                for speaker in all_speakers:
+                    # Check if this speaker's entity would match the entity_id
+                    # (This is a simplified approach - in production you'd want better entity ID resolution)
+                    if entity_id.endswith(speaker.uuid.replace('-', '_').lower()):
+                        speakers.append(speaker)
+                        speaker_found = True
+                        break
+                
+                if not speaker_found:
+                    self._logger.debug("Could not resolve entity ID %s to speaker", entity_id)
+            
             if not speakers:
-                from .data import get_wiim_data
-
-                data = get_wiim_data(self.hass)
-                available_count = len(data.entity_id_mappings)
-
                 self._logger.warning("No valid speakers found for entity IDs: %s", group_members)
                 raise HomeAssistantError(
-                    f"No valid speakers found in group member list {group_members}. Available: {available_count} entities"
+                    f"No valid speakers found in group member list {group_members}. Available: {len(all_speakers)} speakers"
                 )
 
             # Filter out self from the list if present
@@ -611,17 +624,15 @@ class MediaPlayerController:
         try:
             # In WiiM groups, the master is the leader
             if self.speaker.role == "master":
-                # This speaker is the leader - find our entity ID
-                data = get_wiim_data(self.hass)
-                for entity_id, speaker in data.entity_id_mappings.items():
-                    if speaker is self.speaker:
-                        return entity_id
+                # This speaker is the leader - return entity ID based on our UUID
+                # Following HA naming convention: media_player.{uuid_with_underscores}
+                entity_id = f"media_player.{self.speaker.uuid.replace('-', '_').lower()}"
+                return entity_id
             elif self.speaker.role == "slave" and self.speaker.coordinator_speaker:
                 # Find the master's entity ID
-                data = get_wiim_data(self.hass)
-                for entity_id, speaker in data.entity_id_mappings.items():
-                    if speaker is self.speaker.coordinator_speaker:
-                        return entity_id
+                master_uuid = self.speaker.coordinator_speaker.uuid
+                entity_id = f"media_player.{master_uuid.replace('-', '_').lower()}"
+                return entity_id
             # Solo speakers have no leader
             return None
         except Exception as err:

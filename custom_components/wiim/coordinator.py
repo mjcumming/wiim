@@ -566,14 +566,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _update_speaker_object(self, status: dict) -> None:
         """Update Speaker object if it exists."""
         try:
-            from .data import get_wiim_data
+            from .data import get_speaker_from_config_entry
 
-            wiim_data = get_wiim_data(self.hass)
-            speaker = wiim_data.speakers.get(self.entry.unique_id)
-
-            if speaker:
-                # Build data structure for speaker update
-                speaker.update_from_coordinator_data(status)
+            # In v2.0.0 simplified architecture, get speaker directly from config entry
+            speaker = get_speaker_from_config_entry(self.hass, self.entry)
+            
+            # Build data structure for speaker update
+            speaker.update_from_coordinator_data(status)
 
         except Exception as speaker_err:
             _LOGGER.debug(
@@ -689,13 +688,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         _LOGGER.debug("Mirroring master media info for slave %s", self.client.host)
 
-        # Get the master device's information
-        from .data import get_wiim_data
-
-        wiim_data = get_wiim_data(self.hass)
+        # Get the master device's information using simplified architecture
+        from .data import find_speaker_by_ip, get_all_speakers
 
         # Find master by looking at our group state
-        # We need to find which device is the master of our group
         master_speaker = None
 
         # First try to find master using device status master_ip field
@@ -704,15 +700,16 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if master_ip:
             # Look for speaker with this IP address
-            for _speaker_uuid, speaker in wiim_data.speakers.items():
-                if speaker.ip_address == master_ip and speaker.role == "master":
-                    master_speaker = speaker
-                    _LOGGER.debug("Found master %s by IP %s for slave %s", speaker.name, master_ip, self.client.host)
-                    break
+            master_speaker = find_speaker_by_ip(self.hass, master_ip)
+            if master_speaker and master_speaker.role == "master":
+                _LOGGER.debug("Found master %s by IP %s for slave %s", master_speaker.name, master_ip, self.client.host)
+            else:
+                master_speaker = None  # IP found but not a master
 
         # Fallback: search through all masters to find one that has us as a slave
         if not master_speaker:
-            for _speaker_uuid, speaker in wiim_data.speakers.items():
+            all_speakers = get_all_speakers(self.hass)
+            for speaker in all_speakers:
                 if speaker.role == "master" and self.client.host != speaker.ip_address:
                     # Check if this master has our device as a slave
                     try:
