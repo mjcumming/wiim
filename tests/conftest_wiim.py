@@ -81,18 +81,11 @@ def wiim_coordinator(wiim_client):
 
 
 @pytest.fixture
-def wiim_data(hass):
-    """Create a WiimData instance."""
-    from custom_components.wiim.data import WiimData
-
-    return WiimData(hass)
-
-
-@pytest.fixture
-def wiim_speaker(hass, wiim_coordinator, wiim_data):
+def wiim_speaker(hass, wiim_coordinator):
     """Create a test Speaker instance."""
     from custom_components.wiim.data import Speaker
     from homeassistant.config_entries import ConfigEntry
+    from custom_components.wiim.const import DOMAIN
 
     # Create a mock config entry
     config_entry = MagicMock(spec=ConfigEntry)
@@ -107,18 +100,19 @@ def wiim_speaker(hass, wiim_coordinator, wiim_data):
     speaker.model = "WiiM Mini"
     speaker.role = "solo"
 
-    # Add to registry using new registration method
-    wiim_data.register_speaker(speaker)
-    hass.data = {"wiim": {"data": wiim_data}}
+    # Emulate the data structure the integration uses at runtime so helper
+    # functions (e.g. find_speaker_by_uuid) work inside the tests.
+    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {"speaker": speaker}
 
     return speaker
 
 
 @pytest.fixture
-def wiim_speaker_slave(hass, wiim_data):
+def wiim_speaker_slave(hass):
     """Create a test slave Speaker instance."""
     from custom_components.wiim.data import Speaker
     from homeassistant.config_entries import ConfigEntry
+    from custom_components.wiim.const import DOMAIN
 
     # Create mock coordinator for slave
     slave_coordinator = MagicMock()
@@ -148,8 +142,8 @@ def wiim_speaker_slave(hass, wiim_data):
     speaker.model = "WiiM Pro"
     speaker.role = "slave"
 
-    # Add to registry using new registration method
-    wiim_data.register_speaker(speaker)
+    # Register slave speaker in hass.data for helper lookups
+    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {"speaker": speaker}
 
     return speaker
 
