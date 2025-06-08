@@ -229,11 +229,10 @@ class Speaker:
             else:
                 # Missing slave - trigger discovery
                 _LOGGER.warning("Master %s cannot find slave %s (IP: %s, UUID: %s)",
-                              self.name, slave_name, slave_ip, slave_uuid)
+                                self.name, slave_name, slave_ip, slave_uuid)
                 if slave_uuid:
                     self.hass.async_create_task(
-                        self._trigger_missing_device_discovery(slave_uuid, slave_name)
-                    )
+                        self._trigger_missing_device_discovery(slave_uuid, slave_name))
 
         self.group_members = new_group_members
 
@@ -249,8 +248,7 @@ class Speaker:
                 _LOGGER.warning("Slave %s cannot find master UUID: %s", self.name, master_uuid)
                 # Trigger discovery for missing master
                 self.hass.async_create_task(
-                    self._trigger_missing_device_discovery(master_uuid, "Missing Master")
-                )
+                    self._trigger_missing_device_discovery(master_uuid, "Missing Master"))
 
     def _clear_group_state(self) -> None:
         """Clear group state for solo speakers."""
