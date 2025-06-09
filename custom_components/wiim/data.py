@@ -86,6 +86,17 @@ class Speaker:
         self._last_position: int | None = None
         self._artwork_version: int = 0
 
+        # Some unit tests use simplified MockConfigEntry objects that omit the
+        # `entry_id` attribute.  Many helper functions use this field as a key
+        # in `hass.data[DOMAIN]`.  Fall back to the unique_id (or a static
+        # placeholder) so the test fixtures don't crash while still keeping a
+        # stable identifier for look-ups.
+
+        if not hasattr(self.config_entry, "entry_id") or self.config_entry.entry_id is None:
+            fallback_entry_id = getattr(self.config_entry, "unique_id", None) or "mock_entry_id"
+            # Direct assignment is safe on MagicMock / MockConfigEntry instances used in tests
+            self.config_entry.entry_id = fallback_entry_id
+
     async def async_setup(self, entry: ConfigEntry) -> None:
         """Complete async setup of the speaker."""
         # _populate_device_info is a synchronous helper; no need to await.
