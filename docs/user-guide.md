@@ -408,4 +408,12 @@ automation:
             - media_player.kitchen
 ```
 
+## 📚 Preset Browser
+
+Open the media-player card → three-dot menu → *Browse Media* → *Presets*.
+
+You'll see all presets configured in the WiiM Home app (names, cover art) and can start playback with a single click.
+
+The list refreshes every 30 seconds; empty slots are hidden automatically.
+
 This guide covers the essential user-facing features. For automation examples, see [automation-examples.md](automation-examples.md). For technical details, see [../development/](../development/).

@@ -57,6 +57,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._statusex_supported: bool | None = None
         self._metadata_supported: bool | None = None
         self._eq_supported: bool | None = None
+        self._presets_supported: bool | None = None
 
         # Device state tracking
         self._last_status: dict[str, Any] = {}
@@ -233,6 +234,21 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Track metadata result for %s%s", self.client.host, f": {track_metadata}" if VERBOSE_DEBUG else f" (keys={list(track_metadata.keys())})")
 
             # --------------------------------------------------------
+            # Preset list (optional)
+            # --------------------------------------------------------
+            presets_list: list[dict] = []
+            if self._presets_supported is not False:
+                try:
+                    presets_list = await self.client.get_presets()
+                    if presets_list and self._presets_supported is None:
+                        self._presets_supported = True
+                except WiiMError:
+                    if self._presets_supported is None:
+                        self._presets_supported = False
+                except Exception as pre_err:
+                    _LOGGER.debug("get_presets failed for %s: %s", self.client.host, pre_err)
+
+            # --------------------------------------------------------
             # Artwork propagation
             # --------------------------------------------------------
             # Speaker entities look for artwork URL in coordinator.data["status"]
@@ -281,6 +297,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "multiroom": multiroom_info,
                 "metadata": track_metadata,
                 "eq": eq_info,
+                "presets": presets_list,
                 "role": role,
                 "polling": polling_data,
             }

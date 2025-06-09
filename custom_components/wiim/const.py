@@ -249,3 +249,5 @@ UPDATE_AVAILABLE_KEY = "update_available"
 LATEST_VERSION_KEY = "latest_version"
 
 PROJECT_KEY = "project"
+
+API_ENDPOINT_PRESET_INFO = "/httpapi.asp?command=getPresetInfo"

@@ -900,3 +900,82 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             )
 
         return attrs
+
+    # ===== MEDIA BROWSER SUPPORT =====
+
+    async def async_browse_media(self, media_content_type: str | None = None, media_content_id: str | None = None):
+        """Provide a Media Browser tree with a single Presets shelf."""
+        from homeassistant.components.media_player.browse_media import (
+            BrowseMedia,
+            MediaClass,
+        )
+
+        # Fetch presets from coordinator
+        presets: list[dict] = self.speaker.coordinator.data.get("presets", []) if self.speaker.coordinator.data else []
+        presets_supported = bool(presets)
+
+        # Root request
+        if media_content_id in (None, "root"):
+            children: list[BrowseMedia] = []
+            if presets_supported:
+                children.append(
+                    BrowseMedia(
+                        media_class=MediaClass.DIRECTORY,
+                        media_content_id="presets",
+                        media_content_type="presets",
+                        title="Presets",
+                        can_play=False,
+                        can_expand=True,
+                        children=[],
+                        thumbnail=None,
+                    )
+                )
+
+            if not children:
+                from homeassistant.components.media_player.browse_media import BrowseError
+                raise BrowseError("No browsable media")
+
+            return BrowseMedia(
+                media_class=MediaClass.DIRECTORY,
+                media_content_id="root",
+                media_content_type="root",
+                title=self.speaker.name,
+                can_play=False,
+                can_expand=True,
+                children=children,
+            )
+
+        # Preset folder
+        if media_content_id == "presets":
+            items: list[BrowseMedia] = []
+            for entry in presets:
+                title = entry.get("name") or f"Preset {entry.get('number')}"
+                url = entry.get("url") or ""
+                if not url:
+                    # skip empty presets
+                    continue
+                items.append(
+                    BrowseMedia(
+                        media_class=MediaClass.MUSIC,
+                        media_content_id=url,
+                        media_content_type="url",
+                        title=title,
+                        can_play=True,
+                        can_expand=False,
+                        thumbnail=entry.get("picurl"),
+                    )
+                )
+
+            return BrowseMedia(
+                media_class=MediaClass.DIRECTORY,
+                media_content_id="presets",
+                media_content_type="presets",
+                title="Presets",
+                can_play=False,
+                can_expand=True,
+                children=items,
+            )
+
+        # Unknown request
+        from homeassistant.components.media_player.browse_media import BrowseError
+        raise BrowseError("Unknown media_content_id")

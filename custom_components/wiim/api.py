@@ -941,6 +941,31 @@ class WiiMClient:
             raise ValueError("Preset must be between 1 and 6")
         await self._request(f"{API_ENDPOINT_PRESET}{preset}")
 
+    # ------------------------------------------------------------------
+    # Preset list (for media-browser)
+    # ------------------------------------------------------------------
+
+    async def get_presets(self) -> list[dict[str, Any]]:
+        """Return a list of preset entries from getPresetInfo.
+
+        Each entry contains at least:
+          {"number": 1, "name": "Radio Paradise", "url": "...", "picurl": "..."}
+        On older firmware the endpoint may be missing – in that case we raise
+        WiiMError so the caller can mark the capability unsupported.
+        """
+
+        try:
+            from .const import API_ENDPOINT_PRESET_INFO
+
+            payload = await self._request(API_ENDPOINT_PRESET_INFO)
+            if not isinstance(payload, dict):
+                raise WiiMResponseError("Invalid preset info response")
+
+            return payload.get("preset_list", [])
+
+        except WiiMError:
+            raise  # propagate so coordinator can disable capability
+
     async def toggle_power(self) -> None:
         """Toggle power state.
 
