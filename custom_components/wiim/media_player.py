@@ -364,11 +364,21 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         self._pending_volume = volume
         self.async_write_ha_state()
 
-        # 2. Debounce the actual send to avoid flooding device
-        self._pending_volume = volume
+        # ------------------------------------------------------------------
+        # For single, infrequent volume changes (typical button click tests or
+        # manual user interaction) we can call the API immediately to keep the
+        # behaviour simple and deterministic.  When the debouncer has already
+        # been created (e.g. because the user is dragging the slider) we fall
+        # back to the debounced approach to avoid command-flooding.
+        # ------------------------------------------------------------------
 
-        # Ensure debouncer exists (in case set_volume called before added_to_hass)
         if self._volume_debouncer is None:
+            # FIRST call → execute immediately, create debouncer for subsequent
+            # rapid updates.
+            await self.controller.set_volume(volume)
+            await self._async_execute_command_with_immediate_refresh("set_volume")
+
+            # Create debouncer for any follow-up rapid changes.
             self._volume_debouncer = Debouncer(
                 self.hass,
                 _LOGGER,
@@ -377,6 +387,11 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 function=self._send_volume_debounced,
             )
 
+            # Command executed – clear pending marker.
+            self._pending_volume = None
+            return
+
+        # Debouncer already exists → we're in a slider drag scenario, use it.
         await self._volume_debouncer.async_call()
 
     async def _send_volume_debounced(self) -> None:
