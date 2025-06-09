@@ -554,7 +554,12 @@ class MediaPlayerController:
             for entity_id in group_members:
                 reg_entry = ent_reg.async_get(entity_id)
                 if reg_entry and reg_entry.unique_id:
-                    speaker_match = find_speaker_by_uuid(self.hass, reg_entry.unique_id)
+                    # Entity unique_id is stored as "wiim_<uuid>". Strip the prefix if present
+                    unique_id = reg_entry.unique_id
+                    if unique_id.startswith("wiim_"):
+                        unique_id = unique_id[len("wiim_") :]
+
+                    speaker_match = find_speaker_by_uuid(self.hass, unique_id)
                     if speaker_match:
                         speakers.append(speaker_match)
                     else:
