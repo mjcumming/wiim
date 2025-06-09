@@ -21,6 +21,10 @@ jobs:
       - name: Check out code from GitHub
         uses: actions/checkout@v4
 
+      # Validate standalone integration structure with Home Assistant hassfest action
+      - name: Validate with hassfest
+        uses: home-assistant/actions/hassfest@master
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
