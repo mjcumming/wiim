@@ -20,6 +20,7 @@ from .const import (
     FIRMWARE_KEY,
     FIRMWARE_DATE_KEY,
     HARDWARE_KEY,
+    PROJECT_KEY,
     MCU_VERSION_KEY,
     DSP_VERSION_KEY,
     PRESET_SLOTS_KEY,
@@ -50,18 +51,22 @@ async def async_setup_entry(
     # This is NOT diagnostic - it's core functionality users need to see
     entities.append(WiiMRoleSensor(speaker))
 
+    # Current Input sensor (always useful)
+    entities.append(WiiMInputSensor(speaker))
+
     # ------------------------------------------------------------
     # Device-info sensors
     # ------------------------------------------------------------
     core_info_defs = [
         (FIRMWARE_KEY, "Firmware Version", "mdi:chip", None, True),
-        (PRESET_SLOTS_KEY, "Preset Slots", "mdi:numeric", "slots", True),
-        (WMRM_VERSION_KEY, "WMRM Version", "mdi:radio-tower", None, True),
     ]
 
     diag_info_defs = [
+        (PRESET_SLOTS_KEY, "Preset Slots", "mdi:numeric", "slots", False),
+        (WMRM_VERSION_KEY, "WMRM Version", "mdi:radio-tower", None, False),
         (FIRMWARE_DATE_KEY, "Firmware Build Date", "mdi:calendar-clock", None, False),
         (HARDWARE_KEY, "Hardware", "mdi:memory", None, False),
+        (PROJECT_KEY, "Project", "mdi:cube", None, False),
         (MCU_VERSION_KEY, "MCU Version", "mdi:chip", None, False),
         (DSP_VERSION_KEY, "DSP Version", "mdi:chip", None, False),
     ]
@@ -264,3 +269,20 @@ class WiiMDeviceInfoSensor(WiimEntity, SensorEntity):
         if not self.speaker.coordinator.data:
             return None
         return self.speaker.coordinator.data.get("device_info", {}).get(self._key)
+
+
+# ------------------- Input Source Sensor -------------------
+
+class WiiMInputSensor(WiimEntity, SensorEntity):
+    """Shows current input/source (AirPlay, Bluetooth, etc.)."""
+
+    _attr_icon = "mdi:import"  # generic input symbol
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_current_input"
+        self._attr_name = "Current Input"
+
+    @property  # type: ignore[override]
+    def native_value(self):
+        return self.speaker.get_current_source()

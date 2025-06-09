@@ -225,9 +225,11 @@ class WiiMClient:
         # Start with HTTPS endpoint, will auto-detect if fallback needed
         self._endpoint = f"https://{self._host}:{self.port}"
         self._lock = asyncio.Lock()
-        self._base_url = self._endpoint
         self._group_master: str | None = None
         self._group_slaves: list[str] = []
+        # Track/play-mode change detection helpers
+        self._last_track: str | None = None
+        self._last_play_mode: str | None = None
         # Some firmwares ship a *device-unique* self-signed certificate.  We
         # start optimistic (verify on) and permanently fall back to
         # *insecure* mode after the first verification failure to avoid the
@@ -339,7 +341,7 @@ class WiiMClient:
                 _LOGGER.debug("Fast-path attempt failed (%s), falling back to probe list", err)
 
         # If we have a discovered port, prioritize that
-        if hasattr(self, "_discovered_port") and self._discovered_port:
+        if self._discovered_port:
             # For discovered ports, try both HTTPS and HTTP on the same port
             protocols_to_try = [
                 ("https", self.port, self._get_ssl_context()),  # Discovered port with HTTPS
@@ -617,8 +619,6 @@ class WiiMClient:
 
             # Check if the change actually took effect by getting current status
             try:
-                import asyncio
-
                 await asyncio.sleep(0.5)  # Give device time to update
                 status = await self.get_player_status()
                 loop_val = status.get("loop_mode") or status.get("loop")
@@ -661,8 +661,6 @@ class WiiMClient:
 
             # Check if the change actually took effect by getting current status
             try:
-                import asyncio
-
                 await asyncio.sleep(0.5)  # Give device time to update
                 status = await self.get_player_status()
                 loop_val = status.get("loop_mode") or status.get("loop")
@@ -1107,9 +1105,6 @@ class WiiMClient:
         # Log track changes for debugging
         if data.get("title") and data["title"] != "Unknown":
             current_track = f"{data.get('artist', 'Unknown')} - {data['title']}"
-            # Initialize _last_track if it doesn't exist
-            if not hasattr(self, "_last_track"):
-                self._last_track = None
             if self._last_track != current_track:
                 _LOGGER.info("🎵 Track changed for %s: %s", self.host, current_track)
                 self._last_track = current_track
@@ -1170,14 +1165,9 @@ class WiiMClient:
                 new_play_mode = PLAY_MODE_NORMAL
 
             # Only log when play mode actually changes
-            if not hasattr(self, "_last_play_mode"):
-                self._last_play_mode = None
-
             if self._last_play_mode != new_play_mode:
                 _LOGGER.info("🔁🔀 Set play_mode for %s: %s (loop_val=%s)", self.host, new_play_mode, loop_val)
                 self._last_play_mode = new_play_mode
-            else:
-                _LOGGER.debug("🔁🔀 Play mode unchanged for %s: %s (loop_val=%s)", self.host, new_play_mode, loop_val)
 
             data["play_mode"] = new_play_mode
         else:

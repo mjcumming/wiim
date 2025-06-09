@@ -247,3 +247,5 @@ PRESET_SLOTS_KEY = "preset_slots"
 WMRM_VERSION_KEY = "wmrm_version"
 UPDATE_AVAILABLE_KEY = "update_available"
 LATEST_VERSION_KEY = "latest_version"
+
+PROJECT_KEY = "project"

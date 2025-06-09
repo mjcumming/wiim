@@ -176,6 +176,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     WMRM_VERSION_KEY,
                     UPDATE_AVAILABLE_KEY,
                     LATEST_VERSION_KEY,
+                    PROJECT_KEY,
                 )
 
                 normalised: dict[str, Any] = {}
@@ -187,10 +188,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if build_date := device_info.get("Release") or device_info.get("release"):
                     normalised[FIRMWARE_DATE_KEY] = build_date
 
-                # Hardware / project string
-                hw_val = device_info.get("hardware") or device_info.get("project")
-                if hw_val:
-                    normalised[HARDWARE_KEY] = hw_val
+                # Hardware & project split
+                if hw := device_info.get("hardware"):
+                    normalised[HARDWARE_KEY] = hw
+                if proj := device_info.get("project"):
+                    normalised[PROJECT_KEY] = proj
 
                 # MCU / DSP versions
                 if device_info.get("mcu_ver") is not None:
