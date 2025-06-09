@@ -82,6 +82,16 @@ jobs:
         run: |
           pytest tests/ --cov=custom_components/wiim --cov-report=xml
 
+      # --- HACS repository validation ---------------------------------------------------
+      # Validate that the repository follows all rules required by HACS.
+      # This uses the official HACS Action (https://github.com/hacs/action)
+      # so that every push and every automated release is guaranteed to be
+      # accepted by HACS without manual re-validation.
+      - name: Validate repository with HACS Action
+        uses: hacs/action@22.5.0
+        with:
+          category: "integration"
+
   release:
     needs: [check-version, tests]
     if: needs.check-version.outputs.version-changed == 'true'
