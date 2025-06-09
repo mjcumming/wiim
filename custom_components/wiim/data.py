@@ -437,7 +437,8 @@ class Speaker:
             return MediaPlayerState.PAUSED
         if play_status in ["stop", "stopped", "idle", ""]:
             return MediaPlayerState.IDLE
-        return MediaPlayerState.UNKNOWN
+        # Home Assistant no longer provides an UNKNOWN state constant.  Fallback to IDLE.
+        return MediaPlayerState.IDLE
 
     def is_volume_muted(self) -> bool | None:
         """Return mute status based on coordinator status dict.

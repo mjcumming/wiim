@@ -67,6 +67,11 @@ class MediaPlayerController:
         self._media_image_bytes: bytes | None = None
         self._media_image_content_type: str | None = None
 
+        # Internal trackers to avoid noisy duplicate logs on every property poll
+        self._last_sound_mode: str | None = None
+        self._last_shuffle_state: bool | None = None
+        self._last_repeat_mode: str | None = None
+
         self._logger.debug(
             "MediaPlayerController initialized for %s (volume_step=%.2f)",
             speaker.name,
@@ -98,14 +103,9 @@ class MediaPlayerController:
         try:
             self._logger.debug("Setting volume to %.2f for %s", volume, self.speaker.name)
 
-            # Implement master/slave logic
-            if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
-                # Slave should control master volume
-                self._logger.debug("Slave speaker redirecting volume to master")
-                await self.speaker.coordinator_speaker.coordinator.client.set_volume(volume)
-            else:
-                # Master or solo speaker controls directly
-                await self.speaker.coordinator.client.set_volume(volume)
+            # Send volume directly to *this* device regardless of role.
+            # Group-level aggregation is handled by the group-volume entity.
+            await self.speaker.coordinator.client.set_volume(volume)
 
         except Exception as err:
             self._logger.error("Failed to set volume to %.2f: %s", volume, err)
@@ -478,17 +478,10 @@ class MediaPlayerController:
         """Get shuffle state."""
         try:
             shuffle_state = self.speaker.get_shuffle_state()
-            self._logger.debug("Detected shuffle state: %s for %s", shuffle_state, self.speaker.name)
 
-            # Also log the raw coordinator data for debugging
-            if self.speaker.coordinator.data:
-                status = self.speaker.coordinator.data.get("status", {})
-                play_mode = status.get("play_mode")
-                playmode = status.get("playmode")
-                shuffle_field = status.get("shuffle")
-                self._logger.debug(
-                    "Raw shuffle data - play_mode='%s', playmode='%s', shuffle='%s'", play_mode, playmode, shuffle_field
-                )
+            if shuffle_state != self._last_shuffle_state:
+                self._logger.debug("Detected shuffle state: %s for %s", shuffle_state, self.speaker.name)
+                self._last_shuffle_state = shuffle_state
 
             return shuffle_state
         except Exception as err:
@@ -499,17 +492,11 @@ class MediaPlayerController:
         """Get repeat mode."""
         try:
             repeat_mode = self.speaker.get_repeat_mode()
-            self._logger.debug("Detected repeat mode: '%s' for %s", repeat_mode, self.speaker.name)
 
-            # Also log the raw coordinator data for debugging
-            if self.speaker.coordinator.data:
-                status = self.speaker.coordinator.data.get("status", {})
-                play_mode = status.get("play_mode")
-                playmode = status.get("playmode")
-                repeat_field = status.get("repeat")
-                self._logger.debug(
-                    "Raw repeat data - play_mode='%s', playmode='%s', repeat='%s'", play_mode, playmode, repeat_field
-                )
+            # Log only on change
+            if repeat_mode != self._last_repeat_mode:
+                self._logger.debug("Detected repeat mode: '%s' for %s", repeat_mode, self.speaker.name)
+                self._last_repeat_mode = repeat_mode
 
             return repeat_mode
         except Exception as err:
@@ -524,18 +511,10 @@ class MediaPlayerController:
         """Get current EQ preset."""
         try:
             sound_mode = self.speaker.get_sound_mode()
-            self._logger.debug("Detected sound mode: '%s' for %s", sound_mode, self.speaker.name)
 
-            # Also log the raw coordinator data for debugging
-            if self.speaker.coordinator.data:
-                status = self.speaker.coordinator.data.get("status", {})
-                eq_info = self.speaker.coordinator.data.get("eq", {})
-                eq_preset = status.get("eq_preset")
-                eq_field = status.get("eq")
-                eq_enabled = eq_info.get("eq_enabled")
-                self._logger.debug(
-                    "Raw EQ data - eq_preset='%s', eq='%s', eq_enabled='%s'", eq_preset, eq_field, eq_enabled
-                )
+            if sound_mode != self._last_sound_mode:
+                self._logger.debug("Detected sound mode: '%s' for %s", sound_mode, self.speaker.name)
+                self._last_sound_mode = sound_mode
 
             return sound_mode
         except Exception as err:
@@ -554,24 +533,34 @@ class MediaPlayerController:
             self._logger.debug("Joining group with members: %s", group_members)
 
             # Validate and resolve entity IDs to Speaker objects using new architecture
-            from .data import get_all_speakers
+            from .data import get_all_speakers, find_speaker_by_uuid
 
             all_speakers = get_all_speakers(self.hass)
             speakers = []
 
-            for entity_id in group_members:
-                # Extract media_player.xxx -> xxx for UUID lookup, or try direct entity lookup
-                speaker_found = False
-                for speaker in all_speakers:
-                    # Check if this speaker's entity would match the entity_id
-                    # (This is a simplified approach - in production you'd want better entity ID resolution)
-                    if entity_id.endswith(speaker.uuid.replace('-', '_').lower()):
-                        speakers.append(speaker)
-                        speaker_found = True
-                        break
+            # Resolve each supplied entity_id to a Speaker object via the
+            # entity-registry → unique_id → UUID mapping.  Slug-based fallbacks
+            # were removed – during beta we assume all entities expose a valid
+            # unique_id that matches the speaker UUID.
 
-                if not speaker_found:
-                    self._logger.debug("Could not resolve entity ID %s to speaker", entity_id)
+            from homeassistant.helpers import entity_registry as er
+
+            ent_reg = er.async_get(self.hass)
+
+            for entity_id in group_members:
+                reg_entry = ent_reg.async_get(entity_id)
+                if reg_entry and reg_entry.unique_id:
+                    speaker_match = find_speaker_by_uuid(self.hass, reg_entry.unique_id)
+                    if speaker_match:
+                        speakers.append(speaker_match)
+                    else:
+                        self._logger.debug(
+                            "Entity '%s' unique_id '%s' not found among registered speakers",
+                            entity_id,
+                            reg_entry.unique_id,
+                        )
+                else:
+                    self._logger.debug("Entity '%s' not found in registry or has no unique_id", entity_id)
 
             if not speakers:
                 self._logger.warning("No valid speakers found for entity IDs: %s", group_members)
@@ -709,9 +698,21 @@ class MediaPlayerController:
             # Set reasonable timeout for image fetching (match LinkPlay's 5s)
             timeout = aiohttp.ClientTimeout(total=5.0)
 
-            async with session.get(
-                image_url, timeout=timeout, ssl=ssl_context, headers={"User-Agent": "HomeAssistant/WiiM-Integration"}
-            ) as response:
+            # aiohttp only accepts the *ssl* parameter for HTTPS requests. Passing it for
+            # plain HTTP raises a ValueError ("ssl parameter is only for https URLs").
+            # Determine protocol first and attach SSL context only when required.
+
+            request_kwargs = {
+                "timeout": timeout,
+                "headers": {"User-Agent": "HomeAssistant/WiiM-Integration"},
+            }
+
+            if image_url.lower().startswith("https"):
+                # HTTPS → use permissive context from the WiiM client
+                request_kwargs["ssl"] = ssl_context
+            # HTTP → **do not** set the ssl kwarg (would raise ValueError)
+
+            async with session.get(image_url, **request_kwargs) as response:
                 if response.status != 200:
                     self._logger.warning(
                         "Failed to fetch media image for %s: HTTP %d", self.speaker.name, response.status

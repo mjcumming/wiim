@@ -59,7 +59,10 @@ class WiiMGroupMuteControl(WiimEntity, SwitchEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:volume-off"
-    _attr_entity_registry_enabled_default = False  # Start hidden
+    # Enabled by default so the entity is visible immediately. Availability
+    # is still driven by the `available` property (only when this speaker is
+    # group master).
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, speaker: Speaker) -> None:
         """Initialize group mute control."""
@@ -90,12 +93,26 @@ class WiiMGroupMuteControl(WiimEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return if group is muted."""
+        """Return *group* mute state.
+
+        The switch is considered ON only when **every** member of the group
+        explicitly reports muted.
+        """
         if not self.available:
             return None
 
-        # Return master's mute state as group mute state
-        return self.speaker.is_volume_muted()
+        # Collect mute states for master and slaves. Treat "unknown" (None)
+        # as *not muted* so that missing data won't leave the switch in an
+        # indeterminate state.  The group is muted only when **every** member
+        # explicitly reports muted.
+
+        mute_states: list[bool] = []
+
+        for spk in [self.speaker] + self.speaker.group_members:
+            state = spk.is_volume_muted()
+            mute_states.append(state is True)  # None → False, False → False, True → True
+
+        return all(mute_states)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

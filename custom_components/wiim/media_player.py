@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.debounce import Debouncer
+from homeassistant.exceptions import HomeAssistantError  # Graceful error handling
 
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
@@ -324,8 +325,11 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     def _clear_optimistic_state(self) -> None:
         """Clear optimistic state when real data is available."""
-        self._optimistic_volume = None
-        self._optimistic_mute = None
+        # Only clear optimistic volume/mute if there is no command in-flight.
+        if self._pending_volume is None:
+            self._optimistic_volume = None
+            self._optimistic_mute = None
+        # Other optimistic fields are safe to clear immediately.
         self._optimistic_state = None
         self._optimistic_source = None
         self._optimistic_shuffle = None
@@ -357,6 +361,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Set volume level, range 0..1."""
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_volume = volume
+        self._pending_volume = volume
         self.async_write_ha_state()
 
         # 2. Debounce the actual send to avoid flooding device
@@ -381,13 +386,29 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.controller.set_volume(self._pending_volume)
+
             # Immediate refresh to confirm actual device state
             await self._async_execute_command_with_immediate_refresh("set_volume_debounced")
+
+        except HomeAssistantError as err:
+            # Device offline or unreachable – log at warning level and fail silently
+            _LOGGER.warning("Volume command failed for %s: %s", self.speaker.name, err)
+
+            # Clear optimistic state so UI snaps back gracefully
+            self._optimistic_volume = None
+            self.async_write_ha_state()
+
+            # Do NOT re-raise – prevents noisy stack traces & keeps entity alive
+
         except Exception:
-            # Clear optimistic state so UI snaps back
+            # Unexpected error – bubble up after clearing optimistic state
             self._optimistic_volume = None
             self.async_write_ha_state()
             raise
+
+        finally:
+            # Reset pending value so next change is fresh
+            self._pending_volume = None
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute the volume."""
@@ -409,47 +430,83 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise
 
     async def async_volume_up(self) -> None:
-        """Volume up the media player."""
-        # Calculate new optimistic volume
-        current_volume = self.controller.get_volume_level() or 0.0
-        new_volume = min(1.0, current_volume + 0.05)  # 5% step
+        """Increase volume using the configured step size."""
+        # Determine step from controller config (fallback to 5 %)
+        step = getattr(self.controller, "_volume_step", 0.05)
 
-        # 1. Optimistic update for immediate UI feedback
+        # Base calculation on the value the UI currently shows. If we already
+        # applied an optimistic change that hasn't been confirmed yet use that
+        # value so consecutive clicks accumulate properly.
+        current_volume = (
+            self._optimistic_volume
+            if self._optimistic_volume is not None
+            else self.controller.get_volume_level() or 0.0
+        )
+        new_volume = min(1.0, current_volume + step)
+
+        # 1. Optimistic UI update
         self._optimistic_volume = new_volume
+        self._pending_volume = new_volume
         self.async_write_ha_state()
 
         try:
-            # 2. Send command to device
-            await self.controller.volume_up()
+            # 2. Send absolute volume so we don't double-apply the step
+            await self.controller.set_volume(new_volume)
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            # 3. Immediate refresh for confirmation
             await self._async_execute_command_with_immediate_refresh("volume_up")
 
+            # Mark command complete
+            self._pending_volume = None
+
+        except HomeAssistantError as err:
+            _LOGGER.warning("Volume-up failed for %s: %s", self.speaker.name, err)
+            self._optimistic_volume = None
+            self.async_write_ha_state()
+            # swallow to avoid traceback
         except Exception:
-            # Clear optimistic state on error so real state shows
+            # Clear optimistic state on error
             self._optimistic_volume = None
             self.async_write_ha_state()
             raise
 
     async def async_volume_down(self) -> None:
-        """Volume down the media player."""
-        # Calculate new optimistic volume
-        current_volume = self.controller.get_volume_level() or 0.0
-        new_volume = max(0.0, current_volume - 0.05)  # 5% step
+        """Decrease volume using the configured step size."""
+        # Determine step from controller config (fallback to 5 %)
+        step = getattr(self.controller, "_volume_step", 0.05)
 
-        # 1. Optimistic update for immediate UI feedback
+        # Base calculation on the value the UI currently shows. If we already
+        # applied an optimistic change that hasn't been confirmed yet use that
+        # value so consecutive clicks accumulate properly.
+        current_volume = (
+            self._optimistic_volume
+            if self._optimistic_volume is not None
+            else self.controller.get_volume_level() or 0.0
+        )
+        new_volume = max(0.0, current_volume - step)
+
+        # 1. Optimistic UI update
         self._optimistic_volume = new_volume
+        self._pending_volume = new_volume
         self.async_write_ha_state()
 
         try:
-            # 2. Send command to device
-            await self.controller.volume_down()
+            # 2. Send absolute volume so we don't double-apply the step
+            await self.controller.set_volume(new_volume)
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
+            # 3. Immediate refresh for confirmation
             await self._async_execute_command_with_immediate_refresh("volume_down")
 
+            # Mark command complete
+            self._pending_volume = None
+
+        except HomeAssistantError as err:
+            _LOGGER.warning("Volume-down failed for %s: %s", self.speaker.name, err)
+            self._optimistic_volume = None
+            self.async_write_ha_state()
+            # swallow to avoid traceback
         except Exception:
-            # Clear optimistic state on error so real state shows
+            # Clear optimistic state on error
             self._optimistic_volume = None
             self.async_write_ha_state()
             raise

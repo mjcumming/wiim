@@ -15,6 +15,11 @@ from .const import FIXED_POLL_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
+# Toggle to True if you really need full payloads in the log.
+# When False (default) large dicts are truncated to a list of top-level keys
+# which is usually enough for troubleshooting without spamming the log.
+VERBOSE_DEBUG = False
+
 
 class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """WiiM coordinator with fixed 5-second polling.
@@ -65,6 +70,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Debug: Track update calls
         self._update_count = 0
 
+        # One-time flag for dynamic EQ preset discovery
+        self._eq_list_extended: bool = False
+
         _LOGGER.info(
             "Coordinator initialized for %s with fixed %d-second polling",
             client.host,
@@ -99,7 +107,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             _LOGGER.debug("[WiiM] %s: About to call client.get_player_status()", self.client.host)
             result = await self.client.get_player_status() or {}
-            _LOGGER.debug("[WiiM] %s: get_player_status() returned: %s", self.client.host, result)
+            if VERBOSE_DEBUG:
+                _LOGGER.debug("Player status result for %s: %s", self.client.host, result)
+            else:
+                _LOGGER.debug("Player status result for %s (keys=%s)", self.client.host, list(result.keys()))
             return result
         except WiiMError as err:
             _LOGGER.warning("[WiiM] %s: getPlayerStatus failed: %s", self.client.host, err)
@@ -133,6 +144,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Fetch data from the WiiM device."""
         _LOGGER.debug("=== COORDINATOR UPDATE START for %s ===", self.client.host)
 
+        # 0. One-time attempt to fetch the full preset list (EQGetList)
+        if not self._eq_list_extended:
+            await self._extend_eq_preset_map_once()
+
         try:
             # Core data - always required
             player_status = await self._get_player_status()
@@ -140,20 +155,41 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             _LOGGER.debug("Step 2: Getting device info for %s", self.client.host)
             device_info = await self._get_device_info_defensive()
-            _LOGGER.debug("Device info result for %s: %s", self.client.host, device_info)
+            if VERBOSE_DEBUG:
+                _LOGGER.debug("Device info result for %s: %s", self.client.host, device_info)
+            else:
+                _LOGGER.debug("Device info result for %s (keys=%s)", self.client.host, list(device_info.keys()))
 
             # Additional data with defensive programming
             _LOGGER.debug("Step 3: Getting multiroom info for %s", self.client.host)
             multiroom_info = await self._get_multiroom_info_defensive()
-            _LOGGER.debug("Multiroom info result for %s: %s", self.client.host, multiroom_info)
+            _LOGGER.debug("Multiroom info result for %s%s", self.client.host, f": {multiroom_info}" if VERBOSE_DEBUG else f" (keys={list(multiroom_info.keys())})")
 
             _LOGGER.debug("Step 4: Getting track metadata for %s", self.client.host)
             track_metadata = await self._get_track_metadata_defensive(player_status)
-            _LOGGER.debug("Track metadata result for %s: %s", self.client.host, track_metadata)
+            _LOGGER.debug("Track metadata result for %s%s", self.client.host, f": {track_metadata}" if VERBOSE_DEBUG else f" (keys={list(track_metadata.keys())})")
+
+            # --------------------------------------------------------
+            # Artwork propagation
+            # --------------------------------------------------------
+            # Speaker entities look for artwork URL in coordinator.data["status"]
+            # (see Speaker.get_media_image_url).  After the recent refactor
+            # entity_picture/cover_url moved into the *metadata* payload which
+            # broke album-art display.  To restore previous behaviour we now
+            # copy any discovered artwork fields into the status dict while
+            # keeping the richer metadata payload intact.
+
+            if track_metadata:
+                art_url = track_metadata.get("entity_picture") or track_metadata.get("cover_url")
+                if art_url:
+                    if player_status.get("entity_picture") != art_url:
+                        _LOGGER.debug("Propagating artwork URL to status: %s", art_url)
+                    player_status["entity_picture"] = art_url
+                    player_status.setdefault("cover_url", art_url)
 
             _LOGGER.debug("Step 5: Getting EQ info for %s", self.client.host)
             eq_info = await self._get_eq_info_defensive()
-            _LOGGER.debug("EQ info result for %s: %s", self.client.host, eq_info)
+            _LOGGER.debug("EQ info result for %s%s", self.client.host, f": {eq_info}" if VERBOSE_DEBUG else f" (keys={list(eq_info.keys())})")
 
             # Detect role using the fetched data
             _LOGGER.debug("Step 6: Detecting role for %s", self.client.host)
@@ -196,7 +232,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data["device_info"]["uuid"] = self.entry.unique_id
                 _LOGGER.debug("Injected UUID from config entry as API did not provide one")
 
-            _LOGGER.debug("Step 8: Final coordinator data for %s: %s", self.client.host, data)
+            # Log only top-level keys to keep debug output readable
+            _LOGGER.debug("Step 8: Final coordinator data for %s (keys=%s)", self.client.host, list(data.keys()))
 
             # Update speaker object with comprehensive data
             _LOGGER.debug("Step 9: Updating speaker object for %s", self.client.host)
@@ -380,6 +417,15 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Always try to get EQ data for preset information
             eq_data = await self.client.get_eq()
             if eq_data:
+                # NEW: Detect 'unknown command' responses and treat as unsupported
+                if "raw" in eq_data and str(eq_data["raw"]).lower().startswith("unknown command"):
+                    _LOGGER.info(
+                        "[WiiM] %s: Device responded 'unknown command' to getEQ - disabling EQ polling",
+                        self.client.host,
+                    )
+                    self._eq_supported = False
+                    return eq_info
+
                 eq_info.update(eq_data)
                 _LOGGER.debug("[WiiM] %s: Raw EQ data: %s", self.client.host, eq_data)
 
@@ -441,7 +487,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _detect_role_from_status_and_slaves(self, status: dict, multiroom: dict, device_info: dict) -> str:
         """Detect device role using proper slaves API call.
 
-        CRITICAL FIX: Group information comes from device_info (getStatusEx), not status (getPlayerStatus).
+        Group information comes from device_info (getStatusEx).
         We need to consolidate group fields from the proper source.
         """
         _LOGGER.debug("=== ROLE DETECTION START for %s ===", self.client.host)
@@ -536,6 +582,38 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 role = "solo"
 
                 # SYNC CLIENT STATE: Clear client state for solo mode
+                self.client._group_master = None
+                self.client._group_slaves = []
+
+        # Special case: Some firmwares flag followers with mode=99 but keep group='0'.
+        # Treat those as SLAVE so that volume commands are redirected to the master
+        elif status.get("mode") == "99":
+            # Some firmwares keep mode=99 after a group has been disbanded.  Treat the
+            # speaker as a follower *only* when it is actively relaying audio.
+
+            play_state = (status.get("play_status") or status.get("status", "")).lower()
+
+            if play_state == "play":
+                if current_role != "slave":
+                    _LOGGER.info(
+                        "ROLE DETECTION: %s (%s) acting as FOLLOWER (mode=99) – treating as SLAVE for control redirection",
+                        self.client.host,
+                        device_name,
+                    )
+                role = "slave"
+
+                # We don't know master IP yet; clear client state so subsequent discovery can fill it
+                self.client._group_master = None
+                self.client._group_slaves = []
+            else:
+                # Idle follower → revert to SOLO to avoid mis-classification
+                if current_role != "solo":
+                    _LOGGER.debug(
+                        "ROLE DETECTION: %s (%s) reports mode=99 but is not playing – treating as SOLO",
+                        self.client.host,
+                        device_name,
+                    )
+                role = "solo"
                 self.client._group_master = None
                 self.client._group_slaves = []
 
@@ -783,13 +861,76 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             import time
 
             current_time = time.time()
-            if current_time - self._last_master_warning_time > 60:  # Only warn once per minute
-                _LOGGER.warning(
-                    "Could not find master for slave %s (suppressing further warnings for 60s)", self.client.host
-                )
+            if current_time - self._last_master_warning_time > 60:
+                # If the device itself does not report a master_ip we have *no* way to locate
+                # the leader – this is normal for many LinkPlay firmwares that only flag the
+                # follower state via ``mode=99``.  In that case just emit a debug message to
+                # avoid confusing end-users with a warning that suggests something is wrong.
+
+                if master_ip:
+                    _LOGGER.warning(
+                        "Could not find master for slave %s (suppressing further warnings for 60s)",
+                        self.client.host,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Slave %s is in follower mode (mode=99) but did not report master_ip – unable to locate group leader",
+                        self.client.host,
+                    )
+
                 self._last_master_warning_time = current_time
             else:
                 _LOGGER.debug("Could not find master for slave %s (warning suppressed)", self.client.host)
 
             # Fallback: just change source from "multiroom" to "follower" for clarity
             status["source"] = "follower"
+
+    # ------------------------------------------------------------------
+    # Dynamic EQ preset discovery --------------------------------------
+    # ------------------------------------------------------------------
+
+    async def _extend_eq_preset_map_once(self) -> None:
+        """Fetch *additional* EQ presets from the device (EQGetList).
+
+        Some WiiM firmwares expose extra presets (e.g. "Latin", "Small Speakers").
+        We merge them into EQ_PRESET_MAP exactly once at start-up so they turn
+        up in the sound-mode dropdown.  If the endpoint is missing we simply
+        mark the attempt as done and move on silently.
+        """
+
+        # Guard – only run once per coordinator instance
+        if self._eq_list_extended:
+            return
+
+        try:
+            presets = await self.client.get_eq_presets()
+            if not isinstance(presets, list):
+                self._eq_list_extended = True
+                return
+
+            from .const import EQ_PRESET_MAP
+            import re
+
+            def _slug(label: str) -> str:
+                slug = label.strip().lower().replace(" ", "_").replace("-", "_")
+                # keep only ascii letters/numbers/underscore
+                return re.sub(r"[^0-9a-z_]+", "", slug)
+
+            added: list[str] = []
+            for label in presets:
+                if not isinstance(label, str):
+                    continue
+                key = _slug(label)
+                if key and key not in EQ_PRESET_MAP:
+                    EQ_PRESET_MAP[key] = label
+                    added.append(label)
+
+            if added:
+                _LOGGER.info("[WiiM] %s: Added %d additional EQ presets from EQGetList: %s", self.client.host, len(added), added)
+        except WiiMError as err:
+            _LOGGER.debug("[WiiM] %s: EQGetList not supported (%s)", self.client.host, err)
+        except Exception as err:  # pragma: no cover – safety
+            _LOGGER.debug("[WiiM] %s: Unexpected error during EQ list fetch: %s", self.client.host, err)
+        finally:
+            # Always mark as attempted so we do not retry every poll
+            self._eq_list_extended = True

@@ -309,6 +309,35 @@ class WiiMClient:
 
         kwargs.setdefault("headers", HEADERS)
 
+        # -----------------------------------------------------------------
+        # FAST PATH: reuse last known-good endpoint to skip expensive probes
+        # -----------------------------------------------------------------
+        if hasattr(self, "_endpoint") and self._endpoint:
+            try:
+                scheme, host_port = self._endpoint.split("://", 1)
+                host_only, port_str = host_port.split(":")
+                fast_url = f"{scheme}://{host_only}:{port_str}{endpoint}"
+                _LOGGER.debug("Fast-path %s request to %s", method, fast_url)
+
+                # SSL context only for https scheme
+                if scheme == "https":
+                    ssl_ctx_fast = self._get_ssl_context()
+                    kwargs["ssl"] = ssl_ctx_fast
+                else:
+                    kwargs.pop("ssl", None)
+
+                async with async_timeout.timeout(self.timeout):
+                    async with self._session.request(method, fast_url, **kwargs) as response:
+                        response.raise_for_status()
+                        text = await response.text()
+                        _LOGGER.debug("Fast-path response from %s: %s", fast_url, text[:200])
+
+                        if text.strip() == "OK":
+                            return {"raw": text.strip()}
+                        return json.loads(text)
+            except Exception as err:
+                _LOGGER.debug("Fast-path attempt failed (%s), falling back to probe list", err)
+
         # If we have a discovered port, prioritize that
         if hasattr(self, "_discovered_port") and self._discovered_port:
             # For discovered ports, try both HTTPS and HTTP on the same port
@@ -1187,18 +1216,57 @@ class WiiMClient:
         # firmwares expose ``source`` directly; adding it here enables the
         # media-player UI to show e.g. "AirPlay" when streaming from iOS.
         #
-        # SPECIAL CASE: mode="99" means multiroom follower, but we need to be
-        # role-aware. Masters should show actual source, slaves should mirror master.
+        # SPECIAL CASE: mode="99" means multiroom participant – coordinator will decide how to
+        # treat it based on current playback state and role detection.
         # ---------------------------------------------------------------
         mode_val = raw.get("mode")
         if mode_val is not None and "source" not in data:
             if str(mode_val) == "99":
-                # Mode 99 = multiroom participant - need role-aware handling
-                # For now, mark as unknown - will be resolved by role detection later
-                data["source"] = "multiroom"  # Temporary - will be resolved by coordinator
+                # Mode 99 = multiroom participant – coordinator will decide how to
+                # treat it based on current playback state and role detection.
+                data["source"] = "multiroom"  # Temporary – resolved by coordinator
                 data["_multiroom_mode"] = True  # Flag for coordinator processing
             else:
                 data["source"] = self._MODE_MAP.get(str(mode_val), "unknown")
+
+        # ---------------------------------------------------------------
+        # Vendor specific override – some services (e.g. Amazon Music)
+        # report a generic mode (3 = wifi/NET) but include a more
+        # descriptive *vendor* field.  Use that to replace the generic
+        # "wifi" source so the UI shows the actual streaming service.
+        # ---------------------------------------------------------------
+        vendor_val = raw.get("vendor") or raw.get("Vendor") or raw.get("app")
+        if vendor_val:
+            vendor_val_clean = str(vendor_val).strip()
+
+            # Common vendor → source normalisation table.  Keys are **case-insensitive**
+            # vendor strings as reported by the firmware, values are the canonical
+            # source string we want to expose to Home Assistant.
+            _VENDOR_SOURCE_MAP = {
+                "amazon music": "amazon_music",
+                "amazonmusic": "amazon_music",
+                "prime": "amazon_music",  # Amazon Prime Music
+                "qobuz": "qobuz",
+                "tidal": "tidal",
+                "deezer": "deezer",
+            }
+
+            # Normalise lookup key to lower-case without surrounding whitespace
+            map_key = vendor_val_clean.lower().strip()
+            mapped_source = _VENDOR_SOURCE_MAP.get(map_key)
+
+            # Only override when the current source is the generic
+            # network streamer variants ("wifi"/"unknown") to avoid
+            # clobbering explicit sources like "spotify" (mode 31).
+            if data.get("source") in (None, "wifi", "unknown"):
+                if mapped_source:
+                    # Preferred mapping when we recognise the vendor
+                    data["source"] = mapped_source
+                else:
+                    # Fallback: simple slug-ification
+                    data["source"] = vendor_val_clean.lower().replace(" ", "_")
+            # Expose human-readable vendor name as separate attribute
+            data["vendor"] = vendor_val_clean
 
         # ---------------------------------------------------------------
         # EQ preset – convert **numeric** codes to their textual alias so

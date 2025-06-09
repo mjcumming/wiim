@@ -58,7 +58,7 @@ class WiiMGroupVolumeControl(WiimEntity, NumberEntity):
     _attr_native_max_value = 1.0
     _attr_native_step = 0.01
     _attr_icon = "mdi:volume-high"
-    _attr_entity_registry_enabled_default = False  # Start hidden
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, speaker: Speaker) -> None:
         """Initialize group volume control."""
@@ -93,8 +93,16 @@ class WiiMGroupVolumeControl(WiimEntity, NumberEntity):
         if not self.available:
             return None
 
-        # Return master's volume as group volume
-        return self.speaker.get_volume_level()
+        # Group volume reflects the loudest speaker in the group so that
+        # moving **any** member's slider instantly updates this entity.
+        volumes: list[float] = []
+
+        for spk in [self.speaker] + self.speaker.group_members:
+            vol = spk.get_volume_level()
+            if vol is not None:
+                volumes.append(vol)
+
+        return max(volumes) if volumes else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

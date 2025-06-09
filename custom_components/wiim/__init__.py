@@ -82,6 +82,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry=entry,
     )
 
+    # ------------------------------------------------------------------
+    # Early Speaker creation & registry setup (before first refresh)
+    # ------------------------------------------------------------------
+    # We need the Speaker object to exist BEFORE the first coordinator
+    # refresh because the coordinator callbacks reference it via
+    # get_speaker_from_config_entry(). Creating and storing it early
+    # prevents transient "Speaker not found" errors at startup.
+    # NOTE: async_setup() is *deferred* until after the first refresh so
+    # that _populate_device_info() can rely on fresh coordinator data.
+    speaker = Speaker(hass, coordinator, entry)
+
+    # Store minimal references immediately so helper look-ups succeed
+    hass.data[DOMAIN][entry.entry_id] = {
+        "coordinator": coordinator,
+        "client": client,
+        "speaker": speaker,
+        "entry": entry,  # platform access to options
+    }
+
     _LOGGER.info(
         "WiiM coordinator created for %s with fixed %ds polling interval",
         entry.data["host"],
@@ -94,30 +113,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_config_entry_first_refresh()
         _LOGGER.info("Initial data fetch completed for %s", entry.data["host"])
 
-    except WiiMTimeoutError as err:
-        _LOGGER.warning("Timeout fetching initial data from %s, will retry: %s", entry.data["host"], err)
-        raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
-    except WiiMConnectionError as err:
-        _LOGGER.warning("Connection error fetching initial data from %s, will retry: %s", entry.data["host"], err)
-        raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
-    except WiiMError as err:
+        # Complete speaker setup now that we have fresh coordinator data
+        await speaker.async_setup(entry)
+
+    except (WiiMTimeoutError, WiiMConnectionError, WiiMError) as err:
+        # Cleanup partial registration before signaling retry
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        if isinstance(err, WiiMTimeoutError):
+            _LOGGER.warning("Timeout fetching initial data from %s, will retry: %s", entry.data["host"], err)
+            raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
+        if isinstance(err, WiiMConnectionError):
+            _LOGGER.warning("Connection error fetching initial data from %s, will retry: %s", entry.data["host"], err)
+            raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
         _LOGGER.error("API error fetching initial data from %s: %s", entry.data["host"], err)
         raise ConfigEntryNotReady(f"API error with WiiM device at {entry.data['host']}") from err
     except Exception as err:
+        # Cleanup on unexpected error and re-raise
+        hass.data[DOMAIN].pop(entry.entry_id, None)
         _LOGGER.error("Unexpected error fetching initial data from %s: %s", entry.data["host"], err, exc_info=True)
-        raise  # Re-raise unexpected errors
-
-    # Create speaker object using simplified pattern
-    speaker = Speaker(hass, coordinator, entry)
-    await speaker.async_setup(entry)
-
-    # Store references for platforms
-    hass.data[DOMAIN][entry.entry_id] = {
-        "coordinator": coordinator,
-        "client": client,
-        "speaker": speaker,
-        "entry": entry,  # Store entry for platform access to options
-    }
+        raise
 
     # Get enabled platforms based on user options
     enabled_platforms = get_enabled_platforms(entry)
