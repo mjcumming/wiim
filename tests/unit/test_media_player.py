@@ -45,6 +45,7 @@ class TestWiiMMediaPlayer:
             | MediaPlayerEntityFeature.REPEAT_SET
             | MediaPlayerEntityFeature.GROUPING
             | MediaPlayerEntityFeature.PLAY_MEDIA  # Always supported
+            | MediaPlayerEntityFeature.BROWSE_MEDIA  # browsing supported
             # SEEK is conditionally added, don't include in test
         )
         assert media_player.supported_features == expected_features
