@@ -1,7 +1,6 @@
 {
   "domain": "wiim",
   "name": "WiiM",
-  "brand": "linkplay",
   "codeowners": ["@mjcumming"],
   "config_flow": true,
   "dependencies": [],
@@ -11,7 +10,6 @@
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
   "quality_scale": "silver",
   "requirements": ["aiohttp"],
-  "icon": "mdi:speaker-wireless",
   "ssdp": [
     {
       "manufacturer": "WiiM",
