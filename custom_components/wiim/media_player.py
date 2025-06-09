@@ -164,6 +164,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.SHUFFLE_SET
             | MediaPlayerEntityFeature.REPEAT_SET
             | MediaPlayerEntityFeature.GROUPING
+            | MediaPlayerEntityFeature.BROWSE_MEDIA
         )
 
         # Add conditional features based on device capabilities
@@ -910,6 +911,12 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             MediaClass,
         )
 
+        # HA 2024.6 renamed BrowseError → BrowseMediaError; add fallback.
+        try:
+            from homeassistant.components.media_player.browse_media import BrowseError as _BrowseError
+        except ImportError:  # pragma: no cover
+            from homeassistant.exceptions import HomeAssistantError as _BrowseError
+
         # Fetch presets from coordinator
         presets: list[dict] = self.speaker.coordinator.data.get("presets", []) if self.speaker.coordinator.data else []
         presets_supported = bool(presets)
@@ -932,8 +939,15 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 )
 
             if not children:
-                from homeassistant.components.media_player.browse_media import BrowseError
-                raise BrowseError("No browsable media")
+                return BrowseMedia(
+                    media_class=MediaClass.DIRECTORY,
+                    media_content_id="root",
+                    media_content_type="root",
+                    title=self.speaker.name,
+                    can_play=False,
+                    can_expand=False,
+                    children=[],
+                )
 
             return BrowseMedia(
                 media_class=MediaClass.DIRECTORY,
@@ -977,5 +991,4 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             )
 
         # Unknown request
-        from homeassistant.components.media_player.browse_media import BrowseError
-        raise BrowseError("Unknown media_content_id")
+        raise _BrowseError("Unknown media_content_id")

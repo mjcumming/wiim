@@ -10,20 +10,20 @@ import logging
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.const import EntityCategory
 
 from .const import (
     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
     DOMAIN,
-    FIRMWARE_KEY,
-    FIRMWARE_DATE_KEY,
-    HARDWARE_KEY,
-    PROJECT_KEY,
-    MCU_VERSION_KEY,
     DSP_VERSION_KEY,
+    FIRMWARE_DATE_KEY,
+    FIRMWARE_KEY,
+    HARDWARE_KEY,
+    MCU_VERSION_KEY,
     PRESET_SLOTS_KEY,
+    PROJECT_KEY,
     WMRM_VERSION_KEY,
 )
 from .data import Speaker, get_speaker_from_config_entry

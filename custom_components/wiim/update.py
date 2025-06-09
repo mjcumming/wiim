@@ -80,4 +80,4 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
             _LOGGER.info("Reboot command sent to %s – speaker will install firmware if staged.", self.speaker.name)
         except Exception as err:  # pragma: no cover – network errors
             _LOGGER.error("Failed to trigger firmware install on %s: %s", self.speaker.name, err)
-            raise 
+            raise

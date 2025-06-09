@@ -168,16 +168,16 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # --------------------------------------------------------
             try:
                 from .const import (
-                    FIRMWARE_KEY,
-                    FIRMWARE_DATE_KEY,
-                    HARDWARE_KEY,
-                    MCU_VERSION_KEY,
                     DSP_VERSION_KEY,
-                    PRESET_SLOTS_KEY,
-                    WMRM_VERSION_KEY,
-                    UPDATE_AVAILABLE_KEY,
+                    FIRMWARE_DATE_KEY,
+                    FIRMWARE_KEY,
+                    HARDWARE_KEY,
                     LATEST_VERSION_KEY,
+                    MCU_VERSION_KEY,
+                    PRESET_SLOTS_KEY,
                     PROJECT_KEY,
+                    UPDATE_AVAILABLE_KEY,
+                    WMRM_VERSION_KEY,
                 )
 
                 normalised: dict[str, Any] = {}

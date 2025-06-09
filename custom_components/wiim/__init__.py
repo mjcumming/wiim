@@ -61,6 +61,11 @@ def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
     return platforms
 
 
+async def _update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options updates by reloading the entry."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
 
@@ -101,6 +106,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "speaker": speaker,
         "entry": entry,  # platform access to options
     }
+
+    # Listen for config entry updates (e.g. options flow) so we can reload
+    entry.async_on_unload(entry.add_update_listener(_update_listener))
 
     _LOGGER.info(
         "WiiM coordinator created for %s with fixed %ds polling interval",
