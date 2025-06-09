@@ -160,6 +160,67 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 _LOGGER.debug("Device info result for %s (keys=%s)", self.client.host, list(device_info.keys()))
 
+            # --------------------------------------------------------
+            # Normalise extra device info from getStatusEx so sensors
+            # don\'t have to duplicate parsing logic.  Missing keys are
+            # simply left out so downstream code can feature-probe.
+            # --------------------------------------------------------
+            try:
+                from .const import (
+                    FIRMWARE_KEY,
+                    FIRMWARE_DATE_KEY,
+                    HARDWARE_KEY,
+                    MCU_VERSION_KEY,
+                    DSP_VERSION_KEY,
+                    PRESET_SLOTS_KEY,
+                    WMRM_VERSION_KEY,
+                    UPDATE_AVAILABLE_KEY,
+                    LATEST_VERSION_KEY,
+                )
+
+                normalised: dict[str, Any] = {}
+
+                if firmware := device_info.get("firmware"):
+                    normalised[FIRMWARE_KEY] = firmware
+
+                # Build / release date
+                if build_date := device_info.get("Release") or device_info.get("release"):
+                    normalised[FIRMWARE_DATE_KEY] = build_date
+
+                # Hardware / project string
+                hw_val = device_info.get("hardware") or device_info.get("project")
+                if hw_val:
+                    normalised[HARDWARE_KEY] = hw_val
+
+                # MCU / DSP versions
+                if device_info.get("mcu_ver") is not None:
+                    normalised[MCU_VERSION_KEY] = str(device_info.get("mcu_ver"))
+                if device_info.get("dsp_ver") is not None:
+                    normalised[DSP_VERSION_KEY] = str(device_info.get("dsp_ver"))
+
+                # Preset slot count
+                if device_info.get("preset_key") is not None:
+                    try:
+                        normalised[PRESET_SLOTS_KEY] = int(device_info.get("preset_key"))
+                    except (TypeError, ValueError):
+                        pass
+
+                # WiiM multiroom protocol version
+                if wmrm_ver := device_info.get("wmrm_version"):
+                    normalised[WMRM_VERSION_KEY] = wmrm_ver
+
+                # Update availability
+                update_flag = str(device_info.get("VersionUpdate", "0"))
+                normalised[UPDATE_AVAILABLE_KEY] = update_flag == "1"
+                if latest := device_info.get("NewVer"):
+                    normalised[LATEST_VERSION_KEY] = latest
+
+                # Merge into device_info so both sensors and diagnostics share
+                device_info.update(normalised)
+
+            except Exception as norm_err:  # pragma: no cover – non-critical
+                _LOGGER.debug("Normalising device_info failed for %s: %s", self.client.host, norm_err)
+
             # Additional data with defensive programming
             _LOGGER.debug("Step 3: Getting multiroom info for %s", self.client.host)
             multiroom_info = await self._get_multiroom_info_defensive()

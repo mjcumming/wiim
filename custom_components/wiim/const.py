@@ -236,3 +236,14 @@ SOURCE_MAP = {
 # Services – extended diagnostic helpers
 SERVICE_REBOOT = "reboot_device"
 SERVICE_SYNC_TIME = "sync_time"
+
+# ===== Diagnostic keys (getStatusEx) =====
+FIRMWARE_KEY = "firmware"
+FIRMWARE_DATE_KEY = "firmware_date"
+HARDWARE_KEY = "hardware"
+MCU_VERSION_KEY = "mcu_ver"
+DSP_VERSION_KEY = "dsp_ver"
+PRESET_SLOTS_KEY = "preset_slots"
+WMRM_VERSION_KEY = "wmrm_version"
+UPDATE_AVAILABLE_KEY = "update_available"
+LATEST_VERSION_KEY = "latest_version"

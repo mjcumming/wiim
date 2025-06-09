@@ -12,10 +12,18 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.const import EntityCategory
 
 from .const import (
     CONF_ENABLE_DIAGNOSTIC_ENTITIES,
     DOMAIN,
+    FIRMWARE_KEY,
+    FIRMWARE_DATE_KEY,
+    HARDWARE_KEY,
+    MCU_VERSION_KEY,
+    DSP_VERSION_KEY,
+    PRESET_SLOTS_KEY,
+    WMRM_VERSION_KEY,
 )
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
@@ -41,6 +49,44 @@ async def async_setup_entry(
     # ALWAYS CREATE: Role sensor - ESSENTIAL for users to understand multiroom status
     # This is NOT diagnostic - it's core functionality users need to see
     entities.append(WiiMRoleSensor(speaker))
+
+    # ------------------------------------------------------------
+    # Device-info sensors
+    # ------------------------------------------------------------
+    core_info_defs = [
+        (FIRMWARE_KEY, "Firmware Version", "mdi:chip", None, True),
+        (PRESET_SLOTS_KEY, "Preset Slots", "mdi:numeric", "slots", True),
+        (WMRM_VERSION_KEY, "WMRM Version", "mdi:radio-tower", None, True),
+    ]
+
+    diag_info_defs = [
+        (FIRMWARE_DATE_KEY, "Firmware Build Date", "mdi:calendar-clock", None, False),
+        (HARDWARE_KEY, "Hardware", "mdi:memory", None, False),
+        (MCU_VERSION_KEY, "MCU Version", "mdi:chip", None, False),
+        (DSP_VERSION_KEY, "DSP Version", "mdi:chip", None, False),
+    ]
+
+    for key, label, icon, unit, default_on in core_info_defs + diag_info_defs:
+        diag_enabled = entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False)
+
+        # Decide if we should create this sensor
+        if not default_on and not diag_enabled:
+            # Diagnostic sensor requested but diagnostics option is off → skip
+            continue
+
+        # Determine whether the sensor should be enabled by default
+        sensor_enabled_by_default = default_on or diag_enabled
+
+        entities.append(
+            WiiMDeviceInfoSensor(
+                speaker,
+                key=key,
+                label=label,
+                icon=icon,
+                unit=unit,
+                default_enabled=sensor_enabled_by_default,
+            )
+        )
 
     # OPTIONAL: Advanced diagnostic sensors (only when explicitly enabled)
     if entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False):
@@ -187,3 +233,34 @@ class WiiMPollingIntervalSensor(WiimEntity, SensorEntity):
             "defensive_polling_enabled": True,
             "coordinator_available": self.speaker.coordinator.last_update_success,
         }
+
+
+class WiiMDeviceInfoSensor(WiimEntity, SensorEntity):
+    """Generic sensor for a single key under coordinator.data['device_info']."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        speaker: Speaker,
+        *,
+        key: str,
+        label: str,
+        icon: str | None = None,
+        unit: str | None = None,
+        default_enabled: bool = True,
+    ) -> None:
+        super().__init__(speaker)
+        self._key = key
+        self._attr_icon = icon
+        self._attr_name = label  # HA will prepend device name automatically
+        self._attr_native_unit_of_measurement = unit
+        self._attr_unique_id = f"{speaker.uuid}_{key}"
+        if not default_enabled:
+            self._attr_entity_registry_enabled_default = False
+
+    @property
+    def native_value(self):  # type: ignore[override]
+        if not self.speaker.coordinator.data:
+            return None
+        return self.speaker.coordinator.data.get("device_info", {}).get(self._key)

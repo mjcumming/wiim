@@ -30,6 +30,7 @@ CORE_PLATFORMS: list[Platform] = [
     Platform.SENSOR,  # Always enabled - role sensor is essential for multiroom
     Platform.NUMBER,  # Always enabled - group volume control for multiroom
     Platform.SWITCH,  # Always enabled - group mute control for multiroom
+    Platform.UPDATE,  # Always enabled - firmware update indicator
 ]
 
 # Essential optional platforms based on user configuration

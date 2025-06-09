@@ -168,6 +168,7 @@ logger:
 
 - **[Complete User Guide](user-guide.md)** - All features and advanced configuration
 - **[Automation Examples](automation-examples.md)** - Ready-to-use scripts
+- **[Diagnostics](diagnostics.md)** - Firmware sensors & update entity
 - **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
 - **[GitHub Issues](https://github.com/mjcumming/wiim/issues)** - Report bugs
 - **[HA Community](https://community.home-assistant.io/)** - Get help
