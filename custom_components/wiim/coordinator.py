@@ -908,8 +908,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._eq_list_extended = True
                 return
 
-            from .const import EQ_PRESET_MAP
             import re
+
+            from .const import EQ_PRESET_MAP
 
             def _slug(label: str) -> str:
                 slug = label.strip().lower().replace(" ", "_").replace("-", "_")

@@ -533,7 +533,7 @@ class MediaPlayerController:
             self._logger.debug("Joining group with members: %s", group_members)
 
             # Validate and resolve entity IDs to Speaker objects using new architecture
-            from .data import get_all_speakers, find_speaker_by_uuid
+            from .data import find_speaker_by_uuid, get_all_speakers
 
             all_speakers = get_all_speakers(self.hass)
             speakers = []

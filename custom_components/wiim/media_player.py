@@ -13,9 +13,9 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.debounce import Debouncer
 from homeassistant.exceptions import HomeAssistantError  # Graceful error handling
+from homeassistant.helpers.debounce import Debouncer
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity

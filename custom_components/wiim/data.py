@@ -364,7 +364,7 @@ class Speaker:
         The master (or solo) speaker is always the first element to match
         the ordering expectation from previous implementation/tests.
         """
-        def _speaker_to_entity_id(spk: "Speaker") -> str:
+        def _speaker_to_entity_id(spk: Speaker) -> str:
             return f"media_player.{spk.uuid.replace('-', '_').lower()}"
 
         if self.role == "master":
@@ -374,7 +374,7 @@ class Speaker:
 
         return [_speaker_to_entity_id(s) for s in ordered_members]
 
-    async def async_join_group(self, target_speakers: list["Speaker"]) -> None:
+    async def async_join_group(self, target_speakers: list[Speaker]) -> None:
         """Create or extend a multiroom group with *self* as master.
 
         A *very* lightweight implementation that simply maps to a few
@@ -454,7 +454,7 @@ class Speaker:
             return None
 
         # Convert to boolean for various encodings
-        if isinstance(mute_val, (bool, int)):
+        if isinstance(mute_val, bool | int):
             return bool(int(mute_val))
 
         mute_str = str(mute_val).strip().lower()
@@ -530,7 +530,7 @@ class Speaker:
         # Some firmwares report explicit shuffle bool, others encode into play_mode.
         if shuffle_val is None:
             return None
-        if isinstance(shuffle_val, (bool, int)):
+        if isinstance(shuffle_val, bool | int):
             return bool(int(shuffle_val))
         # Handle string encodings
         shuffle_val = str(shuffle_val).lower()
