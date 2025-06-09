@@ -1,15 +1,13 @@
 """Test WiiM config flow."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.exceptions import ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wiim.const import CONF_HOST, DOMAIN
-
 from tests.const import MOCK_CONFIG
 
 

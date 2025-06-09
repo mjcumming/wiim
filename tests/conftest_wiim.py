@@ -1,13 +1,12 @@
 """WiiM-specific pytest fixtures."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-
 # Import our components for testing
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from homeassistant.config_entries import ConfigEntry
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -83,9 +82,10 @@ def wiim_coordinator(wiim_client):
 @pytest.fixture
 def wiim_speaker(hass, wiim_coordinator):
     """Create a test Speaker instance."""
-    from custom_components.wiim.data import Speaker
     from homeassistant.config_entries import ConfigEntry
+
     from custom_components.wiim.const import DOMAIN
+    from custom_components.wiim.data import Speaker
 
     # Create a mock config entry
     config_entry = MagicMock(spec=ConfigEntry)
@@ -110,9 +110,10 @@ def wiim_speaker(hass, wiim_coordinator):
 @pytest.fixture
 def wiim_speaker_slave(hass):
     """Create a test slave Speaker instance."""
-    from custom_components.wiim.data import Speaker
     from homeassistant.config_entries import ConfigEntry
+
     from custom_components.wiim.const import DOMAIN
+    from custom_components.wiim.data import Speaker
 
     # Create mock coordinator for slave
     slave_coordinator = MagicMock()

@@ -7,7 +7,6 @@ import aiohttp
 import pytest
 
 from custom_components.wiim.api import WiiMClient
-
 from tests.const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
@@ -94,6 +93,6 @@ async def test_timeout_error_handling():
     client = WiiMClient("192.168.1.100")
 
     # Mock the _request method to raise a timeout (async)
-    with patch.object(client, "_request", new_callable=AsyncMock, side_effect=asyncio.TimeoutError()):
+    with patch.object(client, "_request", new_callable=AsyncMock, side_effect=TimeoutError()):
         with pytest.raises(asyncio.TimeoutError):
             await client.get_player_status()

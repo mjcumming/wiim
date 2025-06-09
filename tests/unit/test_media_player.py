@@ -1,10 +1,11 @@
 """Unit tests for WiiM media player platform."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, call, patch
 from homeassistant.components.media_player import (
-    MediaPlayerState,
     MediaPlayerEntityFeature,
+    MediaPlayerState,
 )
 
 # Import fixtures from our WiiM conftest

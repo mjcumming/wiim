@@ -6,10 +6,10 @@ Runs comprehensive unit and integration tests for the WiiM integration.
 This replaces the old phase-based validation tests with proper pytest-based testing.
 """
 
-import os
-import sys
-import subprocess
 import argparse
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 

@@ -1,12 +1,12 @@
-from __future__ import annotations
-
 """Firmware update entity for WiiM devices.
 
 LinkPlay exposes only an *availability flag* (VersionUpdate/NewVer) – there is no
-public API to download or stage firmware.  On devices that already downloaded
-a new release, issuing a normal `reboot` starts the update process.  Therefore
+public API to download or stage firmware. On devices that already downloaded
+a new release, issuing a normal `reboot` starts the update process. Therefore
 `async_install()` simply reboots the speaker when the user presses *Install*.
 """
+
+from __future__ import annotations
 
 import logging
 from typing import Any
