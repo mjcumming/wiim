@@ -50,7 +50,8 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
     def __init__(self, speaker: Speaker) -> None:
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_fw_update"
-        self._attr_name = "Firmware Update"
+        self._attr_name = "Firmware Update"  # Generic label
+        self._attr_has_entity_name = True
 
     # ------------- UpdateEntity required properties -------------
 

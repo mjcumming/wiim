@@ -171,7 +171,8 @@ class WiiMActivitySensor(WiimEntity, SensorEntity):
         """Initialize activity level sensor."""
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_activity_level"
-        self._attr_name = "Activity Level"  # Clean name without device duplication
+        self._attr_name = "Activity Level"  # Generic label; HA will prefix device name
+        self._attr_has_entity_name = True
 
     @property
     def native_value(self) -> str | None:
@@ -218,7 +219,8 @@ class WiiMPollingIntervalSensor(WiimEntity, SensorEntity):
         """Initialize polling interval sensor."""
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_polling_interval"
-        self._attr_name = "Polling Interval"  # Clean name without device duplication
+        self._attr_name = "Polling Interval"  # Generic label
+        self._attr_has_entity_name = True
 
     @property
     def native_value(self) -> int | None:
@@ -258,9 +260,10 @@ class WiiMDeviceInfoSensor(WiimEntity, SensorEntity):
         super().__init__(speaker)
         self._key = key
         self._attr_icon = icon
-        self._attr_name = label  # HA will prepend device name automatically
+        self._attr_name = label  # Generic label; HA will prepend device name automatically
         self._attr_native_unit_of_measurement = unit
         self._attr_unique_id = f"{speaker.uuid}_{key}"
+        self._attr_has_entity_name = True
         if not default_enabled:
             self._attr_entity_registry_enabled_default = False
 
@@ -281,7 +284,8 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     def __init__(self, speaker: Speaker) -> None:
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_current_input"
-        self._attr_name = "Current Input"
+        self._attr_name = "Current Input"  # Generic label
+        self._attr_has_entity_name = True
 
     @property  # type: ignore[override]
     def native_value(self):

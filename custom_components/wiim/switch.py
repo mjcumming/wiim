@@ -193,7 +193,8 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         """Initialize equalizer switch."""
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_equalizer"
-        self._attr_name = "Equalizer"  # Clean name without device duplication
+        self._attr_name = "Equalizer"  # Generic label
+        self._attr_has_entity_name = True
 
     @property
     def is_on(self) -> bool | None:

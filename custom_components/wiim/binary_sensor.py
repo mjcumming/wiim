@@ -60,7 +60,8 @@ class WiiMConnectivityBinarySensor(WiimEntity, BinarySensorEntity):
         """Initialize connected status binary sensor."""
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_connected"
-        self._attr_name = "Connected"  # Clean name without device duplication
+        self._attr_name = "Connected"  # Generic label
+        self._attr_has_entity_name = True
 
     @property
     def is_on(self) -> bool:

@@ -375,15 +375,34 @@ class Speaker:
         The master (or solo) speaker is always the first element to match
         the ordering expectation from previous implementation/tests.
         """
-        def _speaker_to_entity_id(spk: Speaker) -> str:
-            return f"media_player.{spk.uuid.replace('-', '_').lower()}"
+        # Resolve entity IDs via entity registry to ensure they match the ones
+        # actually created by Home Assistant (which are based on device names
+        # rather than bare UUIDs).
+
+        from homeassistant.helpers import entity_registry as er
+
+        ent_reg = er.async_get(self.hass)
+
+        def _speaker_to_entity_id(spk: Speaker) -> str | None:
+            # MediaPlayerEntity unique_id is the raw speaker UUID as set in
+            # WiiMMediaPlayer.__init__ (no additional "wiim_" prefix).
+
+            entity_id = ent_reg.async_get_entity_id("media_player", "wiim", spk.uuid)
+            if entity_id:
+                return entity_id
+
+            # Fallback: best-effort slugified name to avoid returning invalid
+            # UUID-style IDs.  This guarantees the method never returns an
+            # entity_id that doesn't exist in HA.
+            return None  # Not found – caller will filter out
 
         if self.role == "master":
             ordered_members = [self] + [m for m in self.group_members if m is not self]
         else:
             ordered_members = [self] + self.group_members
 
-        return [_speaker_to_entity_id(s) for s in ordered_members]
+        # Map to entity IDs and filter out any unresolved speakers (None)
+        return [eid for eid in (_speaker_to_entity_id(s) for s in ordered_members) if eid]
 
     async def async_join_group(self, target_speakers: list[Speaker]) -> None:
         """Create or extend a multiroom group with *self* as master.
