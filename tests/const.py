@@ -16,8 +16,6 @@ MOCK_DEVICE_DATA = {
     "ip": "192.168.1.100",
     "vol": "50",
     "mute": "0",
-    "device_name": "WiiM Mini",
-    "DeviceName": "WiiM Mini",
     "status": "stop",
     "mode": "0",
 }
