@@ -529,6 +529,10 @@ class MediaPlayerController:
         Args:
             group_members: List of entity IDs to group with
         """
+        if not group_members:
+            self._logger.debug("join_group called with an empty list – treating as leave_group request for %s", self.speaker.name)
+            await self.leave_group()
+            return
         try:
             self._logger.debug("Joining group with members: %s", group_members)
 
