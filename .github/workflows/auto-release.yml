@@ -91,6 +91,7 @@ jobs:
         uses: hacs/action@22.5.0
         with:
           category: "integration"
+          ignore: "topics brands"
 
   release:
     needs: [check-version, tests]

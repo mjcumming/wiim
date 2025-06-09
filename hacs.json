@@ -6,7 +6,5 @@
   "homeassistant": "2024.12.0",
   "render_readme": true,
   "zip_release": true,
-  "country": ["US", "CA", "GB", "DE", "FR", "AU", "NL", "SE", "NO", "DK"],
-  "domains": ["media_player", "sensor", "number", "button"],
-  "iot_class": "Local Push"
+  "country": ["US", "CA", "GB", "DE", "FR", "AU", "NL", "SE", "NO", "DK"]
 }
