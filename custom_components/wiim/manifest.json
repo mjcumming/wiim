@@ -1,6 +1,7 @@
 {
   "domain": "wiim",
   "name": "WiiM",
+  "brand": "linkplay",
   "codeowners": ["@mjcumming"],
   "config_flow": true,
   "dependencies": [],
