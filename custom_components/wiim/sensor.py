@@ -49,71 +49,45 @@ async def async_setup_entry(
     entities = []
 
     # ALWAYS CREATE: Role sensor - ESSENTIAL for users to understand multiroom status
-    # This is NOT diagnostic - it's core functionality users need to see
     entities.append(WiiMRoleSensor(speaker))
 
     # Current Input sensor (always useful)
     entities.append(WiiMInputSensor(speaker))
 
-    # ------------------------------------------------------------
-    # Device-info sensors
-    # ------------------------------------------------------------
-    core_info_defs = [
-        # Intentionally left empty – no core device-info sensors are enabled by
-        # default.  Firmware version is considered diagnostic and has been
-        # moved to ``diag_info_defs`` so it follows the same visibility rules
-        # as the other diagnostic sensors.
-    ]
-
-    diag_info_defs = [
-        (FIRMWARE_KEY, "Firmware Version", "mdi:chip", None, False),
-        (PRESET_SLOTS_KEY, "Preset Slots", "mdi:numeric", "slots", False),
-        (WMRM_VERSION_KEY, "WMRM Version", "mdi:radio-tower", None, False),
-        (FIRMWARE_DATE_KEY, "Firmware Build Date", "mdi:calendar-clock", None, False),
-        (HARDWARE_KEY, "Hardware", "mdi:memory", None, False),
-        (PROJECT_KEY, "Project", "mdi:cube", None, False),
-        (MCU_VERSION_KEY, "MCU Version", "mdi:chip", None, False),
-        (DSP_VERSION_KEY, "DSP Version", "mdi:chip", None, False),
-    ]
-
-    for key, label, icon, unit, default_on in core_info_defs + diag_info_defs:
-        diag_enabled = entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False)
-
-        # Decide if we should create this sensor
-        if not default_on and not diag_enabled:
-            # Diagnostic sensor requested but diagnostics option is off → skip
-            continue
-
-        # Determine whether the sensor should be enabled by default
-        sensor_enabled_by_default = default_on or diag_enabled
-
-        entities.append(
-            WiiMDeviceInfoSensor(
-                speaker,
-                key=key,
-                label=label,
-                icon=icon,
-                unit=unit,
-                default_enabled=sensor_enabled_by_default,
+    # Only add diagnostic sensors if the option is enabled
+    if entry.options.get("enable_diagnostic_entities", False):
+        diag_info_defs = [
+            (FIRMWARE_KEY, "Firmware Version", "mdi:chip", None, False),
+            (PRESET_SLOTS_KEY, "Preset Slots", "mdi:numeric", "slots", False),
+            (WMRM_VERSION_KEY, "WMRM Version", "mdi:radio-tower", None, False),
+            (FIRMWARE_DATE_KEY, "Firmware Build Date", "mdi:calendar-clock", None, False),
+            (HARDWARE_KEY, "Hardware", "mdi:memory", None, False),
+            (PROJECT_KEY, "Project", "mdi:cube", None, False),
+            (MCU_VERSION_KEY, "MCU Version", "mdi:chip", None, False),
+            (DSP_VERSION_KEY, "DSP Version", "mdi:chip", None, False),
+        ]
+        for key, label, icon, unit, default_on in diag_info_defs:
+            entities.append(
+                WiiMDeviceInfoSensor(
+                    speaker,
+                    key=key,
+                    label=label,
+                    icon=icon,
+                    unit=unit,
+                    default_enabled=True,
+                )
             )
-        )
-
-    # OPTIONAL: Advanced diagnostic sensors (only when explicitly enabled)
-    if entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False):
-        entities.extend(
-            [
-                WiiMActivitySensor(speaker),
-                WiiMPollingIntervalSensor(speaker),
-                WiiMPerformanceSensor(speaker),
-            ]
-        )
+        entities.extend([
+            WiiMActivitySensor(speaker),
+            WiiMPollingIntervalSensor(speaker),
+            WiiMPerformanceSensor(speaker),
+        ])
 
     async_add_entities(entities)
     _LOGGER.info(
-        "Created %d sensor entities for %s (role sensor always included, %d diagnostic sensors)",
+        "Created %d sensor entities for %s (role sensor always included)",
         len(entities),
         speaker.name,
-        len(entities) - 1,  # Subtract 1 for the always-present role sensor
     )
 
 

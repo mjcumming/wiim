@@ -30,12 +30,15 @@ async def async_setup_entry(
     All buttons are optional and controlled by user preferences.
     """
     speaker = get_speaker_from_config_entry(hass, config_entry)
+    entry = hass.data["wiim"][config_entry.entry_id]["entry"]
 
-    # Only create useful maintenance buttons - no internal diagnostic buttons
-    entities = [
-        WiiMRebootButton(speaker),
-        WiiMSyncTimeButton(speaker),
-    ]
+    entities = []
+    # Only create maintenance buttons if the option is enabled
+    if entry.options.get("enable_maintenance_buttons", False):
+        entities.extend([
+            WiiMRebootButton(speaker),
+            WiiMSyncTimeButton(speaker),
+        ])
 
     async_add_entities(entities)
     _LOGGER.info("Created %d maintenance button entities for %s", len(entities), speaker.name)
