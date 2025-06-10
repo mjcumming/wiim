@@ -6,6 +6,23 @@
 
 Transform your WiiM and LinkPlay speakers into powerful Home Assistant `media_player` entities with full multiroom support, no additional dependencies required.
 
+## 🤝 Acknowledgments
+
+This integration builds upon the excellent work of the LinkPlay community:
+
+- [python-linkplay](https://github.com/Velleman/python-linkplay) - A comprehensive Python library for LinkPlay device control
+- [LinkPlay Home Assistant Integration](https://github.com/nagyrobi/home-assistant-custom-components-linkplay) - The original Home Assistant integration for LinkPlay devices
+
+## 🎯 Why Another Integration?
+
+While existing solutions are excellent, this integration takes a different approach:
+
+- **Native Home Assistant**: Built entirely within Home Assistant's framework, with no external dependencies
+- **Standard Media Player**: Fully implements Home Assistant's media player platform for seamless integration
+- **True Multiroom**: Leverages Home Assistant's built-in media player grouping for reliable multiroom control
+- **Simplified Setup**: No additional Python packages or system dependencies required
+- **Future-Proof**: Direct integration with Home Assistant's core features and updates
+
 ## ✨ Key Features
 
 - 🎵 **Complete Media Control** - Play, pause, volume, source selection, presets
@@ -90,21 +107,63 @@ data:
     - media_player.bedroom
 ```
 
-### Automation
+### Advanced Automation
 
 ```yaml
-# Morning music routine
+# Morning music routine with volume fade
 automation:
   - alias: "Morning Music"
     trigger:
       platform: time
       at: "07:00:00"
     action:
+      - service: media_player.join
+        target:
+          entity_id: media_player.kitchen
+        data:
+          group_members:
+            - media_player.bedroom
+            - media_player.living_room
+      - service: media_player.volume_set
+        target:
+          entity_id: media_player.kitchen
+        data:
+          volume_level: 0.1
+      - service: media_player.play_media
+        target:
+          entity_id: media_player.kitchen
+        data:
+          media_content_id: "spotify:playlist:your_playlist_id"
+          media_content_type: "music"
+      - delay:
+          seconds: 30
       - service: media_player.volume_set
         target:
           entity_id: media_player.kitchen
         data:
           volume_level: 0.3
+```
+
+### Voice Control
+
+```yaml
+# Example voice commands that work out of the box:
+# "Hey Google, play music in the kitchen"
+# "Hey Google, set volume to 50% in the living room"
+# "Hey Google, pause all speakers"
+# "Hey Google, play Spotify in the bedroom"
+```
+
+### Dashboard Integration
+
+```yaml
+# Example media player card configuration
+type: media-player
+entity: media_player.living_room
+show_volume_buttons: true
+show_play_pause: true
+show_source: true
+show_group: true
 ```
 
 ## 🔧 Features Matrix
@@ -113,14 +172,16 @@ automation:
 | ---------------- | ------ | --------------------------------- |
 | Play/Pause/Stop  | ✅     | Full transport control            |
 | Volume Control   | ✅     | Absolute and relative             |
-| Group Volume     | ✅     | Synchronized group volume control |
-| Group Mute       | ✅     | Synchronized group mute control   |
+| Group Volume     | ✅     | Native HA group volume control    |
+| Group Mute       | ✅     | Native HA group mute control      |
 | Source Selection | ✅     | WiFi, Bluetooth, Line In, etc.    |
 | Preset Buttons   | ✅     | Hardware buttons 1-6              |
-| Multiroom Groups | ✅     | Master/slave synchronization      |
+| Multiroom Groups | ✅     | Native HA media player grouping   |
 | Equalizer        | ✅     | 10-band EQ + presets              |
 | Auto Discovery   | ✅     | UPnP/SSDP + Zeroconf              |
-| Group Entities   | ✅     | Virtual group controllers         |
+| Group Entities   | ✅     | Native HA group entities          |
+| Voice Control    | ✅     | Works with all HA voice assistants|
+| Dashboards       | ✅     | Compatible with all HA cards      |
 
 ## 🤝 Community & Support
 
@@ -171,10 +232,23 @@ The integration provides many service calls for advanced control:
 
 ### Group Services
 
-- `wiim.create_group_with_members` - Create a multiroom group
-- `wiim.add_to_group` - Add device to existing group
-- `wiim.remove_from_group` - Remove device from group
-- `wiim.disband_group` - Disband the entire group
+The integration fully supports Home Assistant's native media player grouping system:
+
+```yaml
+# Create or join a group
+service: media_player.join
+target:
+  entity_id: media_player.living_room
+data:
+  group_members:
+    - media_player.kitchen
+    - media_player.bedroom
+
+# Remove from group
+service: media_player.unjoin
+target:
+  entity_id: media_player.living_room
+```
 
 ### Device Services
 
@@ -239,11 +313,4 @@ Our integration uses **intelligent source detection** that prioritizes what user
 | **Bluetooth** 📱         | Bluetooth                          | Direct BT connection   |
 | **Line In** 🔌           | Line In                            | Physical audio input   |
 
-#### **Why This Matters**
 
-- **Before**: Users saw confusing technical details like "WiFi" when streaming
-- **After**: Users see meaningful information like "Amazon Music"
-- **Smart Detection**: Uses artwork URLs, metadata, and API fields to identify streaming services
-- **Fallback Logic**: Shows input type (WiFi, Bluetooth) when service can't be detected
-
-This matches how other premium integrations work (Sonos shows "Spotify", not "Network").
