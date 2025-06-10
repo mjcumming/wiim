@@ -1219,10 +1219,16 @@ class WiiMClient:
             artist = data.get("artist") or ""
             album = data.get("album") or ""
             cache_key = f"{title}-{artist}-{album}"
-            from urllib.parse import quote
 
-            if cache_key and "?" not in cover:
-                cover = f"{cover}?cache={quote(cache_key)}"
+            if cache_key:
+                from urllib.parse import quote
+
+                encoded_key = quote(cache_key)
+                if "?" in cover:
+                    # URL already has parameters – append with &
+                    cover = f"{cover}&cache={encoded_key}"
+                else:
+                    cover = f"{cover}?cache={encoded_key}"
             _LOGGER.debug("Setting entity_picture: %s (cache_key: %s)", cover, cache_key)
             data["entity_picture"] = cover
 
@@ -1258,9 +1264,9 @@ class WiiMClient:
             # vendor strings as reported by the firmware, values are the canonical
             # source string we want to expose to Home Assistant.
             _VENDOR_SOURCE_MAP = {
-                "amazon music": "amazon_music",
-                "amazonmusic": "amazon_music",
-                "prime": "amazon_music",  # Amazon Prime Music
+                "amazon music": "amazon",
+                "amazonmusic": "amazon",
+                "prime": "amazon",  # Amazon Prime Music
                 "qobuz": "qobuz",
                 "tidal": "tidal",
                 "deezer": "deezer",
