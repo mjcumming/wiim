@@ -16,7 +16,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    CONF_ENABLE_DIAGNOSTIC_ENTITIES,
     DOMAIN,
     DSP_VERSION_KEY,
     FIRMWARE_DATE_KEY,
@@ -66,7 +65,7 @@ async def async_setup_entry(
             (MCU_VERSION_KEY, "MCU Version", "mdi:chip", None, False),
             (DSP_VERSION_KEY, "DSP Version", "mdi:chip", None, False),
         ]
-        for key, label, icon, unit, default_on in diag_info_defs:
+        for key, label, icon, unit, _default_on in diag_info_defs:
             entities.append(
                 WiiMDeviceInfoSensor(
                     speaker,
