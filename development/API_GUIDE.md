@@ -725,21 +725,6 @@ async def async_set_native_value(self, value: float) -> None:
 ✅ **Robust Error Handling**: Partial failures don't break group operations
 ✅ **HA Conventions**: Proper platform separation (number/switch vs media_player)
 
-### **Phase 1 vs Phase 2 Strategy**
-
-**Phase 1 (Implemented)**: Group volume & mute controls
-
-- Addresses 80% of multiroom UX problems
-- Minimal complexity, maximum benefit
-- Individual media players still available for granular control
-
-**Phase 2 (Future)**: Virtual group media player
-
-- Complete group entity with unified playback control
-- Higher complexity, entity lifecycle management
-- Decision pending based on Phase 1 user feedback
-
----
 
 ## 📊 **API Endpoint Reference**
 

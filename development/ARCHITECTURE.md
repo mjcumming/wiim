@@ -1,15 +1,8 @@
-# WiiM Integration Architecture Design v2.1
+# WiiM Integration Architecture Design 
 
 ## Overview
 
 The WiiM integration follows a **simplified pragmatic architecture** with clear separation of concerns, avoiding over-engineering while maintaining clean code structure.
-
-**Key Simplifications in v2.1:**
-- Removed complex WiimData registry system
-- Config entries are the source of truth (like HA Core LinkPlay integration)
-- Simple speaker lookups via config entry iteration (2-4 devices = negligible overhead)
-- Missing device discovery through integration flows
-- Standard HA coordinator pattern throughout
 
 ## Core Design Principles
 
@@ -60,34 +53,7 @@ All operations have graceful fallbacks and error handling.
 
 This decision prioritizes **reliable core functionality** over potentially problematic power features.
 
-## Speaker Management Simplification (v2.1)
-
-### What Changed
-
-**BEFORE v2.1 (Complex Registry):**
-- WiimData registry with O(1) lookups and bidirectional mappings
-- Complex speaker registration/unregistration 
-- Custom registry validation and maintenance
-- Entity ID to Speaker mappings
-- IP address conflict resolution
-
-**AFTER v2.1 (Simple Lookups):**
-- Config entries as single source of truth
-- Simple iteration for speaker lookups (2-4 devices)
-- Standard HA config entry updates for IP changes
-- Missing device discovery through integration flows
-
-### Why We Simplified
-
-Following **cursor rules** and **HA Core LinkPlay patterns**:
-
-✅ **Performance**: 2-4 devices = negligible overhead for iteration
-✅ **Simplicity**: Less code to maintain and debug
-✅ **Standards**: Uses standard HA config entry system
-✅ **Reliability**: Less custom code = fewer bugs
-✅ **Testability**: Easier to test simple functions than complex registry
-
-### New Speaker Lookup Pattern
+### Speaker Lookup Pattern
 
 ```python
 # Simple helper functions replace complex registry
@@ -126,7 +92,7 @@ async def _trigger_missing_device_discovery(self, device_uuid: str, device_name:
 
 This creates a config flow where users can provide the IP address for known UUIDs.
 
-## Simplified Architecture Layers
+## Architecture Layers
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -148,7 +114,7 @@ This creates a config flow where users can provide the IP address for known UUID
 ├─────────────────────────────────────────────────────────────┤
 │                     BUSINESS LAYER                          │
 ├─────────────────────────────────────────────────────────────┤
-│  Speaker (data.py) - SIMPLIFIED v2.1                      │
+│  Speaker (data.py)                      │
 │  ├── Device State Management                               │
 │  ├── Group Membership (simple lookup)                     │
 │  ├── Role Detection (master/slave/solo)                    │
@@ -438,30 +404,8 @@ wiim/
 │       └── conftest.py
 ```
 
-## Implementation Benefits
 
-### What We Gain ✅
-
-- **Separation of Concerns**: Entity focuses on HA interface, controller on complex logic
-- **Testability**: Can unit test controller logic separately from HA entity  
-- **Maintainability**: All media player complexity in one well-organized file
-- **Simplified Speaker Management**: Config entries as source of truth (like HA Core)
-- **Standard HA Patterns**: No custom registry, standard config entry updates
-- **Automatic Discovery**: Missing devices trigger helpful discovery flows
-- **Performance**: No unnecessary abstraction layers or complex delegation chains
-- **Debuggability**: One place to look for media player issues, simple speaker lookups
-
-### What We Avoid ❌
-
-- **Over-abstraction**: No unnecessary controller hierarchies or complex registries
-- **Over-engineering**: No complex factory patterns, event systems, or bidirectional mappings
-- **Maintenance Overhead**: No multiple small files for simple functionality
-- **Custom Systems**: No custom registry when HA's config entries work perfectly
-- **Performance Overhead**: No deep delegation chains or O(1) optimizations for 2-4 devices
-
-## Next Steps
-
-This simplified architecture (v2.1) provides:
+This architecture provides:
 ✅ **Clear separation** without over-engineering
 ✅ **Testable components** with practical boundaries
 ✅ **Maintainable codebase** with logical organization
@@ -471,4 +415,3 @@ This simplified architecture (v2.1) provides:
 ✅ **Fast implementation** with minimal abstraction
 ✅ **Easy debugging** with centralized logic and simple lookups
 
-The combination of single controller pattern + simplified speaker management gives us all the benefits of clean architecture while following Home Assistant standards and cursor rules.

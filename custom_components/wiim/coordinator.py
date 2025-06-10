@@ -74,6 +74,15 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # One-time flag for dynamic EQ preset discovery
         self._eq_list_extended: bool = False
 
+        # ---------------- Performance metrics ----------------
+        # Duration of the last successful coordinator update (ms)
+        self._last_response_time: float | None = None
+
+        # Per-endpoint health flags (True = last call succeeded, False = failed)
+        self._player_status_working: bool | None = None
+        self._device_info_working: bool | None = None
+        self._multiroom_working: bool | None = None
+
         _LOGGER.info(
             "Coordinator initialized for %s with fixed %d-second polling",
             client.host,
@@ -145,6 +154,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Fetch data from the WiiM device."""
         _LOGGER.debug("=== COORDINATOR UPDATE START for %s ===", self.client.host)
 
+        # Track latency of the entire update cycle for diagnostics.
+        _start_time = time.perf_counter()
+
         # 0. One-time attempt to fetch the full preset list (EQGetList)
         if not self._eq_list_extended:
             await self._extend_eq_preset_map_once()
@@ -154,12 +166,18 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             player_status = await self._get_player_status()
             _LOGGER.debug("Player status result for %s: %s", self.client.host, player_status)
 
+            # Endpoint health – if we reach here the call succeeded.
+            self._player_status_working = True
+
             _LOGGER.debug("Step 2: Getting device info for %s", self.client.host)
             device_info = await self._get_device_info_defensive()
             if VERBOSE_DEBUG:
                 _LOGGER.debug("Device info result for %s: %s", self.client.host, device_info)
             else:
                 _LOGGER.debug("Device info result for %s (keys=%s)", self.client.host, list(device_info.keys()))
+
+            # Device info endpoint considered working if dict is non-empty.
+            self._device_info_working = bool(device_info)
 
             # --------------------------------------------------------
             # Normalise extra device info from getStatusEx so sensors
@@ -228,6 +246,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Step 3: Getting multiroom info for %s", self.client.host)
             multiroom_info = await self._get_multiroom_info_defensive()
             _LOGGER.debug("Multiroom info result for %s%s", self.client.host, f": {multiroom_info}" if VERBOSE_DEBUG else f" (keys={list(multiroom_info.keys())})")
+
+            self._multiroom_working = bool(multiroom_info)
 
             _LOGGER.debug("Step 4: Getting track metadata for %s", self.client.host)
             track_metadata = await self._get_track_metadata_defensive(player_status)
@@ -320,10 +340,18 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._update_speaker_object(data)
 
             self._consecutive_failures = 0
+
+            # Record overall turnaround time in milliseconds.
+            self._last_response_time = (time.perf_counter() - _start_time) * 1000.0
+
             _LOGGER.debug("=== COORDINATOR UPDATE SUCCESS for %s ===", self.client.host)
             return data
 
         except WiiMError as err:
+            # Mark endpoints as failed – conservative approach, assume all failed.
+            self._player_status_working = False
+            self._device_info_working = False
+            self._multiroom_working = False
             self._consecutive_failures += 1
             _LOGGER.error("=== COORDINATOR UPDATE FAILED for %s ===", self.client.host)
             _LOGGER.error("Update failed for %s (attempt %d): %s", self.client.host, self._consecutive_failures, err)

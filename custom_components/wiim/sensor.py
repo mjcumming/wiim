@@ -7,6 +7,7 @@ Only creates sensors that users actually need, with advanced diagnostics optiona
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
@@ -58,10 +59,14 @@ async def async_setup_entry(
     # Device-info sensors
     # ------------------------------------------------------------
     core_info_defs = [
-        (FIRMWARE_KEY, "Firmware Version", "mdi:chip", None, True),
+        # Intentionally left empty – no core device-info sensors are enabled by
+        # default.  Firmware version is considered diagnostic and has been
+        # moved to ``diag_info_defs`` so it follows the same visibility rules
+        # as the other diagnostic sensors.
     ]
 
     diag_info_defs = [
+        (FIRMWARE_KEY, "Firmware Version", "mdi:chip", None, False),
         (PRESET_SLOTS_KEY, "Preset Slots", "mdi:numeric", "slots", False),
         (WMRM_VERSION_KEY, "WMRM Version", "mdi:radio-tower", None, False),
         (FIRMWARE_DATE_KEY, "Firmware Build Date", "mdi:calendar-clock", None, False),
@@ -99,6 +104,7 @@ async def async_setup_entry(
             [
                 WiiMActivitySensor(speaker),
                 WiiMPollingIntervalSensor(speaker),
+                WiiMPerformanceSensor(speaker),
             ]
         )
 
@@ -239,6 +245,41 @@ class WiiMPollingIntervalSensor(WiimEntity, SensorEntity):
             "idle_rate": getattr(self.speaker.coordinator, "_idle_interval", 5),
             "defensive_polling_enabled": True,
             "coordinator_available": self.speaker.coordinator.last_update_success,
+        }
+
+
+class WiiMPerformanceSensor(WiimEntity, SensorEntity):
+    """Sensor providing coordinator performance diagnostics."""
+
+    _attr_icon = "mdi:speedometer"
+    _attr_native_unit_of_measurement = "ms"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_performance"
+        self._attr_name = "Update Latency"  # HA will prefix device name automatically
+        self._attr_has_entity_name = True
+
+    @property
+    def native_value(self) -> float | None:  # type: ignore[override]
+        """Return the last coordinator update duration in milliseconds."""
+        return self.speaker.coordinator._last_response_time  # noqa: SLF001 – intentional private access
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed performance attributes."""
+        coord = self.speaker.coordinator
+        return {
+            "api_response_time_ms": coord._last_response_time,  # noqa: SLF001
+            "consecutive_failures": getattr(coord, "_consecutive_failures", 0),
+            "update_frequency": coord.update_interval.total_seconds() if coord.update_interval else None,
+            "endpoints_working": {
+                "player_status": getattr(coord, "_player_status_working", None),
+                "device_info": getattr(coord, "_device_info_working", None),
+                "multiroom": getattr(coord, "_multiroom_working", None),
+            },
         }
 
 
