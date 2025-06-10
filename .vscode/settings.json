@@ -4,5 +4,6 @@
   "python.pythonPath": "venv/bin/python",
   "files.associations": {
     "*.yaml": "home-assistant"
-  }
+  },
+  "makefile.configureOnOpen": false
 }

@@ -130,11 +130,18 @@ dmypy.json
 .pyre/
 
 # IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+.vscode/*
+!.vscode/cSpell.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+core.code-workspace
+.env
+
+# Windows Explorer
+desktop.ini
+/home-assistant.pyproj
+/home-assistant.sln
+/.vs/*
 
 # macOS
 .DS_Store
@@ -183,3 +190,18 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 sparc.md
+
+# Secrets
+.lokalise_token
+
+# monkeytype
+monkeytype.sqlite3
+
+# This is left behind by Azure Restore Cache
+tmp_cache
+
+# python-language-server / Rope
+.ropeproject
+
+# Will be created from script/split_tests.py
+pytest_buckets.txt

@@ -3,7 +3,7 @@
 # This Makefile provides commands for testing, linting, and building
 # the WiiM Home Assistant integration.
 
-.PHONY: help test test-phase lint format clean install build check-all release
+.PHONY: help test test-phase test-quick lint format clean install install-dev build check-all release check-python check-ha-compat
 
 # Default target
 help:
@@ -13,18 +13,46 @@ help:
 	@echo "  test           - Run all integration tests"
 	@echo "  test-phase N   - Run specific phase test (1-5)"
 	@echo "  test-verbose   - Run tests with verbose output"
+	@echo "  test-quick     - Run tests without coverage (faster)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  lint           - Run linting checks"
 	@echo "  format         - Format code with ruff"
 	@echo "  check-all      - Run all quality checks"
+	@echo "  check-python   - Verify Python version compatibility"
+	@echo "  check-ha-compat - Check HA dependency compatibility"
 	@echo ""
 	@echo "Build:"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  build          - Build integration package"
 	@echo "  install        - Install for development"
+	@echo "  install-dev    - Install dev dependencies with HA checks"
 	@echo "  release        - Full release build (test + lint + build)"
 	@echo ""
+
+# Python version validation
+check-python:
+	@echo "🐍 Checking Python version compatibility with Home Assistant..."
+	@python3 -c "import sys; print(f'Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"
+	@python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,13) else 1)" || \
+		(echo "❌ Python 3.13+ required for Home Assistant 2024.12+"; exit 1)
+	@echo "✅ Python version is compatible with Home Assistant"
+
+# Home Assistant dependency compatibility check
+check-ha-compat: check-python
+	@echo "🏠 Checking Home Assistant Core compatibility..."
+	@pip install -q pytest-homeassistant-custom-component>=0.13.240 || \
+		(echo "❌ Cannot install HA test dependencies - check Python version"; exit 1)
+	@echo "✅ Home Assistant dependencies are compatible"
+
+# Install development dependencies with HA compatibility checks
+install-dev: check-ha-compat
+	pip install --constraint=.github/workflows/constraints.txt -r requirements_test.txt
+	@echo "✅ Development environment ready for Home Assistant integration development"
+
+# Quick test run without coverage (faster for development)
+test-quick: check-python
+	pytest tests/ -v
 
 # Testing targets
 test:
