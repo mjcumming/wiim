@@ -83,17 +83,6 @@ While existing solutions are excellent, this integration takes a different appro
 
 ## 🎵 Usage Examples
 
-### Basic Control
-
-```yaml
-# Play preset 3 on living room speaker
-service: media_player.play_preset
-target:
-  entity_id: media_player.living_room
-data:
-  preset: 3
-```
-
 ### Multiroom Groups
 
 ```yaml
@@ -105,53 +94,6 @@ data:
   group_members:
     - media_player.kitchen
     - media_player.bedroom
-```
-
-### Advanced Automation
-
-```yaml
-# Morning music routine with volume fade
-automation:
-  - alias: "Morning Music"
-    trigger:
-      platform: time
-      at: "07:00:00"
-    action:
-      - service: media_player.join
-        target:
-          entity_id: media_player.kitchen
-        data:
-          group_members:
-            - media_player.bedroom
-            - media_player.living_room
-      - service: media_player.volume_set
-        target:
-          entity_id: media_player.kitchen
-        data:
-          volume_level: 0.1
-      - service: media_player.play_media
-        target:
-          entity_id: media_player.kitchen
-        data:
-          media_content_id: "spotify:playlist:your_playlist_id"
-          media_content_type: "music"
-      - delay:
-          seconds: 30
-      - service: media_player.volume_set
-        target:
-          entity_id: media_player.kitchen
-        data:
-          volume_level: 0.3
-```
-
-### Voice Control
-
-```yaml
-# Example voice commands that work out of the box:
-# "Hey Google, play music in the kitchen"
-# "Hey Google, set volume to 50% in the living room"
-# "Hey Google, pause all speakers"
-# "Hey Google, play Spotify in the bedroom"
 ```
 
 ### Dashboard Integration
