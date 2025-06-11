@@ -20,6 +20,16 @@ _LOGGER = logging.getLogger(__name__)
 # which is usually enough for troubleshooting without spamming the log.
 VERBOSE_DEBUG = False
 
+# Number of consecutive failures after which we escalate to ERROR level
+FAILURE_ERROR_THRESHOLD = 10  # Only log as ERROR when device likely offline
+
+# Consecutive failure counts to switch the polling interval (seconds)
+FAILURE_BACKOFF_STEPS = {
+    3: 15,   # after 3 consecutive failures → 15-second polling
+    6: 30,   # after 6  → 30-second polling
+    10: 60,  # after 10 → 60-second polling
+}
+
 
 class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """WiiM coordinator with fixed 5-second polling.
@@ -339,7 +349,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Step 9: Updating speaker object for %s", self.client.host)
             await self._update_speaker_object(data)
 
+            # Reset failure counter and polling interval after a success
             self._consecutive_failures = 0
+            if self.update_interval.total_seconds() != FIXED_POLL_INTERVAL:
+                self.update_interval = timedelta(seconds=FIXED_POLL_INTERVAL)
 
             # Record overall turnaround time in milliseconds.
             self._last_response_time = (time.perf_counter() - _start_time) * 1000.0
@@ -353,11 +366,28 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._device_info_working = False
             self._multiroom_working = False
             self._consecutive_failures += 1
-            _LOGGER.error("=== COORDINATOR UPDATE FAILED for %s ===", self.client.host)
-            _LOGGER.error("Update failed for %s (attempt %d): %s", self.client.host, self._consecutive_failures, err)
-            # Simplified backoff
-            if self._consecutive_failures >= 3:
-                self.update_interval = timedelta(seconds=15)
+
+            # Determine log level based on consecutive failures
+            if self._consecutive_failures < 3:
+                log_fn = _LOGGER.debug  # first two failures – keep quiet
+            elif self._consecutive_failures < FAILURE_ERROR_THRESHOLD:
+                log_fn = _LOGGER.warning  # warn while we still retry
+            else:
+                log_fn = _LOGGER.error  # device considered offline
+
+            log_fn(
+                "%s: Coordinator update failed (attempt %d): %s",
+                self.client.host,
+                self._consecutive_failures,
+                err,
+            )
+
+            # Adjust polling interval based on back-off map
+            for threshold, seconds in FAILURE_BACKOFF_STEPS.items():
+                if self._consecutive_failures == threshold:
+                    self.update_interval = timedelta(seconds=seconds)
+                    break
+
             raise UpdateFailed(f"Error updating WiiM device: {err}") from err
 
     async def _get_multiroom_info_defensive(self) -> dict:

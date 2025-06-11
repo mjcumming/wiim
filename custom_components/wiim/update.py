@@ -20,12 +20,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    CONF_ENABLE_DIAGNOSTIC_ENTITIES,
-    FIRMWARE_KEY,
-    LATEST_VERSION_KEY,
-    UPDATE_AVAILABLE_KEY,
-)
+from .const import FIRMWARE_KEY, LATEST_VERSION_KEY, UPDATE_AVAILABLE_KEY
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
@@ -38,18 +33,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the firmware UpdateEntity from config entry."""
-    # Only create the firmware update entity when the user has explicitly
-    # enabled diagnostic entities in the integration options.  This keeps the
-    # UI clean by hiding advanced entities unless requested – matching the
-    # behaviour of the other diagnostic sensors.
-
-    if not config_entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False):
-        _LOGGER.info(
-            "Diagnostic entities disabled; skipping firmware update entity for %s",
-            config_entry.title or config_entry.data.get("host", "unknown"),
-        )
-        return
-
     speaker = get_speaker_from_config_entry(hass, config_entry)
     async_add_entities([WiiMFirmwareUpdateEntity(speaker)])
 
@@ -63,8 +46,9 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
     def __init__(self, speaker: Speaker) -> None:
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_fw_update"
-        self._attr_name = "Firmware Update"  # Generic label
+        self._attr_name = "Firmware Update"
         self._attr_has_entity_name = True
+        self._attr_entity_registry_enabled_default = False
 
     # ------------- UpdateEntity required properties -------------
 

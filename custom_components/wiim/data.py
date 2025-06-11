@@ -500,7 +500,11 @@ class Speaker:
         """Return the first matching field from coordinator status dict."""
         status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
         for n in names:
-            if (val := status.get(n)) not in (None, ""):
+            val = status.get(n)
+            # Treat placeholder strings like "unknown" / "unknow" / "none" as missing
+            if isinstance(val, str) and val.strip().lower() in {"unknown", "unknow", "none"}:
+                continue
+            if val not in (None, ""):
                 return val
         return None
 

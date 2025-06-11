@@ -199,31 +199,46 @@ class WiiMClient:
             ssl_context: SSL context for HTTPS connections.
             session: Optional aiohttp ClientSession to use for requests.
         """
-        # Parse host and port if host contains a port
-        if ":" in host and not host.startswith("["):  # IPv6 addresses start with [
+        # -------------------------------------------------------------
+        # Host / port parsing with proper IPv6 support
+        # -------------------------------------------------------------
+        # We keep two internal representations:
+        #   1. _host        – the raw host *without* brackets (for logging)
+        #   2. _host_url    – host normalised for use inside URLs (IPv6 → [addr])
+
+        self._discovered_port: bool = False
+
+        if ":" in host and not host.startswith("["):
+            # Could be "ip:port" *or* an un-bracketed IPv6 literal. We first try the
+            # ip:port parse and fall back to treating it as pure host on failure.
             try:
                 parsed_host, parsed_port_str = host.rsplit(":", 1)
-                parsed_port = int(parsed_port_str)
+                self.port = int(parsed_port_str)
                 self._host = parsed_host
-                self.port = parsed_port
-                self._discovered_port = True  # Flag to indicate we got port from discovery
-                _LOGGER.debug("Parsed host '%s' into host='%s', port=%d", host, parsed_host, parsed_port)
+                self._discovered_port = True
+                _LOGGER.debug("Parsed host '%s' into host='%s', port=%d", host, parsed_host, self.port)
             except (ValueError, TypeError):
-                # If parsing fails, treat the whole thing as hostname
+                # Not a valid "host:port" → treat the full string as host (IPv6 literal)
                 self._host = host
                 self.port = port
-                self._discovered_port = False
-                _LOGGER.debug("Failed to parse host '%s', using as-is with default port %d", host, port)
+                _LOGGER.debug("Host '%s' looks like IPv6 literal – using default port %d", host, port)
         else:
+            # Already bracketed IPv6 or simple hostname/IPv4
             self._host = host
             self.port = port
-            self._discovered_port = False
+
+        # Normalise host for URL usage – wrap bare IPv6 literals in [brackets]
+        if ":" in self._host and not self._host.startswith("["):
+            self._host_url = f"[{self._host}]"
+        else:
+            self._host_url = self._host
 
         self.timeout = timeout
         self.ssl_context = ssl_context
         self._session = session
-        # Start with HTTPS endpoint, will auto-detect if fallback needed
-        self._endpoint = f"https://{self._host}:{self.port}"
+
+        # Start with HTTPS endpoint, will auto-detect if fallback is needed
+        self._endpoint = f"https://{self._host_url}:{self.port}"
         self._lock = asyncio.Lock()
         self._group_master: str | None = None
         self._group_slaves: list[str] = []
@@ -315,10 +330,18 @@ class WiiMClient:
         # FAST PATH: reuse last known-good endpoint to skip expensive probes
         # -----------------------------------------------------------------
         if hasattr(self, "_endpoint") and self._endpoint:
+            from urllib.parse import urlsplit
+
             try:
-                scheme, host_port = self._endpoint.split("://", 1)
-                host_only, port_str = host_port.split(":")
-                fast_url = f"{scheme}://{host_only}:{port_str}{endpoint}"
+                parsed = urlsplit(self._endpoint)
+                scheme = parsed.scheme
+                host_only = parsed.hostname or ""
+                port_num = parsed.port or self.port
+
+                # Re-add brackets for IPv6 when building the URL
+                host_for_url = f"[{host_only}]" if ":" in host_only and not host_only.startswith("[") else host_only
+
+                fast_url = f"{scheme}://{host_for_url}:{port_num}{endpoint}"
                 _LOGGER.debug("Fast-path %s request to %s", method, fast_url)
 
                 # SSL context only for https scheme
@@ -370,7 +393,8 @@ class WiiMClient:
         last_error: Exception | None = None
 
         for scheme, port, ssl_context in protocols_to_try:
-            url = f"{scheme}://{self._host}:{port}{endpoint}"
+            host_for_url_loop = f"[{self._host}]" if ":" in self._host and not self._host.startswith("[") else self._host
+            url = f"{scheme}://{host_for_url_loop}:{port}{endpoint}"
             tried.append(url)
 
             # Set SSL context for HTTPS requests only
@@ -387,8 +411,8 @@ class WiiMClient:
                         text = await response.text()
                         _LOGGER.debug("Response from %s: %s", url, text[:200])
 
-                        # Success! Update our endpoint for future requests
-                        self._endpoint = f"{scheme}://{self._host}:{port}"
+                        # Success! Update our endpoint for future requests (store in URL form)
+                        self._endpoint = f"{scheme}://{host_for_url_loop}:{port}"
 
                         if text.strip() == "OK":
                             return {"raw": text.strip()}
@@ -401,7 +425,7 @@ class WiiMClient:
                 # For JSON decode errors, treat as successful raw response
                 if isinstance(err, json.JSONDecodeError):
                     _LOGGER.debug("Non-JSON response from %s: %s", url, text[:200])
-                    self._endpoint = f"{scheme}://{self._host}:{port}"
+                    self._endpoint = f"{scheme}://{host_for_url_loop}:{port}"
                     return {"raw": text.strip()}
 
                 # Continue to next protocol/port
@@ -433,7 +457,7 @@ class WiiMClient:
                                 text = await response.text()
                                 _LOGGER.debug("Retry response from %s: %s", url, text[:200])
 
-                                self._endpoint = f"{scheme}://{self._host}:{port}"
+                                self._endpoint = f"{scheme}://{host_for_url_loop}:{port}"
 
                                 if text.strip() == "OK":
                                     return {"raw": text.strip()}
@@ -936,9 +960,16 @@ class WiiMClient:
         await self._request(f"{API_ENDPOINT_LED_BRIGHTNESS}{brightness}")
 
     async def play_preset(self, preset: int) -> None:
-        """Play a preset (1-6)."""
-        if not 1 <= preset <= 6:
-            raise ValueError("Preset must be between 1 and 6")
+        """Play a preset.
+
+        The WiiM HTTP API uses the ``MCUKeyShortClick:<n>`` command where
+        *n* is the preset number starting at **1**.  Modern devices expose
+        the total number of preset slots via the ``preset_key`` attribute of
+        *getStatusEx* so callers are expected to validate against that.  We
+        therefore only enforce that the value is a **positive** integer here.
+        """
+        if preset < 1:
+            raise ValueError("Preset number must be 1 or higher")
         await self._request(f"{API_ENDPOINT_PRESET}{preset}")
 
     # ------------------------------------------------------------------
@@ -1472,12 +1503,22 @@ class WiiMClient:
 
     async def play_url(self, url: str) -> None:
         """Play a URL."""
-        encoded_url = quote(url)
+        # Preserve the URI scheme ("http://", "https://") and common
+        # delimiter characters so the LinkPlay firmware receives a *readable*
+        # URL.  Devices fail to play when the colon after the scheme or the
+        # query separators are percent-encoded.  Encode only characters that
+        # are truly unsafe in an HTTP context.
+        encoded_url = quote(url, safe=":/?&=#%")
         await self._request(f"{API_ENDPOINT_PLAY_URL}{encoded_url}")
 
     async def play_playlist(self, playlist_url: str) -> None:
         """Play an M3U playlist."""
-        encoded_url = quote(playlist_url)
+        # Preserve the URI scheme ("http://", "https://") and common
+        # delimiter characters so the LinkPlay firmware receives a *readable*
+        # URL.  Devices fail to play when the colon after the scheme or the
+        # query separators are percent-encoded.  Encode only characters that
+        # are truly unsafe in an HTTP context.
+        encoded_url = quote(playlist_url, safe=":/?&=#%")
         await self._request(f"{API_ENDPOINT_PLAY_M3U}{encoded_url}")
 
     async def play_notification(self, url: str) -> None:

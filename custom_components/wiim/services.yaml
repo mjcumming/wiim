@@ -1,6 +1,6 @@
 play_preset:
   name: Play Preset
-  description: Play a specific preset from the device's available presets
+  description: Play a specific preset (device dependent)
   target:
     entity:
       domain: media_player
@@ -8,12 +8,12 @@ play_preset:
   fields:
     preset:
       name: Preset Number
-      description: Preset number to play (range depends on device capabilities)
+      description: Preset number to play (refer to device capability)
       required: true
       selector:
         number:
           min: 1
-          # max is determined by device capabilities
+          max: 20
 
 play_url:
   name: Play URL

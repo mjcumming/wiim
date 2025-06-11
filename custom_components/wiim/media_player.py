@@ -741,8 +741,20 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Play a piece of media."""
         _LOGGER.debug("Play media called: type=%s, id=%s", media_type, media_id)
         try:
+            # Preset numbers → play_preset (MCUKeyShortClick)
+            if media_type == "preset":
+                try:
+                    preset_num = int(media_id)
+                except ValueError as err:
+                    _LOGGER.error("Invalid preset id '%s': %s", media_id, err)
+                    raise
+
+                await self.async_play_preset(preset_num)
+
+                # Immediate refresh already handled inside async_play_preset()
+
             # For URLs, use play_url
-            if media_type in [MediaType.URL, MediaType.MUSIC, "url"]:
+            elif media_type in [MediaType.URL, MediaType.MUSIC, "url"]:
                 await self.controller.play_url(media_id)
 
                 # Immediate refresh for fast media update
@@ -964,15 +976,21 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             items: list[BrowseMedia] = []
             for entry in presets:
                 title = entry.get("name") or f"Preset {entry.get('number')}"
+                # We use the preset *number* as the content ID and a custom
+                # media_class so the front-end calls async_play_media() with
+                # ``media_type="preset"``.  This triggers the more reliable
+                # MCUKeyShortClick command on the device instead of building
+                # a fragile setPlayerCmd:play:<url> request.
+                number = entry.get("number")
                 url = entry.get("url") or ""
-                if not url:
-                    # skip empty presets
+                if not number or not url:
+                    # Skip empty / malformed presets to avoid no-op items
                     continue
                 items.append(
                     BrowseMedia(
                         media_class=MediaClass.MUSIC,
-                        media_content_id=url,
-                        media_content_type="url",
+                        media_content_id=str(number),
+                        media_content_type="preset",
                         title=title,
                         can_play=True,
                         can_expand=False,

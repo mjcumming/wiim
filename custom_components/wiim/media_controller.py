@@ -29,6 +29,7 @@ from .const import (
     PLAY_MODE_REPEAT_ALL,
     PLAY_MODE_REPEAT_ONE,
     PLAY_MODE_SHUFFLE,
+    PRESET_SLOTS_KEY,
 )
 
 if TYPE_CHECKING:
@@ -828,14 +829,33 @@ class MediaPlayerController:
     # ===== ADVANCED FEATURES =====
 
     async def play_preset(self, preset: int) -> None:
-        """Play preset (1-6).
+        """Play a device preset.
+
+        The valid preset range depends on the device model/firmware and is
+        reported via the ``preset_key`` field of *getStatusEx*.  We fetch the
+        normalised value (``preset_slots``) from the coordinator data to
+        validate user input dynamically instead of assuming a hard-coded
+        1-6 range.
 
         Args:
-            preset: Preset number 1-6
+            preset: Preset number starting at **1**
         """
         try:
-            if not 1 <= preset <= 6:
-                raise ValueError(f"Preset must be 1-6, got {preset} for {self.speaker.name}")
+            # Determine the maximum number of available preset slots at
+            # run-time – fall back to 6 for older firmwares that do not
+            # expose the ``preset_key`` field.
+            max_slots: int = 6
+            if self.speaker.coordinator.data:
+                device_info = self.speaker.coordinator.data.get("device_info", {})
+                try:
+                    max_slots = int(device_info.get(PRESET_SLOTS_KEY, max_slots))
+                except (TypeError, ValueError):
+                    pass
+
+            if not 1 <= preset <= max_slots:
+                raise ValueError(
+                    f"Preset must be between 1 and {max_slots}, got {preset} for {self.speaker.name}"
+                )
 
             self._logger.debug("Playing preset %d for %s", preset, self.speaker.name)
 

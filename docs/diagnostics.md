@@ -1,33 +1,36 @@
-# WiiM Integration – Diagnostics
+# Diagnostics Overview
 
-The integration surfaces a small set of **device-health** entities based on the `getStatusEx` endpoint.  They are lightweight (one extra API call every 30 s) and provide quick insight when things go wrong.
+The integration surfaces diagnostic data through a **single sensor** while reporting firmware-update availability via Home Assistant's standard Update entity.
 
-## Firmware Update Indicator
+| Entity | State | Purpose |
+| ------ | ----- | ------- |
+| `sensor.<device>_device_status` | "Wi-Fi −55 dBm", "Online", or "Offline" | Holds every field returned by `getStatusEx` (firmware strings, hardware model, Wi-Fi details, uptime, group info, …) as **attributes**.  If RSSI is present the state shows the signal strength; otherwise it falls back to a simple Online/Offline indicator. |
+| `update.<device>_firmware` | Disabled by default | Becomes visible when the speaker has already downloaded an update.  Clicking **Install** triggers a reboot; the LinkPlay firmware applies the staged update automatically. |
 
-| Entity | Description |
-|--------|-------------|
-| `update.<device>_firmware` | Signals when the speaker has downloaded a newer firmware and is ready to install.  Click **Install** to reboot the device – LinkPlay applies the update automatically during boot. |
+## How to view the attributes
+1. **Developer Tools → States** → choose the *Device Status* sensor and inspect the *Attributes* box.
+2. On the **device page** click the *Device Status* entity, then the information icon (ℹ️). The side-panel lists all attributes.
+3. Use them directly in automations or templates:
 
-**Limitations**
-* The HTTP-API does **not** allow us to trigger a download – the device must have staged the update itself.
-* If the vendor has not published an OTA package, the entity will simply stay in the *Up-to-date* state.
+```jinja
+{{ state_attr('sensor.kitchen_device_status', 'firmware') }}
+{{ state_attr('sensor.kitchen_device_status', 'wifi_rssi') | int(-100) }}
+```
 
-## Always-on Sensors
+### Attribute reference (commonly present)
 
-| Entity | Example | Notes |
-|--------|---------|-------|
-| `sensor.<device>_firmware` | `4.6.415145` | Current firmware build number |
+| Key | Example | Notes |
+| --- | ------- | ----- |
+| `connection` | `wifi` / `wired` | Inferred from presence of RSSI.
+| `firmware` | `4.6.415133.36` | Main firmware version string.
+| `release` | `20221104` | Build date (if provided).
+| `project` | `W281` | Hardware/board identifier.
+| `wifi_rssi` | `-55` | dBm, absent on Ethernet.
+| `wifi_channel` | `11` | 2.4 GHz / 5 GHz channel number.
+| `uptime` | `86400` | Seconds since last reboot.
+| `group` | `master` / `slave` / `solo` | Current multi-room role.
+| `preset_key` | `6` | Number of physical preset buttons.
 
-## Optional Diagnostic Sensors
+Additional vendor-specific keys (BLE FW, DSP FW, WMRM version, etc.) are included when available.
 
-These are **disabled unless you enable "Diagnostic entities"** in the device options dialog.
-
-| Entity | Source Field |
-|--------|--------------|
-| `sensor.<device>_preset_slots` | `preset_key` |
-| `sensor.<device>_wmrm_version` | `wmrm_version` |
-| `sensor.<device>_firmware_date` | `Release` |
-| `sensor.<device>_hardware`      | `hardware` |
-| `sensor.<device>_project`       | `project` |
-| `sensor.<device>_mcu_version`   | `mcu_ver` |
-| `sensor.<device>_dsp_version`   | `dsp_ver` |
+**Tip:** Because *Device Status* is categorised as *diagnostic* it doesn't clutter dashboards unless you add it to a card, yet the data is always just a click away when you need it.

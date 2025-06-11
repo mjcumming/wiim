@@ -21,7 +21,6 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from .api import WiiMClient
 from .const import (
     CONF_DEBUG_LOGGING,
-    CONF_ENABLE_DIAGNOSTIC_ENTITIES,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
     CONF_VOLUME_STEP,
     CONF_VOLUME_STEP_PERCENT,
@@ -421,8 +420,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
             # Feature toggles
             if CONF_ENABLE_MAINTENANCE_BUTTONS in user_input:
                 options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[CONF_ENABLE_MAINTENANCE_BUTTONS]
-            if CONF_ENABLE_DIAGNOSTIC_ENTITIES in user_input:
-                options_data[CONF_ENABLE_DIAGNOSTIC_ENTITIES] = user_input[CONF_ENABLE_DIAGNOSTIC_ENTITIES]
             if CONF_DEBUG_LOGGING in user_input:
                 options_data[CONF_DEBUG_LOGGING] = user_input[CONF_DEBUG_LOGGING]
 
@@ -433,7 +430,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         volume_step_percent = int(current_volume_step_decimal * 100)
 
         current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, False)
-        current_diagnostic_entities = self.entry.options.get(CONF_ENABLE_DIAGNOSTIC_ENTITIES, False)
         current_debug_logging = self.entry.options.get(CONF_DEBUG_LOGGING, False)
 
         schema = vol.Schema(
@@ -442,7 +438,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                     vol.Coerce(int), vol.Range(min=1, max=50)
                 ),
                 vol.Optional(CONF_ENABLE_MAINTENANCE_BUTTONS, default=current_maintenance_buttons): bool,
-                vol.Optional(CONF_ENABLE_DIAGNOSTIC_ENTITIES, default=current_diagnostic_entities): bool,
                 vol.Optional(CONF_DEBUG_LOGGING, default=current_debug_logging): bool,
             }
         )
