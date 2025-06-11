@@ -108,9 +108,9 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
     """Primary diagnostic sensor – state = Wi-Fi RSSI, attributes = rich status."""
 
     _attr_icon = "mdi:wifi"
-    _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = "dBm"
+    _attr_device_class = None
+    _attr_state_class = None
+    _attr_native_unit_of_measurement = None
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
 
@@ -118,6 +118,21 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_diagnostic"
         self._attr_name = "Device Status"  # HA will prefix device name automatically
+
+    # Force Home Assistant to treat this as non-numeric regardless of legacy
+    # registry values that might still carry a device class or unit.
+
+    @property
+    def device_class(self):  # type: ignore[override]
+        return None
+
+    @property
+    def state_class(self):  # type: ignore[override]
+        return None
+
+    @property
+    def native_unit_of_measurement(self):  # type: ignore[override]
+        return None
 
     # -------------------------- Helpers --------------------------
 
