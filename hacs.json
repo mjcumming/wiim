@@ -1,0 +1,10 @@
+{
+  "name": "WiiM Audio (LinkPlay)",
+  "content_in_root": false,
+  "filename": "wiim.zip",
+  "hide_default_branch": true,
+  "homeassistant": "2024.12.0",
+  "render_readme": true,
+  "zip_release": true,
+  "country": ["US", "CA", "GB", "DE", "FR", "AU", "NL", "SE", "NO", "DK"]
+}

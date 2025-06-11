@@ -1,0 +1,65 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Enter your WiiM device's IP address. You can find this in your router's admin panel or the WiiM Home app under Device Settings → Network Info.",
+        "data": {
+          "host": "Device IP Address"
+        }
+      },
+      "manual": {
+        "title": "Add WiiM Device",
+        "description": "Enter your WiiM device's IP address.\n\nYou can find this in:\n• Your router's admin panel\n• WiiM Home app → Device Settings → Network Info\n• Network scanner apps\n\nExample: {example_ip}",
+        "data": {
+          "host": "Device IP Address"
+        }
+      },
+      "discovery": {
+        "description": "Found {count} WiiM device(s). Select a device to add:",
+        "data": {
+          "host": "Device"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Add {name}?",
+        "description": "Do you want to add this WiiM device to Home Assistant?\n\nDevice: **{name}**"
+      },
+      "missing_device": {
+        "title": "Missing Device Found",
+        "description": "A grouped device **{device_name}** (UUID: {device_uuid}) was detected but its IP address is unknown.\n\nPlease provide the IP address for this device:",
+        "data": {
+          "host": "Device IP Address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the WiiM device. Please check:\n• IP address is correct\n• Device is powered on\n• Device is connected to your network\n• No firewall blocking the connection",
+      "invalid_host": "Invalid IP address format", 
+      "no_host": "No device IP address provided",
+      "no_uuid": "Device did not provide a UUID. This may indicate:\n• Incompatible device or firmware\n• Network connectivity issues\n• Device not fully initialized\n\nPlease check device connectivity and firmware version.",
+      "uuid_mismatch": "The device at this IP address has a different UUID than expected. Please verify:\n• This is the correct device\n• The device hasn't been factory reset\n• No network configuration issues"
+    },
+    "abort": {
+      "already_configured": "This WiiM device is already configured",
+      "cannot_connect": "Cannot connect to device",
+      "no_host": "No device found"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "⚙️ WiiM Device Settings",
+        "description": "Configure essential device settings:",
+        "data": {
+          "playing_update_rate": "🎵 Playing Update Rate (seconds)",
+          "idle_update_rate": "💤 Idle Update Rate (seconds)",
+          "volume_step_percent": "🔊 Volume Step Size (%)",
+          "enable_maintenance_buttons": "🔧 Maintenance Buttons",
+          "enable_diagnostic_entities": "📊 Diagnostic Sensors",
+          "debug_logging": "🐛 Debug Mode"
+        }
+      }
+    }
+  }
+}

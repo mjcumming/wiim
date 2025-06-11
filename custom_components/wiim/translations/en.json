@@ -1,0 +1,64 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Enter your WiiM device's IP address. You can find this in your router's admin panel or the WiiM Home app under Device Settings → Network Info.",
+        "data": {
+          "host": "Device IP Address"
+        }
+      },
+      "manual": {
+        "title": "Add WiiM Device",
+        "description": "Enter your WiiM device's IP address.\n\nYou can find this in:\n• Your router's admin panel\n• WiiM Home app → Device Settings → Network Info\n• Network scanner apps\n\nExample: {example_ip}",
+        "data": {
+          "host": "Device IP Address"
+        }
+      },
+      "discovery": {
+        "description": "Found {count} WiiM device(s). Select a device to add:",
+        "data": {
+          "host": "Device"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Add {name}?",
+        "description": "Do you want to add this WiiM device to Home Assistant?\n\nDevice: **{name}**"
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the WiiM device. Please check:\n• IP address is correct\n• Device is powered on\n• Device is connected to your network\n• No firewall blocking the connection",
+      "invalid_host": "Invalid IP address format",
+      "no_host": "No device IP address provided"
+    },
+    "abort": {
+      "already_configured": "This WiiM device is already configured",
+      "cannot_connect": "Cannot connect to device",
+      "no_host": "No device found"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "⚙️ WiiM Device Settings",
+        "description": "Configure essential device settings:",
+        "data": {
+          "playing_update_rate": "🎵 Playing Update Rate (seconds)",
+          "idle_update_rate": "💤 Idle Update Rate (seconds)",
+          "volume_step_percent": "🔊 Volume Step Size (%)",
+          "enable_maintenance_buttons": "🔧 Maintenance Buttons",
+          "enable_diagnostic_entities": "📊 Diagnostic Sensors",
+          "debug_logging": "🐛 Debug Mode"
+        },
+        "data_description": {
+          "playing_update_rate": "Fast polling when music is playing for smooth position updates (1-5 seconds)",
+          "idle_update_rate": "Slower polling when not playing for efficiency (5-60 seconds)",
+          "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
+          "enable_maintenance_buttons": "Show device maintenance buttons (reboot, sync time) for troubleshooting",
+          "enable_diagnostic_entities": "Show advanced diagnostic sensors for debugging and performance monitoring",
+          "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
+        }
+      }
+    }
+  }
+}

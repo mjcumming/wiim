@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # Ignore Home Assistant-specific dependencies that need manual coordination
+    ignore:
+      # These must match Home Assistant Core requirements exactly
+      - dependency-name: "pytest-homeassistant-custom-component"
+        reason: "Must match HA Core Python version requirements"
+      - dependency-name: "pytest"
+        reason: "Version controlled by pytest-homeassistant-custom-component"
+      - dependency-name: "pytest-cov"
+        reason: "Version controlled by pytest-homeassistant-custom-component"
+      - dependency-name: "aiohttp"
+        reason: "Must match Home Assistant Core aiohttp version"
+    # Only allow patch-level updates for these critical packages
+    allow:
+      - dependency-type: "direct"
+        update-type: "version-update:semver-patch"
+    # Review dependency updates in groups to catch compatibility issues
+    groups:
+      home-assistant-test-deps:
+        patterns:
+          - "pytest*"
+          - "*homeassistant*"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"

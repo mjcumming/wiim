@@ -1,0 +1,9 @@
+{
+  "python.linting.pylintEnabled": true,
+  "python.linting.enabled": true,
+  "python.pythonPath": "venv/bin/python",
+  "files.associations": {
+    "*.yaml": "home-assistant"
+  },
+  "makefile.configureOnOpen": false
+}

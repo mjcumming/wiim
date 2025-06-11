@@ -1,0 +1,114 @@
+name: 🚀 Feature Request
+description: Suggest a new feature for the WiiM integration
+title: "[Feature]: "
+labels:
+  - "enhancement"
+  - "needs-triage"
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature!
+
+        **Before submitting**, please:
+        - Search existing issues to see if someone has already requested this feature
+        - Check our [roadmap](https://github.com/mjcumming/wiim/blob/main/README.md#roadmap) to see if it's already planned
+        - Consider if this fits with the integration's scope and Home Assistant patterns
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and this feature hasn't been requested
+          required: true
+        - label: This feature would be useful for other users, not just my specific setup
+          required: true
+        - label: This feature aligns with Home Assistant's design principles
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What type of feature is this?
+      options:
+        - Device Control (playback, volume, etc.)
+        - Multiroom/Grouping
+        - Device Configuration
+        - User Interface/Dashboard
+        - Integration/Automation
+        - Diagnostics/Troubleshooting
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: Is your feature request related to a problem? Please describe the problem you're trying to solve.
+      placeholder: "I'm always frustrated when... / It would be helpful if... / Currently there's no way to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see implemented
+      placeholder: "I would like to be able to... / The integration should... / Add a new..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: Describe any alternative solutions or features you've considered
+      placeholder: "I considered... / Another approach would be... / Similar integrations do..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: How important is this feature to you?
+      options:
+        - "Low - Nice to have"
+        - "Medium - Would improve my setup"
+        - "High - Needed for basic functionality"
+        - "Critical - Integration unusable without this"
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case Details
+      description: Describe your specific use case and how this feature would help
+      placeholder: "In my setup, I have... / I want to achieve... / This would help me..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, mockups, screenshots, or examples
+      placeholder: "Links to similar features, screenshots, technical details, etc."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Would you be willing to help implement this feature?
+      options:
+        - label: I would be willing to submit a pull request for this feature
+        - label: I would be willing to test this feature once implemented
+        - label: I would be willing to help with documentation for this feature

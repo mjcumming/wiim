@@ -1,0 +1,24 @@
+-r requirements_dev.txt
+
+# Home Assistant Core compatible test dependencies
+# These versions are aligned with HA Core 2024.12+ requirements
+
+# Testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-timeout>=2.1.0
+# Using the version required by HA Core for Python 3.13 compatibility
+pytest-homeassistant-custom-component>=0.13.240
+
+# Test utilities
+aresponses>=2.1.6
+freezegun>=1.2.2
+zeroconf
+
+# Discovery dependencies (matches HA Core versions)
+async-upnp-client==0.44.0
+
+# Code quality
+flake8>=6.0.0
+ruff>=0.4.2

@@ -1,0 +1,64 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Skriv inn IP-adressen til WiiM-enheten din. Du finner denne i ruterens administrasjonspanel eller i WiiM Home-appen under Enhetsinnstillinger → Nettverksinformasjon.",
+        "data": {
+          "host": "Enhets IP-adresse"
+        }
+      },
+      "manual": {
+        "title": "Legg til WiiM-enhet",
+        "description": "Skriv inn IP-adressen til WiiM-enheten din.\n\nDu finner denne i:\n• Ruterens administrasjonspanel\n• WiiM Home-app → Enhetsinnstillinger → Nettverksinformasjon\n• Nettverksskanner-apper\n\nEksempel: {example_ip}",
+        "data": {
+          "host": "Enhets IP-adresse"
+        }
+      },
+      "discovery": {
+        "description": "Fant {count} WiiM-enhet(er). Velg en enhet å legge til:",
+        "data": {
+          "host": "Enhet"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Legg til {name}?",
+        "description": "Vil du legge til denne WiiM-enheten i Home Assistant?\n\nEnhet: **{name}**"
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan ikke koble til WiiM-enheten. Sjekk følgende:\n• IP-adressen er riktig\n• Enheten er slått på\n• Enheten er koblet til nettverket ditt\n• Ingen brannmur blokkerer tilkoblingen",
+      "invalid_host": "Ugyldig IP-adresse format",
+      "no_host": "Ingen enhets IP-adresse oppgitt"
+    },
+    "abort": {
+      "already_configured": "Denne WiiM-enheten er allerede konfigurert",
+      "cannot_connect": "Kan ikke koble til enheten",
+      "no_host": "Ingen enhet funnet"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "⚙️ WiiM-enhetsinnstillinger",
+        "description": "Konfigurer essensielle enhetsinnstillinger:",
+        "data": {
+          "playing_update_rate": "🎵 Oppdateringsrate under avspilling (sekunder)",
+          "idle_update_rate": "💤 Oppdateringsrate når inaktiv (sekunder)",
+          "volume_step_percent": "🔊 Volumtrinnstørrelse (%)",
+          "enable_maintenance_buttons": "🔧 Vedlikeholdsknapper",
+          "enable_diagnostic_entities": "📊 Diagnosesensorer",
+          "debug_logging": "🐛 Debug-modus"
+        },
+        "data_description": {
+          "playing_update_rate": "Rask spørring når musikk spilles for jevne posisjonsoppdateringer (1-5 sekunder)",
+          "idle_update_rate": "Langsommere spørring når ikke spiller for effektivitet (5-60 sekunder)",
+          "volume_step_percent": "Volumendringsstørrelse når volum opp/ned-knapper brukes (1-50%). Mindre trinn gir finere kontroll.",
+          "enable_maintenance_buttons": "Vis enhetsvedlikeholdsknapper (omstart, synkroniser tid) for feilsøking",
+          "enable_diagnostic_entities": "Vis avanserte diagnosesensorer for debugging og ytelsesovervåking",
+          "debug_logging": "Aktiver detaljert logging for feilsøking. Anbefales kun ved problemer."
+        }
+      }
+    }
+  }
+}

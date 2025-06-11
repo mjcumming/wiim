@@ -1,0 +1,109 @@
+play_preset:
+  name: Play Preset
+  description: Play a specific preset (device dependent)
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    preset:
+      name: Preset Number
+      description: Preset number to play (refer to device capability)
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 20
+
+play_url:
+  name: Play URL
+  description: Play media from a URL
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    url:
+      name: URL
+      description: URL of the media to play
+      required: true
+      selector:
+        text:
+
+play_playlist:
+  name: Play Playlist
+  description: Play an M3U playlist
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    playlist_url:
+      name: Playlist URL
+      description: URL of the M3U playlist
+      required: true
+      selector:
+        text:
+
+set_eq:
+  name: Set EQ
+  description: Set equalizer preset or custom values
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    preset:
+      name: EQ Preset
+      description: EQ preset name
+      required: true
+      selector:
+        select:
+          options:
+            - "flat"
+            - "classical"
+            - "jazz"
+            - "vocal"
+            - "pop"
+            - "rock"
+            - "dance"
+            - "country"
+            - "blues"
+            - "custom"
+    custom_values:
+      name: Custom EQ Values
+      description: Custom EQ values (required when preset is 'custom')
+      required: false
+      selector:
+        object:
+
+play_notification:
+  name: Play Notification
+  description: Play a notification sound
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    url:
+      name: Notification URL
+      description: URL of the notification sound
+      required: true
+      selector:
+        text:
+
+reboot_device:
+  name: Reboot Device
+  description: Reboot the WiiM device
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+
+sync_time:
+  name: Sync Time
+  description: Synchronize device time with Home Assistant
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
