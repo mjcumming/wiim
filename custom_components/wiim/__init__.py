@@ -31,6 +31,7 @@ CORE_PLATFORMS: list[Platform] = [
     Platform.NUMBER,  # Always enabled - group volume control for multiroom
     Platform.SWITCH,  # Always enabled - group mute control for multiroom
     Platform.UPDATE,  # Always enabled - firmware update indicator
+    Platform.LIGHT,  # Always enabled - front-panel LED control
 ]
 
 # Essential optional platforms based on user configuration
