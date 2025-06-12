@@ -1072,6 +1072,8 @@ class WiiMClient:
     # used throughout the integration.
     _STATUS_MAP: dict[str, str] = {
         "status": "play_status",
+        "state": "play_status",
+        "player_state": "play_status",
         "vol": "volume",
         "mute": "mute",
         "eq": "eq_preset",
@@ -1104,8 +1106,8 @@ class WiiMClient:
         "4": "line_in",
         "5": "bluetooth",
         "6": "optical",
-        "10": "wifi",  # many firmwares report 10 for NET/Streamer
-        "11": "usb",  # local U-Disk playback
+        "10": "wifi",  # additional NET/Streamer mode (variant)
+        "11": "usb",  # local U-Disk / WiiMu Local
         "20": "wifi",  # HTTPAPI initiated play
         "31": "spotify",  # Spotify Connect session active
         "36": "qobuz",  # Qobuz streaming
@@ -1184,10 +1186,12 @@ class WiiMClient:
                 _LOGGER.warning("Invalid volume value: %s", vol)
 
         # Position and duration in seconds
-        if raw.get("curpos"):
-            data["position"] = int(raw["curpos"]) // 1_000
+        curpos_val = raw.get("curpos") or raw.get("offset_pts")
+        if curpos_val is not None:
+            data["position"] = int(curpos_val) // 1_000
             data["position_updated_at"] = asyncio.get_running_loop().time()
-        if raw.get("totlen"):
+
+        if raw.get("totlen") is not None:
             data["duration"] = int(raw["totlen"]) // 1_000
 
         # Convert mute state to boolean

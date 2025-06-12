@@ -461,7 +461,7 @@ class Speaker:
         status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
         play_status = (status.get("play_status") or status.get("status") or "").lower()
 
-        if play_status in ["play", "playing"]:
+        if play_status in ["play", "playing", "load"]:
             return MediaPlayerState.PLAYING
         if play_status in ["pause", "paused"]:
             return MediaPlayerState.PAUSED
