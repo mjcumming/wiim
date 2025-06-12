@@ -1150,8 +1150,16 @@ class WiiMClient:
 
         data: dict[str, Any] = {}
 
+        # ---- Playback state (prefer newer fields) ----
+        play_state_val = raw.get("state") or raw.get("player_state") or raw.get("status")
+        if play_state_val is not None:
+            data["play_status"] = play_state_val
+
         # Map raw keys to normalized keys
         for k, v in raw.items():
+            # Skip the fields we already handled above to prevent overwriting
+            if k in ("status", "state", "player_state"):
+                continue
             key = self._STATUS_MAP.get(k, k)
             data[key] = v
 
