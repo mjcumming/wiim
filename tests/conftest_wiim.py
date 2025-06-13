@@ -218,3 +218,24 @@ def _rename_safe_shutdown_thread():
     # … and again during fixture *teardown* (covers the case where the thread
     # is spawned later while the test is running).
     _do_rename()
+
+
+# -----------------------------------------------------------------------------
+# Session-level monkey-patch: rename the HA safe-shutdown helper thread the
+# moment it starts so pytest-homeassistant never sees an un-whitelisted name.
+# -----------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True, scope="session")
+def _patch_threading_start():
+    """Patch threading.Thread.start to rename the safe-shutdown thread early."""
+    original_start = threading.Thread.start
+
+    def patched_start(self, *args, **kwargs):  # type: ignore[override]
+        result = original_start(self, *args, **kwargs)
+        if "_run_safe_shutdown_loop" in self.name and not self.name.startswith("waitpid-"):
+            self.name = f"waitpid-{self.ident}"
+        return result
+
+    threading.Thread.start = patched_start  # type: ignore[assignment]
+    yield
+    threading.Thread.start = original_start
