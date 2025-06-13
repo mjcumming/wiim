@@ -9,7 +9,7 @@ pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0
 pytest-timeout>=2.1.0
 # Using the version required by HA Core for Python 3.13 compatibility
-pytest-homeassistant-custom-component>=0.13.240
+pytest-homeassistant-custom-component>=0.13.251,<0.14
 
 # Test utilities
 aresponses>=2.1.6
