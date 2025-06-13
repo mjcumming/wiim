@@ -170,4 +170,16 @@ def mock_wiim_dispatcher():
         yield mock_send
 
 
+# ---------------------------------------------------------------------------
+# Global fixture: allow HA safe-shutdown helper thread to linger without
+# failing pytest-homeassistant cleanup assertions.  When this fixture returns
+# True the plugin downgrades lingering-thread assertions to warnings.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def allow_unwatched_threads() -> bool:  # noqa: D401 – simple fixture
+    """Tell pytest-homeassistant that background threads are expected."""
+    return True
+
+
 
