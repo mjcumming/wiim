@@ -258,6 +258,5 @@ def _patch_threading_start():
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def expected_lingering_threads() -> bool:  # noqa: D401
-    """Return True to silence the thread leak assertion in HA test plug-in."""
-    return True
+def expected_lingering_threads() -> bool:
+    return True       # plug-in downgrades the assert to a warning
