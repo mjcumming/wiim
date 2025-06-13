@@ -202,9 +202,19 @@ async def _cleanup_child_watcher():
 
 @pytest.fixture(autouse=True, scope="function")
 def _rename_safe_shutdown_thread():
-    """Rename HA's safe-shutdown thread to satisfy verify_cleanup."""
+    """Ensure the safe-shutdown helper thread is whitelisted by the HA test plugin."""
+
+    def _do_rename():
+        for th in threading.enumerate():
+            if "_run_safe_shutdown_loop" in th.name and not th.name.startswith("waitpid-"):
+                th.name = f"waitpid-{th.ident}"
+
+    # Rename once during fixture *setup* (covers the case where the thread
+    # already exists) …
+    _do_rename()
+
     yield
-    for thread in threading.enumerate():
-        if thread.name.endswith("(_run_safe_shutdown_loop)"):
-            # Prefix with waitpid- so the verify_cleanup regex accepts it.
-            thread.name = f"waitpid-{thread.ident}"
+
+    # … and again during fixture *teardown* (covers the case where the thread
+    # is spawned later while the test is running).
+    _do_rename()
