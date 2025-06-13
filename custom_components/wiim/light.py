@@ -150,4 +150,4 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         self._brightness = brightness
         self.async_write_ha_state()
 
-        await self._async_execute_command_with_refresh("led_brightness") 
+        await self._async_execute_command_with_refresh("led_brightness")
