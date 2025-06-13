@@ -2,7 +2,7 @@
 # These constraints ensure our CI environment matches Home Assistant Core requirements
 
 # Home Assistant Core compatible versions for Python 3.13
-pytest-homeassistant-custom-component==0.13.240
+pytest-homeassistant-custom-component==0.13.251
 pytest==8.0.0
 pytest-cov==4.1.0
 aiohttp==3.11.11
