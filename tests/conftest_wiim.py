@@ -200,7 +200,7 @@ async def _cleanup_child_watcher():
 # own verify_cleanup fixture, ensuring the thread is already renamed when the
 # leak check runs.
 
-@pytest.fixture(autouse=True, scope="function", order=100)
+@pytest.fixture(autouse=True, scope="function")
 def _rename_safe_shutdown_thread():
     """Rename HA's safe-shutdown thread to satisfy verify_cleanup."""
     yield
