@@ -29,6 +29,7 @@ async def test_get_status_success():
         result = await client.get_player_status()
         assert "play_status" in result
         mock_request.assert_called_once()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -41,6 +42,7 @@ async def test_get_device_info_success():
         result = await client.get_device_info()
         assert result == MOCK_DEVICE_DATA
         mock_request.assert_called_once()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -52,6 +54,7 @@ async def test_play_command():
     with patch.object(client, "_request", new_callable=AsyncMock, return_value={"raw": "OK"}) as mock_request:
         await client.play()  # Should not raise
         mock_request.assert_called_once()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -63,6 +66,7 @@ async def test_pause_command():
     with patch.object(client, "_request", new_callable=AsyncMock, return_value={"raw": "OK"}) as mock_request:
         await client.pause()  # Should not raise
         mock_request.assert_called_once()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -74,6 +78,7 @@ async def test_set_volume_command():
     with patch.object(client, "_request", new_callable=AsyncMock, return_value={"raw": "OK"}) as mock_request:
         await client.set_volume(0.75)  # Should not raise
         mock_request.assert_called_once()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -85,6 +90,7 @@ async def test_connection_error_handling():
     with patch.object(client, "_request", new_callable=AsyncMock, side_effect=aiohttp.ClientError("Connection failed")):
         with pytest.raises(aiohttp.ClientError):
             await client.get_player_status()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -96,3 +102,4 @@ async def test_timeout_error_handling():
     with patch.object(client, "_request", new_callable=AsyncMock, side_effect=TimeoutError()):
         with pytest.raises(asyncio.TimeoutError):
             await client.get_player_status()
+        await client.close()

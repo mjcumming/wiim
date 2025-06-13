@@ -1,6 +1,6 @@
 """Test WiiM config flow."""
 
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -23,6 +23,7 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
     """Test successful connection during config flow."""
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
+        new_callable=AsyncMock,
         return_value=(True, "WiiM Mini"),
     ):
         # Start the flow (manual entry directly)
@@ -43,6 +44,7 @@ async def test_form_connection_error(hass: HomeAssistant) -> None:
     """Test connection error during config flow."""
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
+        new_callable=AsyncMock,
         return_value=(False, "192.168.1.100"),
     ):
         # Start the flow (manual entry directly)
@@ -62,6 +64,7 @@ async def test_form_timeout_error(hass: HomeAssistant) -> None:
     """Test timeout error during config flow."""
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
+        new_callable=AsyncMock,
         return_value=(False, "192.168.1.100"),
     ):
         # Start the flow (manual entry directly)
@@ -81,6 +84,7 @@ async def test_form_invalid_host(hass: HomeAssistant) -> None:
     """Test invalid host error."""
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
+        new_callable=AsyncMock,
         return_value=(False, "invalid_host"),
     ):
         # Start the flow (manual entry directly)
@@ -115,6 +119,7 @@ async def test_enhanced_device_naming_master(hass: HomeAssistant) -> None:
     """Test enhanced device naming for master devices."""
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
+        new_callable=AsyncMock,
         return_value=(True, "Living Room"),
     ):
         # Start the flow (manual entry directly)
@@ -135,6 +140,7 @@ async def test_enhanced_device_naming_slave(hass: HomeAssistant) -> None:
     """Test enhanced device naming for slave devices."""
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
+        new_callable=AsyncMock,
         return_value=(True, "Kitchen"),
     ):
         # Start the flow (manual entry directly)
@@ -164,6 +170,7 @@ async def test_abort_already_configured(hass: HomeAssistant) -> None:
 
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
+        new_callable=AsyncMock,
         return_value=(True, "WiiM Mini"),
     ):
         # Start the flow (manual entry directly)

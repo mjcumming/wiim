@@ -8,6 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntry
 
+import asyncio
+import contextlib
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -168,3 +171,20 @@ def mock_wiim_dispatcher():
     """Mock Home Assistant dispatcher for WiiM tests."""
     with patch("custom_components.wiim.data.async_dispatcher_send") as mock_send:
         yield mock_send
+
+
+# -----------------------------------------------------------------------------
+# Global cleanup fixture – shuts down the asyncio child watcher created by
+# Home-Assistant when it launches its safe-shutdown helper.  If we don't close
+# it, the background thread "_run_safe_shutdown_loop" stays alive until pytest
+# teardown and triggers the verify_cleanup assertion.
+# -----------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+async def _cleanup_child_watcher():
+    """Auto-close asyncio child watcher after each test to avoid thread leak."""
+    yield
+    with contextlib.suppress(Exception):
+        watcher = asyncio.get_event_loop_policy().get_child_watcher()
+        if watcher:
+            watcher.close()
