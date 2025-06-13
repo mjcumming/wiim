@@ -1126,10 +1126,9 @@ class WiiMClient:
             data["play_status"] = play_state_val
             _LOGGER.debug("Raw play state value: %s, final play_status: %s", play_state_val, data["play_status"])
         else:
-            # Fallback: if source is 'qobuz' and state is ambiguous, treat as 'playing'
-            if data.get("source") == "qobuz":
-                data["play_status"] = "play"
-                _LOGGER.debug("Fallback: source is 'qobuz', setting play_status to 'play'")
+            # Log when we don't have loop_mode data
+            if "play_mode" not in data:
+                _LOGGER.debug("🔁🔀 No loop_mode field found for %s, no play_status set", self.host)
 
         # Map raw keys to normalized keys
         for k, v in raw.items():
@@ -1219,6 +1218,7 @@ class WiiMClient:
             if "play_mode" not in data:
                 _LOGGER.debug("🔁🔀 No loop_mode field found for %s, no play_mode set", self.host)
 
+        # ---------------------------------------------------------------
         # Artwork URL – vendors use a **lot** of different keys.  Try the
         # known variants in priority order so the first *non-empty* match wins.
         cover = (
@@ -1316,6 +1316,17 @@ class WiiMClient:
         eq_raw = data.get("eq_preset")
         if isinstance(eq_raw, int | str) and str(eq_raw).isdigit():
             data["eq_preset"] = self._EQ_NUMERIC_MAP.get(str(eq_raw), eq_raw)
+
+        # ---------------------------------------------------------------
+        # FINAL FALLBACK – Qobuz "always playing" quirk (placement AFTER
+        # source/vendor mapping so we know which source was detected).
+        # ---------------------------------------------------------------
+        if (
+            data.get("source") == "qobuz"
+            and (not data.get("play_status") or str(data["play_status"]).lower() in {"stop", "stopped", "idle", ""})
+        ):
+            data["play_status"] = "play"
+            _LOGGER.debug("Qobuz fallback applied – forcing play_status='play'")
 
         _LOGGER.debug("Parsed player status: %s", data)
         return data
