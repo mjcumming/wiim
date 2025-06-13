@@ -170,23 +170,4 @@ def mock_wiim_dispatcher():
         yield mock_send
 
 
-# -----------------------------------------------------------------------------
-# Simple approach: Use pytest-homeassistant-custom-component fixtures to handle
-# the HA background thread issue
-# -----------------------------------------------------------------------------
 
-
-# ---------------------------------------------------------------------------
-# We always get HA's background "_run_safe_shutdown_loop" thread in the
-# config-flow test.  Tell pytest-homeassistant that this is expected so it
-# logs a warning instead of failing the run.
-# ---------------------------------------------------------------------------
-
-@pytest.fixture
-def expected_lingering_threads() -> bool:
-    return True       # plug-in downgrades the assert to a warning
-
-@pytest.fixture
-def allow_unwatched_threads() -> bool:
-    """Allow unwatched threads to prevent test failures from HA background threads."""
-    return True
