@@ -1021,51 +1021,22 @@ class WiiMClient:
     # ---------------------------------------------------------------------
 
     async def get_player_status(self) -> dict[str, Any]:
-        """Return a **normalised** status dict.
+        """Get the current player status using getPlayerStatusEx.
 
-        This method fetches the current player status using the getPlayerStatus endpoint.
-        The raw payload is converted to a stable schema so the rest of the
-        integration can rely on consistent keys.
+        This method provides complete track information and playback state.
+        Use get_status() for device and group information.
 
         Returns:
-            A dictionary containing normalized player status including:
-            - play_status: Current playback state (play/pause/stop)
-            - volume: Current volume level (0-100)
-            - mute: Current mute state
-            - position: Current playback position in seconds
-            - duration: Total duration of current track in seconds
-            - title: Current track title
-            - artist: Current track artist
-            - album: Current track album
-            - source: Current audio source
-            - play_mode: Current play mode (normal/repeat/shuffle)
+            A dictionary containing normalized player status information.
         """
-        _LOGGER.debug("API get_player_status START for %s", self.host)
-
         try:
-            _LOGGER.debug("Trying getPlayerStatus endpoint for %s", self.host)
-            raw: dict[str, Any] = await self._request(API_ENDPOINT_PLAYER_STATUS)
-            _LOGGER.debug("getPlayerStatus SUCCESS for %s", self.host)
-
-        except WiiMError as err:
-            _LOGGER.debug("getPlayerStatus FAILED for %s, falling back to getStatusEx: %s", self.host, err)
-            # Fallback to basic status if player status fails
-            raw = await self._request(API_ENDPOINT_STATUS)
-            _LOGGER.debug("getStatusEx fallback SUCCESS for %s", self.host)
-
-        # Debug log the raw play state only when it's unexpected
-        raw_status = raw.get("status")
-        if raw_status not in ["play", "pause", "stop"]:
-            _LOGGER.debug(
-                "Unexpected raw play state for %s - status='%s'",
-                self.host,
-                raw_status,
-            )
-
-        parsed = self._parse_player_status(raw)
-        _LOGGER.debug("API get_player_status END for %s", self.host)
-
-        return parsed
+            raw = await self._request("getPlayerStatusEx")
+            # Add debug logging to print the raw response
+            _LOGGER.debug("Raw getPlayerStatusEx response: %s", raw)
+            return self._parse_player_status(raw)
+        except WiiMError as e:
+            _LOGGER.error("Failed to get player status: %s", e)
+            return {}
 
     # Normalisation table for the *player-status* endpoint.  Keys on the left
     # are raw HTTP-API field names, values are our canonical attribute names
@@ -1154,6 +1125,12 @@ class WiiMClient:
         play_state_val = raw.get("state") or raw.get("player_state") or raw.get("status")
         if play_state_val is not None:
             data["play_status"] = play_state_val
+            _LOGGER.debug("Raw play state value: %s, final play_status: %s", play_state_val, data["play_status"])
+        else:
+            # Fallback: if source is 'qobuz' and state is ambiguous, treat as 'playing'
+            if data.get("source") == "qobuz":
+                data["play_status"] = "play"
+                _LOGGER.debug("Fallback: source is 'qobuz', setting play_status to 'play'")
 
         # Map raw keys to normalized keys
         for k, v in raw.items():
