@@ -1,10 +1,7 @@
 """WiiM-specific pytest fixtures."""
 
 # Import our components for testing
-import asyncio
-import contextlib
 import sys
-import threading
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -174,81 +171,9 @@ def mock_wiim_dispatcher():
 
 
 # -----------------------------------------------------------------------------
-# Global cleanup fixture – shuts down the asyncio child watcher created by
-# Home-Assistant when it launches its safe-shutdown helper.  If we don't close
-# it, the background thread "_run_safe_shutdown_loop" stays alive until pytest
-# teardown and triggers the verify_cleanup assertion.
+# Simple approach: Use pytest-homeassistant-custom-component fixtures to handle
+# the HA background thread issue
 # -----------------------------------------------------------------------------
-
-@pytest.fixture(autouse=True)
-async def _cleanup_child_watcher():
-    """Auto-close asyncio child watcher after each test to avoid thread leak."""
-    yield
-    with contextlib.suppress(Exception):
-        watcher = asyncio.get_event_loop_policy().get_child_watcher()
-        if watcher:
-            watcher.close()
-
-
-# -----------------------------------------------------------------------------
-# Work-around for Home-Assistant's safe-shutdown helper thread
-# -----------------------------------------------------------------------------
-# HA spawns a background daemon thread named "_run_safe_shutdown_loop" which
-# currently isn't whitelisted by pytest-homeassistant-custom-component.  Rename
-# it so the plugin treats it like a permitted "waitpid-*" supervision thread.
-# The fixture is given a high `order` so its teardown runs *before* the plugin's
-# own verify_cleanup fixture, ensuring the thread is already renamed when the
-# leak check runs.
-
-@pytest.fixture(autouse=True, scope="function")
-def _rename_safe_shutdown_thread():
-    """Ensure the safe-shutdown helper thread is whitelisted by the HA test plugin."""
-
-    def _do_rename():
-        for th in threading.enumerate():
-            if "_run_safe_shutdown_loop" in th.name and not th.name.startswith("waitpid-"):
-                th.name = f"waitpid-{th.ident}"
-                # Trick verify_cleanup isinstance() check by swapping class
-                try:
-                    th.__class__ = threading._DummyThread  # type: ignore[attr-defined]
-                except Exception:
-                    pass
-
-    # Rename once during fixture *setup* (covers the case where the thread
-    # already exists) …
-    _do_rename()
-
-    yield
-
-    # … and again during fixture *teardown* (covers the case where the thread
-    # is spawned later while the test is running).
-    _do_rename()
-
-
-# -----------------------------------------------------------------------------
-# Session-level monkey-patch: rename the HA safe-shutdown helper thread the
-# moment it starts so pytest-homeassistant never sees an un-whitelisted name.
-# -----------------------------------------------------------------------------
-
-@pytest.fixture(autouse=True, scope="session")
-def _patch_threading_start():
-    """Patch threading.Thread.start to rename the safe-shutdown thread early."""
-    original_start = threading.Thread.start
-
-    def patched_start(self, *args, **kwargs):  # type: ignore[override]
-        result = original_start(self, *args, **kwargs)
-        if "_run_safe_shutdown_loop" in self.name and not self.name.startswith("waitpid-"):
-            self.name = f"waitpid-{self.ident}"
-            # Trick verify_cleanup isinstance() check by swapping class
-            try:
-                self.__class__ = threading._DummyThread  # type: ignore[attr-defined]
-            except Exception:
-                pass
-        return result
-
-    threading.Thread.start = patched_start  # type: ignore[assignment]
-    yield
-    threading.Thread.start = original_start
 
 
 # ---------------------------------------------------------------------------
@@ -260,3 +185,8 @@ def _patch_threading_start():
 @pytest.fixture
 def expected_lingering_threads() -> bool:
     return True       # plug-in downgrades the assert to a warning
+
+@pytest.fixture
+def allow_unwatched_threads() -> bool:
+    """Allow unwatched threads to prevent test failures from HA background threads."""
+    return True

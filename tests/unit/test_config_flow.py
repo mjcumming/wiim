@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -19,7 +20,7 @@ async def test_form(hass: HomeAssistant) -> None:
     assert result["errors"] is None or result["errors"] == {}
 
 
-async def test_form_successful_connection(hass: HomeAssistant) -> None:
+async def test_form_successful_connection(hass: HomeAssistant, expected_lingering_threads) -> None:
     """Test successful connection during config flow."""
     with patch(
         "custom_components.wiim.config_flow.validate_wiim_device",
