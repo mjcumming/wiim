@@ -249,3 +249,15 @@ def _patch_threading_start():
     threading.Thread.start = patched_start  # type: ignore[assignment]
     yield
     threading.Thread.start = original_start
+
+
+# ---------------------------------------------------------------------------
+# We always get HA's background "_run_safe_shutdown_loop" thread in the
+# config-flow test.  Tell pytest-homeassistant that this is expected so it
+# logs a warning instead of failing the run.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def expected_lingering_threads() -> bool:  # noqa: D401
+    """Return True to silence the thread leak assertion in HA test plug-in."""
+    return True
