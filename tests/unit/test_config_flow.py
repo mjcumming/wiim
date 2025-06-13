@@ -1,6 +1,6 @@
 """Test WiiM config flow."""
 
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
