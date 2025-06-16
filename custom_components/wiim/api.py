@@ -1029,7 +1029,8 @@ class WiiMClient:
             A dictionary containing normalized player status information.
         """
         try:
-            raw = await self._request("getPlayerStatusEx")
+            # Use absolute endpoint path so URL joins correctly
+            raw = await self._request("/httpapi.asp?command=getPlayerStatusEx")
             # Add debug logging to print the raw response
             _LOGGER.debug("Raw getPlayerStatusEx response: %s", raw)
             return self._parse_player_status(raw)

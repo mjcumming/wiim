@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import binascii
 import logging
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
@@ -16,6 +19,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError  # Graceful error handling
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import yaml as hass_yaml
 
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
@@ -67,6 +71,13 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Debouncer for high-frequency volume changes (slider drags)
         self._volume_debouncer: Debouncer | None = None
         self._pending_volume: float | None = None
+
+        # Quick stations YAML path will be resolved lazily once self.hass is available
+        self._quick_stations_path: Path | None = None
+        self._quick_station_cache: list[dict[str, str]] = []  # cache for title lookup
+
+        # Optimistic media title to show friendly station name immediately
+        self._optimistic_media_title: str | None = None
 
         _LOGGER.debug(
             "WiiMMediaPlayer initialized for %s with controller delegation",
@@ -268,7 +279,24 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def media_title(self) -> str | None:
         """Title of current playing media."""
-        return self.controller.get_media_title()
+        if self._optimistic_media_title is not None:
+            return self._optimistic_media_title
+
+        title = self.controller.get_media_title()
+
+        # 1) Decode hex-encoded URL strings reported by LinkPlay
+        if title:
+            decoded = self._maybe_decode_hex_url(title)
+            if decoded:
+                title = decoded
+
+        # 2) Replace URL / filename with friendly name from Quick-Stations list
+        for st in self._quick_station_cache:
+            if st.get("url", "").endswith(title):
+                title = st["name"]
+                break
+
+        return title
 
     @property
     def media_artist(self) -> str | None:
@@ -335,6 +363,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         self._optimistic_source = None
         self._optimistic_shuffle = None
         self._optimistic_repeat = None
+        self._optimistic_media_title = None
 
     async def _async_execute_command_with_immediate_refresh(self, command_name: str) -> None:
         """Execute command with immediate polling for fast UI updates.
@@ -753,8 +782,25 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
                 # Immediate refresh already handled inside async_play_preset()
 
-            # For URLs, use play_url
-            elif media_type in [MediaType.URL, MediaType.MUSIC, "url"]:
+            # For URLs or generic audio MIME types, use play_url
+            elif media_type in [MediaType.URL, MediaType.MUSIC, "url"] or (
+                isinstance(media_type, str) and media_type.startswith("audio/")
+            ):
+                # If the URL matches a Quick Station entry, use its friendly name
+                station_title = await self._async_lookup_quick_station_title(media_id)
+                if station_title:
+                    self._optimistic_media_title = station_title
+                    self._optimistic_state = MediaPlayerState.PLAYING
+                    # Show a sensible source immediately (WiFi)
+                    self._optimistic_source = "WiFi"
+                    self.async_write_ha_state()
+                else:
+                    self._optimistic_media_title = None
+                    self._optimistic_state = MediaPlayerState.PLAYING
+                    self._optimistic_source = None
+                    self.async_write_ha_state()
+
+                # Always send the URL to the device
                 await self.controller.play_url(media_id)
 
                 # Immediate refresh for fast media update
@@ -931,11 +977,19 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # Fetch presets from coordinator
         presets: list[dict] = self.speaker.coordinator.data.get("presets", []) if self.speaker.coordinator.data else []
-        presets_supported = bool(presets)
+        # Show the Presets shelf whenever the device claims to support presets OR
+        # we have not yet determined support. Only hide it when we explicitly
+        # know presets are unsupported.
+        presets_capability = getattr(self.speaker.coordinator, "_presets_supported", None)
+        presets_supported = presets_capability is not False  # None (unknown) or True ⇒ show
 
-        # Root request
+        # Load user defined quick stations (if any)
+        quick_stations: list[dict[str, str]] = await self._async_load_quick_stations()
+
+        # ===== ROOT LEVEL =====
         if media_content_id in (None, "root"):
             children: list[BrowseMedia] = []
+
             if presets_supported:
                 children.append(
                     BrowseMedia(
@@ -950,7 +1004,22 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                     )
                 )
 
+            if quick_stations:
+                children.append(
+                    BrowseMedia(
+                        media_class=MediaClass.DIRECTORY,
+                        media_content_id="quick",
+                        media_content_type="quick",
+                        title="Quick Stations",
+                        can_play=False,
+                        can_expand=True,
+                        children=[],
+                        thumbnail=None,
+                    )
+                )
+
             if not children:
+                # No content to show – return empty shelf
                 return BrowseMedia(
                     media_class=MediaClass.DIRECTORY,
                     media_content_id="root",
@@ -971,20 +1040,42 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 children=children,
             )
 
-        # Preset folder
+        # ===== QUICK STATIONS LEVEL =====
+        if media_content_id == "quick":
+            items: list[BrowseMedia] = []
+            for st in quick_stations:
+                items.append(
+                    BrowseMedia(
+                        media_class=MediaClass.MUSIC,
+                        media_content_id=st["url"],
+                        media_content_type="url",
+                        title=st["name"],
+                        can_play=True,
+                        can_expand=False,
+                        thumbnail=None,
+                    )
+                )
+
+            # Cache for quick lookup in media_title
+            self._quick_station_cache = quick_stations
+            return BrowseMedia(
+                media_class=MediaClass.DIRECTORY,
+                media_content_id="quick",
+                media_content_type="quick",
+                title="Quick Stations",
+                can_play=False,
+                can_expand=True,
+                children=items,
+            )
+
+        # ===== PRESETS LEVEL =====
         if media_content_id == "presets":
             items: list[BrowseMedia] = []
             for entry in presets:
                 title = entry.get("name") or f"Preset {entry.get('number')}"
-                # We use the preset *number* as the content ID and a custom
-                # media_class so the front-end calls async_play_media() with
-                # ``media_type="preset"``.  This triggers the more reliable
-                # MCUKeyShortClick command on the device instead of building
-                # a fragile setPlayerCmd:play:<url> request.
                 number = entry.get("number")
                 url = entry.get("url") or ""
                 if not number or not url:
-                    # Skip empty / malformed presets to avoid no-op items
                     continue
                 items.append(
                     BrowseMedia(
@@ -1008,5 +1099,69 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 children=items,
             )
 
-        # Unknown request
+        # Unknown
         raise _BrowseError("Unknown media_content_id")
+
+    # ---------------------------------------------------------------------
+    # Internal helpers
+    # ---------------------------------------------------------------------
+
+    async def _async_load_quick_stations(self) -> list[dict[str, str]]:
+        """Read user-defined quick stations from config/wiim_stations.yaml.
+
+        YAML structure expected:
+          - name: Friendly Name
+            url: http://stream...
+        Returns an empty list if the file is missing or malformed.
+        """
+        if self.hass is None:
+            return []  # Should not happen once browse is called
+
+        try:
+            if self._quick_stations_path is None:
+                self._quick_stations_path = Path(self.hass.config.path("wiim_stations.yaml"))
+
+            if not self._quick_stations_path.exists():
+                return []
+
+            data = await self.hass.async_add_executor_job(hass_yaml.load_yaml, str(self._quick_stations_path))
+            if not isinstance(data, list):
+                return []
+
+            stations: list[dict[str, str]] = []
+            for entry in data:
+                if isinstance(entry, dict) and entry.get("name") and entry.get("url"):
+                    stations.append({"name": str(entry["name"]), "url": str(entry["url"])})
+            return stations
+
+        except Exception as err:  # pragma: no cover – non-critical
+            _LOGGER.warning("Failed to load quick stations YAML: %s", err)
+            return []
+
+    async def _async_lookup_quick_station_title(self, url: str) -> str | None:
+        """Return station name for given URL if present in quick stations list."""
+        stations = await self._async_load_quick_stations()
+        for st in stations:
+            if st.get("url") == url:
+                return st.get("name")
+        return None
+
+    # ---------------------------------------------------------------------
+    # Hex URL decode helper & station title mapping
+    # ---------------------------------------------------------------------
+
+    _HEX_CHARS = set("0123456789abcdefABCDEF")
+
+    @staticmethod
+    def _maybe_decode_hex_url(text: str) -> str | None:
+        """Decode hex-encoded URL strings (e.g. '68747470...') to filename."""
+        if not text or len(text) % 2 or any(c not in WiiMMediaPlayer._HEX_CHARS for c in text):
+            return None
+        try:
+            decoded_url = binascii.unhexlify(text).decode("utf-8", "ignore")
+            path = urlparse(decoded_url).path
+            if path:
+                return path.rsplit("/", 1)[-1].lstrip("/") or decoded_url
+            return decoded_url
+        except Exception:
+            return None

@@ -108,6 +108,25 @@ show_source: true
 show_group: true
 ```
 
+### Quick Stations (custom radio list)
+
+Want one-click access to your favourite radio streams?
+
+1.  Create a file named `wiim_stations.yaml` in your Home Assistant *config* folder:
+
+    ```yaml
+    - name: BBC Radio 2
+      url: http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two
+    - name: Groove Salad (SomaFM)
+      url: http://ice2.somafm.com/groovesalad-128-mp3
+    ```
+
+2.  Reload the WiiM integration (or restart Home Assistant).
+
+3.  Open any WiiM speaker → **Browse media** → *Quick Stations*.
+
+Each entry is a single tap away from playback.  The player card shows the station name immediately while the stream buffers.
+
 ## 🔧 Features Matrix
 
 | Feature          | Status | Notes                             |

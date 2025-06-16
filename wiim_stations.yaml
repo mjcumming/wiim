@@ -1,0 +1,10 @@
+- name: BBC Radio 2
+  url: http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two
+- name: Groove Salad (SomaFM)
+  url: http://ice2.somafm.com/groovesalad-128-mp3
+- name: Radio Paradise
+  url: http://stream.radioparadise.com/mp3-192
+- name: KEXP 90.3 Seattle
+  url: http://live-aacplus-64.kexp.org/kexp64.aac
+- name: CBC Radio One Toronto
+  url: http://cbcr1tor.akacast.akamaistream.net/7/20/451661/v1/rc.akacast.akamaistream.net/cbcr1tor 

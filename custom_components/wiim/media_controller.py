@@ -448,8 +448,10 @@ class MediaPlayerController:
         try:
             from .const import SOURCE_MAP
 
-            # Return friendly names for the UI
-            return list(SOURCE_MAP.values())
+            # Built-in sources first
+            built_in = list(SOURCE_MAP.values())
+
+            return built_in
         except Exception as err:
             self._logger.error("Failed to get source list: %s", err)
             return ["WiFi", "Bluetooth", "Line In", "Optical"]  # Basic fallback
