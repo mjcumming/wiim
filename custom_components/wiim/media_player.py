@@ -291,10 +291,12 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 title = decoded
 
         # 2) Replace URL / filename with friendly name from Quick-Stations list
-        for st in self._quick_station_cache:
-            if st.get("url", "").endswith(title):
-                title = st["name"]
-                break
+        if title:
+            for st in self._quick_station_cache:
+                url_val = st.get("url") or ""
+                if isinstance(url_val, str) and url_val.endswith(title):
+                    title = st["name"]
+                    break
 
         return title
 
