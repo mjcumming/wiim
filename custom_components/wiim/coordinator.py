@@ -972,6 +972,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 for key, value in master_metadata.items():
                     metadata[key] = value
 
+                # NEW: Propagate artwork from mirrored metadata to the *status* dict so
+                # the slave entity gets the same cover art in media-player cards.
+                art_url = metadata.get("entity_picture") or metadata.get("cover_url")
+                if art_url:
+                    status["entity_picture"] = art_url
+                    # Preserve existing cover_url if set – otherwise copy it from artwork
+                    status.setdefault("cover_url", art_url)
+
                 # Only log media mirroring when state actually changes (first time or when content changes)
                 if should_log:
                     _LOGGER.debug(
