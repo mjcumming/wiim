@@ -199,6 +199,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         return features
 
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        # Follows the test logic: available if both flags are True
+        return bool(getattr(self.speaker, "_available", True)) and bool(
+            getattr(getattr(self.speaker, "coordinator", None), "last_update_success", True)
+        )
+
     # ===== VOLUME PROPERTIES (delegate to controller) =====
 
     @property
