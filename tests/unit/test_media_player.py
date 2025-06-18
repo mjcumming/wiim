@@ -281,11 +281,19 @@ class TestMediaPlayerState:
 
     def test_available_property(self, media_player, wiim_speaker):
         """Test availability property delegation."""
+        # Case 1: Speaker is available and last update was successful
         wiim_speaker._available = True
         wiim_speaker.coordinator.last_update_success = True
         assert media_player.available is True
 
+        # Case 2: Speaker is unavailable
         wiim_speaker._available = False
+        wiim_speaker.coordinator.last_update_success = True
+        assert media_player.available is False
+
+        # Case 3: Last update was not successful
+        wiim_speaker._available = True
+        wiim_speaker.coordinator.last_update_success = False
         assert media_player.available is False
 
     def test_device_info_property(self, media_player, wiim_speaker):
