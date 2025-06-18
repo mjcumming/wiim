@@ -161,6 +161,11 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
                 pass  # fall through to generic state
 
         # No RSSI → show basic connectivity status
+        # Check for recent command failures for more specific status
+        if hasattr(self.speaker.coordinator, 'has_recent_command_failures'):
+            if self.speaker.coordinator.has_recent_command_failures():
+                return "Command Failed"
+
         return "Online" if self.speaker.available else "Offline"
 
     # ----------------------- Attributes -------------------------
@@ -203,6 +208,17 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             "slave_cnt": multi.get("slave_count") or multi.get("slaves"),
             "preset_key": _to_int(info.get("preset_key")),
         }
+
+        # Add command failure diagnostics
+        if hasattr(self.speaker.coordinator, '_last_command_failure'):
+            if self.speaker.coordinator._last_command_failure is not None:
+                import time
+                time_since_failure = time.time() - self.speaker.coordinator._last_command_failure
+                attrs.update({
+                    "last_command_failure": int(time_since_failure),  # seconds ago
+                    "command_failure_count": getattr(self.speaker.coordinator, '_command_failure_count', 0),
+                    "has_recent_failures": self.speaker.coordinator.has_recent_command_failures() if hasattr(self.speaker.coordinator, 'has_recent_command_failures') else False,
+                })
 
         # Prune None values for cleanliness
         return {k: v for k, v in attrs.items() if v is not None}

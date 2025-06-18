@@ -111,8 +111,22 @@ class Speaker:
 
     @property
     def available(self) -> bool:
-        """Return if speaker is available."""
-        return self._available and self.coordinator.last_update_success
+        """Return if speaker is available.
+
+        A speaker is considered unavailable if:
+        1. Background polling is failing (coordinator.last_update_success = False)
+        2. Recent user commands have failed (provides immediate feedback)
+        """
+        # Check background polling success
+        polling_available = self._available and self.coordinator.last_update_success
+
+        # Check for recent command failures (immediate feedback)
+        if hasattr(self.coordinator, 'has_recent_command_failures'):
+            has_command_failures = self.coordinator.has_recent_command_failures()
+            if has_command_failures:
+                return False  # Command failed recently - device appears unavailable immediately
+
+        return polling_available
 
     def async_write_entity_states(self) -> None:
         """Notify all entities of state changes."""

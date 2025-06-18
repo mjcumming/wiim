@@ -1487,6 +1487,11 @@ class WiiMClient:
             response = await self._request("/httpapi.asp?command=getMetaInfo")
             _LOGGER.debug("getMetaInfo raw response for %s: %s", self.host, response)
 
+            # Check for "unknown command" response (older LinkPlay devices)
+            if "raw" in response and str(response["raw"]).lower().startswith("unknown command"):
+                _LOGGER.debug("Device %s responded 'unknown command' to getMetaInfo - not supported", self.host)
+                return {}
+
             if response and "metaData" in response:
                 metadata = response["metaData"]
                 _LOGGER.debug("Extracted metaData for %s: %s", self.host, metadata)
@@ -1496,7 +1501,7 @@ class WiiMClient:
                 return {}
 
         except Exception as e:
-            # Devices with older firmware return plain "OK" instead of JSON.
+            # Devices with older firmware return plain "OK" or "unknown command" instead of JSON.
             # Treat this as an expected condition rather than an error.
             _LOGGER.debug("get_meta_info not supported on %s: %s", self.host, e)
             return {}

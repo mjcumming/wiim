@@ -291,7 +291,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 title = decoded
 
         # 2) Replace URL / filename with friendly name from Quick-Stations list
-        if title:
+        if title and isinstance(title, str) and self._quick_station_cache:
             for st in self._quick_station_cache:
                 url_val = st.get("url") or ""
                 if isinstance(url_val, str) and url_val.endswith(title):
@@ -374,6 +374,10 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """
         _LOGGER.debug("Command '%s' completed, requesting immediate refresh for %s", command_name, self.speaker.name)
 
+        # Clear any previous command failures since this command succeeded
+        if hasattr(self.speaker.coordinator, 'clear_command_failures'):
+            self.speaker.coordinator.clear_command_failures()
+
         # Request immediate coordinator refresh instead of waiting for next 5s cycle
         await self.coordinator.async_request_refresh()
 
@@ -438,8 +442,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self._async_execute_command_with_immediate_refresh("set_volume_debounced")
 
         except HomeAssistantError as err:
-            # Device offline or unreachable – log at warning level and fail silently
-            _LOGGER.warning("Volume command failed for %s: %s", self.speaker.name, err)
+            # Record command failure for immediate user feedback
+            if hasattr(self.speaker.coordinator, 'record_command_failure'):
+                self.speaker.coordinator.record_command_failure("set_volume", err)
 
             # Clear optimistic state so UI snaps back gracefully
             self._optimistic_volume = None
@@ -507,7 +512,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             self._pending_volume = None
 
         except HomeAssistantError as err:
-            _LOGGER.warning("Volume-up failed for %s: %s", self.speaker.name, err)
+            # Record command failure for immediate user feedback
+            if hasattr(self.speaker.coordinator, 'record_command_failure'):
+                self.speaker.coordinator.record_command_failure("volume_up", err)
             self._optimistic_volume = None
             self.async_write_ha_state()
             # swallow to avoid traceback
@@ -548,7 +555,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             self._pending_volume = None
 
         except HomeAssistantError as err:
-            _LOGGER.warning("Volume-down failed for %s: %s", self.speaker.name, err)
+            # Record command failure for immediate user feedback
+            if hasattr(self.speaker.coordinator, 'record_command_failure'):
+                self.speaker.coordinator.record_command_failure("volume_down", err)
             self._optimistic_volume = None
             self.async_write_ha_state()
             # swallow to avoid traceback
@@ -1134,6 +1143,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             for entry in data:
                 if isinstance(entry, dict) and entry.get("name") and entry.get("url"):
                     stations.append({"name": str(entry["name"]), "url": str(entry["url"])})
+
+            # Cache for quick lookup in media_title
+            self._quick_station_cache = stations
             return stations
 
         except Exception as err:  # pragma: no cover – non-critical

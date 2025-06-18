@@ -21,14 +21,17 @@ _LOGGER = logging.getLogger(__name__)
 VERBOSE_DEBUG = False
 
 # Number of consecutive failures after which we escalate to ERROR level
-FAILURE_ERROR_THRESHOLD = 10  # Only log as ERROR when device likely offline
+FAILURE_ERROR_THRESHOLD = 3  # Reduced from 10 - mark offline after 15 seconds instead of 50
 
 # Consecutive failure counts to switch the polling interval (seconds)
 FAILURE_BACKOFF_STEPS = {
-    3: 15,   # after 3 consecutive failures → 15-second polling
-    6: 30,   # after 6  → 30-second polling
-    10: 60,  # after 10 → 60-second polling
+    2: 10,   # after 2 consecutive failures → 10-second polling (was 3: 15)
+    3: 30,   # after 3 → 30-second polling (was 6: 30)
+    5: 60,   # after 5 → 60-second polling (was 10: 60)
 }
+
+# Command failure tracking - for immediate user feedback
+COMMAND_FAILURE_TIMEOUT = 30  # seconds - how long to remember command failures
 
 
 class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -73,6 +76,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_status: dict[str, Any] = {}
         self._consecutive_failures = 0
         self._device_info = None
+
+        # Command failure tracking for immediate user feedback
+        self._last_command_failure: float | None = None  # timestamp of last command failure
+        self._command_failure_count = 0  # count of recent command failures
 
         # Track device info update timing (every 30-60 seconds)
         self._last_device_info_update = 0.0  # type: ignore[assignment]
@@ -354,6 +361,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self.update_interval.total_seconds() != FIXED_POLL_INTERVAL:
                 self.update_interval = timedelta(seconds=FIXED_POLL_INTERVAL)
 
+            # Clear command failures when polling succeeds (device is back online)
+            if self._last_command_failure is not None:
+                self.clear_command_failures()
+
             # Record overall turnaround time in milliseconds.
             self._last_response_time = (time.perf_counter() - _start_time) * 1000.0
 
@@ -511,7 +522,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _extract_basic_metadata(self, status: dict) -> dict:
         """Extract basic metadata from player status when getMetaInfo unavailable.
 
-        HA will handle cover art fetching through its own mechanisms.
+        Enhanced to also extract artwork URLs for older LinkPlay devices that don't
+        support getMetaInfo but still provide artwork in basic player status.
         """
         _LOGGER.debug("Extracting basic metadata from status for %s", self.client.host)
 
@@ -523,15 +535,53 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if status.get("album"):
             metadata["album"] = status["album"]
 
+        # Extract cover art from multiple possible fields (same as _enhance_metadata_with_artwork)
+        artwork_fields = [
+            "cover",
+            "cover_url",
+            "albumart",
+            "albumArtURI",
+            "albumArtUri",
+            "albumarturi",
+            "art_url",
+            "artwork_url",
+            "pic_url",
+            "entity_picture",  # Already processed by _parse_player_status
+            "thumbnail",
+            "image",
+            "coverart",
+            "cover_art",
+            "album_art",
+            "artworkUrl",
+            "imageUrl",
+        ]
+
+        # Check for artwork URL in status
+        artwork_url = None
+        found_field = None
+
+        for field in artwork_fields:
+            artwork_url = status.get(field)
+            if artwork_url and artwork_url != "un_known":  # Filter out invalid URLs
+                found_field = f"status.{field}"
+                break
+
+        if artwork_url and artwork_url != "un_known":
+            metadata["entity_picture"] = artwork_url
+            metadata["cover_url"] = artwork_url
+            _LOGGER.info("🎨 Artwork extracted from basic status for %s (%s): %s", self.client.host, found_field, artwork_url)
+        else:
+            _LOGGER.debug("❌ No valid artwork URL found in basic status for %s", self.client.host)
+
         _LOGGER.debug(
-            "Basic metadata extracted for %s: title='%s', artist='%s', album='%s'",
+            "Basic metadata extracted for %s: title='%s', artist='%s', album='%s', artwork='%s'",
             self.client.host,
             metadata.get("title"),
             metadata.get("artist"),
             metadata.get("album"),
+            "YES" if metadata.get("entity_picture") else "NO",
         )
 
-        # Note: Cover art will be handled by Home Assistant's media browser and other mechanisms
         return metadata
 
     async def _get_eq_info_defensive(self) -> dict:
@@ -803,6 +853,42 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.debug("[WiiM] %s: User command '%s' - requesting immediate refresh", self.client.host, command_type)
         # Force immediate refresh by setting short interval
         self.update_interval = timedelta(seconds=1)
+
+    def record_command_failure(self, command_type: str, error: Exception) -> None:
+        """Record immediate command failure for user feedback.
+
+        This provides instant feedback when user commands fail, separate from
+        background polling failures. Device will appear temporarily unavailable
+        until either a command succeeds or the failure timeout expires.
+        """
+        import time
+
+        self._last_command_failure = time.time()
+        self._command_failure_count += 1
+
+        _LOGGER.warning(
+            "Command '%s' failed for %s (failure #%d): %s - device temporarily unavailable",
+            command_type,
+            self.client.host,
+            self._command_failure_count,
+            error
+        )
+
+    def clear_command_failures(self) -> None:
+        """Clear command failure state when a command succeeds."""
+        if self._last_command_failure is not None:
+            _LOGGER.info("Command succeeded for %s - clearing failure state", self.client.host)
+            self._last_command_failure = None
+            self._command_failure_count = 0
+
+    def has_recent_command_failures(self) -> bool:
+        """Check if there have been recent command failures."""
+        if self._last_command_failure is None:
+            return False
+
+        import time
+        time_since_failure = time.time() - self._last_command_failure
+        return time_since_failure < COMMAND_FAILURE_TIMEOUT
 
     # Group management methods (simplified from legacy)
     def get_current_role(self) -> str:
