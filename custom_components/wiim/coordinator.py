@@ -9,9 +9,11 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from pydantic import ValidationError
 
 from .api import WiiMClient, WiiMError
 from .const import FIXED_POLL_INTERVAL
+from .models import PlayerStatus, DeviceInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -183,11 +185,31 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             player_status = await self._get_player_status()
             _LOGGER.debug("Player status result for %s: %s", self.client.host, player_status)
 
+            # Extract typed model when present (from api layer)
+            status_model: PlayerStatus | None = None
+            if isinstance(player_status, dict) and "_model" in player_status:
+                status_model = player_status.pop("_model")
+
+            # Fallback validation when _model missing (for older client versions)
+            if status_model is None:
+                try:
+                    status_model = PlayerStatus.model_validate(player_status)
+                except ValidationError:
+                    status_model = None
+
             # Endpoint health – if we reach here the call succeeded.
             self._player_status_working = True
 
             _LOGGER.debug("Step 2: Getting device info for %s", self.client.host)
             device_info = await self._get_device_info_defensive()
+            device_model: DeviceInfo | None = None
+            if isinstance(device_info, dict) and "_model" in device_info:
+                device_model = device_info.pop("_model")
+            if device_model is None:
+                try:
+                    device_model = DeviceInfo.model_validate(device_info)
+                except ValidationError:
+                    device_model = None
             if VERBOSE_DEBUG:
                 _LOGGER.debug("Device info result for %s: %s", self.client.host, device_info)
             else:
@@ -331,6 +353,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data: dict[str, Any] = {
                 "status": player_status,
                 "device_info": device_info,
+                "status_model": status_model,
+                "device_model": device_model,
                 "multiroom": multiroom_info,
                 "metadata": track_metadata,
                 "eq": eq_info,
