@@ -84,6 +84,11 @@ from .const import (
     PLAY_MODE_SHUFFLE_REPEAT_ALL,
 )
 
+# Pydantic models (optional validation layer)
+from pydantic import ValidationError
+
+from .models import PlayerStatus, DeviceInfo
+
 _LOGGER = logging.getLogger(__name__)
 
 WIIM_CA_CERT = """-----BEGIN CERTIFICATE-----
@@ -909,6 +914,15 @@ class WiiMClient:
             device_info = await self._request(API_ENDPOINT_STATUS)
             _LOGGER.debug("Raw getStatusEx response for %s: %s", self.host, device_info)
 
+            # Optional Pydantic validation
+            try:
+                model_obj: DeviceInfo | None = DeviceInfo.model_validate(device_info)
+            except ValidationError as err:
+                _LOGGER.debug("DeviceInfo validation failed on %s: %s", self.host, err.errors())
+                model_obj = None
+
+            device_info["_model"] = model_obj
+
             # Extract key group-related fields for debugging
             group_field = device_info.get("group")
             uuid_field = device_info.get("uuid")
@@ -1031,9 +1045,18 @@ class WiiMClient:
         try:
             # Use absolute endpoint path so URL joins correctly
             raw = await self._request("/httpapi.asp?command=getPlayerStatusEx")
-            # Add debug logging to print the raw response
             _LOGGER.debug("Raw getPlayerStatusEx response: %s", raw)
-            return self._parse_player_status(raw)
+
+            # Optional: validate with Pydantic – failures are non-fatal in beta
+            try:
+                model_obj: PlayerStatus | None = PlayerStatus.model_validate(raw)
+            except ValidationError as err:
+                _LOGGER.debug("PlayerStatus validation failed on %s: %s", self.host, err.errors())
+                model_obj = None
+
+            parsed = self._parse_player_status(raw)
+            parsed["_model"] = model_obj  # expose for typed callers
+            return parsed
         except WiiMError as e:
             _LOGGER.error("Failed to get player status: %s", e)
             return {}
