@@ -1,32 +1,32 @@
 # Cursor **Rules & Engineering Guide** – WiiM / LinkPlay HACS Integration
 
-_Treat this as the project’s **constitution**. Read it. Pin it in Cursor. Obey it._
+_Treat this as the project's **constitution**. Read it. Pin it in Cursor. Obey it._
 
 ---
 
-## 0  Non‑negotiables (read before you code a single line)
+## 0  Non‑negotiables (read before you code a single line)
 
 1. **Every file lives inside** `custom_components/wiim/` – this is ★the only★ directory you may touch.
-   ✦ *Never* modify `homeassistant/` core folders.
-   ✦ *Never* import private HA internals.
-2. **Follow this guide line‑by‑line.** Deviations require an Issue + signed‑off design note from the Tech Lead.
-3. **If you are confused, STOP** → ask in GitHub Discussion. Guessing = bugs + rework.
+   ✦  *Never* modify `homeassistant/` core folders.
+   ✦  *Never* import private HA internals.
+2. **Follow this guide line‑by‑line.** Deviations require an Issue + signed‑off design note from the Tech  Lead.
+3. **If you are confused, STOP** → ask in  GitHub  Discussion. Guessing = bugs + rework.
 
 ---
 
-## 1  Golden Rules
+## 1  Golden Rules
 
 0. **Spec > Ego** – build only what the ticket describes.
-1. Home Assistant Dev Guidelines.
+1. Home  Assistant Dev  Guidelines.
 2. HACS repo standards & semantic versioning.
 3. LinkPlay API is canonical – WiiM quirks wrapped in code, never leak.
-4. Small, composable, typed modules (< 200 LOC).
-5. All work tracked (Issue → Branch → PR → Review).
+4. Small, composable, typed modules (aim for ≤ 300 LOC; CI warns above 300 and **fails at 400 LOC** – see "File-Size Limits" below).
+5. All work tracked (Issue →  Branch →  PR →  Review).
 6. Fail loudly with actionable log messages.
 
 ---
 
-## 2  Mental Checklist before writing code
+## 2  Mental Checklist before writing code
 
 Ask yourself **every time** you open a ticket:
 
@@ -36,12 +36,12 @@ Ask yourself **every time** you open a ticket:
 4. _How will I test success & failure?_ (unit + integration test)
 5. _How does this interact with multi‑room state?_
 6. _What happens if the device is offline?_ (timeouts, retries)
-7. _How will this appear in Home Assistant UI?_ (state, attributes, services)
+7. _How will this appear in Home  Assistant UI?_ (state, attributes, services)
    If any answer is fuzzy—stop and clarify.
 
 ---
 
-## 3  Directory & File Layout
+## 3  Directory & File Layout
 
 ```
 custom_components/
@@ -64,7 +64,7 @@ custom_components/
 
 ---
 
-## 4  Data Model (Pydantic v2)
+## 4  Data Model (Pydantic v2)
 
 ```python
 class PlayerStatus(BaseModel):
@@ -93,14 +93,14 @@ All API JSON → these models. No raw dicts past `api.py`.
 
 ---
 
-## 5  System Architecture & Flow
+## 5  System Architecture & Flow
 
 ```
 User → HA Service call
       ↓
 media_player.py
       ↓ (delegates)
-coordinator.py  ── poll every 5 s ──▶ api.py ──▶ device
+coordinator.py  ── poll every 5  s ──▶ api.py ──▶ device
       ↑                               ↑
       └──── cached data (PlayerStatus & DeviceInfo)
 ```
@@ -116,7 +116,7 @@ coordinator.py  ── poll every 5 s ──▶ api.py ──▶ device
 
 ---
 
-## 6  Implementation Playbook
+## 6  Implementation Playbook
 
 | Step                                      | File     | Code Skeleton |
 | ----------------------------------------- | -------- | ------------- |
@@ -129,20 +129,20 @@ async def set_volume(self, vol: int): ...
 ```
 
 ````|
-| Coordinator | `coordinator.py` | subclass `DataUpdateCoordinator`; fetch + store `PlayerStatus` every 5 s |
+| Coordinator | `coordinator.py` | subclass `DataUpdateCoordinator`; fetch + store `PlayerStatus` every 5  s |
 | Entity | `media_player.py` | use coordinator data, implement `async_set_volume_level` etc. |
 | Services | `services.yaml` + handler in `__init__.py` | `wiim.play_preset`, `wiim.join_group` |
 | Options Flow | `config_flow.py` | HTTPS toggle, polling interval |
 
 ---
-## 7  Testing Strategy
+## 7  Testing Strategy
 1. **Unit:** Mock HTTP with `respx`. Use snapshot JSONs for each device model.
 2. **Integration:** Use HA test harness. Assert entity state & services.
 3. **Group tests:** spin up two mocked devices; test join + kick + computed group volume.
-4. Coverage ≥ 90 %.
+4. Coverage ≥  90  %.
 
 ---
-## 8  CI Pipeline (GitHub Actions)
+## 8  CI Pipeline (GitHub  Actions)
 ```yaml
 jobs:
   lint-test:
@@ -157,38 +157,52 @@ jobs:
     needs: lint-test
     if: startsWith(github.ref, 'refs/tags/')
     uses: hacs/action@v2
-````
+```
 
 ---
 
-## 9  Contributor PR Checklist (template)
+## 9  Contributor PR Checklist (template)
 
 - [ ] Code confined to `custom_components/wiim/`
 - [ ] Fulfils Issue #\_\_ ✅
 - [ ] Added/updated unit + integration tests
-- [ ] passes `pre‑commit` & coverage ≥ 90 %
+- [ ] passes `pre‑commit` & coverage ≥  90  %
 - [ ] Docs/changelog updated
 - [ ] Tested on **real device** (model & firmware listed)
 
 ---
 
-## 10  Common Pitfalls
+## 10  Common Pitfalls
 
 | Symptom                                                                 | Root Cause                  | Fix                                                        |
 | ----------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------- |
 | Accidentally imported `homeassistant.components.media_player` internals | Breaking core encapsulation | Refactor to use public helpers only.                       |
-| Cursor suggests editing `ha/core`                                       | File outside Wiim dir       | Reject suggestion, remind Cursor of rule #0.               |
+| Cursor suggests editing `ha/core`                                       | File outside Wiim dir       | Reject suggestion, remind Cursor of rule #0.               |
 | Group slider only moves host                                            | Missing service loop        | Implement `set_group_volume` helper.                       |
 | JSON decode error                                                       | Field hex‑encoded           | Use `bytes.fromhex().decode()` to parse `Title`, `Artist`. |
 
 ---
 
-## 11  When in doubt
+## 11  When in doubt
 
 1. Re‑read this file 🤬.
-2. Open GitHub Discussion with “QUESTION:” prefix.
+2. Open GitHub Discussion with "QUESTION:" prefix.
 3. Wait for sign‑off **before** coding.
 
 ---
 
 ### End of Rules
+
+---
+
+## File-Size Limits 📏
+
+Keeping files short makes reviews, merge conflict resolution and unit-testing far easier. Instead of a hard 200 LOC ceiling we now use a **soft limit / hard limit** model:
+
+* **≤ 300 LOC**   – sweet spot; no action required.
+* **301-400 LOC** – CI issues a *warning* (`ruff-size-check` job). Please split unless there is a strong justification.
+* **> 400 LOC**    – CI **fails**. Add a `# pragma: allow-long-file <issue-or-pr-id>` header *and* explain in the PR description why the file must stay large.
+
+"Lines of code" are counted after stripping blank lines, comments and imports so documentation doesn't penalise you.  The rule enforces the spirit (single-responsibility, easy review) rather than an arbitrary number.
+
+---

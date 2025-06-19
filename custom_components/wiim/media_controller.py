@@ -32,6 +32,11 @@ from .const import (
     PRESET_SLOTS_KEY,
 )
 
+from pathlib import Path
+
+# extracted helper
+from .media_image_cache import MediaImageCache
+
 if TYPE_CHECKING:
     from .data import Speaker
 else:
@@ -84,11 +89,9 @@ class MediaPlayerController:
 
         Called when track metadata changes to ensure cover art updates.
         """
-        if self._media_image_url_cached or self._media_image_bytes:
-            self._logger.debug("Clearing media image cache for %s", self.speaker.name)
-            self._media_image_url_cached = None
-            self._media_image_bytes = None
-            self._media_image_content_type = None
+        # Delegate to helper cache now
+        self._image_cache._clear()  # type: ignore[attr-defined]
+        self._logger.debug("Cleared media image cache for %s", self.speaker.name)
 
     # ===== VOLUME CONTROL =====
 

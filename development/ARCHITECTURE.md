@@ -1,4 +1,4 @@
-# WiiM Integration Architecture Design 
+# WiiM Integration Architecture Design
 
 ## Overview
 
@@ -28,6 +28,16 @@ State changes flow through the system via events, avoiding tight coupling.
 ### 5. Defensive Programming
 
 All operations have graceful fallbacks and error handling.
+
+### 6. File Size Policy (Soft-/Hard-Limit)
+
+To keep modules focused and reviews short we aim for **≤ 300 LOC** per file (excluding comments, blank lines and imports).
+
+* 301-400 LOC → CI issues a size-warning; please consider splitting.
+* > 400 LOC   → CI fails unless the file begins with `# pragma: allow-long-file <issue>` **and** the PR description justifies why the code cannot be split.
+  >
+
+This mirrors the updated cursor_rules.md guidance and will be enforced by the `ruff-size-check` job in GitHub Actions.
 
 ## Design Decisions & Exclusions
 
@@ -404,7 +414,6 @@ wiim/
 │       └── conftest.py
 ```
 
-
 This architecture provides:
 ✅ **Clear separation** without over-engineering
 ✅ **Testable components** with practical boundaries
@@ -414,4 +423,3 @@ This architecture provides:
 ✅ **Automatic discovery** for missing group devices
 ✅ **Fast implementation** with minimal abstraction
 ✅ **Easy debugging** with centralized logic and simple lookups
-
