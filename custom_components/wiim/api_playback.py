@@ -82,6 +82,12 @@ class PlaybackAPI:  # pylint: disable=too-few-public-methods
         )
         await self._request(f"{API_ENDPOINT_POWER}{1 if power else 0}")  # type: ignore[attr-defined]
 
+    async def toggle_power(self) -> None:  # type: ignore[override]
+        """Toggle power state using set_power helper."""
+        status = await self.get_status()  # type: ignore[attr-defined]
+        power = status.get("power", False)
+        await self.set_power(not power)
+
     # ------------------------------------------------------------------
     # Repeat / shuffle with validation & logging ------------------------
     # ------------------------------------------------------------------
