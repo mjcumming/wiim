@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .api_base import WiiMError
+from .api_base import WiiMError, _LOGGER
 from .const import (
     API_ENDPOINT_CLEAR_PLAYLIST,
     API_ENDPOINT_MUTE,
@@ -23,6 +23,12 @@ from .const import (
     API_ENDPOINT_SOURCES,
     API_ENDPOINT_STOP,
     API_ENDPOINT_VOLUME,
+    API_ENDPOINT_POWER,
+    PLAY_MODE_NORMAL,
+    PLAY_MODE_REPEAT_ALL,
+    PLAY_MODE_REPEAT_ONE,
+    PLAY_MODE_SHUFFLE,
+    PLAY_MODE_SHUFFLE_REPEAT_ALL,
 )
 
 
@@ -60,14 +66,51 @@ class PlaybackAPI:  # pylint: disable=too-few-public-methods
         await self._request(f"{API_ENDPOINT_MUTE}{1 if mute else 0}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
-    # Repeat / shuffle --------------------------------------------------
+    # Power (deprecated) ------------------------------------------------
+    # ------------------------------------------------------------------
+
+    async def set_power(self, power: bool) -> None:  # type: ignore[override]
+        """Set the power state (deprecated & unreliable).
+
+        This mirrors the legacy helper so existing callers keep working, but
+        still emits the deprecation warning every time.
+        """
+        _LOGGER.warning(
+            "Power control is deprecated and unreliable on WiiM devices. "
+            "Use physical power buttons or smart switches instead. Host: %s",
+            self.host,  # type: ignore[attr-defined]
+        )
+        await self._request(f"{API_ENDPOINT_POWER}{1 if power else 0}")  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------
+    # Repeat / shuffle with validation & logging ------------------------
     # ------------------------------------------------------------------
 
     async def set_repeat_mode(self, mode: str) -> None:  # type: ignore[override]
-        await self._request(f"{API_ENDPOINT_REPEAT}{mode}")  # type: ignore[attr-defined]
+        _LOGGER.debug("🔁 API set_repeat_mode called with mode='%s' for %s", mode, self.host)  # type: ignore[attr-defined]
+        if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE):
+            _LOGGER.error("🔁 Invalid repeat mode: %s", mode)
+            raise ValueError(f"Invalid repeat mode: {mode}")
+
+        endpoint_url = f"{API_ENDPOINT_REPEAT}{mode}"
+        try:
+            await self._request(endpoint_url)  # type: ignore[attr-defined]
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.error("🔁 HTTP request failed for repeat mode: %s", err)
+            raise
 
     async def set_shuffle_mode(self, mode: str) -> None:  # type: ignore[override]
-        await self._request(f"{API_ENDPOINT_SHUFFLE}{mode}")  # type: ignore[attr-defined]
+        _LOGGER.debug("🔀 API set_shuffle_mode called with mode='%s' for %s", mode, self.host)  # type: ignore[attr-defined]
+        if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_SHUFFLE, PLAY_MODE_SHUFFLE_REPEAT_ALL):
+            _LOGGER.error("🔀 Invalid shuffle mode: %s", mode)
+            raise ValueError(f"Invalid shuffle mode: {mode}")
+
+        endpoint_url = f"{API_ENDPOINT_SHUFFLE}{mode}"
+        try:
+            await self._request(endpoint_url)  # type: ignore[attr-defined]
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.error("🔀 HTTP request failed for shuffle mode: %s", err)
+            raise
 
     # ------------------------------------------------------------------
     # Seek / clear ------------------------------------------------------
