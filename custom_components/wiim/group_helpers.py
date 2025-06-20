@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Iterable, List
+from collections.abc import Iterable
 
 from .data import Speaker
 
@@ -44,7 +44,7 @@ def all_muted(speakers: Iterable[Speaker]) -> bool | None:
 # Async helpers (network I/O via WiiM API)
 # ---------------------------------------------------------------------------
 
-async def async_set_group_volume(master: Speaker, members: List[Speaker], volume: float) -> None:
+async def async_set_group_volume(master: Speaker, members: list[Speaker], volume: float) -> None:
     """Set *volume* on master plus *members* concurrently."""
 
     _LOGGER.debug("Group-volume %.2f on %s + %d slaves", volume, master.name, len(members))
@@ -60,7 +60,7 @@ async def async_set_group_volume(master: Speaker, members: List[Speaker], volume
         _LOGGER.debug("%d/%d volume requests failed (group)", len(failures), len(results))
 
 
-async def async_set_group_mute(master: Speaker, members: List[Speaker], mute: bool) -> None:
+async def async_set_group_mute(master: Speaker, members: list[Speaker], mute: bool) -> None:
     """Mute/unmute entire group concurrently."""
 
     _LOGGER.debug("Group-mute=%s on %s + %d slaves", mute, master.name, len(members))
@@ -73,4 +73,4 @@ async def async_set_group_mute(master: Speaker, members: List[Speaker], mute: bo
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failures = [r for r in results if isinstance(r, Exception)]
     if failures:
-        _LOGGER.debug("%d/%d mute requests failed (group)", len(failures), len(results)) 
+        _LOGGER.debug("%d/%d mute requests failed (group)", len(failures), len(results))

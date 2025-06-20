@@ -16,7 +16,7 @@ and complex media player business logic.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.exceptions import HomeAssistantError
@@ -32,10 +32,7 @@ from .const import (
     PRESET_SLOTS_KEY,
 )
 
-from pathlib import Path
-
 # extracted helper
-from .media_image_cache import MediaImageCache
 
 if TYPE_CHECKING:
     from .data import Speaker
@@ -850,12 +847,14 @@ class MediaPlayerController:
             # run-time – fall back to 6 for older firmwares that do not
             # expose the ``preset_key`` field.
             max_slots: int = 6
-            if self.speaker.coordinator.data:
-                device_info = self.speaker.coordinator.data.get("device_info", {})
-                try:
-                    max_slots = int(device_info.get(PRESET_SLOTS_KEY, max_slots))
-                except (TypeError, ValueError):
-                    pass
+            device_model = self.speaker.coordinator.data.get("device_model") if self.speaker.coordinator.data else None
+            device_info: dict[str, Any] = (
+                device_model.model_dump(exclude_none=True) if hasattr(device_model, "model_dump") else {}
+            )
+            try:
+                max_slots = int(device_info.get(PRESET_SLOTS_KEY, max_slots))
+            except (TypeError, ValueError):
+                pass
 
             if not 1 <= preset <= max_slots:
                 raise ValueError(

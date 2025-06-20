@@ -8,10 +8,11 @@ requiring the shared aiohttp client session via `hass`.
 from __future__ import annotations
 
 import logging
-import asyncio
-from typing import Tuple, Any
+from ssl import SSLContext
+from typing import Any
 
 import aiohttp
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,7 +30,13 @@ class MediaImageCache:
         self._cached_bytes: bytes | None = None
         self._cached_content_type: str | None = None
 
-    async def fetch(self, hass, url: str, *, ssl_context) -> Tuple[bytes | None, str | None]:
+    async def fetch(
+        self,
+        hass: HomeAssistant,
+        url: str,
+        *,
+        ssl_context: SSLContext | None = None,
+    ) -> tuple[bytes | None, str | None]:
         """Return (bytes, content_type) for *url* or (None, None) on failure.
 
         The helper remembers the last successful image so repeated UI refreshes
@@ -77,7 +84,7 @@ class MediaImageCache:
                 self._cached_content_type = ctype
 
                 return data, ctype
-        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+        except (TimeoutError, aiohttp.ClientError) as err:
             _LOGGER.debug("Network error fetching image %s: %s", url, err)
         except Exception as err:  # pragma: no cover – safety net
             _LOGGER.debug("Unexpected error fetching image %s: %s", url, err)
@@ -92,4 +99,4 @@ class MediaImageCache:
     def _clear(self) -> None:
         self._cached_url = None
         self._cached_bytes = None
-        self._cached_content_type = None 
+        self._cached_content_type = None

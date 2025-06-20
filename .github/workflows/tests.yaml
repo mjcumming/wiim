@@ -48,6 +48,14 @@ jobs:
         run: |
           flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
 
+      - name: Enforce file size limits
+        run: |
+          python scripts/ruff_size_check.py custom_components/wiim 300 400
+
+      - name: Type check with mypy (strict)
+        run: |
+          mypy --strict custom_components/wiim
+
       - name: Test with pytest
         run: |
           pytest tests/ --cov=custom_components/wiim --cov-report=xml

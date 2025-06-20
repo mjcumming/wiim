@@ -39,6 +39,7 @@ import aiohttp
 import async_timeout
 from aiohttp import ClientSession
 
+# Pydantic models (optional validation layer)
 from .const import (
     API_ENDPOINT_CLEAR_PLAYLIST,
     API_ENDPOINT_EQ_CUSTOM,
@@ -83,11 +84,7 @@ from .const import (
     PLAY_MODE_SHUFFLE,
     PLAY_MODE_SHUFFLE_REPEAT_ALL,
 )
-
-# Pydantic models (optional validation layer)
-from pydantic import ValidationError
-
-from .models import PlayerStatus, DeviceInfo
+from .models import DeviceInfo, PlayerStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -914,15 +911,6 @@ class WiiMClient:
             device_info = await self._request(API_ENDPOINT_STATUS)
             _LOGGER.debug("Raw getStatusEx response for %s: %s", self.host, device_info)
 
-            # Optional Pydantic validation
-            try:
-                model_obj: DeviceInfo | None = DeviceInfo.model_validate(device_info)
-            except ValidationError as err:
-                _LOGGER.debug("DeviceInfo validation failed on %s: %s", self.host, err.errors())
-                model_obj = None
-
-            device_info["_model"] = model_obj
-
             # Extract key group-related fields for debugging
             group_field = device_info.get("group")
             uuid_field = device_info.get("uuid")
@@ -1047,15 +1035,7 @@ class WiiMClient:
             raw = await self._request("/httpapi.asp?command=getPlayerStatusEx")
             _LOGGER.debug("Raw getPlayerStatusEx response: %s", raw)
 
-            # Optional: validate with Pydantic – failures are non-fatal in beta
-            try:
-                model_obj: PlayerStatus | None = PlayerStatus.model_validate(raw)
-            except ValidationError as err:
-                _LOGGER.debug("PlayerStatus validation failed on %s: %s", self.host, err.errors())
-                model_obj = None
-
             parsed = self._parse_player_status(raw)
-            parsed["_model"] = model_obj  # expose for typed callers
             return parsed
         except WiiMError as e:
             _LOGGER.error("Failed to get player status: %s", e)
@@ -1583,6 +1563,30 @@ class WiiMClient:
         This reflects the most recently successful communication endpoint.
         """
         return self._endpoint
+
+    # ------------------------------------------------------------------
+    # 🆕  Preferred typed access helpers  (internal migration aid)
+    # ------------------------------------------------------------------
+
+    async def get_device_info_model(self) -> DeviceInfo:
+        """Return `DeviceInfo` Pydantic object (preferred).
+
+        Internally re-uses ``get_device_info`` so we keep the existing
+        request/normalisation logic untouched while callers can move to a
+        fully-typed API.  The legacy dict variant will be deprecated once
+        all call-sites migrate.
+        """
+
+        info_dict = await self.get_device_info()
+
+        return DeviceInfo.model_validate(info_dict)
+
+    async def get_player_status_model(self) -> PlayerStatus:
+        """Return `PlayerStatus` Pydantic object (preferred)."""
+
+        status_dict = await self.get_player_status()
+
+        return PlayerStatus.model_validate(status_dict)
 
 
 def _hex_to_str(val: str | None) -> str | None:

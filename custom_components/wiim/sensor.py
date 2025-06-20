@@ -84,7 +84,7 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
         return role
 
     @property
-    def extra_state_attributes(self) -> dict[str, any]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return group-related information."""
         attrs = {
             "is_group_coordinator": self.speaker.is_group_coordinator,
@@ -137,10 +137,20 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
     # -------------------------- Helpers --------------------------
 
     def _status(self) -> dict[str, Any]:
-        return self.speaker.coordinator.data.get("status", {}) if self.speaker.coordinator.data else {}
+        """Return *status* payload as a plain dict extracted from the PlayerStatus model."""
+
+        if self.speaker.status_model is None:
+            return {}
+
+        return self.speaker.status_model.model_dump(exclude_none=True)
 
     def _device_info(self) -> dict[str, Any]:
-        return self.speaker.coordinator.data.get("device_info", {}) if self.speaker.coordinator.data else {}
+        """Return *device_info* payload as a plain dict extracted from the DeviceInfo model."""
+
+        if self.speaker.device_model is None:
+            return {}
+
+        return self.speaker.device_model.model_dump(exclude_none=True)
 
     def _multiroom(self) -> dict[str, Any]:
         return self.speaker.coordinator.data.get("multiroom", {}) if self.speaker.coordinator.data else {}
@@ -228,6 +238,7 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 # Utility helpers (local – simple, avoids polluting other modules)
 # -----------------------------------------------------------------------------
 
+# Converts a value to a boolean if possible, otherwise returns None.
 def _to_bool(val: Any) -> bool | None:  # noqa: D401
     if val is None:
         return None
@@ -236,11 +247,12 @@ def _to_bool(val: Any) -> bool | None:  # noqa: D401
     if isinstance(val, int | float):
         return bool(val)
     try:
-        return str(val).strip() in {"1", "true", "yes", "on"}
+        return str(val).strip().lower() in {"1", "true", "yes", "on"}
     except Exception:
         return None
 
 
+# Converts a value to an integer if possible, otherwise returns None.
 def _to_int(val: Any) -> int | None:  # noqa: D401
     try:
         return int(val)

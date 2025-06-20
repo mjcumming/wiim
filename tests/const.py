@@ -1,11 +1,12 @@
 """Constants for WiiM tests."""
 
 from custom_components.wiim.const import CONF_HOST
+from custom_components.wiim.models import DeviceInfo, PlayerStatus
 
 MOCK_CONFIG = {CONF_HOST: "192.168.1.100"}
 
 # Mock device data for testing
-MOCK_DEVICE_DATA = {
+_RAW_DEVICE_INFO = {
     "uuid": "FF31F09E1A5020113B0A3918",
     "DeviceName": "WiiM Mini",
     "device_name": "WiiM Mini",
@@ -14,14 +15,10 @@ MOCK_DEVICE_DATA = {
     "project": "UP2STREAM_MINI_V3",
     "MAC": "00:22:6C:33:D4:AD",
     "ip": "192.168.1.100",
-    "vol": "50",
-    "mute": "0",
-    "status": "stop",
-    "mode": "0",
+    "wmrm_version": "1.32",
 }
 
-# Mock status response
-MOCK_STATUS_RESPONSE = {
+_RAW_STATUS = {
     "type": "0",
     "ch": "0",
     "mode": "0",
@@ -35,6 +32,13 @@ MOCK_STATUS_RESPONSE = {
     "Album": "",
     "vol": "50",
     "mute": "0",
-    "device_name": "WiiM Mini",
     "DeviceName": "WiiM Mini",
 }
+
+# Expose typed model instances for tests
+MOCK_DEVICE_MODEL: DeviceInfo = DeviceInfo.model_validate(_RAW_DEVICE_INFO)
+MOCK_STATUS_MODEL: PlayerStatus = PlayerStatus.model_validate(_RAW_STATUS)
+
+# Keep raw dicts for fixtures that still need them temporarily
+MOCK_DEVICE_DATA = _RAW_DEVICE_INFO
+MOCK_STATUS_RESPONSE = _RAW_STATUS

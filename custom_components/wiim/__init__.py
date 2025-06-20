@@ -1,6 +1,41 @@
 """WiiM Media Player integration for Home Assistant."""
 
+# ---------------------------------------------------------------------------
+# Test Environment Compatibility Shim
+# ---------------------------------------------------------------------------
+# When running unit tests outside of Home Assistant, the real "homeassistant"
+# package is typically not installed.  Attempting to import it will therefore
+# raise a ``ModuleNotFoundError`` long before pytest fixtures have a chance to
+# insert the stub package.  To make the component self-contained for testing we
+# fall back to the lightweight stubs located under the top-level *stubs/*
+# directory whenever the import fails.  This keeps the production codepath
+# untouched while allowing `pytest` to execute in a vanilla virtualenv.
+#
+# ``stubs/homeassistant/__init__.py`` intentionally registers **itself** and
+# all of the sub-modules the integration relies on into ``sys.modules``.  Once
+# that module has been imported exactly once, subsequent ``import homeassistant``
+# statements throughout the codebase succeed transparently.
+# ---------------------------------------------------------------------------
+
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+try:
+    import homeassistant  # noqa: F401 – try real package first
+except ModuleNotFoundError:  # pragma: no cover – only executed in test env
+    # Add <repo-root>/stubs to ``sys.path`` and retry the import.  We cannot
+    # rely on relative imports here because the integration may live two or
+    # more levels deep inside *custom_components/*.
+    repo_root = Path(__file__).resolve().parents[2]
+    stubs_path = repo_root / "stubs"
+    sys.path.append(str(stubs_path))
+
+    # Import the stub package which will register itself in ``sys.modules``.
+    import importlib
+
+    importlib.import_module("homeassistant")
 
 import logging
 

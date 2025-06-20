@@ -423,3 +423,13 @@ This architecture provides:
 ✅ **Automatic discovery** for missing group devices
 ✅ **Fast implementation** with minimal abstraction
 ✅ **Easy debugging** with centralized logic and simple lookups
+
+## v2.1 Typed Data-Flow
+
+All API payloads are now parsed into Pydantic models at the edge:
+
+1. `api.py` fetch -> `DeviceInfo` / `PlayerStatus`
+2. `coordinator_polling` enriches -> `TrackMetadata`, `EQInfo`, `PollingMetrics`
+3. Coordinator exposes **only models** via `.data` (legacy dict keys removed)
+
+Helper modules are capped at 300 LOC for clarity.

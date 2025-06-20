@@ -21,19 +21,23 @@ This follows cursor rules: simple, composable, < 200 LOC modules.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
+from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo as HADeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import DOMAIN
+from .models import DeviceInfo as WiiMDeviceInfo
+from .models import PlayerStatus
 
 if TYPE_CHECKING:
     from .coordinator import WiiMCoordinator
+    from .models import DeviceInfo as WiiMDeviceInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,7 +82,7 @@ class Speaker:
         self.coordinator_speaker: Speaker | None = None
 
         # HA integration
-        self.device_info: DeviceInfo | None = None
+        self.device_info: HADeviceInfo | None = None
         self._available: bool = True
 
         # Media tracking
@@ -134,7 +138,10 @@ class Speaker:
 
     def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+        status_model = (self.coordinator.data.get("status_model") if self.coordinator and self.coordinator.data else None)
+        status: dict[str, Any] = (
+            status_model.model_dump(exclude_none=True) if isinstance(status_model, PlayerStatus) else {}
+        )
 
         # Debug: Log available fields for device naming
         _LOGGER.debug(
@@ -178,7 +185,7 @@ class Speaker:
         )
 
         # Store DeviceInfo for entities
-        self.device_info = DeviceInfo(
+        self.device_info = HADeviceInfo(
             identifiers=identifiers,
             manufacturer="WiiM",
             name=self.name,
@@ -186,13 +193,20 @@ class Speaker:
             sw_version=self.firmware,
         )
 
-    def update_from_coordinator_data(self, data: dict) -> None:
+    def update_from_coordinator_data(self, data: dict[str, Any]) -> None:
         """Update speaker state from coordinator data."""
         if not data:
             return
 
-        status = data.get("status", {})
-        device_info = data.get("device_info", {})
+        status_model = data.get("status_model")
+        device_model = data.get("device_model")
+
+        status: dict[str, Any] = (
+            status_model.model_dump(exclude_none=True) if isinstance(status_model, PlayerStatus) else {}
+        )
+        device_info: dict[str, Any] = (
+            device_model.model_dump(exclude_none=True) if isinstance(device_model, WiiMDeviceInfo) else {}
+        )
         role = data.get("role", "solo")
 
         # Update basic device info
@@ -236,7 +250,7 @@ class Speaker:
         # Notify entities if significant changes
         self.async_write_entity_states()
 
-    def _update_master_group_state(self, multiroom: dict) -> None:
+    def _update_master_group_state(self, multiroom: dict[str, Any]) -> None:
         """Update group state for master speakers using simple lookups."""
         slave_list = multiroom.get("slave_list", [])
         self.coordinator_speaker = None  # Masters don't have coordinators
@@ -333,7 +347,7 @@ class Speaker:
             return None
         return ":".join(clean_mac[i : i + 2] for i in range(0, 12, 2))
 
-    def _extract_device_name(self, status: dict) -> str:
+    def _extract_device_name(self, status: dict[str, Any]) -> str:
         """Extract device name from status data with fallback logic.
 
         This is the SINGLE SOURCE OF TRUTH for device name extraction.
@@ -460,20 +474,16 @@ class Speaker:
 
     def get_volume_level(self) -> float | None:
         """Return current volume as a float 0…1."""
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
-        vol_raw = status.get("vol") or status.get("volume")
-        try:
-            vol_int = int(vol_raw)
-            return max(0, min(vol_int, 100)) / 100.0
-        except (TypeError, ValueError):
+        if self.status_model is None or self.status_model.volume is None:
             return None
+        return max(0, min(int(self.status_model.volume), 100)) / 100.0
 
-    def get_playback_state(self):
+    def get_playback_state(self) -> MediaPlayerState:
         """Map WiiM play_status to Home Assistant MediaPlayerState."""
-        from homeassistant.components.media_player import MediaPlayerState
+        if self.status_model is None or self.status_model.play_state is None:
+            return MediaPlayerState.IDLE
 
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
-        play_status = (status.get("play_status") or status.get("status") or "").lower()
+        play_status = str(self.status_model.play_state)
 
         if play_status in ["play", "playing", "load"]:
             return MediaPlayerState.PLAYING
@@ -485,15 +495,18 @@ class Speaker:
         return MediaPlayerState.IDLE
 
     def is_volume_muted(self) -> bool | None:
-        """Return mute status based on coordinator status dict.
+        """Return *current* mute state derived from :class:`PlayerStatus`.
 
         Returns:
-            True  – muted
-            False – unmuted
-            None  – unknown / not reported
+            True   – muted
+            False  – un-muted
+            None   – value not reported yet
         """
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
-        mute_val = status.get("mute") or status.get("muted")
+        if self.status_model is None:
+            return None
+
+        mute_val = self.status_model.mute if self.status_model else None
+
         if mute_val is None:
             return None
 
@@ -510,12 +523,14 @@ class Speaker:
 
     # ----- MEDIA METADATA HELPERS -----
 
-    def _status_field(self, *names: str):
-        """Return the first matching field from coordinator status dict."""
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
+    def _status_field(self, *names: str) -> Any:
+        """Return the first non-empty attribute from :class:`PlayerStatus`."""
+        if self.status_model is None:
+            return None
+
         for n in names:
-            val = status.get(n)
-            # Treat placeholder strings like "unknown" / "unknow" / "none" as missing
+            if hasattr(self.status_model, n):
+                val = getattr(self.status_model, n)
             if isinstance(val, str) and val.strip().lower() in {"unknown", "unknow", "none"}:
                 continue
             if val not in (None, ""):
@@ -523,13 +538,22 @@ class Speaker:
         return None
 
     def get_media_title(self) -> str | None:
-        return self._status_field("title")
+        val = self._status_field("title")
+        if isinstance(val, str):
+            return val
+        return None
 
     def get_media_artist(self) -> str | None:
-        return self._status_field("artist")
+        val = self._status_field("artist")
+        if isinstance(val, str):
+            return val
+        return None
 
     def get_media_album(self) -> str | None:
-        return self._status_field("album", "album_name")
+        val = self._status_field("album", "album_name")
+        if isinstance(val, str):
+            return val
+        return None
 
     def get_media_duration(self) -> int | None:
         duration = self._status_field("duration")
@@ -562,8 +586,11 @@ class Speaker:
 
     def get_current_source(self) -> str | None:
         """Return user-friendly current source name."""
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
-        source_internal = status.get("source") or status.get("mode")
+        if self.status_model is None:
+            return None
+
+        source_internal = self.status_model.source or getattr(self.status_model, "mode", None)
+
         if not source_internal:
             return None
         try:
@@ -573,48 +600,94 @@ class Speaker:
             return str(source_internal)
 
     def get_shuffle_state(self) -> bool | None:
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
-        shuffle_val = status.get("shuffle") or status.get("play_mode") or status.get("playmode")
-        # Some firmwares report explicit shuffle bool, others encode into play_mode.
+        """Return True if shuffle is active, False if off, None if unknown."""
+        # Always rely on the Pydantic model – but guard against very early calls
+        # before the first coordinator refresh (tests or HA startup edge-cases).
+
+        if self.status_model is None:
+            return None
+
+        # Use the model exclusively from here on.
+        shuffle_val = (
+            self.status_model.shuffle
+            or self.status_model.play_mode
+        )
+
         if shuffle_val is None:
             return None
+
         if isinstance(shuffle_val, bool | int):
             return bool(int(shuffle_val))
-        # Handle string encodings
-        shuffle_val = str(shuffle_val).lower()
-        return shuffle_val in ["1", "true", "shuffle"]
+
+        shuffle_str = str(shuffle_val).strip().lower()
+        return shuffle_str in {"1", "true", "shuffle"}
 
     def get_repeat_mode(self) -> str | None:
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
-        repeat_val = status.get("repeat") or status.get("play_mode") or status.get("playmode")
+        """Return repeat mode: 'one', 'all' or 'off'."""
+        if self.status_model is None:
+            return None
+
+        repeat_val = (
+            self.status_model.repeat
+            or self.status_model.play_mode
+        )
+
         if repeat_val is None:
             return None
-        # Map to HA repeat mode semantics
-        repeat_val = str(repeat_val).lower()
-        if repeat_val in ["one", "single", "repeat_one", "repeatone", "2"]:
+
+        repeat_str = str(repeat_val).strip().lower()
+        if repeat_str in {"one", "single", "repeat_one", "repeatone", "2"}:
             return "one"
-        if repeat_val in ["all", "repeat_all", "repeatall", "1"]:
+        if repeat_str in {"all", "repeat_all", "repeatall", "1"}:
             return "all"
         return "off"
 
     def get_sound_mode(self) -> str | None:
-        status = self.coordinator.data.get("status", {}) if self.coordinator.data else {}
-        eq_preset = status.get("eq_preset") or status.get("eq")
+        """Return current EQ preset name suitable for display."""
+        if self.status_model is None:
+            return None
+
+        eq_preset: str | None = self.status_model.eq_preset
+
         if not eq_preset:
             return None
-        # Map internal key to display name if available.
+
         try:
-            from .media_controller import EQ_PRESET_MAP
-            return EQ_PRESET_MAP.get(eq_preset, eq_preset.title())
+            from .const import EQ_PRESET_MAP
+            return EQ_PRESET_MAP.get(str(eq_preset).lower(), str(eq_preset).title())
         except Exception:
             return str(eq_preset).title()
+
+    # ==========================================================
+    # NEW – TYPED MODEL SHORTCUTS (Pydantic)
+    # ==========================================================
+
+    @property
+    def status_model(self) -> PlayerStatus | None:  # noqa: D401
+        """Return the typed PlayerStatus model injected by the coordinator."""
+
+        if self.coordinator and self.coordinator.data:
+            raw = self.coordinator.data.get("status_model")
+            if isinstance(raw, PlayerStatus):
+                return raw
+        return None
+
+    @property
+    def device_model(self) -> WiiMDeviceInfo | None:  # noqa: D401
+        """Return the typed DeviceInfo model injected by the coordinator."""
+
+        if self.coordinator and self.coordinator.data:
+            raw = self.coordinator.data.get("device_model")
+            if isinstance(raw, WiiMDeviceInfo):
+                return raw
+        return None
 
 
 # Simplified helper functions replacing complex registry
 def get_speaker_from_config_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> Speaker:
     """Get speaker from config entry - standard HA pattern."""
     try:
-        return hass.data[DOMAIN][config_entry.entry_id]["speaker"]
+        return cast(Speaker, hass.data[DOMAIN][config_entry.entry_id]["speaker"])
     except KeyError as err:
         _LOGGER.error("Speaker not found for config entry %s: %s", config_entry.entry_id, err)
         raise RuntimeError(f"Speaker not found for {config_entry.entry_id}") from err

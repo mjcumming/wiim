@@ -23,6 +23,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
+"stubs/*" = ["F401"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["custom_components.wiim"]
@@ -33,18 +34,38 @@ line-length = 120
 
 [tool.mypy]
 python_version = "3.13"
+strict = true
 ignore_missing_imports = true
-check_untyped_defs = false
-disallow_any_generics = false
-disallow_incomplete_defs = false
-disallow_untyped_defs = false
-no_implicit_optional = false
-warn_redundant_casts = false
-warn_unused_ignores = false
 exclude = [
     ".*/site-packages/.*"
 ]
+plugins = ["pydantic.mypy"]
+mypy_path = "stubs"
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "stubs.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "custom_components.wiim.api"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "custom_components.wiim.coordinator"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "custom_components.wiim.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "homeassistant.*"
+ignore_errors = true

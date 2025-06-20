@@ -202,8 +202,8 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         if not self.speaker.coordinator.data:
             return None
 
-        status = self.speaker.coordinator.data.get("status", {})
-        return status.get("eq_enabled", False)
+        eq_info = self.speaker.coordinator.data.get("eq", {})
+        return bool(eq_info.get("enabled", False))
 
     async def async_turn_on(self, **kwargs) -> None:
         """Enable the equalizer.
@@ -236,7 +236,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
             raise
 
     @property
-    def extra_state_attributes(self) -> dict[str, any]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return equalizer-related information."""
         if not self.speaker.coordinator.data:
             return {"eq_supported": False, "current_preset": None, "available_presets": []}

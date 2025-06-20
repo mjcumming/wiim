@@ -180,18 +180,10 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # Add conditional features based on device capabilities
         try:
-            # Check if device supports seeking (most modern WiiM devices do)
-            status = self.speaker.coordinator.data.get("status", {}) if self.speaker.coordinator.data else {}
 
-            # Enable seek if device reports duration/position or is playing streaming content
-            if (
-                status.get("duration") is not None
-                or status.get("position") is not None
-                or status.get("source") in ["spotify", "tidal", "qobuz", "amazon", "network"]
-            ):
-                features |= MediaPlayerEntityFeature.SEEK
+            # TODO: Re-enable SEEK once behaviour confirmed with typed model only
 
-            # Enable play_media for URL/stream playback (all WiiM devices support this)
+            # Enable play_media universally (URL/stream support)
             features |= MediaPlayerEntityFeature.PLAY_MEDIA
 
         except Exception as err:
@@ -863,20 +855,19 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         This maps internal source codes to user-friendly streaming service names.
         """
-        if not self.speaker.coordinator.data:
-            return None
+        status_model = self.speaker.status_model
 
-        status = self.speaker.coordinator.data.get("status", {})
+        if status_model is None:
+            return None  # Typed model always expected in new architecture
+
+        source = status_model.source
+        streaming_service = getattr(status_model, "streaming_service", None)
 
         # First try explicit streaming service field
-        streaming_service = status.get("streaming_service")
-        if streaming_service and self._is_valid_app_name(streaming_service):
-            return streaming_service
+        if streaming_service and self._is_valid_app_name(str(streaming_service)):
+            return str(streaming_service)
 
-        # Fallback to source mapping for streaming services
-        source = status.get("source")
-        if source and self._is_valid_app_name(source):
-            # Map known streaming services to friendly names
+        if source and self._is_valid_app_name(str(source)):
             streaming_map = {
                 "spotify": "Spotify",
                 "tidal": "Tidal",
@@ -886,12 +877,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 "airplay": "AirPlay",
                 "dlna": "DLNA",
             }
+            src_lower = str(source).lower()
+            return streaming_map.get(src_lower)
 
-            source_lower = source.lower()
-            if source_lower in streaming_map:
-                return streaming_map[source_lower]
-
-        # Return None instead of garbage - this will hide the field
         return None
 
     def _is_valid_app_name(self, text: str) -> bool:

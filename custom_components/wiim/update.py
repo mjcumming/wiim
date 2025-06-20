@@ -9,7 +9,6 @@ a new release, issuing a normal `reboot` starts the update process. Therefore
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.update import (
     UpdateDeviceClass,
@@ -20,7 +19,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import FIRMWARE_KEY, LATEST_VERSION_KEY, UPDATE_AVAILABLE_KEY
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
@@ -54,18 +52,21 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
 
     @property
     def installed_version(self) -> str | None:  # type: ignore[override]
-        info: dict[str, Any] = self.speaker.coordinator.data.get("device_info", {})
-        return info.get(FIRMWARE_KEY)
+        if self.speaker.device_model is None:
+            return None
+        return getattr(self.speaker.device_model, "firmware", None)
 
     @property
     def latest_version(self) -> str | None:  # type: ignore[override]
-        info: dict[str, Any] = self.speaker.coordinator.data.get("device_info", {})
-        return info.get(LATEST_VERSION_KEY)
+        if self.speaker.device_model is None:
+            return None
+        return getattr(self.speaker.device_model, "latest_version", None)
 
     @property
     def available(self) -> bool:  # type: ignore[override]
-        info: dict[str, Any] = self.speaker.coordinator.data.get("device_info", {})
-        return bool(info.get(UPDATE_AVAILABLE_KEY))
+        if self.speaker.device_model is None:
+            return False
+        return bool(getattr(self.speaker.device_model, "version_update", False))
 
     # ------------- Optional actions -------------
 
