@@ -86,6 +86,30 @@ class DeviceAPI:  # pylint: disable=too-few-public-methods
         return self.host  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
+    # Device & connection status ---------------------------------------
+    # ------------------------------------------------------------------
+
+    async def get_status(self) -> dict[str, Any]:  # type: ignore[override]
+        """Return the current *device* status via getStatusEx.
+
+        This mirrors the legacy implementation that lives in ``api_base`` so we
+        can start slimming down that file.  The raw payload is passed through
+        ``_parse_player_status`` because the WiiM HTTP API re-uses many of the
+        same field names for both endpoints and the existing normalisation
+        logic already handles the superset we care about.
+        """
+        raw = await self._request(API_ENDPOINT_STATUS)  # type: ignore[attr-defined]
+        return self._parse_player_status(raw)  # type: ignore[attr-defined]
+
+    async def validate_connection(self) -> bool:  # type: ignore[override]
+        """Light-weight reachability probe for config-flow discovery."""
+        try:
+            await self.get_player_status()  # type: ignore[attr-defined]
+            return True
+        except WiiMError:  # type: ignore[misc]
+            return False
+
+    # ------------------------------------------------------------------
     # Helper wrappers to piggy-back on api_base logging -----------------
     # ------------------------------------------------------------------
 
