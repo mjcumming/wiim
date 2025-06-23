@@ -22,6 +22,8 @@ from .api_base import (
 
 # Order is important: mixins first, legacy client last so their `__init__` is called
 # exactly once via Python's MRO.
+# Phase-1 refactor: only DeviceAPI mixin extracted so far.
+# mixins included so far
 from .api_device import DeviceAPI
 from .api_diag import DiagnosticsAPI
 from .api_eq import EQAPI
@@ -29,16 +31,17 @@ from .api_group import GroupAPI
 from .api_playback import PlaybackAPI
 from .api_preset import PresetAPI
 
+# Placeholder imports for future mixins (not yet implemented).
+# from .api_group import GroupAPI        # noqa: ERA001
+# from .api_eq import EQAPI             # noqa: ERA001
+# from .api_preset import PresetAPI     # noqa: ERA001
+# from .api_diag import DiagnosticsAPI   # noqa: ERA001
 
-class WiiMClient(
-    DeviceAPI,
-    PlaybackAPI,
-    GroupAPI,
-    EQAPI,
-    PresetAPI,
-    DiagnosticsAPI,
-    _LegacyClient,
-):
+
+# TODO: add the remaining mixins once extracted.
+
+
+class WiiMClient(DeviceAPI, PlaybackAPI, EQAPI, GroupAPI, PresetAPI, DiagnosticsAPI, _LegacyClient):
     """Aggregated WiiM HTTP API client – modular in the future, legacy compatible today."""
 
     # No additional code – all behaviour lives in the mixins or the legacy client.

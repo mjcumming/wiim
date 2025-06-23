@@ -1,10 +1,17 @@
 """Global fixtures for WiiM integration."""
 
+# Ensure the stubbed Home Assistant package is importable before any test modules
+import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
+STUBS_DIR = Path(__file__).resolve().parents[1] / "stubs"
+if str(STUBS_DIR) not in sys.path:
+    sys.path.insert(0, str(STUBS_DIR))
+
+from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE  # noqa: E402
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 

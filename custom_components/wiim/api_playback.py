@@ -1,29 +1,32 @@
-"""Playback & source control helpers (stub).
+"""Playback and volume helpers for WiiM HTTP client.
 
-Future PRs will migrate play/pause/seek/volume/* etc. from the legacy client
-into this mixin while keeping signatures identical.
+All networking (`_request`) and logging (`_log` via api_base) are supplied by
+``api_base.WiiMClient``.  This mix-in must therefore be inherited **before** the
+base client in the final MRO.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
+from urllib.parse import quote
 
-from .api_base import WiiMError, _LOGGER
 from .const import (
     API_ENDPOINT_CLEAR_PLAYLIST,
     API_ENDPOINT_MUTE,
     API_ENDPOINT_NEXT,
     API_ENDPOINT_PAUSE,
     API_ENDPOINT_PLAY,
+    API_ENDPOINT_PLAY_M3U,
+    API_ENDPOINT_PLAY_PROMPT_URL,
+    API_ENDPOINT_PLAY_URL,
     API_ENDPOINT_PREV,
     API_ENDPOINT_REPEAT,
     API_ENDPOINT_SEEK,
     API_ENDPOINT_SHUFFLE,
-    API_ENDPOINT_SOURCE,
-    API_ENDPOINT_SOURCES,
     API_ENDPOINT_STOP,
     API_ENDPOINT_VOLUME,
-    API_ENDPOINT_POWER,
     PLAY_MODE_NORMAL,
     PLAY_MODE_REPEAT_ALL,
     PLAY_MODE_REPEAT_ONE,
@@ -31,12 +34,14 @@ from .const import (
     PLAY_MODE_SHUFFLE_REPEAT_ALL,
 )
 
+_LOGGER = logging.getLogger(__name__)
 
-class PlaybackAPI:  # pylint: disable=too-few-public-methods
-    """Playback & source control helpers – thin wrappers delegating to BaseClient."""
+
+class PlaybackAPI:  # mix-in – must be left of base client in MRO
+    """Transport-level playback controls (play, volume, seek, …)."""
 
     # ------------------------------------------------------------------
-    # Core transport wrappers ------------------------------------------
+    # Core transport helpers
     # ------------------------------------------------------------------
 
     async def play(self) -> None:  # type: ignore[override]
@@ -54,102 +59,88 @@ class PlaybackAPI:  # pylint: disable=too-few-public-methods
     async def previous_track(self) -> None:  # type: ignore[override]
         await self._request(API_ENDPOINT_PREV)  # type: ignore[attr-defined]
 
+    async def seek(self, position: int) -> None:  # type: ignore[override]
+        """Seek to *position* (seconds)."""
+        await self._request(f"{API_ENDPOINT_SEEK}{position}")  # type: ignore[attr-defined]
+
     # ------------------------------------------------------------------
-    # Volume / mute -----------------------------------------------------
+    # Volume / mute
     # ------------------------------------------------------------------
 
     async def set_volume(self, volume: float) -> None:  # type: ignore[override]
-        volume_pct = int(volume * 100)
-        await self._request(f"{API_ENDPOINT_VOLUME}{volume_pct}")  # type: ignore[attr-defined]
+        """Set absolute volume (0.0 – 1.0)."""
+        vol_pct = int(max(0.0, min(volume, 1.0)) * 100)
+        await self._request(f"{API_ENDPOINT_VOLUME}{vol_pct}")  # type: ignore[attr-defined]
 
     async def set_mute(self, mute: bool) -> None:  # type: ignore[override]
         await self._request(f"{API_ENDPOINT_MUTE}{1 if mute else 0}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
-    # Power (deprecated) ------------------------------------------------
-    # ------------------------------------------------------------------
-
-    async def set_power(self, power: bool) -> None:  # type: ignore[override]
-        """Set the power state (deprecated & unreliable).
-
-        This mirrors the legacy helper so existing callers keep working, but
-        still emits the deprecation warning every time.
-        """
-        _LOGGER.warning(
-            "Power control is deprecated and unreliable on WiiM devices. "
-            "Use physical power buttons or smart switches instead. Host: %s",
-            self.host,  # type: ignore[attr-defined]
-        )
-        await self._request(f"{API_ENDPOINT_POWER}{1 if power else 0}")  # type: ignore[attr-defined]
-
-    async def toggle_power(self) -> None:  # type: ignore[override]
-        """Toggle power state using set_power helper."""
-        status = await self.get_status()  # type: ignore[attr-defined]
-        power = status.get("power", False)
-        await self.set_power(not power)
-
-    # ------------------------------------------------------------------
-    # Repeat / shuffle with validation & logging ------------------------
+    # Play-mode / shuffle
     # ------------------------------------------------------------------
 
     async def set_repeat_mode(self, mode: str) -> None:  # type: ignore[override]
-        _LOGGER.debug("🔁 API set_repeat_mode called with mode='%s' for %s", mode, self.host)  # type: ignore[attr-defined]
         if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE):
-            _LOGGER.error("🔁 Invalid repeat mode: %s", mode)
             raise ValueError(f"Invalid repeat mode: {mode}")
-
-        endpoint_url = f"{API_ENDPOINT_REPEAT}{mode}"
-        try:
-            await self._request(endpoint_url)  # type: ignore[attr-defined]
-        except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.error("🔁 HTTP request failed for repeat mode: %s", err)
-            raise
+        await self._request(f"{API_ENDPOINT_REPEAT}{mode}")  # type: ignore[attr-defined]
 
     async def set_shuffle_mode(self, mode: str) -> None:  # type: ignore[override]
-        _LOGGER.debug("🔀 API set_shuffle_mode called with mode='%s' for %s", mode, self.host)  # type: ignore[attr-defined]
         if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_SHUFFLE, PLAY_MODE_SHUFFLE_REPEAT_ALL):
-            _LOGGER.error("🔀 Invalid shuffle mode: %s", mode)
             raise ValueError(f"Invalid shuffle mode: {mode}")
-
-        endpoint_url = f"{API_ENDPOINT_SHUFFLE}{mode}"
-        try:
-            await self._request(endpoint_url)  # type: ignore[attr-defined]
-        except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.error("🔀 HTTP request failed for shuffle mode: %s", err)
-            raise
+        await self._request(f"{API_ENDPOINT_SHUFFLE}{mode}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
-    # Seek / clear ------------------------------------------------------
+    # Playlist helpers
     # ------------------------------------------------------------------
-
-    async def seek(self, position: int) -> None:  # type: ignore[override]
-        await self._request(f"{API_ENDPOINT_SEEK}{position}")  # type: ignore[attr-defined]
 
     async def clear_playlist(self) -> None:  # type: ignore[override]
         await self._request(API_ENDPOINT_CLEAR_PLAYLIST)  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
-    # Source selection --------------------------------------------------
+    # URL playback helpers – preserved for automation convenience
     # ------------------------------------------------------------------
 
-    async def set_source(self, source: str) -> None:  # type: ignore[override]
-        await self._request(f"{API_ENDPOINT_SOURCE}{source}")  # type: ignore[attr-defined]
+    async def play_url(self, url: str) -> None:  # type: ignore[override]
+        encoded = quote(url, safe=":/?&=#%")
+        await self._request(f"{API_ENDPOINT_PLAY_URL}{encoded}")  # type: ignore[attr-defined]
 
-    async def get_sources(self) -> list[str]:  # type: ignore[override]
-        response = await self._request(API_ENDPOINT_SOURCES)  # type: ignore[attr-defined]
-        return response.get("sources", []) if isinstance(response, dict) else []
+    async def play_playlist(self, playlist_url: str) -> None:  # type: ignore[override]
+        encoded = quote(playlist_url, safe=":/?&=#%")
+        await self._request(f"{API_ENDPOINT_PLAY_M3U}{encoded}")  # type: ignore[attr-defined]
+
+    async def play_notification(self, url: str) -> None:  # type: ignore[override]
+        encoded = quote(url, safe="")
+        await self._request(f"{API_ENDPOINT_PLAY_PROMPT_URL}{encoded}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
-    # Player status -----------------------------------------------------
+    # Metadata helper (used by media-image caching)
     # ------------------------------------------------------------------
 
-    async def get_player_status(self) -> dict[str, Any]:  # type: ignore[override]
+    async def get_meta_info(self) -> dict[str, Any]:  # type: ignore[override]
+        """Retrieve current track metadata.
+
+        Not all firmware supports this call – returns an empty dict when the
+        endpoint is missing or replies with the old plain-text "unknown
+        command" response.
+        """
         try:
-            raw = await self._request("/httpapi.asp?command=getPlayerStatusEx")  # type: ignore[attr-defined]
-            return self._parse_player_status(raw)  # type: ignore[attr-defined]
-        except WiiMError:
+            resp = await self._request("/httpapi.asp?command=getMetaInfo")  # type: ignore[attr-defined]
+            if "raw" in resp and str(resp["raw"]).lower().startswith("unknown command"):
+                return {}
+            if "metaData" in resp:
+                return {"metaData": resp["metaData"]}
+            return {}
+        except Exception:  # noqa: BLE001 – older firmware returns plain text
             return {}
 
-    # _parse_player_status is still inherited from api_base – no need to duplicate.
+    # ------------------------------------------------------------------
+    # Convenience: repeat/shuffle status check (non-blocking)
+    # ------------------------------------------------------------------
 
-    # END PlaybackAPI
+    async def _verify_play_mode(self) -> None:
+        try:
+            await asyncio.sleep(0.5)
+            status = await self.get_player_status()  # type: ignore[attr-defined]
+            _LOGGER.debug("Status after mode change: %%s", status.get("loop_mode"))
+        except Exception:  # noqa: BLE001 – best-effort only
+            pass
