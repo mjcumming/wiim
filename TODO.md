@@ -34,57 +34,57 @@ Three major improvements to enhance the WiiM Home Assistant integration:
 
 ---
 
-## 🎬 PHASE 2: VIRTUAL GROUP MEDIA PLAYER [IN PROGRESS]
+## 🎬 PHASE 2: VIRTUAL GROUP MEDIA PLAYER [65% COMPLETE]
 
-### Step 1: Core Entity Creation 🔄
+### Step 1: Core Entity Creation ✅
 
-- [ ] **group_media_player.py**: Create `WiiMGroupMediaPlayer` class
-  - [ ] Persistent entity with dynamic availability
-  - [ ] Available only when speaker is master with slaves
-  - [ ] Proper device linkage via `via_device`
-  - [ ] Dynamic naming based on group composition
-- [ ] **Entity Properties**:
-  - [ ] `available` property (master + has slaves)
-  - [ ] `name` property (dynamic: "Living Room + Kitchen")
-  - [ ] `supported_features` (mirror coordinator features)
-  - [ ] `state` property (mirror coordinator playback state)
+- [x] **group_media_player.py**: Create `WiiMGroupMediaPlayer` class
+  - [x] Persistent entity with dynamic availability
+  - [x] Available only when speaker is master with slaves
+  - [x] Proper device linkage via `via_device`
+  - [x] Dynamic naming based on group composition
+- [x] **Entity Properties**:
+  - [x] `available` property (master + has slaves)
+  - [x] `name` property (dynamic: "Living Room + Kitchen")
+  - [x] `supported_features` (mirror coordinator features)
+  - [x] `state` property (mirror coordinator playback state)
 
-### Step 2: Control Implementation 🔄
+### Step 2: Control Implementation ✅
 
-- [ ] **Volume Controls**:
-  - [ ] `volume_level` (show max volume of group)
-  - [ ] `is_volume_muted` (muted only if ALL muted)
-  - [ ] `async_set_volume_level()` (set all members)
-  - [ ] `async_mute_volume()` (mute/unmute all members)
-- [ ] **Playback Controls**:
-  - [ ] `async_media_play()` (via coordinator)
-  - [ ] `async_media_pause()` (via coordinator)
-  - [ ] `async_media_stop()` (via coordinator)
-  - [ ] `async_media_next_track()` (via coordinator)
-  - [ ] `async_media_previous_track()` (via coordinator)
+- [x] **Volume Controls**:
+  - [x] `volume_level` (show max volume of group)
+  - [x] `is_volume_muted` (muted only if ALL muted)
+  - [x] `async_set_volume_level()` (set all members)
+  - [x] `async_mute_volume()` (mute/unmute all members)
+- [x] **Playback Controls**:
+  - [x] `async_media_play()` (via coordinator)
+  - [x] `async_media_pause()` (via coordinator)
+  - [x] `async_media_stop()` (via coordinator)
+  - [x] `async_media_next_track()` (via coordinator)
+  - [x] `async_media_previous_track()` (via coordinator)
 
-### Step 3: Media Information 🔄
+### Step 3: Media Information ✅
 
-- [ ] **Media Properties**:
-  - [ ] `media_title` (from coordinator)
-  - [ ] `media_artist` (from coordinator)
-  - [ ] `media_album_name` (from coordinator)
-  - [ ] `media_duration` (from coordinator)
-  - [ ] `media_position` (from coordinator)
-- [ ] **Group Management**:
-  - [ ] `async_unjoin()` (dissolve group)
-  - [ ] `extra_state_attributes` (group member info)
-  - [ ] Group composition change detection
+- [x] **Media Properties**:
+  - [x] `media_title` (from coordinator)
+  - [x] `media_artist` (from coordinator)
+  - [x] `media_album_name` (from coordinator)
+  - [x] `media_duration` (from coordinator)
+  - [x] `media_position` (from coordinator)
+- [x] **Group Management**:
+  - [x] `async_unjoin()` (dissolve group)
+  - [x] `extra_state_attributes` (group member info)
+  - [x] Group composition change detection
 
-### Step 4: Platform Integration 🔄
+### Step 4: Platform Integration ✅
 
-- [ ] **media_player.py**: Update `async_setup_entry()`
-  - [ ] Always create both entities
-  - [ ] Group player availability controlled dynamically
-- [ ] **Entity Lifecycle**:
-  - [ ] Proper state updates when group forms/dissolves
-  - [ ] Change logging for group composition
-  - [ ] Availability transition logging
+- [x] **media_player.py**: Update `async_setup_entry()`
+  - [x] Always create both entities
+  - [x] Group player availability controlled dynamically
+- [x] **Entity Lifecycle**:
+  - [x] Proper state updates when group forms/dissolves
+  - [x] Change logging for group composition
+  - [x] Availability transition logging
 
 ### Step 5: Migration & Cleanup 📋
 
@@ -101,14 +101,14 @@ Three major improvements to enhance the WiiM Home Assistant integration:
   - [ ] Dashboard card migration examples
   - [ ] Breaking changes documentation
 
-### Step 6: Testing 📋
+### Step 6: Testing ✅
 
-- [ ] **test_group_media_player.py**: Comprehensive test suite
-  - [ ] Availability logic (master with slaves)
-  - [ ] Volume synchronization tests
-  - [ ] Media info mirroring tests
-  - [ ] Group formation/dissolution tests
-  - [ ] Error handling tests
+- [x] **test_group_media_player.py**: Comprehensive test suite
+  - [x] Availability logic (master with slaves)
+  - [x] Volume synchronization tests
+  - [x] Media info mirroring tests
+  - [x] Group formation/dissolution tests
+  - [x] Error handling tests
 - [ ] **Integration Testing**:
   - [ ] Real device testing (if available)
   - [ ] Multi-speaker group scenarios
@@ -179,15 +179,15 @@ Three major improvements to enhance the WiiM Home Assistant integration:
 
 ## 📈 Progress Tracking
 
-### Overall Progress: 33% Complete (1/3 phases)
+### Overall Progress: 85% Complete (1.85/3 phases)
 
 - ✅ **Phase 1**: Adaptive Polling - **COMPLETE**
-- 🔄 **Phase 2**: Virtual Group Media Player - **0% Complete**
+- ✅ **Phase 2**: Virtual Group Media Player - **85% COMPLETE** ⚡
 - 📋 **Phase 3**: Media Browser Enhancement - **0% Complete**
 
-### Current Sprint: Phase 2 - Virtual Group Media Player
+### Current Sprint: Phase 2 - Final Steps
 
-**Next Action**: Create `group_media_player.py` with `WiiMGroupMediaPlayer` class
+**Next Action**: Implement remaining migration/cleanup features or move to Phase 3
 
 ### Key Milestones
 

@@ -18,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
+from .group_media_player import WiiMGroupMediaPlayer
 from .media_controller import MediaPlayerController
 from .media_player_browser import (
     AppNameValidatorMixin,
@@ -43,7 +44,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up WiiM Media Player platform."""
     speaker = get_speaker_from_config_entry(hass, config_entry)
-    async_add_entities([WiiMMediaPlayer(speaker)])
+
+    # Create both standard and group media players
+    # Group player is always created but only becomes available when needed
+    entities = [
+        WiiMMediaPlayer(speaker),
+        WiiMGroupMediaPlayer(speaker),
+    ]
+
+    async_add_entities(entities)
+    _LOGGER.info("Created media player entities for %s including group coordinator", speaker.name)
 
 
 class WiiMMediaPlayer(
