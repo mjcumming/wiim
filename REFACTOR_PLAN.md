@@ -27,10 +27,11 @@
 
 ## 🚧 Phase 2: Media Layer Refactor
 
-### Critical Fixes First
+### Critical Fixes First ✅ COMPLETE (commit: 86b7069)
 
-- [ ] **Fix `media_controller.py:90`** - Remove missing `_image_cache._clear()` call
-- [ ] **Fix `data.py:534`** - Variable `val` assignment issue in `_status_field()`
+- [x] **Fix `media_controller.py:90`** - Remove missing `_image_cache._clear()` call
+- [x] **Fix `data.py:534`** - Variable `val` assignment issue in `_status_field()`
+- [x] **Fix `data.py` import redefinition** - Removed duplicate WiiMDeviceInfo import
 
 ### 1. Media Player Refactor (`media_player.py` → 4 modules)
 
@@ -171,6 +172,6 @@ data_helpers.py      # 150 LOC - Lookup functions, device registration, IP updat
 
 ---
 
-**Next Action**: Fix critical linter errors then begin helper extraction
+**Next Action**: ✅ Critical fixes complete → Extract data_helpers.py (Day 3-4)
 
 _Updated: Phase 2 planning complete, ready to begin implementation_
