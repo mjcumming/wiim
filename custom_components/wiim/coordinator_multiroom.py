@@ -27,11 +27,12 @@ async def resolve_multiroom_source_and_media(
 ) -> None:
     """Public entry-point used by the polling loop."""
 
-    status_dict: dict[str, Any] = status.model_dump(exclude_none=False)
-
-    if not status_dict.get("_multiroom_mode"):
+    # Check _multiroom_mode directly on the status object since it's a PrivateAttr
+    if not getattr(status, "_multiroom_mode", False):
         _LOGGER.debug("Device %s not in multiroom mode, no source resolution needed", coordinator.client.host)
         return
+
+    status_dict: dict[str, Any] = status.model_dump(exclude_none=False)
 
     if role == "master":
         await _resolve_master_source(coordinator, status)
@@ -78,9 +79,7 @@ async def _mirror_master_media(coordinator, status: dict[str, Any], metadata: di
 
     status_model_self = coordinator.data.get("status_model") if coordinator.data else None  # type: ignore[attr-defined]
     _device_status: dict[str, Any] = (
-        status_model_self.model_dump(exclude_none=True)
-        if isinstance(status_model_self, PlayerStatus)
-        else {}
+        status_model_self.model_dump(exclude_none=True) if isinstance(status_model_self, PlayerStatus) else {}
     )
     master_ip = _device_status.get("master_ip")
 
@@ -103,9 +102,7 @@ async def _mirror_master_media(coordinator, status: dict[str, Any], metadata: di
     if master_speaker and master_speaker.coordinator.data:
         master_status_model = master_speaker.coordinator.data.get("status_model")
         master_status: dict[str, Any] = (
-            master_status_model.model_dump(exclude_none=True)
-            if isinstance(master_status_model, PlayerStatus)
-            else {}
+            master_status_model.model_dump(exclude_none=True) if isinstance(master_status_model, PlayerStatus) else {}
         )
         master_metadata: dict[str, Any] = master_speaker.coordinator.data.get("metadata", {})
 
@@ -131,9 +128,7 @@ async def _mirror_master_media(coordinator, status: dict[str, Any], metadata: di
             status["entity_picture"] = art_url
             status.setdefault("cover_url", art_url)
 
-        _LOGGER.debug(
-            "Slave %s now mirroring master %s media info", coordinator.client.host, master_speaker.name
-        )
+        _LOGGER.debug("Slave %s now mirroring master %s media info", coordinator.client.host, master_speaker.name)
         return
 
     # If we could not determine the master … keep UX reasonable.

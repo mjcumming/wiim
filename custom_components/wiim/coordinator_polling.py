@@ -9,7 +9,6 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from . import coordinator_endpoints as _endpoints
 from .api import WiiMError
-from .const import FIXED_POLL_INTERVAL
 from .models import DeviceInfo, PlayerStatus, PollingMetrics
 
 # Verbose debug toggle (mirrors coordinator.py)
@@ -18,7 +17,40 @@ VERBOSE_DEBUG = False
 # Number of consecutive failures after which we escalate to ERROR level
 FAILURE_ERROR_THRESHOLD = 3  # keep behaviour identical to original implementation
 
+# Adaptive polling intervals
+FAST_POLL_INTERVAL = 1  # seconds - during active playback
+NORMAL_POLL_INTERVAL = 5  # seconds - when idle (original fixed interval)
+
 _LOGGER = logging.getLogger(__name__)
+
+
+def _determine_adaptive_interval(coordinator, status_model: PlayerStatus, role: str) -> int:
+    """Determine polling interval based on playback state and group role.
+
+    Returns:
+        1 second if any device in the ecosystem is playing
+        5 seconds if all devices are idle
+    """
+    # Check if this device is playing
+    is_playing = str(status_model.play_state or "").lower() == "play"
+
+    # For group masters, also check if any slaves are playing
+    if role == "master" and not is_playing:
+        try:
+            from .data import get_speaker_from_config_entry
+
+            speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
+            for member in speaker.group_members:
+                member_state = member.get_playback_state()
+                if member_state and str(member_state).lower() == "playing":
+                    is_playing = True
+                    _LOGGER.debug("Group member %s is playing, enabling fast polling", member.name)
+                    break
+        except Exception as err:
+            _LOGGER.debug("Could not check group member states: %s", err)
+            # Fallback to device-only check
+
+    return FAST_POLL_INTERVAL if is_playing else NORMAL_POLL_INTERVAL
 
 
 async def async_update_data(coordinator) -> dict[str, Any]:
@@ -26,6 +58,8 @@ async def async_update_data(coordinator) -> dict[str, Any]:
 
     The full implementation now lives here to keep ``coordinator.py`` under
     the 300-LOC soft limit while providing identical behaviour.
+
+    Enhanced with adaptive polling that switches between 1s (playback) and 5s (idle).
     """
 
     _LOGGER.debug("=== COORDINATOR UPDATE START for %s ===", coordinator.client.host)
@@ -162,10 +196,16 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         await coordinator._resolve_multiroom_source_and_media(status_model, track_metadata, role)
 
         # ------------------------------------------------------------------
+        # Adaptive polling interval determination
+        # ------------------------------------------------------------------
+        new_interval = _determine_adaptive_interval(coordinator, status_model, role)
+        interval_changed = coordinator.update_interval.total_seconds() != new_interval
+
+        # ------------------------------------------------------------------
         # Polling diagnostics & final data structure
         # ------------------------------------------------------------------
         polling_data_model = PollingMetrics(
-            interval=coordinator.update_interval.total_seconds() if coordinator.update_interval else 0,
+            interval=new_interval,  # Use adaptive interval
             is_playing=(str(status_model.play_state or "").lower() == "play"),
             api_capabilities={
                 "statusex_supported": coordinator._statusex_supported,
@@ -174,6 +214,15 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             },
         )
         polling_data = polling_data_model.model_dump(exclude_none=True)
+
+        # Add adaptive polling state for diagnostics
+        polling_data.update(
+            {
+                "adaptive_polling": True,
+                "interval_reason": "playback_active" if new_interval == FAST_POLL_INTERVAL else "idle",
+                "fast_polling_active": new_interval == FAST_POLL_INTERVAL,
+            }
+        )
 
         # Final aggregated data exposed via the coordinator.  Only *typed models* are
         # propagated – legacy dict dumps have been removed as part of the Pydantic
@@ -214,11 +263,20 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         await coordinator._update_speaker_object(data)
 
         # ------------------------------------------------------------------
-        # Success handling – reset back-off / failure counters
+        # Success handling – adaptive polling interval adjustment
         # ------------------------------------------------------------------
         coordinator._backoff.record_success()
-        if coordinator.update_interval.total_seconds() != FIXED_POLL_INTERVAL:
-            coordinator.update_interval = timedelta(seconds=FIXED_POLL_INTERVAL)
+
+        # Apply adaptive polling interval
+        if interval_changed:
+            coordinator.update_interval = timedelta(seconds=new_interval)
+            _LOGGER.debug(
+                "%s: Switched to %s polling (%ds) - device is %s",
+                coordinator.client.host,
+                "fast" if new_interval == FAST_POLL_INTERVAL else "normal",
+                new_interval,
+                "playing" if new_interval == FAST_POLL_INTERVAL else "idle",
+            )
 
         if coordinator._last_command_failure is not None:
             coordinator.clear_command_failures()
@@ -252,6 +310,8 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             err,
         )
 
-        coordinator.update_interval = coordinator._backoff.next_interval(FIXED_POLL_INTERVAL)
+        # On error, use backoff logic but ensure minimum safe interval
+        backoff_interval = coordinator._backoff.next_interval(NORMAL_POLL_INTERVAL)
+        coordinator.update_interval = timedelta(seconds=backoff_interval)
 
         raise UpdateFailed(f"Error updating WiiM device: {err}") from err

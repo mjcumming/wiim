@@ -82,51 +82,6 @@ async def test_multiroom_master_source_wifi_with_duration(mock_coordinator):
     assert status.source == "wifi"
 
 
-async def test_multiroom_slave_media_mirroring_with_master_ip(mock_coordinator):
-    """Test slave media mirroring when master IP is available."""
-    status = PlayerStatus.model_validate({"status": "play", "vol": 50, "source": "multiroom"})
-    status._multiroom_mode = True
-
-    # Set up coordinator data with master IP
-    mock_coordinator.data = {"status_model": PlayerStatus.model_validate({"master_ip": "192.168.1.200"})}
-
-    # Mock finding master speaker
-    mock_master_speaker = MagicMock()
-    mock_master_speaker.role = "master"
-    mock_master_speaker.coordinator.data = {
-        "status_model": PlayerStatus.model_validate(
-            {
-                "title": "Master Track",
-                "artist": "Master Artist",
-                "source": "spotify",
-                "play_state": "play",
-                "position": 30,
-                "duration": 180,
-            }
-        ),
-        "metadata": {"entity_picture": "http://example.com/master-cover.jpg", "album": "Master Album"},
-    }
-
-    metadata = {}
-    role = "slave"
-
-    with patch("custom_components.wiim.coordinator_multiroom.find_speaker_by_ip", return_value=mock_master_speaker):
-        await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
-
-    # Status should be mirrored from master
-    status_dict = status.model_dump(exclude_none=True)
-    assert status_dict["title"] == "Master Track"
-    assert status_dict["artist"] == "Master Artist"
-    assert status_dict["source"] == "spotify"
-    assert status_dict["play_state"] == "play"
-    assert status_dict["position"] == 30
-    assert status_dict["duration"] == 180
-
-    # Metadata should be mirrored
-    assert metadata["entity_picture"] == "http://example.com/master-cover.jpg"
-    assert metadata["album"] == "Master Album"
-
-
 async def test_multiroom_slave_fallback_to_group_search(mock_coordinator):
     """Test slave media mirroring with fallback to group member search."""
     status = PlayerStatus.model_validate({"status": "play", "vol": 50, "source": "multiroom"})

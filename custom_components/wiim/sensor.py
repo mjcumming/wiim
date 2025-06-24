@@ -104,6 +104,7 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
 # New consolidated diagnostic sensor
 # -----------------------------------------------------------------------------
 
+
 class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
     """Primary diagnostic sensor – state = Wi-Fi RSSI, attributes = rich status."""
 
@@ -172,7 +173,7 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 
         # No RSSI → show basic connectivity status
         # Check for recent command failures for more specific status
-        if hasattr(self.speaker.coordinator, 'has_recent_command_failures'):
+        if hasattr(self.speaker.coordinator, "has_recent_command_failures"):
             if self.speaker.coordinator.has_recent_command_failures():
                 return "Command Failed"
 
@@ -191,14 +192,12 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             "mac": info.get("mac") or status.get("mac_address"),
             "uuid": info.get("uuid"),
             "project": info.get("project"),
-
             # Firmware / software
             "firmware": info.get("firmware"),
             "release": info.get("release") or info.get("Release"),
             "mcu_ver": info.get("mcu_ver"),
             "ble_fw_ver": info.get("ble_fw_ver"),
             "dsp_ver": info.get("dsp_ver"),
-
             # Network
             "ssid": info.get("ssid"),
             "ap_mac": info.get("ap_mac"),
@@ -207,11 +206,9 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             "wifi_channel": status.get("wifi_channel"),
             "internet": _to_bool(info.get("internet")),
             "netstat": _to_int(info.get("netstat")),
-
             # System resources
             "uptime": _to_int(info.get("uptime")),
             "free_ram": _to_int(info.get("free_ram")),
-
             # Multi-room context
             "group": multi.get("role") or self.speaker.role,
             "master_uuid": info.get("master_uuid") or status.get("master_uuid"),
@@ -220,15 +217,35 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
         }
 
         # Add command failure diagnostics
-        if hasattr(self.speaker.coordinator, '_last_command_failure'):
+        if hasattr(self.speaker.coordinator, "_last_command_failure"):
             if self.speaker.coordinator._last_command_failure is not None:
                 import time
+
                 time_since_failure = time.time() - self.speaker.coordinator._last_command_failure
-                attrs.update({
-                    "last_command_failure": int(time_since_failure),  # seconds ago
-                    "command_failure_count": getattr(self.speaker.coordinator, '_command_failure_count', 0),
-                    "has_recent_failures": self.speaker.coordinator.has_recent_command_failures() if hasattr(self.speaker.coordinator, 'has_recent_command_failures') else False,
-                })
+                attrs.update(
+                    {
+                        "last_command_failure": int(time_since_failure),  # seconds ago
+                        "command_failure_count": getattr(self.speaker.coordinator, "_command_failure_count", 0),
+                        "has_recent_failures": (
+                            self.speaker.coordinator.has_recent_command_failures()
+                            if hasattr(self.speaker.coordinator, "has_recent_command_failures")
+                            else False
+                        ),
+                    }
+                )
+
+        # Add adaptive polling diagnostics
+        polling_data = self.speaker.coordinator.data.get("polling", {}) if self.speaker.coordinator.data else {}
+        if polling_data:
+            attrs.update(
+                {
+                    "polling_interval": polling_data.get("interval", 5),
+                    "polling_reason": polling_data.get("interval_reason", "unknown"),
+                    "fast_polling_active": polling_data.get("fast_polling_active", False),
+                    "adaptive_polling": polling_data.get("adaptive_polling", False),
+                    "is_playing": polling_data.get("is_playing", False),
+                }
+            )
 
         # Prune None values for cleanliness
         return {k: v for k, v in attrs.items() if v is not None}
@@ -237,6 +254,7 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 # -----------------------------------------------------------------------------
 # Utility helpers (local – simple, avoids polluting other modules)
 # -----------------------------------------------------------------------------
+
 
 # Converts a value to a boolean if possible, otherwise returns None.
 def _to_bool(val: Any) -> bool | None:  # noqa: D401
@@ -261,6 +279,7 @@ def _to_int(val: Any) -> int | None:  # noqa: D401
 
 
 # ------------------- Input Source Sensor -------------------
+
 
 class WiiMInputSensor(WiimEntity, SensorEntity):
     """Shows current input/source (AirPlay, Bluetooth, etc.)."""

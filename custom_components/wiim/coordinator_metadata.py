@@ -51,10 +51,12 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
                 coordinator._metadata_supported = True  # noqa: SLF001
                 _LOGGER.info("getMetaInfo works for %s – full metadata available", coordinator.client.host)
 
-            # Enhance metadata with cover art extraction.
+            # Enhance metadata with cover art extraction and merge with status fallbacks.
             enhanced_metadata = _enhance_metadata_with_artwork(coordinator, metadata, status_dict)
-            _LOGGER.debug("Enhanced metadata for %s: %s", coordinator.client.host, enhanced_metadata)
-            return TrackMetadata.model_validate(enhanced_metadata)
+            # Merge missing fields from status data as fallback
+            merged_metadata = _merge_metadata_with_status_fallback(enhanced_metadata, status_dict)
+            _LOGGER.debug("Enhanced and merged metadata for %s: %s", coordinator.client.host, merged_metadata)
+            return TrackMetadata.model_validate(merged_metadata)
 
     except WiiMError as err:
         if coordinator._metadata_supported is None:  # noqa: SLF001
@@ -71,6 +73,21 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
 # ---------------------------------------------------------------------------
 # Internal helpers – kept private to this module
 # ---------------------------------------------------------------------------
+
+
+def _merge_metadata_with_status_fallback(metadata: dict, status: dict) -> dict[str, Any]:
+    """Merge metadata with status data as fallback for missing fields."""
+    merged = metadata.copy()
+
+    # Use status data as fallback for missing essential fields
+    if not merged.get("title") and status.get("title"):
+        merged["title"] = status["title"]
+    if not merged.get("artist") and status.get("artist"):
+        merged["artist"] = status["artist"]
+    if not merged.get("album") and status.get("album"):
+        merged["album"] = status["album"]
+
+    return merged
 
 
 def _enhance_metadata_with_artwork(coordinator, metadata: dict, status: dict) -> dict[str, Any]:

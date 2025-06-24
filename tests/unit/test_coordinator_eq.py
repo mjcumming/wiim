@@ -98,6 +98,7 @@ async def test_eq_info_wiim_error_first_time(mock_coordinator):
     """Test EQ info when WiiMError occurs on first attempt."""
     mock_coordinator._eq_supported = None  # First time
     mock_coordinator.client.get_eq_status = AsyncMock(side_effect=WiiMError("EQ not supported"))
+    mock_coordinator.client.get_eq = AsyncMock(side_effect=WiiMError("EQ not supported"))
 
     result = await fetch_eq_info(mock_coordinator)
 
@@ -111,6 +112,7 @@ async def test_eq_info_wiim_error_known_supported(mock_coordinator):
     """Test EQ info when WiiMError occurs on known supported device."""
     mock_coordinator._eq_supported = True  # Known to be supported
     mock_coordinator.client.get_eq_status = AsyncMock(side_effect=WiiMError("Temporary failure"))
+    mock_coordinator.client.get_eq = AsyncMock(side_effect=WiiMError("Temporary failure"))
 
     result = await fetch_eq_info(mock_coordinator)
 
