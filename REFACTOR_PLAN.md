@@ -103,10 +103,10 @@ data_helpers.py      # 150 LOC - Lookup functions, device registration, IP updat
 #### Progress Tracker
 
 - [ ] **Fix variable assignment bug** - Critical fix first
-- [ ] **data_helpers.py** - Extract helper functions
-  - [ ] Speaker lookup functions (`find_speaker_by_uuid`, etc.)
-  - [ ] Config entry helpers (`get_speaker_from_config_entry`)
-  - [ ] IP update logic
+- [x] **data_helpers.py** - Extract helper functions ✅ COMPLETE (commit: e6a8846)
+  - [x] Speaker lookup functions (`find_speaker_by_uuid`, etc.)
+  - [x] Config entry helpers (`get_speaker_from_config_entry`)
+  - [x] IP update logic
 - [ ] **data_group.py** - Extract group management
   - [ ] Group state update methods
   - [ ] Master/slave relationship management
@@ -172,6 +172,6 @@ data_helpers.py      # 150 LOC - Lookup functions, device registration, IP updat
 
 ---
 
-**Next Action**: ✅ Critical fixes complete → Extract data_helpers.py (Day 3-4)
+**Next Action**: ✅ data_helpers.py complete → Extract media_player_state.py (Day 5-7)
 
 _Updated: Phase 2 planning complete, ready to begin implementation_
