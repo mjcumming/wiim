@@ -67,9 +67,7 @@ class PlayerStatus(_WiimBase):
     Field aliases correspond to WiiM API keys.
     """
 
-    play_state: Literal["play", "pause", "stop", "load"] | None = Field(
-        None, alias="status"
-    )
+    play_state: Literal["play", "pause", "stop", "load"] | None = Field(None, alias="status")
     volume: int | None = Field(None, ge=0, le=100, alias="vol")
     mute: bool | None = Field(None, alias="mute")
 
@@ -99,6 +97,12 @@ class PlayerStatus(_WiimBase):
     play_mode: str | None = Field(None, alias="play_mode")
     repeat: str | None = None
     shuffle: str | None = None
+
+    # Group/multiroom fields (sometimes in status payload)
+    group: str | None = None
+    master_uuid: str | None = None
+    master_ip: str | None = None
+    uuid: str | None = None
 
     # Internal flags – allow underscore alias via extra="allow"
     _multiroom_mode: bool | None = PrivateAttr(default=None)

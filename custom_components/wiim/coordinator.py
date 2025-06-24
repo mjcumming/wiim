@@ -137,7 +137,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Check if this device has slaves (making it a master)."""
         if self.data and isinstance(self.data, dict):
             multiroom = self.data.get("multiroom", {})
-            return multiroom.get("slaves", 0) > 0
+            return multiroom.get("slave_count", 0) > 0
         return False
 
     async def _get_player_status(self) -> dict:
@@ -253,7 +253,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_status = status.copy()
         return changed
 
-    async def _detect_role_from_status_and_slaves(self, status: PlayerStatus, multiroom: dict, device_info: DeviceInfo) -> str:  # noqa: D401
+    async def _detect_role_from_status_and_slaves(
+        self, status: PlayerStatus, multiroom: dict, device_info: DeviceInfo
+    ) -> str:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_role* helper."""
         from . import coordinator_role as _role
 
@@ -301,7 +303,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             command_type,
             self.client.host,
             self._command_failure_count,
-            error
+            error,
         )
 
     def clear_command_failures(self) -> None:
@@ -317,6 +319,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return False
 
         import time
+
         time_since_failure = time.time() - self._last_command_failure
         return time_since_failure < COMMAND_FAILURE_TIMEOUT
 
@@ -411,7 +414,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     added.append(label)
 
             if added:
-                _LOGGER.info("[WiiM] %s: Added %d additional EQ presets from EQGetList: %s", self.client.host, len(added), added)
+                _LOGGER.info(
+                    "[WiiM] %s: Added %d additional EQ presets from EQGetList: %s", self.client.host, len(added), added
+                )
         except WiiMError as err:
             _LOGGER.debug("[WiiM] %s: EQGetList not supported (%s)", self.client.host, err)
         except Exception as err:  # pragma: no cover – safety
