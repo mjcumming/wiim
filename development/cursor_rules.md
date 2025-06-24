@@ -4,29 +4,29 @@ _Treat this as the project's **constitution**. Read it. Pin it in Cursor. Obey i
 
 ---
 
-## 0  Non‑negotiables (read before you code a single line)
+## 0 Non‑negotiables (read before you code a single line)
 
 1. **Every file lives inside** `custom_components/wiim/` – this is ★the only★ directory you may touch.
-   ✦  *Never* modify `homeassistant/` core folders.
-   ✦  *Never* import private HA internals.
-2. **Follow this guide line‑by‑line.** Deviations require an Issue + signed‑off design note from the Tech  Lead.
-3. **If you are confused, STOP** → ask in  GitHub  Discussion. Guessing = bugs + rework.
+   ✦ _Never_ modify `homeassistant/` core folders.
+   ✦ _Never_ import private HA internals.
+2. **Follow this guide line‑by‑line.** Deviations require an Issue + signed‑off design note from the Tech Lead.
+3. **If you are confused, STOP** → ask in GitHub Discussion. Guessing = bugs + rework.
 
 ---
 
-## 1  Golden Rules
+## 1 Golden Rules
 
 0. **Spec > Ego** – build only what the ticket describes.
-1. Home  Assistant Dev  Guidelines.
+1. Home Assistant Dev Guidelines.
 2. HACS repo standards & semantic versioning.
 3. LinkPlay API is canonical – WiiM quirks wrapped in code, never leak.
-4. Small, composable, typed modules (aim for ≤ 300 LOC; CI warns above 300 and **fails at 400 LOC** – see "File-Size Limits" below).
-5. All work tracked (Issue →  Branch →  PR →  Review).
+4. Small, composable, typed modules (aim for natural boundaries ~400-600 LOC; avoid over-fragmentation – see "File-Size Limits" below).
+5. All work tracked (Issue → Branch → PR → Review).
 6. Fail loudly with actionable log messages.
 
 ---
 
-## 2  Mental Checklist before writing code
+## 2 Mental Checklist before writing code
 
 Ask yourself **every time** you open a ticket:
 
@@ -36,12 +36,12 @@ Ask yourself **every time** you open a ticket:
 4. _How will I test success & failure?_ (unit + integration test)
 5. _How does this interact with multi‑room state?_
 6. _What happens if the device is offline?_ (timeouts, retries)
-7. _How will this appear in Home  Assistant UI?_ (state, attributes, services)
+7. _How will this appear in Home Assistant UI?_ (state, attributes, services)
    If any answer is fuzzy—stop and clarify.
 
 ---
 
-## 3  Directory & File Layout
+## 3 Directory & File Layout
 
 ```
 custom_components/
@@ -64,7 +64,7 @@ custom_components/
 
 ---
 
-## 4  Data Model (Pydantic v2)
+## 4 Data Model (Pydantic v2)
 
 ```python
 class PlayerStatus(BaseModel):
@@ -93,7 +93,7 @@ All API JSON → these models. No raw dicts past `api.py`.
 
 ---
 
-## 5  System Architecture & Flow
+## 5 System Architecture & Flow
 
 ```
 User → HA Service call
@@ -116,7 +116,7 @@ coordinator.py  ── poll every 5  s ──▶ api.py ──▶ device
 
 ---
 
-## 6  Implementation Playbook
+## 6 Implementation Playbook
 
 | Step                                      | File     | Code Skeleton |
 | ----------------------------------------- | -------- | ------------- |
@@ -195,14 +195,18 @@ jobs:
 
 ---
 
-## File-Size Limits 📏
+## File-Size Limits 📏 - **REVISED APPROACH**
 
-Keeping files short makes reviews, merge conflict resolution and unit-testing far easier. Instead of a hard 200 LOC ceiling we now use a **soft limit / hard limit** model:
+**Natural Boundaries > Arbitrary Limits**: Following lessons from the successful API refactor, we now prioritize logical cohesion over strict size limits:
 
-* **≤ 300 LOC**   – sweet spot; no action required.
-* **301-400 LOC** – CI issues a *warning* (`ruff-size-check` job). Please split unless there is a strong justification.
-* **> 400 LOC**    – CI **fails**. Add a `# pragma: allow-long-file <issue-or-pr-id>` header *and* explain in the PR description why the file must stay large.
+* **400-600 LOC** – **sweet spot** for natural boundaries with logical cohesion
+* **< 400 LOC**   – fine if natural; avoid over-fragmentation into many tiny files
+* **> 600 LOC**   – consider splitting **only** if clear natural boundaries exist
+* **> 800 LOC**   – CI **warns**. Strong justification required in PR description
 
-"Lines of code" are counted after stripping blank lines, comments and imports so documentation doesn't penalise you.  The rule enforces the spirit (single-responsibility, easy review) rather than an arbitrary number.
+**Philosophy**: Better to have 3 cohesive 500-LOC modules than 5 fragmented 300-LOC modules. Natural code boundaries (like entity interface vs. commands vs. utilities) are more important than hitting arbitrary size targets.
+
+"Lines of code" are counted after stripping blank lines, comments and imports. The rule enforces maintainability and reviewability, not arbitrary limits.
 
 ---
+````

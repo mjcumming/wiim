@@ -15,13 +15,13 @@
 
 ### 🎯 Phase 2 Targets - Updated Focus
 
-| File                  | Current Size     | Target    | Status                                                      |
-| --------------------- | ---------------- | --------- | ----------------------------------------------------------- |
-| `media_player.py`     | 1,178 LOC (44KB) | 4 modules | 🎯 **PRIMARY TARGET** - Entity complexity, optimistic state |
-| `media_controller.py` | 886 LOC (36KB)   | 3 modules | 🎯 **SECONDARY TARGET** - Business logic extraction         |
-| `data.py`             | 694 LOC (29KB)   | ✅ DONE   | ✅ **COMPLETE** - Strategic decision: good size             |
+| File                  | Current Size     | Target    | Status                                                       |
+| --------------------- | ---------------- | --------- | ------------------------------------------------------------ |
+| `media_player.py`     | 1,178 LOC (44KB) | 3 modules | 🎯 **PRIMARY TARGET** - Natural boundaries: ~500/500/300 LOC |
+| `media_controller.py` | 886 LOC (36KB)   | 3 modules | 🎯 **SECONDARY TARGET** - Business logic: ~400/300/200 LOC   |
+| `data.py`             | 694 LOC (29KB)   | ✅ DONE   | ✅ **COMPLETE** - Strategic decision: good size              |
 
-**Updated Reduction Target**: 2,064 LOC → ~7 focused modules (~280 LOC avg)
+**Updated Reduction Target**: 2,064 LOC → ~6 focused modules (400-500 LOC avg)
 **Progress**: 1 of 3 complete (data layer) → Focus on media layer
 
 ---
@@ -34,35 +34,32 @@
 - [x] **Fix `data.py:534`** - Variable `val` assignment issue in `_status_field()`
 - [x] **Fix `data.py` import redefinition** - Removed duplicate WiiMDeviceInfo import
 
-### 1. Media Player Refactor (`media_player.py` → 4 modules)
+### 1. Media Player Refactor (`media_player.py` → 3 modules) - **REVISED APPROACH**
 
-**Current Issues**: 1,178 lines doing entity interface, optimistic state, commands, media browsing
+**Current Issues**: 1,178 lines → **Solution**: 3 natural boundaries with logical cohesion
 
 ```
-media_player.py           # 300 LOC - Core HA entity interface & delegation
-media_player_commands.py  # 250 LOC - Command methods with optimistic updates
-media_player_media.py     # 200 LOC - Media browsing, quick stations, hex decoding
-media_player_state.py     # 150 LOC - Optimistic state management helpers
+media_player.py           # ~500 LOC - Core entity + properties + optimistic state
+media_player_commands.py  # ~500 LOC - All command methods + error handling
+media_player_browser.py   # ~300 LOC - Media browser + quick stations + utilities
 ```
 
-#### Progress Tracker
+#### Progress Tracker - **Natural Boundaries Approach**
 
-- [ ] **media_player_state.py** - Extract optimistic state management
-  - [ ] Optimistic volume/mute/state tracking
-  - [ ] Debouncer logic
-  - [ ] State clearing helpers
-- [ ] **media_player_media.py** - Extract media browsing
+- [ ] **media_player_browser.py** - Extract media browsing & utilities
   - [ ] `async_browse_media()` implementation
-  - [ ] Quick stations YAML loading
+  - [ ] Quick stations YAML loading & caching
   - [ ] Hex URL decoding helper
-- [ ] **media_player_commands.py** - Extract command methods
-  - [ ] Volume commands (set/up/down/mute)
-  - [ ] Playback commands (play/pause/stop/seek)
+  - [ ] App name validation utilities
+- [ ] **media_player_commands.py** - Extract all command methods
+  - [ ] Volume commands (set/up/down/mute) with optimistic updates
+  - [ ] Playback commands (play/pause/stop/seek) with error handling
   - [ ] Source/mode commands (source/sound/shuffle/repeat)
-  - [ ] Group commands (join/leave)
-- [ ] **media_player.py** - Refactor core entity
-  - [ ] Core MediaPlayerEntity class
-  - [ ] Property delegation to controller
+  - [ ] Group commands (join/leave) + media commands (play_media/preset)
+- [ ] **media_player.py** - Refactor core entity (keep substantial)
+  - [ ] Core MediaPlayerEntity class + initialization
+  - [ ] All property delegation to controller
+  - [ ] Optimistic state management integrated
   - [ ] Import updates & facade pattern
 
 ### 2. Media Controller Refactor (`media_controller.py` → 3 modules)
@@ -136,13 +133,14 @@ data_helpers.py      # 142 LOC - Lookup functions, device registration, IP updat
 
 ---
 
-## 🎯 Success Metrics
+## 🎯 Success Metrics - **REVISED FOR NATURAL BOUNDARIES**
 
-- ✅ **Size**: All modules <300 LOC (following API refactor success)
+- ✅ **Size**: All modules 400-600 LOC (natural, logical boundaries)
 - ✅ **Functionality**: All features working, zero regressions
 - ✅ **Testing**: 100% existing test pass rate maintained
-- ✅ **Architecture**: Clean separation, maintainable code
+- ✅ **Architecture**: Clear separation following natural code seams
 - ✅ **Compatibility**: No breaking changes to public interfaces
+- ✅ **Maintainability**: Fewer files with logical cohesion > arbitrary size limits
 
 ---
 
@@ -165,6 +163,6 @@ data_helpers.py      # 142 LOC - Lookup functions, device registration, IP updat
 
 ---
 
-**Next Action**: ✅ Data layer complete → Extract media_player_state.py (Day 5-7) from 1,178-line media_player.py
+**Next Action**: ✅ Data layer complete → Extract media_player_browser.py (Day 5-7) - Natural boundaries approach!
 
 _Updated: Phase 2 planning complete, ready to begin implementation_
