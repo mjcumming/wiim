@@ -13,15 +13,16 @@
 - **Test coverage**: Complete test suite for all new modules
 - **Architecture**: Facade pattern, backward compatibility maintained
 
-### 🎯 Phase 2 Targets (3 Large Files)
+### 🎯 Phase 2 Targets - Updated Focus
 
-| File                  | Current Size     | Target    | Issues                                 |
-| --------------------- | ---------------- | --------- | -------------------------------------- |
-| `media_player.py`     | 1,178 LOC (44KB) | 4 modules | Entity complexity, optimistic state    |
-| `media_controller.py` | 886 LOC (36KB)   | 3 modules | Missing `_image_cache`, business logic |
-| `data.py`             | 742 LOC (29KB)   | 3 modules | Variable assignment bug, Speaker class |
+| File                  | Current Size     | Target    | Status                                                      |
+| --------------------- | ---------------- | --------- | ----------------------------------------------------------- |
+| `media_player.py`     | 1,178 LOC (44KB) | 4 modules | 🎯 **PRIMARY TARGET** - Entity complexity, optimistic state |
+| `media_controller.py` | 886 LOC (36KB)   | 3 modules | 🎯 **SECONDARY TARGET** - Business logic extraction         |
+| `data.py`             | 694 LOC (29KB)   | ✅ DONE   | ✅ **COMPLETE** - Strategic decision: good size             |
 
-**Total Reduction Target**: 2,806 LOC → ~10 focused modules (~250 LOC avg)
+**Updated Reduction Target**: 2,064 LOC → ~7 focused modules (~280 LOC avg)
+**Progress**: 1 of 3 complete (data layer) → Focus on media layer
 
 ---
 
@@ -90,31 +91,23 @@ media_controller_media.py    # 200 LOC - Media metadata, image fetching, advance
   - [ ] Source management
   - [ ] Core controller initialization
 
-### 3. Data Layer Refactor (`data.py` → 3 modules)
+### 3. Data Layer Refactor ✅ STRATEGIC DECISION: COMPLETE
 
-**Current Issues**: 742 lines with Speaker class doing everything, group logic, helpers
+**Original Issues**: 742 lines → **Resolved**: Now 694 LOC (much more manageable)
 
 ```
-data.py              # 300 LOC - Core Speaker class & basic properties
-data_group.py        # 200 LOC - Group state management & multiroom logic
-data_helpers.py      # 150 LOC - Lookup functions, device registration, IP updates
+data.py              # 694 LOC - Cohesive Speaker class with integrated group logic ✅ GOOD SIZE
+data_helpers.py      # 142 LOC - Lookup functions, device registration, IP updates ✅ COMPLETE
 ```
 
-#### Progress Tracker
+#### Progress Tracker ✅ COMPLETE
 
-- [ ] **Fix variable assignment bug** - Critical fix first
+- [x] **Fix variable assignment bug** - Critical fix first ✅ COMPLETE
 - [x] **data_helpers.py** - Extract helper functions ✅ COMPLETE (commit: e6a8846)
   - [x] Speaker lookup functions (`find_speaker_by_uuid`, etc.)
   - [x] Config entry helpers (`get_speaker_from_config_entry`)
   - [x] IP update logic
-- [ ] **data_group.py** - Extract group management
-  - [ ] Group state update methods
-  - [ ] Master/slave relationship management
-  - [ ] Missing device discovery triggers
-- [ ] **data.py** - Refactor core Speaker class
-  - [ ] Basic Speaker initialization
-  - [ ] Device info & coordinator integration
-  - [ ] Core properties & typed model shortcuts
+- [x] **Strategic decision**: Keep remaining code together (cohesive, tightly coupled group logic)
 
 ---
 
@@ -172,6 +165,6 @@ data_helpers.py      # 150 LOC - Lookup functions, device registration, IP updat
 
 ---
 
-**Next Action**: ✅ data_helpers.py complete → Extract media_player_state.py (Day 5-7)
+**Next Action**: ✅ Data layer complete → Extract media_player_state.py (Day 5-7) from 1,178-line media_player.py
 
 _Updated: Phase 2 planning complete, ready to begin implementation_
