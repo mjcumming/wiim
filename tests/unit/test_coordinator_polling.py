@@ -1,13 +1,14 @@
 """Test coordinator polling implementation."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.wiim.coordinator_polling import async_update_data
-from custom_components.wiim.models import PlayerStatus, DeviceInfo, TrackMetadata, EQInfo, PollingMetrics
 from custom_components.wiim.api import WiiMError
-from tests.const import MOCK_STATUS_RESPONSE, MOCK_DEVICE_DATA
+from custom_components.wiim.coordinator_polling import async_update_data
+from custom_components.wiim.models import DeviceInfo, EQInfo, PlayerStatus, PollingMetrics, TrackMetadata
+from tests.const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 
 @pytest.fixture
@@ -43,6 +44,15 @@ def mock_coordinator():
     coordinator.clear_command_failures = MagicMock()
     coordinator._last_response_time = None
 
+    # Mock the async methods that will be called
+    coordinator._fetch_multiroom_info = AsyncMock(return_value={})
+    coordinator._fetch_track_metadata = AsyncMock()
+    coordinator._fetch_eq_info = AsyncMock()
+    coordinator._detect_role_from_status_and_slaves = AsyncMock(return_value="solo")
+    coordinator._resolve_multiroom_source_and_media = AsyncMock()
+    coordinator._update_speaker_object = AsyncMock()
+    coordinator._extend_eq_preset_map_once = AsyncMock()
+
     return coordinator
 
 
@@ -52,9 +62,9 @@ async def test_polling_success_complete(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
         patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
         patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
@@ -135,12 +145,12 @@ async def test_polling_presets_not_supported(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
+        patch.object(mock_coordinator, "_update_speaker_object"),
     ):
         # Set up successful returns
         mock_player_status.return_value = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
@@ -165,12 +175,12 @@ async def test_polling_presets_already_not_supported(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
+        patch.object(mock_coordinator, "_update_speaker_object"),
     ):
         # Set up successful returns
         mock_player_status.return_value = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
@@ -195,12 +205,12 @@ async def test_polling_artwork_propagation(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
+        patch.object(mock_coordinator, "_update_speaker_object"),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
@@ -230,12 +240,12 @@ async def test_polling_eq_preset_propagation(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
+        patch.object(mock_coordinator, "_update_speaker_object"),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
@@ -262,12 +272,12 @@ async def test_polling_uuid_injection(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
+        patch.object(mock_coordinator, "_update_speaker_object"),
     ):
         # Device model without UUID
         device_data = MOCK_DEVICE_DATA.copy()
@@ -298,12 +308,12 @@ async def test_polling_response_time_tracking(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
+        patch.object(mock_coordinator, "_update_speaker_object"),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
@@ -333,12 +343,12 @@ async def test_polling_command_failure_clearing(mock_coordinator):
     with (
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
         patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
-        patch.object(mock_coordinator, "_get_multiroom_info_defensive") as mock_multiroom,
-        patch.object(mock_coordinator, "_get_track_metadata_defensive") as mock_metadata,
-        patch.object(mock_coordinator, "_get_eq_info_defensive") as mock_eq,
+        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
         patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
+        patch.object(mock_coordinator, "_update_speaker_object"),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)

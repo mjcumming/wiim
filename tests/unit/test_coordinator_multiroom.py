@@ -1,7 +1,8 @@
 """Test coordinator multiroom helpers."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.wiim.coordinator_multiroom import resolve_multiroom_source_and_media
 from custom_components.wiim.models import PlayerStatus

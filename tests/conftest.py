@@ -43,7 +43,7 @@ def mock_wiim_client_fixture():
     client.get_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
     client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
     client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
-    client.get_multiroom_info = AsyncMock(return_value={})
+    client.get_multiroom_status = AsyncMock(return_value={})
     client.get_meta_info = AsyncMock(return_value={})
     client.get_eq_status = AsyncMock(return_value=False)
     client.get_eq = AsyncMock(return_value={})
@@ -134,7 +134,7 @@ def bypass_get_data_fixture():
             return_value=mock_status,  # Use merged status instead of original
         ),
         patch(
-            "custom_components.wiim.api.WiiMClient.get_multiroom_info",
+            "custom_components.wiim.api.WiiMClient.get_multiroom_status",
             return_value={"slaves": 0},
         ),
         patch(

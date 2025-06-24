@@ -41,9 +41,8 @@ async def test_fetch_player_status_fallback_method(mock_client):
 
 async def test_fetch_player_status_error_handling(mock_client):
     """Test fetch_player_status error handling."""
-    # Clear any existing methods first
-    mock_client._mock_children = {}
-    mock_client.get_player_status = AsyncMock(side_effect=WiiMError("Connection failed"))
+    # Mock the get_player_status_model method to raise an error
+    mock_client.get_player_status_model = AsyncMock(side_effect=WiiMError("Connection failed"))
 
     with pytest.raises(WiiMError):
         await fetch_player_status(mock_client)
@@ -72,9 +71,8 @@ async def test_fetch_device_info_fallback_method(mock_client):
 
 async def test_fetch_device_info_error_handling(mock_client):
     """Test fetch_device_info error handling."""
-    # Clear any existing methods first
-    mock_client._mock_children = {}
-    mock_client.get_device_info = AsyncMock(side_effect=WiiMError("Connection failed"))
+    # Mock the get_device_info_model method to raise an error
+    mock_client.get_device_info_model = AsyncMock(side_effect=WiiMError("Connection failed"))
 
     with pytest.raises(WiiMError):
         await fetch_device_info(mock_client)
@@ -83,13 +81,14 @@ async def test_fetch_device_info_error_handling(mock_client):
 async def test_endpoint_model_validation():
     """Test that invalid data raises validation errors."""
     mock_client = MagicMock()
-    mock_client.get_player_status = AsyncMock(return_value={"invalid": "data"})
 
-    # Should not raise - Pydantic allows extra fields and has defaults
+    # Test player status with valid data - typed method
+    mock_client.get_player_status_model = AsyncMock(return_value=PlayerStatus())
     result = await fetch_player_status(mock_client)
     assert isinstance(result, PlayerStatus)
 
-    # Test with completely invalid data structure
+    # Test device info validation error - remove typed method to trigger fallback
+    del mock_client.get_device_info_model  # Force fallback to raw method
     mock_client.get_device_info = AsyncMock(return_value="not a dict")
 
     with pytest.raises(ValueError):  # Pydantic validation error

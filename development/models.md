@@ -135,4 +135,4 @@ used throughout the integration.  _Optional_ fields are marked by
 These definitions are intended for developer reference only.  They are kept
 lightweight so that they can be diff-viewed easily in PRs.  For an exhaustive
 machine-readable schema run `python -m custom_components.wiim.models` (script
-to be added) which prints the full `model_json_schema()` output. 
+to be added) which prints the full `model_json_schema()` output.

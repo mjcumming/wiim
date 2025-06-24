@@ -67,7 +67,7 @@ class PlayerStatus(_WiimBase):
     Field aliases correspond to WiiM API keys.
     """
 
-    play_state: Literal["play", "pause", "stop", "load"] | None = Field(None, alias="status")
+    play_state: Literal["play", "pause", "stop", "load", "idle"] | None = Field(None, alias="play_status")
     volume: int | None = Field(None, ge=0, le=100, alias="vol")
     mute: bool | None = Field(None, alias="mute")
 

@@ -1,11 +1,12 @@
 """Test coordinator metadata helpers."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from custom_components.wiim.api import WiiMError
 from custom_components.wiim.coordinator_metadata import get_track_metadata_defensive
 from custom_components.wiim.models import PlayerStatus, TrackMetadata
-from custom_components.wiim.api import WiiMError
 
 
 @pytest.fixture

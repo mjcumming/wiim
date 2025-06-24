@@ -493,19 +493,40 @@ class Speaker:
 
     def get_playback_state(self) -> MediaPlayerState:
         """Map WiiM play_status to Home Assistant MediaPlayerState."""
-        if self.status_model is None or self.status_model.play_state is None:
+        if self.status_model is None:
+            _LOGGER.warning("🎵 DEVICE STATE: status_model=None")
+            return MediaPlayerState.IDLE
+
+        # Debug: Show ALL fields in the status model to see what the device provides
+        if self.status_model.play_state is None:
+            status_dict = self.status_model.model_dump(exclude_none=True)
+            _LOGGER.warning("🎵 DEVICE STATE: play_state=None, available_fields=%s", list(status_dict.keys()))
+
+            # Check if status field exists under a different name
+            raw_status = getattr(self.status_model, "status", None)
+            _LOGGER.warning("🎵 DEVICE STATE: checking raw 'status' field=%s", raw_status)
             return MediaPlayerState.IDLE
 
         play_status = str(self.status_model.play_state)
 
+        # Debug: Log the raw device state to see what we're actually getting
+        _LOGGER.warning(
+            "🎵 DEVICE STATE: raw_play_state='%s' (type=%s)", play_status, type(self.status_model.play_state)
+        )
+
         if play_status in ["play", "playing", "load"]:
-            return MediaPlayerState.PLAYING
-        if play_status in ["pause", "paused"]:
-            return MediaPlayerState.PAUSED
-        if play_status in ["stop", "stopped", "idle", ""]:
-            return MediaPlayerState.IDLE
-        # Home Assistant no longer provides an UNKNOWN state constant.  Fallback to IDLE.
-        return MediaPlayerState.IDLE
+            mapped_state = MediaPlayerState.PLAYING
+        elif play_status in ["pause", "paused"]:
+            mapped_state = MediaPlayerState.PAUSED
+        elif play_status in ["stop", "stopped", "idle", ""]:
+            mapped_state = MediaPlayerState.IDLE
+        else:
+            # Unknown state - log it for debugging
+            _LOGGER.warning("🎵 DEVICE STATE: Unknown play_state='%s', falling back to IDLE", play_status)
+            mapped_state = MediaPlayerState.IDLE
+
+        _LOGGER.warning("🎵 DEVICE STATE: '%s' → %s", play_status, mapped_state)
+        return mapped_state
 
     def is_volume_muted(self) -> bool | None:
         """Return *current* mute state derived from :class:`PlayerStatus`.

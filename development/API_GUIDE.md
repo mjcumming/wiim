@@ -370,7 +370,7 @@ async def async_join_group(self, speakers: list[Speaker]) -> None:
 ### **Pure LinkPlay Devices (Arylic, etc.)**
 
 - ✅ **Basic endpoints** - getPlayerStatus, basic status always work
-- ❌ **No getStatusEx** - Use basic status instead
+- ✅ **Device metadata** - Standard LinkPlay device info endpoints available
 - ❌ **No getMetaInfo** - Extract metadata from getPlayerStatus
 - ❌ **Variable EQ** - Many devices have no EQ at all
 
@@ -724,7 +724,6 @@ async def async_set_native_value(self, value: float) -> None:
 ✅ **Rich Information**: State attributes show group membership and size
 ✅ **Robust Error Handling**: Partial failures don't break group operations
 ✅ **HA Conventions**: Proper platform separation (number/switch vs media_player)
-
 
 ## 📊 **API Endpoint Reference**
 

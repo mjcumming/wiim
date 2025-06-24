@@ -1,10 +1,11 @@
 """Test coordinator role detection helpers."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from custom_components.wiim.coordinator_role import detect_role_from_status_and_slaves
-from custom_components.wiim.models import PlayerStatus, DeviceInfo
+from custom_components.wiim.models import DeviceInfo, PlayerStatus
 
 
 @pytest.fixture

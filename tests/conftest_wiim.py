@@ -39,7 +39,7 @@ def wiim_client():
         "status": "stop",
     }
 
-    client.get_multiroom_info.return_value = {"slaves": 0, "slave_list": []}
+    client.get_multiroom_status.return_value = {"slaves": 0, "slave_list": []}
 
     client.send_command.return_value = {"raw": "OK"}
     return client
@@ -176,10 +176,8 @@ def mock_wiim_dispatcher():
 # True the plugin downgrades lingering-thread assertions to warnings.
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def allow_unwatched_threads() -> bool:  # noqa: D401 – simple fixture
     """Tell pytest-homeassistant that background threads are expected."""
     return True
-
-
-

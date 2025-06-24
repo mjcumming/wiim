@@ -40,6 +40,22 @@ __all__ = [
 class VolumeCommandsMixin:
     """Mixin for volume control commands with optimistic state and debouncing."""
 
+    def volume_up(self) -> None:
+        """Increase volume (sync wrapper)."""
+        self.hass.async_create_task(self.async_volume_up())  # type: ignore[attr-defined]
+
+    def volume_down(self) -> None:
+        """Decrease volume (sync wrapper)."""
+        self.hass.async_create_task(self.async_volume_down())  # type: ignore[attr-defined]
+
+    def mute_volume(self, mute: bool) -> None:
+        """Mute the volume (sync wrapper)."""
+        self.hass.async_create_task(self.async_mute_volume(mute))  # type: ignore[attr-defined]
+
+    def set_volume_level(self, volume: float) -> None:
+        """Set volume level (sync wrapper)."""
+        self.hass.async_create_task(self.async_set_volume_level(volume))  # type: ignore[attr-defined]
+
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0..1."""
         # Required attributes from implementing class
@@ -232,12 +248,39 @@ class VolumeCommandsMixin:
 class PlaybackCommandsMixin:
     """Mixin for playback control commands with optimistic state."""
 
+    def media_play(self) -> None:
+        """Send play command (sync wrapper)."""
+        self.hass.async_create_task(self.async_media_play())  # type: ignore[attr-defined]
+
+    def media_pause(self) -> None:
+        """Send pause command (sync wrapper)."""
+        self.hass.async_create_task(self.async_media_pause())  # type: ignore[attr-defined]
+
+    def media_stop(self) -> None:
+        """Send stop command (sync wrapper)."""
+        self.hass.async_create_task(self.async_media_stop())  # type: ignore[attr-defined]
+
+    def media_next_track(self) -> None:
+        """Send next track command (sync wrapper)."""
+        self.hass.async_create_task(self.async_media_next_track())  # type: ignore[attr-defined]
+
+    def media_previous_track(self) -> None:
+        """Send previous track command (sync wrapper)."""
+        self.hass.async_create_task(self.async_media_previous_track())  # type: ignore[attr-defined]
+
+    def media_seek(self, position: float) -> None:
+        """Send seek command (sync wrapper)."""
+        self.hass.async_create_task(self.async_media_seek(position))  # type: ignore[attr-defined]
+
     async def async_media_play(self) -> None:
         """Send play command."""
+        import time
+
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_state = MediaPlayerState.PLAYING  # type: ignore[attr-defined]
+        self._optimistic_state_timestamp = time.time()  # type: ignore[attr-defined]
         self.async_write_ha_state()  # type: ignore[attr-defined]
 
         try:
@@ -250,15 +293,19 @@ class PlaybackCommandsMixin:
         except Exception:
             # Clear optimistic state on error so real state shows
             self._optimistic_state = None  # type: ignore[attr-defined]
+            self._optimistic_state_timestamp = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
 
     async def async_media_pause(self) -> None:
         """Send pause command."""
+        import time
+
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_state = MediaPlayerState.PAUSED  # type: ignore[attr-defined]
+        self._optimistic_state_timestamp = time.time()  # type: ignore[attr-defined]
         self.async_write_ha_state()  # type: ignore[attr-defined]
 
         try:
@@ -271,15 +318,19 @@ class PlaybackCommandsMixin:
         except Exception:
             # Clear optimistic state on error so real state shows
             self._optimistic_state = None  # type: ignore[attr-defined]
+            self._optimistic_state_timestamp = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
 
     async def async_media_stop(self) -> None:
         """Send stop command."""
+        import time
+
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_state = MediaPlayerState.IDLE  # type: ignore[attr-defined]
+        self._optimistic_state_timestamp = time.time()  # type: ignore[attr-defined]
         self.async_write_ha_state()  # type: ignore[attr-defined]
 
         try:
@@ -292,6 +343,7 @@ class PlaybackCommandsMixin:
         except Exception:
             # Clear optimistic state on error so real state shows
             self._optimistic_state = None  # type: ignore[attr-defined]
+            self._optimistic_state_timestamp = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
 
@@ -340,6 +392,22 @@ class PlaybackCommandsMixin:
 
 class SourceCommandsMixin:
     """Mixin for source and mode selection commands with optimistic state."""
+
+    def select_source(self, source: str) -> None:
+        """Select input source (sync wrapper)."""
+        self.hass.async_create_task(self.async_select_source(source))  # type: ignore[attr-defined]
+
+    def select_sound_mode(self, sound_mode: str) -> None:
+        """Select sound mode (sync wrapper)."""
+        self.hass.async_create_task(self.async_select_sound_mode(sound_mode))  # type: ignore[attr-defined]
+
+    def set_shuffle(self, shuffle: bool) -> None:
+        """Enable/disable shuffle mode (sync wrapper)."""
+        self.hass.async_create_task(self.async_set_shuffle(shuffle))  # type: ignore[attr-defined]
+
+    def set_repeat(self, repeat: str) -> None:
+        """Set repeat mode (sync wrapper)."""
+        self.hass.async_create_task(self.async_set_repeat(repeat))  # type: ignore[attr-defined]
 
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
@@ -422,6 +490,14 @@ class SourceCommandsMixin:
 class GroupCommandsMixin:
     """Mixin for group management commands."""
 
+    def join_players(self, group_members: list[str]) -> None:
+        """Join speakers into a group (sync wrapper)."""
+        self.hass.async_create_task(self.async_join(group_members))  # type: ignore[attr-defined]
+
+    def unjoin_player(self) -> None:
+        """Remove this speaker from any group (sync wrapper)."""
+        self.hass.async_create_task(self.async_unjoin())  # type: ignore[attr-defined]
+
     async def async_join(self, group_members: list[str]) -> None:
         """Join speakers into a group."""
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
@@ -471,6 +547,10 @@ class GroupCommandsMixin:
 
 class MediaCommandsMixin:
     """Mixin for media playback commands (URLs, presets, media types)."""
+
+    def play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
+        """Play a piece of media (sync wrapper)."""
+        self.hass.async_create_task(self.async_play_media(media_type, media_id, **kwargs))  # type: ignore[attr-defined]
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         """Play a piece of media."""

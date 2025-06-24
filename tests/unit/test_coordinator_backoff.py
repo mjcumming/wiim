@@ -1,6 +1,5 @@
 """Test coordinator backoff logic."""
 
-import pytest
 from datetime import timedelta
 
 from custom_components.wiim.coordinator_backoff import BackoffController

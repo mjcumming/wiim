@@ -15,11 +15,11 @@ from .models import PlayerStatus, TrackMetadata
 _LOGGER = logging.getLogger(__name__)
 
 __all__ = [
-    "get_track_metadata_defensive",
+    "fetch_track_metadata",
 ]
 
 
-async def get_track_metadata_defensive(coordinator, status: PlayerStatus) -> TrackMetadata:
+async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetadata:
     """Return rich track metadata with graceful fall-back.
 
     The logic is identical to the previous ``WiiMCoordinator._get_track_metadata_defensive``

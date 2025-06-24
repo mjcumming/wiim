@@ -15,11 +15,11 @@ from .models import EQInfo
 _LOGGER = logging.getLogger(__name__)
 
 __all__ = [
-    "get_eq_info_defensive",
+    "fetch_eq_info",
 ]
 
 
-async def get_eq_info_defensive(coordinator) -> EQInfo:
+async def fetch_eq_info(coordinator) -> EQInfo:
     """Return EQ information model (may be empty)."""
 
     if coordinator._eq_supported is False:  # noqa: SLF001

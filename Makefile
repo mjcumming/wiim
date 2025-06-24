@@ -16,6 +16,8 @@ help:
 	@echo "  test-quick     - Run tests without coverage (faster)"
 	@echo ""
 	@echo "Code Quality:"
+	@echo "  validate       - Validate refactor integrity & API consistency"
+	@echo "  pre-commit     - Run all pre-commit validation checks"
 	@echo "  lint           - Run linting checks"
 	@echo "  format         - Format code with ruff"
 	@echo "  check-all      - Run all quality checks"
@@ -76,12 +78,20 @@ lint:
 	@echo "📏 Running file size check..."
 	@python scripts/ruff_size_check.py custom_components/wiim 300 400
 
+validate:
+	@echo "🔍 Validating refactor integrity..."
+	python scripts/validate_refactor.py
+
+pre-commit:
+	@echo "🔄 Running pre-commit checks..."
+	bash scripts/pre_commit_check.sh
+
 format:
 	@echo "🎨 Formatting code with ruff..."
 	-python -m ruff format custom_components/wiim/
 	-python -m ruff format tests/
 
-check-all: lint test
+check-all: validate lint test
 	@echo "✅ All quality checks completed"
 
 # Build targets

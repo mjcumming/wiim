@@ -1,14 +1,15 @@
 """Test WiiM coordinator with comprehensive coverage of refactored architecture."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wiim import DOMAIN
 from custom_components.wiim.api import WiiMError
 from custom_components.wiim.coordinator import WiiMCoordinator
-from custom_components.wiim.models import PlayerStatus, DeviceInfo, TrackMetadata, EQInfo, PollingMetrics
+from custom_components.wiim.models import DeviceInfo, EQInfo, PlayerStatus, PollingMetrics, TrackMetadata
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
 
 

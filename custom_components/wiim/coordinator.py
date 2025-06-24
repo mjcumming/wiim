@@ -168,7 +168,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.error("[WiiM] %s: Unexpected error in get_player_status: %s", self.client.host, err)
             raise
 
-    async def _get_device_info_defensive(self) -> dict[str, Any]:
+    async def _fetch_device_info(self) -> dict[str, Any]:
         """Fetch device information, handling potential errors or missing support."""
         try:
             from . import coordinator_endpoints as _endpoints
@@ -197,19 +197,19 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return await _poll.async_update_data(self)
 
-    async def _get_multiroom_info_defensive(self) -> dict:
+    async def _fetch_multiroom_info(self) -> dict:
         """Get multiroom info with graceful failure handling."""
         try:
-            return await self.client.get_multiroom_info() or {}
+            return await self.client.get_multiroom_status() or {}
         except WiiMError as err:
-            _LOGGER.debug("[WiiM] %s: get_multiroom_info failed: %s", self.client.host, err)
+            _LOGGER.debug("[WiiM] %s: get_multiroom_status failed: %s", self.client.host, err)
             return {}
 
-    async def _get_track_metadata_defensive(self, status: PlayerStatus) -> dict:  # noqa: D401
+    async def _fetch_track_metadata(self, status: PlayerStatus) -> dict:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_metadata* helper."""
         from . import coordinator_metadata as _meta
 
-        return await _meta.get_track_metadata_defensive(self, status)
+        return await _meta.fetch_track_metadata(self, status)
 
     def _enhance_metadata_with_artwork(self, metadata: dict, status: dict) -> dict:  # noqa: D401
         """Delegated to *coordinator_metadata* (legacy shim)."""
@@ -224,11 +224,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return _meta._extract_basic_metadata(self, status)
 
-    async def _get_eq_info_defensive(self) -> dict:  # noqa: D401
+    async def _fetch_eq_info(self) -> dict:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_eq* helper."""
         from . import coordinator_eq as _eq
 
-        return await _eq.get_eq_info_defensive(self)
+        return await _eq.fetch_eq_info(self)
 
     def _should_update_device_info(self) -> bool:
         """Check if we should update device info (every 30-60 seconds)."""
@@ -366,7 +366,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return friendly name for the device."""
         return self.device_name
 
-    async def _resolve_multiroom_source_and_media(self, status: PlayerStatus, metadata: dict, role: str) -> None:  # noqa: D401
+    async def _resolve_multiroom_source_and_media(
+        self, status: PlayerStatus, metadata: dict, role: str
+    ) -> None:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_multiroom* helper."""
         from . import coordinator_multiroom as _mr
 

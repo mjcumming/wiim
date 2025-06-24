@@ -1,9 +1,5 @@
 """Test coordinator normalise helpers."""
 
-import pytest
-
-from custom_components.wiim.coordinator_normalise import normalise_device_info
-from custom_components.wiim.models import DeviceInfo
 from custom_components.wiim.const import (
     DSP_VERSION_KEY,
     FIRMWARE_DATE_KEY,
@@ -16,6 +12,8 @@ from custom_components.wiim.const import (
     UPDATE_AVAILABLE_KEY,
     WMRM_VERSION_KEY,
 )
+from custom_components.wiim.coordinator_normalise import normalise_device_info
+from custom_components.wiim.models import DeviceInfo
 
 
 def test_normalise_device_info_basic():

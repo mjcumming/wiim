@@ -90,7 +90,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Multi-room info
         # ------------------------------------------------------------------
         _LOGGER.debug("Step 3: Getting multiroom info for %s", coordinator.client.host)
-        multiroom_info = await coordinator._get_multiroom_info_defensive()
+        multiroom_info = await coordinator._fetch_multiroom_info()
         _LOGGER.debug(
             "Multiroom info result for %s%s",
             coordinator.client.host,
@@ -102,7 +102,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Track metadata
         # ------------------------------------------------------------------
         _LOGGER.debug("Step 4: Getting track metadata for %s", coordinator.client.host)
-        track_metadata_model = await coordinator._get_track_metadata_defensive(status_model)
+        track_metadata_model = await coordinator._fetch_track_metadata(status_model)
         track_metadata = track_metadata_model.model_dump(exclude_none=True)
         _LOGGER.debug(
             "Track metadata result for %s%s",
@@ -140,7 +140,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # EQ info
         # ------------------------------------------------------------------
         _LOGGER.debug("Step 5: Getting EQ info for %s", coordinator.client.host)
-        eq_info_model = await coordinator._get_eq_info_defensive()
+        eq_info_model = await coordinator._fetch_eq_info()
         eq_info = eq_info_model.model_dump(exclude_none=True)
         _LOGGER.debug(
             "EQ info result for %s%s",
