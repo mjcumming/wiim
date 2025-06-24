@@ -37,7 +37,6 @@ from .models import PlayerStatus
 
 if TYPE_CHECKING:
     from .coordinator import WiiMCoordinator
-    from .models import DeviceInfo as WiiMDeviceInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -125,7 +124,7 @@ class Speaker:
         polling_available = self._available and self.coordinator.last_update_success
 
         # Check for recent command failures (immediate feedback)
-        if hasattr(self.coordinator, 'has_recent_command_failures'):
+        if hasattr(self.coordinator, "has_recent_command_failures"):
             has_command_failures = self.coordinator.has_recent_command_failures()
             if has_command_failures:
                 return False  # Command failed recently - device appears unavailable immediately
@@ -138,7 +137,7 @@ class Speaker:
 
     def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
-        status_model = (self.coordinator.data.get("status_model") if self.coordinator and self.coordinator.data else None)
+        status_model = self.coordinator.data.get("status_model") if self.coordinator and self.coordinator.data else None
         status: dict[str, Any] = (
             status_model.model_dump(exclude_none=True) if isinstance(status_model, PlayerStatus) else {}
         )
@@ -225,7 +224,11 @@ class Speaker:
 
             # Update config entry title so that options dialog & integrations page reflect new name
             # Only update if user hasn't manually overridden title via UI (HA allows editing).
-            if self.config_entry.title == self.name or self.config_entry.title in [self._extract_device_name({}), "WiiM Speaker", "WiiM Device"]:
+            if self.config_entry.title == self.name or self.config_entry.title in [
+                self._extract_device_name({}),
+                "WiiM Speaker",
+                "WiiM Device",
+            ]:
                 self.hass.config_entries.async_update_entry(self.config_entry, title=new_name)
 
         # Update role and group state
@@ -279,11 +282,11 @@ class Speaker:
                 slave_speaker.coordinator_speaker = self
             else:
                 # Missing slave - trigger discovery
-                _LOGGER.warning("Master %s cannot find slave %s (IP: %s, UUID: %s)",
-                                self.name, slave_name, slave_ip, slave_uuid)
+                _LOGGER.warning(
+                    "Master %s cannot find slave %s (IP: %s, UUID: %s)", self.name, slave_name, slave_ip, slave_uuid
+                )
                 if slave_uuid:
-                    self.hass.async_create_task(
-                        self._trigger_missing_device_discovery(slave_uuid, slave_name))
+                    self.hass.async_create_task(self._trigger_missing_device_discovery(slave_uuid, slave_name))
 
         self.group_members = new_group_members
 
@@ -298,8 +301,7 @@ class Speaker:
             else:
                 _LOGGER.warning("Slave %s cannot find master UUID: %s", self.name, master_uuid)
                 # Trigger discovery for missing master
-                self.hass.async_create_task(
-                    self._trigger_missing_device_discovery(master_uuid, "Missing Master"))
+                self.hass.async_create_task(self._trigger_missing_device_discovery(master_uuid, "Missing Master"))
 
     def _clear_group_state(self) -> None:
         """Clear group state for solo speakers."""
@@ -318,7 +320,8 @@ class Speaker:
 
             # Check for existing discovery flows
             existing_flows = [
-                flow for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+                flow
+                for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN)
                 if flow.get("context", {}).get("unique_id") == device_uuid
             ]
             if existing_flows:
@@ -333,7 +336,7 @@ class Speaker:
                     "device_uuid": device_uuid,
                     "device_name": device_name,
                     "discovery_source": "missing_device",
-                }
+                },
             )
         except Exception as err:
             _LOGGER.error("Failed to trigger discovery for %s: %s", device_name, err)
@@ -531,10 +534,10 @@ class Speaker:
         for n in names:
             if hasattr(self.status_model, n):
                 val = getattr(self.status_model, n)
-            if isinstance(val, str) and val.strip().lower() in {"unknown", "unknow", "none"}:
-                continue
-            if val not in (None, ""):
-                return val
+                if isinstance(val, str) and val.strip().lower() in {"unknown", "unknow", "none"}:
+                    continue
+                if val not in (None, ""):
+                    return val
         return None
 
     def get_media_title(self) -> str | None:
@@ -595,6 +598,7 @@ class Speaker:
             return None
         try:
             from .const import SOURCE_MAP
+
             return SOURCE_MAP.get(str(source_internal).lower(), str(source_internal))
         except Exception:
             return str(source_internal)
@@ -608,10 +612,7 @@ class Speaker:
             return None
 
         # Use the model exclusively from here on.
-        shuffle_val = (
-            self.status_model.shuffle
-            or self.status_model.play_mode
-        )
+        shuffle_val = self.status_model.shuffle or self.status_model.play_mode
 
         if shuffle_val is None:
             return None
@@ -627,10 +628,7 @@ class Speaker:
         if self.status_model is None:
             return None
 
-        repeat_val = (
-            self.status_model.repeat
-            or self.status_model.play_mode
-        )
+        repeat_val = self.status_model.repeat or self.status_model.play_mode
 
         if repeat_val is None:
             return None
@@ -654,6 +652,7 @@ class Speaker:
 
         try:
             from .const import EQ_PRESET_MAP
+
             return EQ_PRESET_MAP.get(str(eq_preset).lower(), str(eq_preset).title())
         except Exception:
             return str(eq_preset).title()
@@ -732,10 +731,7 @@ def update_speaker_ip(hass: HomeAssistant, speaker: Speaker, new_ip: str) -> Non
     _LOGGER.info("Updating speaker %s IP: %s -> %s", speaker.name, speaker.ip_address, new_ip)
 
     # Update config entry
-    hass.config_entries.async_update_entry(
-        speaker.config_entry,
-        data={**speaker.config_entry.data, CONF_HOST: new_ip}
-    )
+    hass.config_entries.async_update_entry(speaker.config_entry, data={**speaker.config_entry.data, CONF_HOST: new_ip})
 
     # Update speaker object
     speaker.ip_address = new_ip

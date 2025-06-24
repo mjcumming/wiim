@@ -86,8 +86,10 @@ class MediaPlayerController:
 
         Called when track metadata changes to ensure cover art updates.
         """
-        # Delegate to helper cache now
-        self._image_cache._clear()  # type: ignore[attr-defined]
+        # Clear individual cache attributes
+        self._media_image_url_cached = None
+        self._media_image_bytes = None
+        self._media_image_content_type = None
         self._logger.debug("Cleared media image cache for %s", self.speaker.name)
 
     # ===== VOLUME CONTROL =====
@@ -533,7 +535,9 @@ class MediaPlayerController:
             group_members: List of entity IDs to group with
         """
         if not group_members:
-            self._logger.debug("join_group called with an empty list – treating as leave_group request for %s", self.speaker.name)
+            self._logger.debug(
+                "join_group called with an empty list – treating as leave_group request for %s", self.speaker.name
+            )
             await self.leave_group()
             return
         try:
@@ -585,9 +589,7 @@ class MediaPlayerController:
             if not speakers and hasattr(self.speaker, "resolve_entity_ids_to_speakers"):
                 try:
                     speakers = self.speaker.resolve_entity_ids_to_speakers(group_members) or []
-                    self._logger.debug(
-                        "Fallback resolve_entity_ids_to_speakers returned %d speakers", len(speakers)
-                    )
+                    self._logger.debug("Fallback resolve_entity_ids_to_speakers returned %d speakers", len(speakers))
                 except Exception as err:  # pragma: no cover – safety
                     self._logger.debug("Fallback resolver raised error: %s", err)
 
@@ -857,9 +859,7 @@ class MediaPlayerController:
                 pass
 
             if not 1 <= preset <= max_slots:
-                raise ValueError(
-                    f"Preset must be between 1 and {max_slots}, got {preset} for {self.speaker.name}"
-                )
+                raise ValueError(f"Preset must be between 1 and {max_slots}, got {preset} for {self.speaker.name}")
 
             self._logger.debug("Playing preset %d for %s", preset, self.speaker.name)
 
