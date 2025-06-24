@@ -46,11 +46,11 @@ media_player_browser.py   # ~300 LOC - Media browser + quick stations + utilitie
 
 #### Progress Tracker - **Natural Boundaries Approach**
 
-- [ ] **media_player_browser.py** - Extract media browsing & utilities
-  - [ ] `async_browse_media()` implementation
-  - [ ] Quick stations YAML loading & caching
-  - [ ] Hex URL decoding helper
-  - [ ] App name validation utilities
+- [x] **media_player_browser.py** - Extract media browsing & utilities ✅ COMPLETE (commit: 0f1bb86)
+  - [x] `async_browse_media()` implementation
+  - [x] Quick stations YAML loading & caching
+  - [x] Hex URL decoding helper
+  - [x] App name validation utilities
 - [ ] **media_player_commands.py** - Extract all command methods
   - [ ] Volume commands (set/up/down/mute) with optimistic updates
   - [ ] Playback commands (play/pause/stop/seek) with error handling
@@ -163,6 +163,6 @@ data_helpers.py      # 142 LOC - Lookup functions, device registration, IP updat
 
 ---
 
-**Next Action**: ✅ Data layer complete → Extract media_player_browser.py (Day 5-7) - Natural boundaries approach!
+**Next Action**: ✅ Browser extraction complete → Extract media_player_commands.py (Day 8-10) - 500 LOC command methods!
 
 _Updated: Phase 2 planning complete, ready to begin implementation_
