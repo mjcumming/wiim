@@ -21,17 +21,26 @@ This follows cursor rules: simple, composable, < 200 LOC modules.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo as HADeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import DOMAIN
+
+# Helper functions moved to data_helpers.py as part of Phase 2 refactor
+# Import them here to maintain backward compatibility
+from .data_helpers import (
+    find_speaker_by_ip,
+    find_speaker_by_uuid,
+    get_all_speakers,
+    get_speaker_from_config_entry,
+    update_speaker_ip,
+)
 from .models import DeviceInfo as WiiMDeviceInfo
 from .models import PlayerStatus
 
@@ -46,6 +55,7 @@ __all__ = [
     "find_speaker_by_uuid",
     "find_speaker_by_ip",
     "get_all_speakers",
+    "update_speaker_ip",
 ]
 
 
@@ -680,58 +690,3 @@ class Speaker:
             if isinstance(raw, WiiMDeviceInfo):
                 return raw
         return None
-
-
-# Simplified helper functions replacing complex registry
-def get_speaker_from_config_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> Speaker:
-    """Get speaker from config entry - standard HA pattern."""
-    try:
-        return cast(Speaker, hass.data[DOMAIN][config_entry.entry_id]["speaker"])
-    except KeyError as err:
-        _LOGGER.error("Speaker not found for config entry %s: %s", config_entry.entry_id, err)
-        raise RuntimeError(f"Speaker not found for {config_entry.entry_id}") from err
-
-
-def find_speaker_by_uuid(hass: HomeAssistant, uuid: str) -> Speaker | None:
-    """Find speaker by UUID using config entry iteration."""
-    if not uuid:
-        return None
-
-    entry = hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, uuid)
-    if entry and entry.entry_id in hass.data.get(DOMAIN, {}):
-        return get_speaker_from_config_entry(hass, entry)
-    return None
-
-
-def find_speaker_by_ip(hass: HomeAssistant, ip: str) -> Speaker | None:
-    """Find speaker by IP address using config entry iteration."""
-    if not ip:
-        return None
-
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.data.get(CONF_HOST) == ip and entry.entry_id in hass.data.get(DOMAIN, {}):
-            return get_speaker_from_config_entry(hass, entry)
-    return None
-
-
-def get_all_speakers(hass: HomeAssistant) -> list[Speaker]:
-    """Get all registered speakers."""
-    speakers = []
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.entry_id in hass.data.get(DOMAIN, {}):
-            speakers.append(get_speaker_from_config_entry(hass, entry))
-    return speakers
-
-
-def update_speaker_ip(hass: HomeAssistant, speaker: Speaker, new_ip: str) -> None:
-    """Update speaker IP address through config entry system."""
-    if speaker.ip_address == new_ip:
-        return
-
-    _LOGGER.info("Updating speaker %s IP: %s -> %s", speaker.name, speaker.ip_address, new_ip)
-
-    # Update config entry
-    hass.config_entries.async_update_entry(speaker.config_entry, data={**speaker.config_entry.data, CONF_HOST: new_ip})
-
-    # Update speaker object
-    speaker.ip_address = new_ip
