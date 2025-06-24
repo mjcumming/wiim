@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.wiim.api import WiiMError
-from custom_components.wiim.coordinator_eq import get_eq_info_defensive
+from custom_components.wiim.coordinator_eq import fetch_eq_info
 from custom_components.wiim.models import EQInfo
 
 
@@ -23,7 +23,7 @@ async def test_eq_info_not_supported(mock_coordinator):
     """Test EQ info when EQ is not supported."""
     mock_coordinator._eq_supported = False
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is None
@@ -36,7 +36,7 @@ async def test_eq_info_success_first_time(mock_coordinator):
     mock_coordinator.client.get_eq_status = AsyncMock(return_value=True)
     mock_coordinator.client.get_eq = AsyncMock(return_value={"enabled": True, "preset": "rock", "EQ": "Rock Mode"})
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is True
@@ -50,7 +50,7 @@ async def test_eq_info_success_already_supported(mock_coordinator):
     mock_coordinator.client.get_eq_status = AsyncMock(return_value=False)
     mock_coordinator.client.get_eq = AsyncMock(return_value={"enabled": False, "preset": "flat"})
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is False
@@ -63,7 +63,7 @@ async def test_eq_info_unknown_command_response(mock_coordinator):
     mock_coordinator.client.get_eq_status = AsyncMock(return_value=True)
     mock_coordinator.client.get_eq = AsyncMock(return_value={"raw": "unknown command: getEQ"})
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is True  # Status was successful
@@ -88,7 +88,7 @@ async def test_eq_info_preset_field_variations(mock_coordinator):
     for field_name, preset_value in preset_fields:
         mock_coordinator.client.get_eq = AsyncMock(return_value={field_name: preset_value})
 
-        result = await get_eq_info_defensive(mock_coordinator)
+        result = await fetch_eq_info(mock_coordinator)
 
         assert isinstance(result, EQInfo)
         assert result.eq_preset == preset_value
@@ -99,7 +99,7 @@ async def test_eq_info_wiim_error_first_time(mock_coordinator):
     mock_coordinator._eq_supported = None  # First time
     mock_coordinator.client.get_eq_status = AsyncMock(side_effect=WiiMError("EQ not supported"))
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is None
@@ -112,7 +112,7 @@ async def test_eq_info_wiim_error_known_supported(mock_coordinator):
     mock_coordinator._eq_supported = True  # Known to be supported
     mock_coordinator.client.get_eq_status = AsyncMock(side_effect=WiiMError("Temporary failure"))
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is None
@@ -127,7 +127,7 @@ async def test_eq_info_partial_data(mock_coordinator):
     mock_coordinator.client.get_eq_status = AsyncMock(return_value=True)
     mock_coordinator.client.get_eq = AsyncMock(return_value={})  # Empty data
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is True  # From status call
@@ -140,7 +140,7 @@ async def test_eq_info_status_failure_eq_success(mock_coordinator):
     mock_coordinator.client.get_eq_status = AsyncMock(side_effect=WiiMError("Status failed"))
     mock_coordinator.client.get_eq = AsyncMock(return_value={"enabled": False, "preset": "flat"})
 
-    result = await get_eq_info_defensive(mock_coordinator)
+    result = await fetch_eq_info(mock_coordinator)
 
     assert isinstance(result, EQInfo)
     # Should use data from get_eq call
