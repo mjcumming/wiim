@@ -1,0 +1,357 @@
+"""WiiM Media Player Browser Support.
+
+This module handles all media browsing functionality including:
+- Media browser tree implementation
+- Quick stations YAML loading and caching
+- Hex URL decoding utilities
+- App name validation and streaming service mapping
+
+Extracted from media_player.py as part of Phase 2 refactor to create focused,
+maintainable modules following natural code boundaries.
+
+Following the successful API refactor pattern with logical cohesion over arbitrary size limits.
+"""
+
+from __future__ import annotations
+
+import binascii
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING
+from urllib.parse import urlparse
+
+from homeassistant.util import yaml as hass_yaml
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from .data import Speaker
+
+_LOGGER = logging.getLogger(__name__)
+
+__all__ = [
+    "MediaBrowserMixin",
+    "AppNameValidatorMixin",
+    "QuickStationsMixin",
+    "HexUrlDecoderMixin",
+]
+
+
+class QuickStationsMixin:
+    """Mixin for quick stations YAML loading and caching."""
+
+    def __init__(self) -> None:
+        """Initialize quick stations tracking."""
+        self._quick_stations_path: Path | None = None
+        self._quick_station_cache: list[dict[str, str]] = []
+
+    async def _async_load_quick_stations(self) -> list[dict[str, str]]:
+        """Read user-defined quick stations from config/wiim_stations.yaml.
+
+        YAML structure expected:
+          - name: Friendly Name
+            url: http://stream...
+        Returns an empty list if the file is missing or malformed.
+        """
+        # Must be implemented by entity class
+        hass: HomeAssistant = self.hass  # type: ignore[attr-defined]
+        if hass is None:
+            return []  # Should not happen once browse is called
+
+        try:
+            if self._quick_stations_path is None:
+                self._quick_stations_path = Path(hass.config.path("wiim_stations.yaml"))
+
+            if not self._quick_stations_path.exists():
+                return []
+
+            data = await hass.async_add_executor_job(hass_yaml.load_yaml, str(self._quick_stations_path))
+            if not isinstance(data, list):
+                return []
+
+            stations: list[dict[str, str]] = []
+            for entry in data:
+                if isinstance(entry, dict) and entry.get("name") and entry.get("url"):
+                    stations.append({"name": str(entry["name"]), "url": str(entry["url"])})
+
+            # Cache for quick lookup in media_title
+            self._quick_station_cache = stations
+            return stations
+
+        except Exception as err:  # pragma: no cover – non-critical
+            _LOGGER.warning("Failed to load quick stations YAML: %s", err)
+            return []
+
+    async def _async_lookup_quick_station_title(self, url: str) -> str | None:
+        """Return station name for given URL if present in quick stations list."""
+        stations = await self._async_load_quick_stations()
+        for st in stations:
+            if st.get("url") == url:
+                return st.get("name")
+        return None
+
+
+class HexUrlDecoderMixin:
+    """Mixin for hex URL decoding utilities."""
+
+    _HEX_CHARS = set("0123456789abcdefABCDEF")
+
+    @staticmethod
+    def _maybe_decode_hex_url(text: str) -> str | None:
+        """Decode hex-encoded URL strings (e.g. '68747470...') to filename."""
+        if not text or len(text) % 2 or any(c not in HexUrlDecoderMixin._HEX_CHARS for c in text):
+            return None
+        try:
+            decoded_url = binascii.unhexlify(text).decode("utf-8", "ignore")
+            path = urlparse(decoded_url).path
+            if path:
+                return path.rsplit("/", 1)[-1].lstrip("/") or decoded_url
+            return decoded_url
+        except Exception:
+            return None
+
+
+class AppNameValidatorMixin:
+    """Mixin for app name validation and streaming service mapping."""
+
+    def _is_valid_app_name(self, text: str) -> bool:
+        """Check if app name text is valid and not garbage.
+
+        Uses same comprehensive filtering as media text to prevent
+        "wiim 192 168 1 68" and similar garbage from showing up.
+
+        Args:
+            text: The text to validate
+
+        Returns:
+            True if text is valid app/service name, False if garbage
+        """
+        if not text or not isinstance(text, str):
+            return False
+
+        text_clean = text.strip().lower()
+
+        # Must be at least 2 characters
+        if len(text_clean) < 2:
+            return False
+
+        # Filter out text starting with "wiim" (catches "wiim 192 168 1 68" etc.)
+        if text_clean.startswith("wiim"):
+            return False
+
+        # Filter out text containing IP address patterns
+        import re
+
+        ip_pattern = r"\b\d{1,3}[\s\.]?\d{1,3}[\s\.]?\d{1,3}[\s\.]?\d{1,3}\b"
+        if re.search(ip_pattern, text_clean):
+            return False
+
+        # Filter out generic garbage values
+        garbage_values = {
+            "unknown",
+            "none",
+            "null",
+            "undefined",
+            "n/a",
+            "na",
+            "not available",
+            "no data",
+            "empty",
+            "---",
+            "...",
+            "loading",
+            "buffering",
+            "connecting",
+            "error",
+        }
+        if text_clean in garbage_values:
+            return False
+
+        # Filter out purely numeric text (likely technical IDs)
+        if text_clean.replace(" ", "").replace(".", "").replace("-", "").replace("_", "").isdigit():
+            return False
+
+        # Text passes all filters
+        return True
+
+    def get_app_name(self) -> str | None:
+        """Return the name of the current streaming service.
+
+        This maps internal source codes to user-friendly streaming service names.
+        Requires the implementing class to have a 'speaker' attribute.
+        """
+        # Must be implemented by entity class
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        status_model = speaker.status_model
+
+        if status_model is None:
+            return None  # Typed model always expected in new architecture
+
+        source = status_model.source
+        streaming_service = getattr(status_model, "streaming_service", None)
+
+        # First try explicit streaming service field
+        if streaming_service and self._is_valid_app_name(str(streaming_service)):
+            return str(streaming_service)
+
+        if source and self._is_valid_app_name(str(source)):
+            streaming_map = {
+                "spotify": "Spotify",
+                "tidal": "Tidal",
+                "qobuz": "Qobuz",
+                "amazon": "Amazon Music",
+                "deezer": "Deezer",
+                "airplay": "AirPlay",
+                "dlna": "DLNA",
+            }
+            src_lower = str(source).lower()
+            return streaming_map.get(src_lower)
+
+        return None
+
+
+class MediaBrowserMixin:
+    """Mixin for media browser tree implementation."""
+
+    async def async_browse_media(self, media_content_type: str | None = None, media_content_id: str | None = None):
+        """Provide a Media Browser tree with Presets and Quick Stations shelves."""
+        from homeassistant.components.media_player.browse_media import (
+            BrowseMedia,
+            MediaClass,
+        )
+
+        # HA 2024.6 renamed BrowseError → BrowseMediaError; add fallback.
+        try:
+            from homeassistant.components.media_player.browse_media import BrowseError as _BrowseError
+        except ImportError:  # pragma: no cover
+            from homeassistant.exceptions import HomeAssistantError as _BrowseError
+
+        # Must be implemented by entity class
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+
+        # Fetch presets from coordinator
+        presets: list[dict] = speaker.coordinator.data.get("presets", []) if speaker.coordinator.data else []
+        # Show the Presets shelf whenever the device claims to support presets OR
+        # we have not yet determined support. Only hide it when we explicitly
+        # know presets are unsupported.
+        presets_capability = getattr(speaker.coordinator, "_presets_supported", None)
+        presets_supported = presets_capability is not False  # None (unknown) or True ⇒ show
+
+        # Load user defined quick stations (if any)
+        quick_stations: list[dict[str, str]] = await self._async_load_quick_stations()
+
+        # ===== ROOT LEVEL =====
+        if media_content_id in (None, "root"):
+            children: list[BrowseMedia] = []
+
+            if presets_supported:
+                children.append(
+                    BrowseMedia(
+                        media_class=MediaClass.DIRECTORY,
+                        media_content_id="presets",
+                        media_content_type="presets",
+                        title="Presets",
+                        can_play=False,
+                        can_expand=True,
+                        children=[],
+                        thumbnail=None,
+                    )
+                )
+
+            if quick_stations:
+                children.append(
+                    BrowseMedia(
+                        media_class=MediaClass.DIRECTORY,
+                        media_content_id="quick",
+                        media_content_type="quick",
+                        title="Quick Stations",
+                        can_play=False,
+                        can_expand=True,
+                        children=[],
+                        thumbnail=None,
+                    )
+                )
+
+            if not children:
+                # No content to show – return empty shelf
+                return BrowseMedia(
+                    media_class=MediaClass.DIRECTORY,
+                    media_content_id="root",
+                    media_content_type="root",
+                    title=speaker.name,
+                    can_play=False,
+                    can_expand=False,
+                    children=[],
+                )
+
+            return BrowseMedia(
+                media_class=MediaClass.DIRECTORY,
+                media_content_id="root",
+                media_content_type="root",
+                title=speaker.name,
+                can_play=False,
+                can_expand=True,
+                children=children,
+            )
+
+        # ===== QUICK STATIONS LEVEL =====
+        if media_content_id == "quick":
+            items: list[BrowseMedia] = []
+            for st in quick_stations:
+                items.append(
+                    BrowseMedia(
+                        media_class=MediaClass.MUSIC,
+                        media_content_id=st["url"],
+                        media_content_type="url",
+                        title=st["name"],
+                        can_play=True,
+                        can_expand=False,
+                        thumbnail=None,
+                    )
+                )
+
+            # Cache for quick lookup in media_title
+            self._quick_station_cache = quick_stations
+            return BrowseMedia(
+                media_class=MediaClass.DIRECTORY,
+                media_content_id="quick",
+                media_content_type="quick",
+                title="Quick Stations",
+                can_play=False,
+                can_expand=True,
+                children=items,
+            )
+
+        # ===== PRESETS LEVEL =====
+        if media_content_id == "presets":
+            items: list[BrowseMedia] = []
+            for entry in presets:
+                title = entry.get("name") or f"Preset {entry.get('number')}"
+                number = entry.get("number")
+                url = entry.get("url") or ""
+                if not number or not url:
+                    continue
+                items.append(
+                    BrowseMedia(
+                        media_class=MediaClass.MUSIC,
+                        media_content_id=str(number),
+                        media_content_type="preset",
+                        title=title,
+                        can_play=True,
+                        can_expand=False,
+                        thumbnail=entry.get("picurl"),
+                    )
+                )
+
+            return BrowseMedia(
+                media_class=MediaClass.DIRECTORY,
+                media_content_id="presets",
+                media_content_type="presets",
+                title="Presets",
+                can_play=False,
+                can_expand=True,
+                children=items,
+            )
+
+        # Unknown
+        raise _BrowseError("Unknown media_content_id")
