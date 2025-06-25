@@ -139,7 +139,7 @@ def test_supported_features_available(group_media_player, mock_speaker):
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.NEXT_TRACK
         | MediaPlayerEntityFeature.PREVIOUS_TRACK
-        | MediaPlayerEntityFeature.GROUPING
+        # NOTE: GROUPING feature is intentionally excluded for virtual group players
     )
     assert features == expected_features
 
@@ -383,6 +383,30 @@ def test_extra_state_attributes_unavailable(group_media_player, mock_speaker):
     attrs = group_media_player.extra_state_attributes
     assert attrs["group_members"] == []
     assert attrs["group_coordinator"] is None
+
+
+@pytest.mark.asyncio
+async def test_async_join_players_prevented(group_media_player):
+    """Test that virtual group players cannot join other players."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await group_media_player.async_join_players(["media_player.kitchen"])
+
+    assert "Virtual group player" in str(exc_info.value)
+    assert "cannot join other players" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_async_unjoin_player_prevented(group_media_player):
+    """Test that virtual group players cannot be unjoined."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await group_media_player.async_unjoin_player()
+
+    assert "Virtual group player" in str(exc_info.value)
+    assert "cannot be unjoined" in str(exc_info.value)
 
 
 # Removed complex integration tests that aren't providing core value in beta

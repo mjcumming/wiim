@@ -88,9 +88,10 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
         """Return the supported features mirroring the coordinator."""
-        # Groups support all features of the coordinator
+        # Groups support all features of the coordinator EXCEPT grouping
+        # Virtual group players should not be able to join/unjoin other players
         if self.available and hasattr(self.speaker, "coordinator"):
-            # Mirror the features from the physical media player
+            # Mirror the features from the physical media player but exclude GROUPING
             features = (
                 MediaPlayerEntityFeature.VOLUME_SET
                 | MediaPlayerEntityFeature.VOLUME_MUTE
@@ -100,7 +101,8 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
                 | MediaPlayerEntityFeature.STOP
                 | MediaPlayerEntityFeature.NEXT_TRACK
                 | MediaPlayerEntityFeature.PREVIOUS_TRACK
-                | MediaPlayerEntityFeature.GROUPING
+                # NOTE: GROUPING feature is intentionally excluded
+                # Virtual group players should not participate in join/unjoin operations
             )
             return features
         return MediaPlayerEntityFeature(0)
@@ -325,6 +327,26 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             # TODO: Implement group dissolution logic
             # This would typically involve calling unjoin on all group members
             pass
+
+    async def async_join_players(self, group_members: list[str]) -> None:
+        """Prevent virtual group players from joining other players."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        _LOGGER.warning("Cannot join group - %s is a virtual group player", self.name)
+        raise HomeAssistantError(
+            f"Virtual group player '{self.name}' cannot join other players. "
+            "Use individual speaker entities for group operations."
+        )
+
+    async def async_unjoin_player(self) -> None:
+        """Prevent virtual group players from being unjoined."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        _LOGGER.warning("Cannot unjoin - %s is a virtual group player", self.name)
+        raise HomeAssistantError(
+            f"Virtual group player '{self.name}' cannot be unjoined. "
+            "Use individual speaker entities for group operations."
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
