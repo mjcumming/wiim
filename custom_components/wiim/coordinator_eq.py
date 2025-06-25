@@ -16,7 +16,65 @@ _LOGGER = logging.getLogger(__name__)
 
 __all__ = [
     "fetch_eq_info",
+    "extend_eq_preset_map_once",
 ]
+
+
+async def extend_eq_preset_map_once(coordinator) -> None:
+    """Fetch *additional* EQ presets from the device (EQGetList).
+
+    Some WiiM firmwares expose extra presets (e.g. "Latin", "Small Speakers").
+    We merge them into EQ_PRESET_MAP exactly once at start-up so they turn
+    up in the sound-mode dropdown.  If the endpoint is missing we simply
+    mark the attempt as done and move on silently.
+    """
+
+    # Guard – only run once per coordinator instance
+    if coordinator._eq_list_extended:
+        return
+
+    try:
+        presets = await coordinator.client.get_eq_presets()
+        if not isinstance(presets, list):
+            coordinator._eq_list_extended = True
+            return
+
+        import re
+
+        from .const import EQ_PRESET_MAP
+
+        def _slug(label: str) -> str:
+            slug = label.strip().lower().replace(" ", "_").replace("-", "_")
+            # keep only ascii letters/numbers/underscore
+            return re.sub(r"[^0-9a-z_]+", "", slug)
+
+        added: list[str] = []
+        for label in presets:
+            if not isinstance(label, str):
+                continue
+            key = _slug(label)
+            if key and key not in EQ_PRESET_MAP:
+                EQ_PRESET_MAP[key] = label
+                added.append(label)
+
+        if added:
+            _LOGGER.info(
+                "[WiiM] %s: Added %d additional EQ presets from EQGetList: %s",
+                coordinator.client.host,
+                len(added),
+                added,
+            )
+    except WiiMError as err:
+        _LOGGER.debug("[WiiM] %s: EQGetList not supported (%s)", coordinator.client.host, err)
+    except Exception as err:  # pragma: no cover – safety
+        _LOGGER.debug(
+            "[WiiM] %s: Unexpected error during EQ list fetch: %s",
+            coordinator.client.host,
+            err,
+        )
+    finally:
+        # Always mark as attempted so we do not retry every poll
+        coordinator._eq_list_extended = True
 
 
 async def fetch_eq_info(coordinator) -> EQInfo:

@@ -53,6 +53,9 @@ def mock_coordinator():
     coordinator._update_speaker_object = AsyncMock()
     coordinator._extend_eq_preset_map_once = AsyncMock()
 
+    # Mock client async methods
+    coordinator.client.get_presets = AsyncMock(return_value=[])
+
     return coordinator
 
 
@@ -60,8 +63,12 @@ async def test_polling_success_complete(mock_coordinator):
     """Test successful complete polling cycle."""
     # Mock all endpoint calls
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
@@ -114,7 +121,9 @@ async def test_polling_success_complete(mock_coordinator):
 
 async def test_polling_player_status_failure(mock_coordinator):
     """Test polling when player status fails."""
-    with patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status:
+    with patch(
+        "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+    ) as mock_player_status:
         mock_player_status.side_effect = WiiMError("Connection failed")
 
         with pytest.raises(UpdateFailed, match="Error updating WiiM device"):
@@ -130,8 +139,12 @@ async def test_polling_player_status_failure(mock_coordinator):
 async def test_polling_device_info_failure(mock_coordinator):
     """Test polling when device info fails but player status succeeds."""
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
     ):
         mock_player_status.return_value = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         mock_device_info.side_effect = WiiMError("Device info failed")
@@ -143,8 +156,12 @@ async def test_polling_device_info_failure(mock_coordinator):
 async def test_polling_presets_not_supported(mock_coordinator):
     """Test polling when presets are not supported."""
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
@@ -173,8 +190,12 @@ async def test_polling_presets_not_supported(mock_coordinator):
 async def test_polling_presets_already_not_supported(mock_coordinator):
     """Test polling when presets already known to be unsupported."""
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
@@ -203,8 +224,12 @@ async def test_polling_presets_already_not_supported(mock_coordinator):
 async def test_polling_artwork_propagation(mock_coordinator):
     """Test artwork propagation from metadata to status."""
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
@@ -238,8 +263,12 @@ async def test_polling_artwork_propagation(mock_coordinator):
 async def test_polling_eq_preset_propagation(mock_coordinator):
     """Test EQ preset propagation from EQ info to status."""
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
@@ -270,8 +299,12 @@ async def test_polling_eq_preset_propagation(mock_coordinator):
 async def test_polling_uuid_injection(mock_coordinator):
     """Test UUID injection when device API doesn't provide it."""
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
@@ -306,8 +339,12 @@ async def test_polling_uuid_injection(mock_coordinator):
 async def test_polling_response_time_tracking(mock_coordinator):
     """Test that response time is tracked."""
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
@@ -341,8 +378,12 @@ async def test_polling_command_failure_clearing(mock_coordinator):
     mock_coordinator._last_command_failure = 12345.0  # Some timestamp
 
     with (
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_player_status") as mock_player_status,
-        patch("custom_components.wiim.coordinator_polling._endpoints.fetch_device_info") as mock_device_info,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
+        ) as mock_player_status,
+        patch(
+            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
+        ) as mock_device_info,
         patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
         patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
         patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,

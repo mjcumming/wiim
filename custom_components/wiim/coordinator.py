@@ -1,4 +1,4 @@
-"""WiiM coordinator for fixed 5-second polling and device updates."""
+"""WiiM coordinator for polling and device updates."""
 
 from __future__ import annotations
 
@@ -438,58 +438,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Dynamic EQ preset discovery --------------------------------------
     # ------------------------------------------------------------------
 
-    async def _extend_eq_preset_map_once(self) -> None:
-        """Fetch *additional* EQ presets from the device (EQGetList).
+    async def _extend_eq_preset_map_once(self) -> None:  # noqa: D401
+        """Thin wrapper delegating heavy logic to *coordinator_eq* helper."""
+        from . import coordinator_eq as _eq
 
-        Some WiiM firmwares expose extra presets (e.g. "Latin", "Small Speakers").
-        We merge them into EQ_PRESET_MAP exactly once at start-up so they turn
-        up in the sound-mode dropdown.  If the endpoint is missing we simply
-        mark the attempt as done and move on silently.
-        """
-
-        # Guard – only run once per coordinator instance
-        if self._eq_list_extended:
-            return
-
-        try:
-            presets = await self.client.get_eq_presets()
-            if not isinstance(presets, list):
-                self._eq_list_extended = True
-                return
-
-            import re
-
-            from .const import EQ_PRESET_MAP
-
-            def _slug(label: str) -> str:
-                slug = label.strip().lower().replace(" ", "_").replace("-", "_")
-                # keep only ascii letters/numbers/underscore
-                return re.sub(r"[^0-9a-z_]+", "", slug)
-
-            added: list[str] = []
-            for label in presets:
-                if not isinstance(label, str):
-                    continue
-                key = _slug(label)
-                if key and key not in EQ_PRESET_MAP:
-                    EQ_PRESET_MAP[key] = label
-                    added.append(label)
-
-            if added:
-                _LOGGER.info(
-                    "[WiiM] %s: Added %d additional EQ presets from EQGetList: %s",
-                    self.client.host,
-                    len(added),
-                    added,
-                )
-        except WiiMError as err:
-            _LOGGER.debug("[WiiM] %s: EQGetList not supported (%s)", self.client.host, err)
-        except Exception as err:  # pragma: no cover – safety
-            _LOGGER.debug(
-                "[WiiM] %s: Unexpected error during EQ list fetch: %s",
-                self.client.host,
-                err,
-            )
-        finally:
-            # Always mark as attempted so we do not retry every poll
-            self._eq_list_extended = True
+        await _eq.extend_eq_preset_map_once(self)
