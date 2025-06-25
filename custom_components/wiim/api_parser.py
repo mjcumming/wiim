@@ -28,6 +28,8 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
     Returns:
         Tuple of (parsed_data, new_last_track)
     """
+    # Process API response
+
     data: dict[str, Any] = {}
 
     play_state_val = raw.get("state") or raw.get("player_state") or raw.get("status")
@@ -40,10 +42,10 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
             continue
         data[STATUS_MAP.get(k, k)] = v
 
-    # Hex-encoded strings → UTF-8.
-    data["title"] = _hex_to_str(raw.get("Title")) or raw.get("title")
-    data["artist"] = _hex_to_str(raw.get("Artist")) or raw.get("artist")
-    data["album"] = _hex_to_str(raw.get("Album")) or raw.get("album")
+    # Hex-encoded strings → UTF-8 (per LinkPlay API standard)
+    data["title"] = _decode_text(raw.get("Title")) or _decode_text(raw.get("title"))
+    data["artist"] = _decode_text(raw.get("Artist")) or _decode_text(raw.get("artist"))
+    data["album"] = _decode_text(raw.get("Album")) or _decode_text(raw.get("album"))
 
     # Track change detection for debug logging.
     new_last_track = last_track
@@ -66,11 +68,21 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
             _LOGGER.debug("Invalid volume value: %s", vol)
 
     # Playback position & duration (ms → s).
+    # Parse position and duration (convert ms to seconds)
     if (pos := raw.get("curpos") or raw.get("offset_pts")) is not None:
-        data["position"] = int(pos) // 1_000
-        data["position_updated_at"] = asyncio.get_running_loop().time()
+        try:
+            data["position"] = int(pos) // 1_000
+            data["position_updated_at"] = asyncio.get_running_loop().time()
+        except (ValueError, TypeError):
+            _LOGGER.debug("Invalid position value: %s", pos)
+
     if raw.get("totlen") is not None:
-        data["duration"] = int(raw["totlen"]) // 1_000
+        try:
+            duration_ms = int(raw["totlen"])
+            if duration_ms > 0:  # Only set duration if it's actually provided
+                data["duration"] = duration_ms // 1_000
+        except (ValueError, TypeError):
+            _LOGGER.debug("Invalid duration value: %s", raw.get("totlen"))
 
     # Mute → bool.
     if "mute" in data:
@@ -79,18 +91,32 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         except (TypeError, ValueError):  # noqa: PERF203 – clarity > micro perf.
             data["mute"] = bool(data["mute"])
 
-    # Play-mode mapping.
+    # Play-mode mapping from loop_mode bit flags.
+    # WiiM devices use bit flags: bit 0=repeat_one, bit 1=repeat_all, bit 2=shuffle
     if "play_mode" not in data and "loop_mode" in data:
         try:
             loop_val = int(data["loop_mode"])
         except (TypeError, ValueError):
-            loop_val = 4
-        data["play_mode"] = {
-            0: PLAY_MODE_REPEAT_ALL,
-            1: PLAY_MODE_REPEAT_ONE,
-            2: PLAY_MODE_SHUFFLE_REPEAT_ALL,
-            3: PLAY_MODE_SHUFFLE,
-        }.get(loop_val, PLAY_MODE_NORMAL)
+            loop_val = 0
+
+        # Decode bit flags
+        is_shuffle = bool(loop_val & 4)  # bit 2
+        is_repeat_one = bool(loop_val & 1)  # bit 0
+        is_repeat_all = bool(loop_val & 2)  # bit 1
+
+        # Map to play modes
+        if is_shuffle and is_repeat_all:
+            data["play_mode"] = PLAY_MODE_SHUFFLE_REPEAT_ALL
+        elif is_shuffle and is_repeat_one:
+            data["play_mode"] = PLAY_MODE_SHUFFLE  # WiiM doesn't support shuffle+repeat_one as separate mode
+        elif is_shuffle:
+            data["play_mode"] = PLAY_MODE_SHUFFLE
+        elif is_repeat_one:
+            data["play_mode"] = PLAY_MODE_REPEAT_ONE
+        elif is_repeat_all:
+            data["play_mode"] = PLAY_MODE_REPEAT_ALL
+        else:
+            data["play_mode"] = PLAY_MODE_NORMAL
 
     # Artwork – attempt cache-busting when metadata changes.
     cover = (
@@ -158,3 +184,19 @@ def _hex_to_str(val: str | None) -> str | None:
         return bytes.fromhex(val).decode("utf-8", errors="replace")
     except ValueError:
         return val
+
+
+def _decode_text(val: str | None) -> str | None:
+    """Decode hex-encoded UTF-8 strings, then clean up HTML entities."""
+    if not val:
+        return None
+
+    # First: Standard hex decoding as per API specification
+    decoded = _hex_to_str(val)
+    if decoded:
+        # Second: Clean up HTML entities that may appear in hex-decoded text
+        import html
+
+        return html.unescape(decoded)
+
+    return val

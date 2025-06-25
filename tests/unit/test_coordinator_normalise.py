@@ -45,8 +45,8 @@ def test_normalise_device_info_complete():
             "Release": "2024-01-15",
             "hardware": "v2.1",
             "wmrm_version": "4.2",
-            "mcu_ver": 100,
-            "dsp_ver": 200,
+            "mcu_ver": "100",
+            "dsp_ver": "200",
             "preset_key": 6,
             "VersionUpdate": "1",
             "NewVer": "1.2.4",
@@ -98,7 +98,7 @@ def test_normalise_device_info_version_update_flags():
 
 def test_normalise_device_info_version_conversion():
     """Test MCU/DSP version conversion to strings."""
-    device_info = DeviceInfo.model_validate({"mcu_ver": 12345, "dsp_ver": 67890})
+    device_info = DeviceInfo.model_validate({"mcu_ver": "12345", "dsp_ver": "67890"})
 
     result = normalise_device_info(device_info)
 

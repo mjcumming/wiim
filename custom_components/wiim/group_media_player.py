@@ -40,6 +40,8 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Don't call WiimEntity.__init__ to avoid duplicate coordinator
         Entity.__init__(self)
         self.speaker = speaker
+        self.coordinator = speaker.coordinator  # Access coordinator through speaker
+        self.coordinator_context = None  # Required by CoordinatorEntity
         self._attr_unique_id = f"{speaker.uuid}_group_coordinator"
         self._attr_should_poll = False  # Updates via speaker coordinator
 

@@ -80,7 +80,16 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
     def native_value(self) -> str:
         """Return the current multiroom role of the device."""
         role = self.speaker.role.title()
-        # Return the role directly - Solo/Master/Slave is clear
+        # Only log when role actually changes to reduce log spam
+        last_role = getattr(self, "_last_logged_role", None)
+        if last_role != role:
+            _LOGGER.info(
+                "🎯 ROLE SENSOR VALUE CHANGED for %s: %s -> %s",
+                self.speaker.name,
+                last_role or "unknown",
+                role,
+            )
+            self._last_logged_role = role
         return role
 
     @property
@@ -90,6 +99,21 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
             "is_group_coordinator": self.speaker.is_group_coordinator,
             "group_members_count": len(self.speaker.group_members),
         }
+
+        # Only log attrs when they change to reduce log spam
+        current_attrs = (
+            self.speaker.is_group_coordinator,
+            len(self.speaker.group_members),
+        )
+        if not hasattr(self, "_last_logged_attrs") or self._last_logged_attrs != current_attrs:
+            _LOGGER.info(
+                "🎯 ROLE SENSOR ATTRS CHANGED for %s: is_coordinator=%s, group_count=%s, members=%s",
+                self.speaker.name,
+                self.speaker.is_group_coordinator,
+                len(self.speaker.group_members),
+                [m.name for m in self.speaker.group_members],
+            )
+            self._last_logged_attrs = current_attrs
 
         if self.speaker.coordinator_speaker:
             attrs["coordinator_name"] = self.speaker.coordinator_speaker.name
@@ -212,7 +236,7 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             # Multi-room context
             "group": multi.get("role") or self.speaker.role,
             "master_uuid": info.get("master_uuid") or status.get("master_uuid"),
-            "slave_cnt": multi.get("slave_count") or multi.get("slaves"),
+            "slave_cnt": multi.get("slaves") or multi.get("slave_count"),
             "preset_key": _to_int(info.get("preset_key")),
         }
 

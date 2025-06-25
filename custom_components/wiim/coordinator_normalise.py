@@ -79,10 +79,11 @@ def normalise_device_info(device_info: DeviceInfo) -> dict[str, Any]:
     # ------------------------------------------------------------------
     # Firmware update availability
     # ------------------------------------------------------------------
-    update_flag = str(device_info.version_update or "0")
-    payload[UPDATE_AVAILABLE_KEY] = update_flag == "1"
+    if device_info.version_update is not None:
+        update_flag = str(device_info.version_update)
+        payload[UPDATE_AVAILABLE_KEY] = update_flag == "1"
 
-    if device_info.latest_version:
-        payload[LATEST_VERSION_KEY] = device_info.latest_version
+        if device_info.latest_version:
+            payload[LATEST_VERSION_KEY] = device_info.latest_version
 
     return payload

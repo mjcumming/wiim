@@ -36,15 +36,39 @@ async def detect_role_from_status_and_slaves(
 
     device_name = device_info.name or "Unknown"
 
-    slave_count = multiroom.get("slave_count", 0)
-    slaves_list = multiroom.get("slaves", [])
+    # Get slave count from API (field is "slaves", not "slave_count")
+    slaves_data = multiroom.get("slaves", 0)
+    slaves_list = multiroom.get("slave_list", [])
+
+    # Handle different data types for slaves field
+    if isinstance(slaves_data, list):
+        # If slaves is a list, use its length as count
+        slave_count = len(slaves_data)
+        slaves_list = slaves_data  # Use the slaves list directly
+    elif isinstance(slaves_data, int):
+        # If slaves is already a count, use it
+        slave_count = slaves_data
+    else:
+        # Fallback to slave_count field or 0
+        slave_count = multiroom.get("slave_count", 0)
+
+    # If slaves_list is a number (API sometimes returns count in slaves field), use it
+    if isinstance(slaves_list, int):
+        slave_count = slaves_list
+        slaves_list = []
+    elif isinstance(slaves_list, list) and slave_count == 0:
+        slave_count = len(slaves_list)
 
     _log = _LOGGER.debug
     _log("Role detection inputs for %s:", coordinator.client.host)
     _log("  - device_name: '%s'", device_name)
     _log("  - device_uuid: '%s'", device_uuid)
     _log("  - group_field: '%s'", group_field)
-    _log("  - slave_count: %s", slave_count)
+    _log(
+        "  - slave_count: %s (from multiroom.slaves=%s)",
+        slave_count,
+        multiroom.get("slaves"),
+    )
     _log("  - slaves_list: %s", slaves_list)
     _log("  - master_uuid: '%s'", master_uuid)
     _log("  - master_ip: '%s'", master_ip)
@@ -66,9 +90,7 @@ async def detect_role_from_status_and_slaves(
         # Update cached client state for group operations.
         coordinator.client._group_master = coordinator.client.host  # type: ignore[attr-defined]
         coordinator.client._group_slaves = [
-            entry.get("ip")
-            for entry in slaves_list
-            if isinstance(entry, dict) and entry.get("ip") is not None
+            entry.get("ip") for entry in slaves_list if isinstance(entry, dict) and entry.get("ip") is not None
         ]  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------

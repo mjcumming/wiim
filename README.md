@@ -37,16 +37,16 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ## Key Features
 
-| Feature | Description |
-|---------|-------------|
-| **Media Control** | Play, pause, stop, next/previous, seek |
-| **Volume Control** | Individual and synchronized group volume |
-| **Smart Sources** | Detects streaming services (Spotify, Amazon Music, etc.) |
-| **Multiroom Groups** | Synchronized playback across speaker groups |
-| **Quick Stations** | Custom radio station list in Browse Media |
-| **EQ Control** | 10-band equalizer with presets |
-| **Presets** | Hardware preset buttons (1-6) |
-| **Auto-Discovery** | Finds speakers automatically via UPnP/Zeroconf |
+| Feature              | Description                                              |
+| -------------------- | -------------------------------------------------------- |
+| **Media Control**    | Play, pause, stop, next/previous, seek                   |
+| **Volume Control**   | Individual and synchronized group volume                 |
+| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, etc.) |
+| **Multiroom Groups** | Synchronized playback across speaker groups              |
+| **Quick Stations**   | Custom radio station list in Browse Media                |
+| **EQ Control**       | 10-band equalizer with presets                           |
+| **Presets**          | Hardware preset buttons (1-6)                            |
+| **Auto-Discovery**   | Finds speakers automatically via UPnP/Zeroconf           |
 
 ## Usage Examples
 
@@ -100,19 +100,20 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 ## Advanced Services
 
-| Service | Description |
-|---------|-------------|
-| `wiim.play_preset` | Play hardware preset (1-6) |
-| `wiim.play_url` | Play audio from URL |
-| `wiim.set_eq` | Set equalizer presets or custom values |
-| `wiim.reboot_device` | Reboot device |
+| Service              | Description                            |
+| -------------------- | -------------------------------------- |
+| `wiim.play_preset`   | Play hardware preset (1-6)             |
+| `wiim.play_url`      | Play audio from URL                    |
+| `wiim.set_eq`        | Set equalizer presets or custom values |
+| `wiim.reboot_device` | Reboot device                          |
 
 ## Documentation
 
-- **[📚 Complete Documentation](docs/README.md)** - Full setup guide and reference
-- **[🔧 Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
-- **[🏠 Multiroom Setup](docs/multiroom.md)** - Synchronized audio configuration
-- **[📋 Examples](examples/)** - Ready-to-use automations and scripts
+- **[📚 Quick Start Guide](docs/README.md)** - Installation and basic setup
+- **[🎛️ User Guide](docs/user-guide.md)** - Complete features and configuration
+- **[🤖 Automation Cookbook](docs/automation-cookbook.md)** - Ready-to-use automation patterns
+- **[❓ FAQ](docs/FAQ.md)** - Quick answers to common questions
+- **[🔧 Troubleshooting](docs/troubleshooting.md)** - Fix common issues and network problems
 
 ## Support & Community
 
@@ -142,6 +143,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-*This integration is not affiliated with WiiM or LinkPlay. All trademarks belong to their respective owners.*
-
-
+_This integration is not affiliated with WiiM or LinkPlay. All trademarks belong to their respective owners._

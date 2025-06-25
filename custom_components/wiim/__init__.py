@@ -52,7 +52,6 @@ from .const import (
     CONF_ENABLE_MAINTENANCE_BUTTONS,
     CONF_ENABLE_NETWORK_MONITORING,
     DOMAIN,
-    FIXED_POLL_INTERVAL,
 )
 from .coordinator import WiiMCoordinator
 from .data import Speaker
@@ -147,9 +146,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_update_listener))
 
     _LOGGER.info(
-        "WiiM coordinator created for %s with fixed %ds polling interval",
+        "WiiM coordinator created for %s with adaptive polling (1s when playing, 5s when idle)",
         entry.data["host"],
-        FIXED_POLL_INTERVAL,
     )
 
     # Initial data fetch with proper error handling

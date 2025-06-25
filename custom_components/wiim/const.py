@@ -55,7 +55,7 @@ CONF_ENABLE_EQ_CONTROLS = "enable_eq_controls"
 
 # Defaults
 DEFAULT_PORT = 443  # HTTPS - like python-linkplay
-DEFAULT_TIMEOUT = 10  # seconds
+DEFAULT_TIMEOUT = 3  # seconds - reduced for better HA asyncio performance
 DEFAULT_POLL_INTERVAL = 5  # seconds - for config options
 # Fixed polling interval - HA compliant, easily changeable
 FIXED_POLL_INTERVAL = 5  # seconds - hard-coded 5s polling for all devices
@@ -104,8 +104,7 @@ API_ENDPOINT_POWER = "/httpapi.asp?command=setPlayerCmd:power:"
 API_ENDPOINT_PRESET = "/httpapi.asp?command=MCUKeyShortClick:"
 
 # Playback Control
-API_ENDPOINT_REPEAT = "/httpapi.asp?command=setPlayerCmd:repeat:"
-API_ENDPOINT_SHUFFLE = "/httpapi.asp?command=setPlayerCmd:shuffle:"
+API_ENDPOINT_LOOPMODE = "/httpapi.asp?command=setPlayerCmd:loopmode:"
 API_ENDPOINT_SEEK = "/httpapi.asp?command=setPlayerCmd:seek:"
 API_ENDPOINT_PLAYLIST = "/httpapi.asp?command=setPlayerCmd:playlist:"
 API_ENDPOINT_CLEAR_PLAYLIST = "/httpapi.asp?command=setPlayerCmd:clear_playlist"

@@ -1,10 +1,10 @@
-# WiiM Integration - Automation Examples
+# WiiM Integration - Automation Cookbook
 
-Ready-to-use automation scripts and dashboard configurations for your WiiM speakers.
+Essential automation patterns for your WiiM speakers. Copy these proven examples and adapt to your setup.
 
 ## 🚀 Quick Start Scripts
 
-Copy these to your `scripts.yaml`:
+Add these to your `scripts.yaml`:
 
 ```yaml
 # Party Mode - Group all speakers
@@ -22,7 +22,7 @@ wiim_party_mode:
           - media_player.patio
     - service: media_player.volume_set
       target:
-        entity_id: media_player.living_room
+        entity_id: media_player.living_room_group_coordinator
       data:
         volume_level: 0.7
 
@@ -114,14 +114,9 @@ automation:
           group_members:
             - media_player.kitchen
             - media_player.living_room
-      - service: media_player.volume_set
-        target:
-          entity_id: media_player.dining_room
-        data:
-          volume_level: 0.4
       - service: wiim.play_preset
         target:
-          entity_id: media_player.dining_room
+          entity_id: media_player.dining_room_group_coordinator
         data:
           preset: 3
 ```
@@ -136,28 +131,23 @@ automation:
       platform: time
       at: "22:30:00"
     action:
-      # Gradually lower volume
+      # Gradually lower volume on active groups
       - service: media_player.volume_set
         target:
-          entity_id:
-            - media_player.living_room
-            - media_player.kitchen
+          entity_id: >
+            {{ states.sensor
+               | selectattr('entity_id', 'match', '.*_multiroom_role$')
+               | selectattr('state', 'eq', 'Master')
+               | map(attribute='entity_id')
+               | map('replace', 'sensor.', 'media_player.')
+               | map('replace', '_multiroom_role', '_group_coordinator')
+               | list }}
         data:
           volume_level: 0.1
-      # Ungroup all speakers
+      # Wait then ungroup all
       - delay: "00:02:00"
-      - service: media_player.unjoin
-        target:
-          entity_id:
-            - media_player.living_room
-            - media_player.kitchen
-            - media_player.bedroom
+      - service: script.wiim_ungroup_all
       # Start sleep sounds in bedroom only
-      - service: media_player.volume_set
-        target:
-          entity_id: media_player.bedroom
-        data:
-          volume_level: 0.1
       - service: wiim.play_preset
         target:
           entity_id: media_player.bedroom
@@ -183,16 +173,16 @@ automation:
         after: "08:00:00"
         before: "22:00:00"
     action:
-      - service: media_player.volume_set
-        target:
-          entity_id: media_player.living_room
-        data:
-          volume_level: 0.3
       - service: wiim.play_preset
         target:
           entity_id: media_player.living_room
         data:
           preset: 2
+      - service: media_player.volume_set
+        target:
+          entity_id: media_player.living_room
+        data:
+          volume_level: 0.3
 
   - alias: "Away Mode"
     description: "Turn off all speakers when everyone leaves"
@@ -231,13 +221,7 @@ automation:
           snapshot_entities:
             - media_player.living_room
             - media_player.kitchen
-      # Pause active speakers
-      - service: media_player.media_pause
-        target:
-          entity_id:
-            - media_player.living_room
-            - media_player.kitchen
-      # Make announcement
+      # Make announcement (uses TTS)
       - service: tts.speak
         target:
           entity_id: media_player.living_room
@@ -250,7 +234,7 @@ automation:
           entity_id: scene.before_doorbell
 ```
 
-### Smart Volume Adjustment
+### Dynamic Volume Control
 
 ```yaml
 automation:
@@ -280,9 +264,9 @@ automation:
             {% endif %}
 ```
 
-## 📱 Dashboard Controls
+## 📱 Group Management Dashboard
 
-### Group Management Card
+### Group Preset Selector
 
 ```yaml
 # Add to configuration.yaml
@@ -294,14 +278,10 @@ input_select:
       - "Kitchen + Dining"
       - "Living Room Zone"
       - "Party Mode (All)"
-      - "Quiet Hours"
     initial: "Solo (No Groups)"
     icon: mdi:speaker-multiple
-```
 
-### Group Preset Automation
-
-```yaml
+# Automation to apply presets
 automation:
   - alias: "Apply WiiM Group Preset"
     description: "Apply selected group configuration"
@@ -353,12 +333,12 @@ entities:
 
 ## 🎵 Role-Based Automations
 
-### Master Speaker Control
+### Control Only Group Masters
 
 ```yaml
 automation:
-  - alias: "Control Via Master Only"
-    description: "Send commands to group master"
+  - alias: "Control Via Masters Only"
+    description: "Send commands to group masters for efficiency"
     trigger:
       platform: state
       entity_id: input_boolean.music_mode
@@ -367,11 +347,13 @@ automation:
       - service: media_player.media_play
         target:
           entity_id: >
-            {% for entity in states.sensor %}
-              {% if entity.entity_id.endswith('_multiroom_role') and entity.state == 'Master' %}
-                {{ entity.entity_id.replace('sensor.', 'media_player.').replace('_multiroom_role', '') }}
-              {% endif %}
-            {% endfor %}
+            {{ states.sensor
+               | selectattr('entity_id', 'match', '.*_multiroom_role$')
+               | selectattr('state', 'eq', 'Master')
+               | map(attribute='entity_id')
+               | map('replace', 'sensor.', 'media_player.')
+               | map('replace', '_multiroom_role', '')
+               | list }}
 ```
 
 ### Group Formation Detection
@@ -395,15 +377,18 @@ automation:
 
 ## 🛠️ Maintenance Automations
 
-### Health Check
+### Weekly Health Check
 
 ```yaml
 automation:
   - alias: "WiiM Health Check"
-    description: "Daily maintenance and sync"
+    description: "Weekly maintenance and sync"
     trigger:
       platform: time
       at: "03:00:00"
+    condition:
+      platform: time
+      weekday: sun
     action:
       # Sync time on all devices
       - service: wiim.sync_time
@@ -412,11 +397,11 @@ automation:
             - media_player.living_room
             - media_player.kitchen
             - media_player.bedroom
-      # Check for offline devices
+      # Check for offline devices and reboot if needed
       - repeat:
           for_each: >
             {{ states.media_player
-              | selectattr('entity_id', 'match', 'media_player..*')
+              | selectattr('entity_id', 'match', 'media_player\..*')
               | selectattr('state', 'equalto', 'unavailable')
               | map(attribute='entity_id') | list }}
           sequence:
@@ -428,9 +413,10 @@ automation:
 
 ## 📚 Template Helpers
 
-Add these to `configuration.yaml`:
+Essential templates for WiiM automations:
 
 ```yaml
+# Add to configuration.yaml
 template:
   - sensor:
       name: "WiiM Active Groups"
@@ -444,7 +430,7 @@ template:
       name: "WiiM Playing Devices"
       state: >
         {{ states.media_player
-          | selectattr('entity_id', 'match', 'media_player..*')
+          | selectattr('entity_id', 'match', 'media_player\..*')
           | selectattr('state', 'equalto', 'playing')
           | list | length }}
 
@@ -460,10 +446,47 @@ input_boolean:
 
 ## 🎯 Pro Tips
 
-1. **Use Role Sensor**: Always check multiroom role before sending commands
+1. **Use Role Sensors**: Always check `sensor.{device}_multiroom_role` before sending commands
 2. **Group First**: Create groups before setting volume/playback
-3. **Test Commands**: Use Developer Tools to test before adding to automations
+3. **Master Control**: Use group coordinators (`*_group_coordinator`) for group operations
 4. **Error Handling**: Add `continue_on_error: true` for robust automations
 5. **Timing**: Add small delays between group operations for reliability
 
-For more advanced patterns, see the [complete user guide](user-guide.md).
+## 📱 Quick Station Switching
+
+```yaml
+input_select:
+  radio_station:
+    options:
+      - BBC Radio 2
+      - Jazz FM
+      - Classic FM
+
+automation:
+  - trigger:
+      platform: state
+      entity_id: input_select.radio_station
+    action:
+      service: media_player.play_media
+      target:
+        entity_id: media_player.living_room
+      data:
+        media_content_type: music
+        media_content_id: >
+          {% set stations = {
+            'BBC Radio 2': 'http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two',
+            'Jazz FM': 'http://jazz.fm/stream',
+            'Classic FM': 'http://classic.fm/stream'
+          } %}
+          {{ stations[trigger.to_state.state] }}
+```
+
+## 📚 More Resources
+
+- **[🎛️ User Guide](user-guide.md)** - Complete features and configuration reference
+- **[❓ FAQ](FAQ.md)** - Quick answers to common questions
+- **[🔧 Troubleshooting](troubleshooting.md)** - Fix common issues and network problems
+
+---
+
+**Need help getting started?** Check our [Quick Start Guide](README.md) for installation and basic setup.

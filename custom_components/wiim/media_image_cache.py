@@ -5,6 +5,7 @@ The helper keeps a per-instance in-memory cache (URL → bytes, content-type).
 It intentionally contains **no** Home-Assistant specific code except for
 requiring the shared aiohttp client session via `hass`.
 """
+
 from __future__ import annotations
 
 import logging

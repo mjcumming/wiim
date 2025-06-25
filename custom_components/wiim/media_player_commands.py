@@ -548,6 +548,43 @@ class GroupCommandsMixin:
 class MediaCommandsMixin:
     """Mixin for media playback commands (URLs, presets, media types)."""
 
+    def _is_audio_media_source(self, play_item) -> bool:
+        """Check if a resolved media source item is audio content compatible with WiiM.
+
+        Args:
+            play_item: ResolvedMedia item from media_source.async_resolve_media()
+
+        Returns:
+            True if item is audio content that WiiM can play
+        """
+        # Check MIME type if available
+        if hasattr(play_item, "mime_type") and play_item.mime_type:
+            mime_type = play_item.mime_type.lower()
+            if mime_type.startswith("audio/"):
+                return True
+
+        # Check file extension in URL
+        url = getattr(play_item, "url", "")
+        if url:
+            url_lower = url.lower()
+            audio_extensions = {
+                ".mp3",
+                ".flac",
+                ".wav",
+                ".aac",
+                ".ogg",
+                ".m4a",
+                ".wma",
+                ".aiff",
+                ".dsd",
+                ".dsf",
+                ".dff",
+            }
+            if any(url_lower.endswith(ext) for ext in audio_extensions):
+                return True
+
+        return False
+
     def play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         """Play a piece of media (sync wrapper)."""
         self.hass.async_create_task(self.async_play_media(media_type, media_id, **kwargs))  # type: ignore[attr-defined]
@@ -556,8 +593,36 @@ class MediaCommandsMixin:
         """Play a piece of media."""
         _LOGGER.debug("Play media called: type=%s, id=%s", media_type, media_id)
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+        hass = self.hass  # type: ignore[attr-defined]
 
         try:
+            # Handle media-source:// URLs by resolving them first
+            if media_id.startswith("media-source://"):
+                _LOGGER.debug("Resolving media source: %s", media_id)
+                try:
+                    from homeassistant.components import media_source
+
+                    # Resolve the media source to get the actual playable URL
+                    play_item = await media_source.async_resolve_media(hass, media_id)
+                    resolved_url = play_item.url
+
+                    _LOGGER.debug("Media source resolved: %s -> %s", media_id, resolved_url)
+
+                    # Validate that it's audio content
+                    if not self._is_audio_media_source(play_item):
+                        raise HomeAssistantError(
+                            f"Unsupported media type for WiiM: {getattr(play_item, 'mime_type', 'unknown')}"
+                        )
+
+                    # Play the resolved URL
+                    media_id = resolved_url
+                    media_type = MediaType.URL
+
+                except Exception as err:
+                    _LOGGER.error("Failed to resolve media source %s: %s", media_id, err)
+                    raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
+
+            # Continue with normal media handling logic
             # Preset numbers → play_preset (MCUKeyShortClick)
             if media_type == "preset":
                 try:

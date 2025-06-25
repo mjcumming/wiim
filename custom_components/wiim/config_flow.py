@@ -2,6 +2,7 @@
 
 Simple discovery and setup flow following Home Assistant best practices.
 """
+
 # mypy: ignore-errors
 
 from __future__ import annotations
@@ -307,8 +308,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_uuid = discovery_info.get("device_uuid")
         discovery_source = discovery_info.get("discovery_source")
 
-        _LOGGER.info("🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s, source: %s)",
-                     device_name, host, device_uuid, discovery_source)
+        _LOGGER.info(
+            "🔍 INTEGRATION DISCOVERY called for device %s at %s (UUID: %s, source: %s)",
+            device_name,
+            host,
+            device_uuid,
+            discovery_source,
+        )
 
         # Handle missing device discovery (no IP provided)
         if discovery_source == "missing_device":
@@ -368,9 +374,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=validated_name, data={CONF_HOST: host})
 
-        schema = vol.Schema({
-            vol.Required(CONF_HOST, description="IP address of the missing device"): str
-        })
+        schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of the missing device"): str})
 
         return self.async_show_form(
             step_id="missing_device",
@@ -378,8 +382,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "device_name": device_name,
-                "device_uuid": device_uuid[:8] + "..." if device_uuid else "Unknown"
-            }
+                "device_uuid": device_uuid[:8] + "..." if device_uuid else "Unknown",
+            },
         )
 
     async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:

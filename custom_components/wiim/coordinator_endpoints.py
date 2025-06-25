@@ -23,6 +23,7 @@ __all__ = [
 # Player-status (getPlayerStatusEx)
 # ---------------------------------------------------------------------------
 
+
 async def fetch_player_status(client: WiiMClient) -> PlayerStatus:
     """Return *typed* :class:`PlayerStatus` for the given client."""
 
@@ -38,6 +39,7 @@ async def fetch_player_status(client: WiiMClient) -> PlayerStatus:
 # ---------------------------------------------------------------------------
 # Device-info (getStatusEx)
 # ---------------------------------------------------------------------------
+
 
 async def fetch_device_info(client: WiiMClient) -> DeviceInfo:
     """Return *typed* :class:`DeviceInfo` for the given client."""

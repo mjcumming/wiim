@@ -63,8 +63,8 @@ class WiiMMediaPlayer(
     SourceCommandsMixin,
     GroupCommandsMixin,
     MediaCommandsMixin,
-    MediaPlayerEntity,
     MediaBrowserMixin,
+    MediaPlayerEntity,
     QuickStationsMixin,
     HexUrlDecoderMixin,
     AppNameValidatorMixin,
@@ -92,6 +92,11 @@ class WiiMMediaPlayer(
         # Timestamps for optimistic state timeout (10 seconds)
         self._optimistic_state_timestamp: float | None = None
 
+        # Track transition smoothing
+        self._last_stable_state: MediaPlayerState | None = None
+        self._last_state_change_time: float | None = None
+        self._current_unstable_state: MediaPlayerState | None = None
+
         # Track info for album art cache management
         self._last_track_info: dict[str, Any] = {}
 
@@ -107,6 +112,9 @@ class WiiMMediaPlayer(
 
         # Optimistic media title to show friendly station name immediately
         self._optimistic_media_title: str | None = None
+
+        # Duration tracking for supported_features updates
+        self._last_duration: int | None = None
 
         # Initialize mixins
         QuickStationsMixin.__init__(self)
@@ -127,7 +135,11 @@ class WiiMMediaPlayer(
     async def async_added_to_hass(self) -> None:
         """Set up entity."""
         await super().async_added_to_hass()
-        _LOGGER.debug("Media player %s registered with entity_id %s", self.speaker.name, self.entity_id)
+        _LOGGER.debug(
+            "Media player %s registered with entity_id %s",
+            self.speaker.name,
+            self.entity_id,
+        )
 
         # Create debouncer lazily once hass is available
         if self._volume_debouncer is None:
@@ -169,10 +181,17 @@ class WiiMMediaPlayer(
                 if old_val != new_val:
                     if key == "image_url":
                         _LOGGER.debug(
-                            "🎨 Media player clearing image cache due to URL change: %s -> %s", old_val, new_val
+                            "🎨 Media player clearing image cache due to URL change: %s -> %s",
+                            old_val,
+                            new_val,
                         )
                     elif key in ["title", "artist"]:
-                        _LOGGER.debug("🎵 Media player detected %s change: %s -> %s", key, old_val, new_val)
+                        _LOGGER.debug(
+                            "🎵 Media player detected %s change: %s -> %s",
+                            key,
+                            old_val,
+                            new_val,
+                        )
 
             # CRITICAL: Clear cache when track changes OR when image URL changes
             # WiiM devices often keep the same URL but change the image content
@@ -192,33 +211,39 @@ class WiiMMediaPlayer(
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
-        """Flag media player features that are supported."""
+        """Flag media player features supported by WiiM API, with conditional seek."""
+        # Enable ALL features that WiiM API supports per design guide
         features = (
+            # Volume & Mute (API: vol, mute)
             MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.VOLUME_STEP
+            # Playback Control (API: status, curpos, totlen)
             | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
+            # Track Navigation (API: next/prev commands)
             | MediaPlayerEntityFeature.NEXT_TRACK
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            # Sources & EQ (API: mode, eq)
             | MediaPlayerEntityFeature.SELECT_SOURCE
             | MediaPlayerEntityFeature.SELECT_SOUND_MODE
+            # Shuffle & Repeat (API: loop_mode bit flags)
             | MediaPlayerEntityFeature.SHUFFLE_SET
             | MediaPlayerEntityFeature.REPEAT_SET
+            # Media Playback (API: supports URLs and streams)
+            | MediaPlayerEntityFeature.PLAY_MEDIA
+            # Multiroom Grouping (API: multiroom commands)
             | MediaPlayerEntityFeature.GROUPING
+            # Media Browsing (API: preset navigation)
             | MediaPlayerEntityFeature.BROWSE_MEDIA
         )
 
-        # Add conditional features based on device capabilities
-        try:
-            # TODO: Re-enable SEEK once behaviour confirmed with typed model only
-
-            # Enable play_media universally (URL/stream support)
-            features |= MediaPlayerEntityFeature.PLAY_MEDIA
-
-        except Exception as err:
-            _LOGGER.debug("Failed to determine conditional features: %s", err)
+        # Only enable seek when we have actual duration data
+        # Streaming services like Amazon Music provide position but not duration due to DRM
+        duration = self.media_duration
+        if duration and duration > 0:
+            features |= MediaPlayerEntityFeature.SEEK
 
         return features
 
@@ -252,11 +277,55 @@ class WiiMMediaPlayer(
 
     @property
     def state(self) -> MediaPlayerState:
-        """State of the media player."""
+        """State of the media player with transition smoothing.
+
+        Filters out brief idle/buffering states during track transitions to prevent
+        UI flickering. Only shows idle if it persists for more than 2 seconds.
+        """
+        import time
+
         # Use optimistic state if available for immediate feedback
         if self._optimistic_state is not None:
             return self._optimistic_state
-        return self.controller.get_playback_state()
+
+        current_state = self.controller.get_playback_state()
+        current_time = time.time()
+
+        # Initialize tracking on first call
+        if self._last_stable_state is None:
+            self._last_stable_state = current_state
+            self._last_state_change_time = current_time
+            return current_state
+
+        # State hasn't changed - keep showing stable state
+        if current_state == self._current_unstable_state or current_state == self._last_stable_state:
+            # Reset change tracking if back to stable state
+            if current_state == self._last_stable_state:
+                self._current_unstable_state = None
+                self._last_state_change_time = current_time
+            return self._last_stable_state
+
+        # New state detected
+        if current_state != self._current_unstable_state:
+            # This is a new unstable state
+            self._current_unstable_state = current_state
+            self._last_state_change_time = current_time
+
+            # For non-idle states, show immediately (playing, paused)
+            if current_state != MediaPlayerState.IDLE:
+                self._last_stable_state = current_state
+                self._current_unstable_state = None
+                return current_state
+
+        # Check if unstable state has persisted long enough
+        if self._current_unstable_state is not None and current_time - self._last_state_change_time > 2.0:
+            # State has been stable for 2+ seconds, accept it
+            self._last_stable_state = self._current_unstable_state
+            self._current_unstable_state = None
+            return self._last_stable_state
+
+        # Still in transition period, keep showing last stable state
+        return self._last_stable_state
 
     # ===== SOURCE PROPERTIES (delegate to controller) =====
 
@@ -350,7 +419,15 @@ class WiiMMediaPlayer(
     @property
     def media_duration(self) -> int | None:
         """Duration of current playing media in seconds."""
-        return self.controller.get_media_duration()
+        duration = self.controller.get_media_duration()
+
+        # Force supported_features re-evaluation when duration changes
+        if duration != getattr(self, "_last_duration", None):
+            self._last_duration = duration
+            # Schedule a state update to refresh supported_features
+            self.schedule_update_ha_state(force_refresh=True)
+
+        return duration
 
     @property
     def media_position(self) -> int | None:
@@ -373,6 +450,26 @@ class WiiMMediaPlayer(
         # WiiM devices serve images locally (HTTP or self-signed HTTPS)
         # These are not directly accessible by web browsers, so HA must proxy them
         return False
+
+    @property
+    def media_image_hash(self) -> str | None:
+        """Hash value for media image.
+
+        WiiM devices often keep the same image URL but change the image content when
+        tracks change. We create a hash based on both URL and track metadata to ensure
+        Home Assistant's image cache updates when the track changes.
+        """
+        url = self.media_image_url
+        if not url:
+            return None
+
+        # Include track metadata in hash to force cache refresh when track changes
+        # even if URL stays the same (common WiiM behavior)
+        track_info = f"{url}|{self.media_title}|{self.media_artist}|{self.media_album_name}"
+
+        import hashlib
+
+        return hashlib.sha256(track_info.encode("utf-8")).hexdigest()[:16]
 
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
         """Fetch media image of current playing media.
@@ -409,7 +506,11 @@ class WiiMMediaPlayer(
 
         This provides much better UX than waiting 5 seconds for next poll cycle.
         """
-        _LOGGER.debug("Command '%s' completed, requesting immediate refresh for %s", command_name, self.speaker.name)
+        _LOGGER.debug(
+            "Command '%s' completed, requesting immediate refresh for %s",
+            command_name,
+            self.speaker.name,
+        )
 
         # Clear any previous command failures since this command succeeded
         if hasattr(self.speaker.coordinator, "clear_command_failures"):
@@ -464,7 +565,10 @@ class WiiMMediaPlayer(
 
         # Clear optimistic state only when real data matches expected changes
         if self._optimistic_state is not None and real_state == self._optimistic_state:
-            _LOGGER.debug("Real state matches optimistic state (%s), clearing optimistic state", real_state)
+            _LOGGER.debug(
+                "Real state matches optimistic state (%s), clearing optimistic state",
+                real_state,
+            )
             self._optimistic_state = None
             self._optimistic_state_timestamp = None
 
@@ -473,23 +577,38 @@ class WiiMMediaPlayer(
             and real_volume is not None
             and abs(real_volume - self._optimistic_volume) < 0.01
         ):
-            _LOGGER.debug("Real volume matches optimistic volume (%.2f), clearing optimistic volume", real_volume)
+            _LOGGER.debug(
+                "Real volume matches optimistic volume (%.2f), clearing optimistic volume",
+                real_volume,
+            )
             self._optimistic_volume = None
 
         if self._optimistic_mute is not None and real_mute == self._optimistic_mute:
-            _LOGGER.debug("Real mute matches optimistic mute (%s), clearing optimistic mute", real_mute)
+            _LOGGER.debug(
+                "Real mute matches optimistic mute (%s), clearing optimistic mute",
+                real_mute,
+            )
             self._optimistic_mute = None
 
         if self._optimistic_source is not None and real_source == self._optimistic_source:
-            _LOGGER.debug("Real source matches optimistic source (%s), clearing optimistic source", real_source)
+            _LOGGER.debug(
+                "Real source matches optimistic source (%s), clearing optimistic source",
+                real_source,
+            )
             self._optimistic_source = None
 
         if self._optimistic_shuffle is not None and real_shuffle == self._optimistic_shuffle:
-            _LOGGER.debug("Real shuffle matches optimistic shuffle (%s), clearing optimistic shuffle", real_shuffle)
+            _LOGGER.debug(
+                "Real shuffle matches optimistic shuffle (%s), clearing optimistic shuffle",
+                real_shuffle,
+            )
             self._optimistic_shuffle = None
 
         if self._optimistic_repeat is not None and real_repeat == self._optimistic_repeat:
-            _LOGGER.debug("Real repeat matches optimistic repeat (%s), clearing optimistic repeat", real_repeat)
+            _LOGGER.debug(
+                "Real repeat matches optimistic repeat (%s), clearing optimistic repeat",
+                real_repeat,
+            )
             self._optimistic_repeat = None
 
         # Always clear optimistic media title - it's transient
@@ -540,7 +659,3 @@ class WiiMMediaPlayer(
             )
 
         return attrs
-
-    # ===== MEDIA BROWSER SUPPORT (delegate to mixin) =====
-
-    # async_browse_media method provided by MediaBrowserMixin

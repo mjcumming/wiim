@@ -213,8 +213,63 @@ class AppNameValidatorMixin:
 class MediaBrowserMixin:
     """Mixin for media browser tree implementation."""
 
+    def _is_audio_content(self, browse_item) -> bool:
+        """Check if a browse item represents audio content compatible with WiiM.
+
+        Args:
+            browse_item: BrowseMedia item to check
+
+        Returns:
+            True if item is audio content that WiiM can play
+        """
+        from homeassistant.components.media_player.browse_media import MediaClass
+
+        # Always allow directories to be browsed
+        if browse_item.media_class == MediaClass.DIRECTORY:
+            return True
+
+        # Check for audio media classes
+        audio_classes = {
+            MediaClass.MUSIC,
+            MediaClass.PODCAST,
+            MediaClass.ALBUM,
+            MediaClass.ARTIST,
+            MediaClass.PLAYLIST,
+            MediaClass.TRACK,
+        }
+        if browse_item.media_class in audio_classes:
+            return True
+
+        # Check MIME types for audio content
+        if hasattr(browse_item, "media_content_type") and browse_item.media_content_type:
+            content_type = browse_item.media_content_type.lower()
+            if content_type.startswith("audio/"):
+                return True
+
+        # Check file extensions for common audio formats
+        if hasattr(browse_item, "media_content_id") and browse_item.media_content_id:
+            content_id = browse_item.media_content_id.lower()
+            audio_extensions = {
+                ".mp3",
+                ".flac",
+                ".wav",
+                ".aac",
+                ".ogg",
+                ".m4a",
+                ".wma",
+                ".aiff",
+                ".dsd",
+                ".dsf",
+                ".dff",
+            }
+            if any(content_id.endswith(ext) for ext in audio_extensions):
+                return True
+
+        return False
+
     async def async_browse_media(self, media_content_type: str | None = None, media_content_id: str | None = None):
-        """Provide a Media Browser tree with Presets and Quick Stations shelves."""
+        """Provide a Media Browser tree with Presets, Quick Stations, and HA Media Sources."""
+        from homeassistant.components import media_source
         from homeassistant.components.media_player.browse_media import (
             BrowseMedia,
             MediaClass,
@@ -228,6 +283,29 @@ class MediaBrowserMixin:
 
         # Must be implemented by entity class
         speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        hass = self.hass  # type: ignore[attr-defined]
+
+        # Handle media-source:// URLs by delegating to HA media source system
+        if media_content_id and media_content_id.startswith("media-source://"):
+            try:
+                # Handle root media library browsing
+                if media_content_id == "media-source://":
+                    browse_result = await media_source.async_browse_media(hass, None)
+                else:
+                    browse_result = await media_source.async_browse_media(hass, media_content_id)
+
+                # Filter audio content only for WiiM compatibility
+                if browse_result.children:
+                    audio_children = []
+                    for child in browse_result.children:
+                        if self._is_audio_content(child):
+                            audio_children.append(child)
+                    browse_result.children = audio_children
+
+                return browse_result
+            except Exception as err:
+                _LOGGER.warning("Failed to browse media source %s: %s", media_content_id, err)
+                raise _BrowseError(f"Failed to browse media source: {err}") from err
 
         # Fetch presets from coordinator
         presets: list[dict] = speaker.coordinator.data.get("presets", []) if speaker.coordinator.data else []
@@ -244,6 +322,25 @@ class MediaBrowserMixin:
         if media_content_id in (None, "root"):
             children: list[BrowseMedia] = []
 
+            # Add HA Media Library if media sources are available
+            try:
+                media_source_root = await media_source.async_browse_media(hass, None)
+                if media_source_root and media_source_root.children:
+                    children.append(
+                        BrowseMedia(
+                            media_class=MediaClass.DIRECTORY,
+                            media_content_id="media-source://",
+                            media_content_type="media_source",
+                            title="Media Library",
+                            can_play=False,
+                            can_expand=True,
+                            children=[],
+                            thumbnail="mdi:folder-music",
+                        )
+                    )
+            except Exception as err:
+                _LOGGER.debug("Media sources not available: %s", err)
+
             if presets_supported:
                 children.append(
                     BrowseMedia(
@@ -254,7 +351,7 @@ class MediaBrowserMixin:
                         can_play=False,
                         can_expand=True,
                         children=[],
-                        thumbnail=None,
+                        thumbnail="mdi:star",
                     )
                 )
 
@@ -268,7 +365,7 @@ class MediaBrowserMixin:
                         can_play=False,
                         can_expand=True,
                         children=[],
-                        thumbnail=None,
+                        thumbnail="mdi:radio",
                     )
                 )
 

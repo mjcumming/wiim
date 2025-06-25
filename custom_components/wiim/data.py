@@ -66,7 +66,12 @@ class Speaker:
     No complex registry - just standard coordinator pattern.
     """
 
-    def __init__(self, hass: HomeAssistant, coordinator: WiiMCoordinator, config_entry: ConfigEntry):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        coordinator: WiiMCoordinator,
+        config_entry: ConfigEntry,
+    ):
         """Initialize a Speaker instance."""
         self.hass = hass
         self.coordinator = coordinator
@@ -75,7 +80,10 @@ class Speaker:
         # Use config entry unique_id as speaker UUID (set by config flow)
         self._uuid: str = self.config_entry.unique_id or ""
         if not self._uuid:
-            _LOGGER.error("Speaker initialized without unique_id for host %s", self.coordinator.client.host)
+            _LOGGER.error(
+                "Speaker initialized without unique_id for host %s",
+                self.coordinator.client.host,
+            )
             self._uuid = self.coordinator.client.host  # Fallback
 
         # Device properties
@@ -175,9 +183,10 @@ class Speaker:
         self.model = status.get("project") or "WiiM Speaker"
         self.firmware = status.get("firmware")
 
-        # Group info
-        multiroom = self.coordinator.data.get("multiroom", {}) if self.coordinator.data else {}
-        self.role = multiroom.get("role", "solo")
+        # Group info - role is stored in main coordinator data, not multiroom section
+        # Only set role if it hasn't been set by role detection yet (avoid overriding)
+        if not hasattr(self, "role") or self.role is None:
+            self.role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
     async def _register_ha_device(self, entry: ConfigEntry) -> None:
         """Register device in HA registry."""
@@ -216,7 +225,19 @@ class Speaker:
         device_info: dict[str, Any] = (
             device_model.model_dump(exclude_none=True) if isinstance(device_model, WiiMDeviceInfo) else {}
         )
-        role = data.get("role", "solo")
+        # Get role from coordinator data, preserving existing role if coordinator data unavailable
+        # Role detection sets the role correctly, don't override with fallback defaults
+        coordinator_role = data.get("role")
+        if coordinator_role:
+            # Coordinator has explicit role data - use it (this is the authoritative source)
+            role = coordinator_role
+        elif hasattr(self, "role") and self.role:
+            # Preserve existing role if coordinator data doesn't have role yet
+            # This prevents race condition where role detection works but gets overridden
+            role = self.role
+        else:
+            # True fallback only if no role has been detected anywhere
+            role = "solo"
 
         # Update basic device info
         if device_info.get("model"):
@@ -229,7 +250,12 @@ class Speaker:
         # Detect device name change coming from API – keep config entry title in sync
         new_name = status.get("DeviceName") or device_info.get("device_name") or None
         if new_name and new_name != self.name:
-            _LOGGER.info("Device name changed on %s: '%s' → '%s'", self.ip_address, self.name, new_name)
+            _LOGGER.info(
+                "Device name changed on %s: '%s' → '%s'",
+                self.ip_address,
+                self.name,
+                new_name,
+            )
             self.name = new_name
 
             # Update config entry title so that options dialog & integrations page reflect new name
@@ -260,13 +286,43 @@ class Speaker:
         # Update availability
         self._available = self.coordinator.last_update_success
 
-        # Notify entities if significant changes
+        # Notify entities AFTER group state is fully updated
+        if old_role != self.role:
+            # Force immediate entity state update for role changes (now with correct group data)
+            _LOGGER.info(
+                "🎯 FINAL ENTITY UPDATE for %s: role=%s, is_coordinator=%s, group_count=%s",
+                self.name,
+                self.role,
+                self.is_group_coordinator,
+                len(self.group_members),
+            )
+
         self.async_write_entity_states()
 
     def _update_master_group_state(self, multiroom: dict[str, Any]) -> None:
         """Update group state for master speakers using simple lookups."""
         slave_list = multiroom.get("slave_list", [])
+        slaves_count = multiroom.get("slaves", 0)
         self.coordinator_speaker = None  # Masters don't have coordinators
+
+        # Only log when group composition actually changes
+        current_slave_ips = [m.ip_address for m in self.group_members if hasattr(m, "ip_address")]
+        new_slave_ips = []
+        for slave_info in slave_list:
+            if isinstance(slave_info, dict):
+                slave_ip = slave_info.get("ip")
+                if slave_ip:
+                    new_slave_ips.append(slave_ip)
+
+        group_changed = set(current_slave_ips) != set(new_slave_ips)
+
+        if group_changed:
+            _LOGGER.debug(
+                "Master group update for %s: slaves_count=%s, slave_list_length=%s",
+                self.name,
+                slaves_count,
+                len(slave_list),
+            )
 
         # Find slave speakers using simple iteration
         new_group_members = []
@@ -293,12 +349,25 @@ class Speaker:
             else:
                 # Missing slave - trigger discovery
                 _LOGGER.warning(
-                    "Master %s cannot find slave %s (IP: %s, UUID: %s)", self.name, slave_name, slave_ip, slave_uuid
+                    "Master %s cannot find slave %s (IP: %s, UUID: %s)",
+                    self.name,
+                    slave_name,
+                    slave_ip,
+                    slave_uuid,
                 )
                 if slave_uuid:
                     self.hass.async_create_task(self._trigger_missing_device_discovery(slave_uuid, slave_name))
 
         self.group_members = new_group_members
+
+        # Only log when group membership actually changes
+        if group_changed:
+            _LOGGER.debug(
+                "Master group result for %s: final_group_members_count=%s, group_members=%s",
+                self.name,
+                len(self.group_members),
+                [m.name for m in self.group_members],
+            )
 
     def _update_slave_group_state(self, master_uuid: str | None) -> None:
         """Update group state for slave speakers using simple lookups."""
@@ -337,11 +406,18 @@ class Speaker:
             if existing_flows:
                 return
 
-            _LOGGER.info("Creating discovery flow for missing device: %s (%s)", device_name, device_uuid)
+            _LOGGER.info(
+                "Creating discovery flow for missing device: %s (%s)",
+                device_name,
+                device_uuid,
+            )
 
             await self.hass.config_entries.flow.async_init(
                 DOMAIN,
-                context={"source": SOURCE_INTEGRATION_DISCOVERY, "unique_id": device_uuid},
+                context={
+                    "source": SOURCE_INTEGRATION_DISCOVERY,
+                    "unique_id": device_uuid,
+                },
                 data={
                     "device_uuid": device_uuid,
                     "device_name": device_name,
@@ -404,11 +480,12 @@ class Speaker:
 
     @property
     def is_group_coordinator(self) -> bool:
-        """Return True if this speaker can be considered the group coordinator.
+        """Return True if this speaker is coordinating a group.
 
-        Solo and master speakers are coordinators, slaves are not.
+        Only master speakers are coordinators - they manage slaves.
+        Solo speakers and slaves are not coordinators.
         """
-        return self.role != "slave"
+        return self.role == "master"
 
     def get_group_member_entity_ids(self) -> list[str]:
         """Return HA entity IDs for all members in the current group.
@@ -494,24 +571,29 @@ class Speaker:
     def get_playback_state(self) -> MediaPlayerState:
         """Map WiiM play_status to Home Assistant MediaPlayerState."""
         if self.status_model is None:
-            _LOGGER.warning("🎵 DEVICE STATE: status_model=None")
+            _LOGGER.debug("🎵 DEVICE STATE: status_model=None")
             return MediaPlayerState.IDLE
 
         # Debug: Show ALL fields in the status model to see what the device provides
         if self.status_model.play_state is None:
             status_dict = self.status_model.model_dump(exclude_none=True)
-            _LOGGER.warning("🎵 DEVICE STATE: play_state=None, available_fields=%s", list(status_dict.keys()))
+            _LOGGER.debug(
+                "🎵 DEVICE STATE: play_state=None, available_fields=%s",
+                list(status_dict.keys()),
+            )
 
             # Check if status field exists under a different name
             raw_status = getattr(self.status_model, "status", None)
-            _LOGGER.warning("🎵 DEVICE STATE: checking raw 'status' field=%s", raw_status)
+            _LOGGER.debug("🎵 DEVICE STATE: checking raw 'status' field=%s", raw_status)
             return MediaPlayerState.IDLE
 
         play_status = str(self.status_model.play_state)
 
         # Debug: Log the raw device state to see what we're actually getting
-        _LOGGER.warning(
-            "🎵 DEVICE STATE: raw_play_state='%s' (type=%s)", play_status, type(self.status_model.play_state)
+        _LOGGER.debug(
+            "🎵 DEVICE STATE: raw_play_state='%s' (type=%s)",
+            play_status,
+            type(self.status_model.play_state),
         )
 
         if play_status in ["play", "playing", "load"]:
@@ -522,10 +604,13 @@ class Speaker:
             mapped_state = MediaPlayerState.IDLE
         else:
             # Unknown state - log it for debugging
-            _LOGGER.warning("🎵 DEVICE STATE: Unknown play_state='%s', falling back to IDLE", play_status)
+            _LOGGER.debug(
+                "🎵 DEVICE STATE: Unknown play_state='%s', falling back to IDLE",
+                play_status,
+            )
             mapped_state = MediaPlayerState.IDLE
 
-        _LOGGER.warning("🎵 DEVICE STATE: '%s' → %s", play_status, mapped_state)
+        _LOGGER.debug("🎵 DEVICE STATE: '%s' → %s", play_status, mapped_state)
         return mapped_state
 
     def is_volume_muted(self) -> bool | None:
@@ -565,7 +650,11 @@ class Speaker:
         for n in names:
             if hasattr(self.status_model, n):
                 val = getattr(self.status_model, n)
-                if isinstance(val, str) and val.strip().lower() in {"unknown", "unknow", "none"}:
+                if isinstance(val, str) and val.strip().lower() in {
+                    "unknown",
+                    "unknow",
+                    "none",
+                }:
                     continue
                 if val not in (None, ""):
                     return val
@@ -591,6 +680,7 @@ class Speaker:
 
     def get_media_duration(self) -> int | None:
         duration = self._status_field("duration")
+
         try:
             return int(float(duration)) if duration is not None else None
         except (TypeError, ValueError):
@@ -598,6 +688,9 @@ class Speaker:
 
     def get_media_position(self) -> int | None:
         position = self._status_field("position", "seek")
+
+        # Position may vary by source type and streaming service
+
         try:
             return int(float(position)) if position is not None else None
         except (TypeError, ValueError):
@@ -636,39 +729,52 @@ class Speaker:
 
     def get_shuffle_state(self) -> bool | None:
         """Return True if shuffle is active, False if off, None if unknown."""
-        # Always rely on the Pydantic model – but guard against very early calls
-        # before the first coordinator refresh (tests or HA startup edge-cases).
-
         if self.status_model is None:
             return None
 
-        # Use the model exclusively from here on.
-        shuffle_val = self.status_model.shuffle or self.status_model.play_mode
+        # Check specific shuffle field first
+        shuffle_val = getattr(self.status_model, "shuffle", None)
+        if shuffle_val is not None:
+            if isinstance(shuffle_val, bool | int):
+                return bool(int(shuffle_val))
+            shuffle_str = str(shuffle_val).strip().lower()
+            return shuffle_str in {"1", "true", "shuffle"}
 
-        if shuffle_val is None:
-            return None
+        # Check play_mode field (properly decoded from loop_mode by api_parser)
+        play_mode = getattr(self.status_model, "play_mode", None)
+        if play_mode is not None:
+            mode_str = str(play_mode).strip().lower()
+            return "shuffle" in mode_str
 
-        if isinstance(shuffle_val, bool | int):
-            return bool(int(shuffle_val))
-
-        shuffle_str = str(shuffle_val).strip().lower()
-        return shuffle_str in {"1", "true", "shuffle"}
+        return None
 
     def get_repeat_mode(self) -> str | None:
         """Return repeat mode: 'one', 'all' or 'off'."""
         if self.status_model is None:
             return None
 
-        repeat_val = self.status_model.repeat or self.status_model.play_mode
+        # Check specific repeat field first
+        repeat_val = getattr(self.status_model, "repeat", None)
+        if repeat_val is not None:
+            repeat_str = str(repeat_val).strip().lower()
+            if repeat_str in {"one", "single", "repeat_one", "repeatone", "1"}:
+                return "one"
+            elif repeat_str in {"all", "repeat_all", "repeatall", "2"}:
+                return "all"
+            else:
+                return "off"
 
-        if repeat_val is None:
-            return None
+        # Check play_mode field (properly decoded from loop_mode by api_parser)
+        play_mode = getattr(self.status_model, "play_mode", None)
+        if play_mode is not None:
+            mode_str = str(play_mode).strip().lower()
+            if "repeat_one" in mode_str or mode_str in {"one", "single"}:
+                return "one"
+            elif "repeat_all" in mode_str or mode_str in {"all"}:
+                return "all"
+            elif "repeat" in mode_str and "shuffle" not in mode_str:
+                return "all"  # fallback for generic "repeat"
 
-        repeat_str = str(repeat_val).strip().lower()
-        if repeat_str in {"one", "single", "repeat_one", "repeatone", "2"}:
-            return "one"
-        if repeat_str in {"all", "repeat_all", "repeatall", "1"}:
-            return "all"
         return "off"
 
     def get_sound_mode(self) -> str | None:

@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 from .const import (
     API_ENDPOINT_CLEAR_PLAYLIST,
+    API_ENDPOINT_LOOPMODE,
     API_ENDPOINT_MUTE,
     API_ENDPOINT_NEXT,
     API_ENDPOINT_PAUSE,
@@ -22,16 +23,9 @@ from .const import (
     API_ENDPOINT_PLAY_PROMPT_URL,
     API_ENDPOINT_PLAY_URL,
     API_ENDPOINT_PREV,
-    API_ENDPOINT_REPEAT,
     API_ENDPOINT_SEEK,
-    API_ENDPOINT_SHUFFLE,
     API_ENDPOINT_STOP,
     API_ENDPOINT_VOLUME,
-    PLAY_MODE_NORMAL,
-    PLAY_MODE_REPEAT_ALL,
-    PLAY_MODE_REPEAT_ONE,
-    PLAY_MODE_SHUFFLE,
-    PLAY_MODE_SHUFFLE_REPEAT_ALL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,18 +70,17 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
         await self._request(f"{API_ENDPOINT_MUTE}{1 if mute else 0}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
-    # Play-mode / shuffle
+    # Loop mode (shuffle/repeat combined)
     # ------------------------------------------------------------------
 
-    async def set_repeat_mode(self, mode: str) -> None:  # type: ignore[override]
-        if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_REPEAT_ALL, PLAY_MODE_REPEAT_ONE):
-            raise ValueError(f"Invalid repeat mode: {mode}")
-        await self._request(f"{API_ENDPOINT_REPEAT}{mode}")  # type: ignore[attr-defined]
+    async def set_loop_mode(self, mode: int) -> None:  # type: ignore[override]
+        """Set loop mode using WiiM's loopmode command.
 
-    async def set_shuffle_mode(self, mode: str) -> None:  # type: ignore[override]
-        if mode not in (PLAY_MODE_NORMAL, PLAY_MODE_SHUFFLE, PLAY_MODE_SHUFFLE_REPEAT_ALL):
-            raise ValueError(f"Invalid shuffle mode: {mode}")
-        await self._request(f"{API_ENDPOINT_SHUFFLE}{mode}")  # type: ignore[attr-defined]
+        Values: 0=normal, 1=repeat_one, 2=repeat_all, 4=shuffle, 5=shuffle+repeat_one, 6=shuffle+repeat_all
+        """
+        if mode not in (0, 1, 2, 4, 5, 6):
+            raise ValueError(f"Invalid loop mode: {mode}. Valid values: 0,1,2,4,5,6")
+        await self._request(f"{API_ENDPOINT_LOOPMODE}{mode}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Playlist helpers

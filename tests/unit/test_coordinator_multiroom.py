@@ -110,9 +110,9 @@ async def test_multiroom_slave_fallback_to_group_search(mock_coordinator):
     role = "slave"
 
     with (
-        patch("custom_components.wiim.coordinator_multiroom.find_speaker_by_ip", return_value=None),
+        patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=None),
         patch(
-            "custom_components.wiim.coordinator_multiroom.get_all_speakers",
+            "custom_components.wiim.data_helpers.get_all_speakers",
             return_value=[mock_master_speaker, mock_other_speaker],
         ),
     ):
@@ -135,8 +135,8 @@ async def test_multiroom_slave_no_master_found(mock_coordinator):
     role = "slave"
 
     with (
-        patch("custom_components.wiim.coordinator_multiroom.find_speaker_by_ip", return_value=None),
-        patch("custom_components.wiim.coordinator_multiroom.get_all_speakers", return_value=[]),
+        patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=None),
+        patch("custom_components.wiim.data_helpers.get_all_speakers", return_value=[]),
     ):
         await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
 
@@ -174,8 +174,8 @@ async def test_multiroom_master_found_but_not_master_role(mock_coordinator):
     role = "slave"
 
     with (
-        patch("custom_components.wiim.coordinator_multiroom.find_speaker_by_ip", return_value=mock_found_speaker),
-        patch("custom_components.wiim.coordinator_multiroom.get_all_speakers", return_value=[]),
+        patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=mock_found_speaker),
+        patch("custom_components.wiim.data_helpers.get_all_speakers", return_value=[]),
     ):
         await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
 
@@ -199,7 +199,7 @@ async def test_multiroom_master_data_missing(mock_coordinator):
     metadata = {}
     role = "slave"
 
-    with patch("custom_components.wiim.coordinator_multiroom.find_speaker_by_ip", return_value=mock_master_speaker):
+    with patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=mock_master_speaker):
         await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
 
     # Should fallback to follower when master has no data
@@ -224,8 +224,8 @@ async def test_multiroom_exception_handling(mock_coordinator):
     role = "slave"
 
     with (
-        patch("custom_components.wiim.coordinator_multiroom.find_speaker_by_ip", return_value=None),
-        patch("custom_components.wiim.coordinator_multiroom.get_all_speakers", return_value=[mock_master_speaker]),
+        patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=None),
+        patch("custom_components.wiim.data_helpers.get_all_speakers", return_value=[mock_master_speaker]),
     ):
         await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
 

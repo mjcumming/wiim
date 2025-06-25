@@ -24,10 +24,6 @@ from .const import (
     CONF_VOLUME_STEP,
     DEFAULT_VOLUME_STEP,
     EQ_PRESET_MAP,
-    PLAY_MODE_NORMAL,
-    PLAY_MODE_REPEAT_ALL,
-    PLAY_MODE_REPEAT_ONE,
-    PLAY_MODE_SHUFFLE,
 )
 
 if TYPE_CHECKING:
@@ -101,14 +97,9 @@ class MediaControllerCoreMixin:
         try:
             self._logger.debug("Setting mute to %s for %s", mute, self.speaker.name)
 
-            # Implement master/slave logic
-            if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
-                # Slave should control master mute
-                self._logger.debug("Slave speaker redirecting mute to master")
-                await self.speaker.coordinator_speaker.coordinator.client.set_mute(mute)
-            else:
-                # Master or solo speaker controls directly
-                await self.speaker.coordinator.client.set_mute(mute)
+            # Send mute directly to *this* device regardless of role.
+            # Group-level mute operations are handled by the group coordinator entity.
+            await self.speaker.coordinator.client.set_mute(mute)
 
         except Exception as err:
             self._logger.error("Failed to set mute to %s: %s", mute, err)
@@ -169,17 +160,27 @@ class MediaControllerCoreMixin:
     async def play(self) -> None:
         """Start playback (master/slave aware)."""
         try:
-            self._logger.debug("Starting playback for %s (role=%s)", self.speaker.name, self.speaker.role)
+            self._logger.debug(
+                "Starting playback for %s (role=%s)",
+                self.speaker.name,
+                self.speaker.role,
+            )
 
             # Implement master/slave logic - slaves should control master
             if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
                 target_speaker = self.speaker.coordinator_speaker
                 self._logger.debug(
-                    "Slave redirecting to master %s at %s", target_speaker.name, target_speaker.ip_address
+                    "Slave redirecting to master %s at %s",
+                    target_speaker.name,
+                    target_speaker.ip_address,
                 )
                 await target_speaker.coordinator.client.play()
             else:
-                self._logger.debug("Sending play to %s at %s", self.speaker.name, self.speaker.ip_address)
+                self._logger.debug(
+                    "Sending play to %s at %s",
+                    self.speaker.name,
+                    self.speaker.ip_address,
+                )
                 await self.speaker.coordinator.client.play()
 
             self._logger.debug("Play command sent successfully to device")
@@ -191,17 +192,27 @@ class MediaControllerCoreMixin:
     async def pause(self) -> None:
         """Pause playback (master/slave aware)."""
         try:
-            self._logger.debug("Pausing playback for %s (role=%s)", self.speaker.name, self.speaker.role)
+            self._logger.debug(
+                "Pausing playback for %s (role=%s)",
+                self.speaker.name,
+                self.speaker.role,
+            )
 
             # Implement master/slave logic - slaves should control master
             if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
                 target_speaker = self.speaker.coordinator_speaker
                 self._logger.debug(
-                    "Slave redirecting pause to master %s at %s", target_speaker.name, target_speaker.ip_address
+                    "Slave redirecting pause to master %s at %s",
+                    target_speaker.name,
+                    target_speaker.ip_address,
                 )
                 await target_speaker.coordinator.client.pause()
             else:
-                self._logger.debug("Sending pause to %s at %s", self.speaker.name, self.speaker.ip_address)
+                self._logger.debug(
+                    "Sending pause to %s at %s",
+                    self.speaker.name,
+                    self.speaker.ip_address,
+                )
                 await self.speaker.coordinator.client.pause()
 
             self._logger.debug("Pause command sent successfully to device")
@@ -358,76 +369,91 @@ class MediaControllerCoreMixin:
             raise HomeAssistantError(f"Failed to set EQ preset '{preset}' on {self.speaker.name}: {err}") from err
 
     async def set_shuffle(self, shuffle: bool) -> None:
-        """Set shuffle mode with repeat coordination.
+        """Set shuffle mode using WiiM's loopmode command.
 
         Args:
             shuffle: True to enable shuffle, False to disable
         """
         try:
-            self._logger.debug("=== SHUFFLE OPERATION START ===")
             self._logger.debug("Setting shuffle to %s for %s", shuffle, self.speaker.name)
-            self._logger.debug(
-                "Current speaker state: role=%s, available=%s", self.speaker.role, self.speaker.available
-            )
 
-            # Map boolean to WiiM shuffle mode constants (NOT string numbers!)
-            shuffle_mode = PLAY_MODE_SHUFFLE if shuffle else PLAY_MODE_NORMAL
-            self._logger.debug("Mapped shuffle=%s to mode constant='%s'", shuffle, shuffle_mode)
+            # Check current source - Airplay sources may not support shuffle control
+            current_source = self.get_current_source()
+            if current_source and "airplay" in current_source.lower():
+                self._logger.warning(
+                    "Shuffle control may not work with Airplay source '%s' - "
+                    "playback is controlled by the source device (iPhone/Mac)",
+                    current_source,
+                )
 
-            # Log what we're about to send to the API
-            self._logger.debug("About to call client.set_shuffle_mode('%s')", shuffle_mode)
+            # Get current repeat state to preserve it
+            current_repeat = self.get_repeat_mode()
 
-            await self.speaker.coordinator.client.set_shuffle_mode(shuffle_mode)
+            # Map to loopmode values: 0=normal, 1=repeat_one, 2=repeat_all, 4=shuffle, 5=shuffle+repeat_one, 6=shuffle+repeat_all
+            if shuffle:
+                if current_repeat == "one":
+                    loop_mode = 5  # shuffle + repeat_one
+                elif current_repeat == "all":
+                    loop_mode = 6  # shuffle + repeat_all
+                else:
+                    loop_mode = 4  # shuffle only
+            else:
+                if current_repeat == "one":
+                    loop_mode = 1  # repeat_one
+                elif current_repeat == "all":
+                    loop_mode = 2  # repeat_all
+                else:
+                    loop_mode = 0  # normal
 
-            self._logger.debug("Successfully sent shuffle command to device")
-            self._logger.debug("=== SHUFFLE OPERATION END ===")
+            await self.speaker.coordinator.client.set_loop_mode(loop_mode)
+            self._logger.debug("Shuffle command sent: loopmode=%s", loop_mode)
 
         except Exception as err:
-            self._logger.error("=== SHUFFLE OPERATION FAILED ===")
             self._logger.error("Failed to set shuffle to %s: %s", shuffle, err)
-            self._logger.error("Error type: %s", type(err).__name__)
-            self._logger.error("=== SHUFFLE OPERATION END ===")
             raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
 
     async def set_repeat(self, repeat: str) -> None:
-        """Set repeat mode (off/one/all).
+        """Set repeat mode using WiiM's loopmode command.
 
         Args:
             repeat: Repeat mode - "off", "one", "all"
         """
         try:
-            self._logger.debug("=== REPEAT OPERATION START ===")
             self._logger.debug("Setting repeat to '%s' for %s", repeat, self.speaker.name)
-            self._logger.debug(
-                "Current speaker state: role=%s, available=%s", self.speaker.role, self.speaker.available
-            )
 
-            # Map HA repeat modes to WiiM repeat mode constants (NOT string numbers!)
-            if repeat == "off":
-                repeat_mode = PLAY_MODE_NORMAL
-            elif repeat == "one":
-                repeat_mode = PLAY_MODE_REPEAT_ONE
-            elif repeat == "all":
-                repeat_mode = PLAY_MODE_REPEAT_ALL
+            # Check current source - Airplay sources may not support repeat control
+            current_source = self.get_current_source()
+            if current_source and "airplay" in current_source.lower():
+                self._logger.warning(
+                    "Repeat control may not work with Airplay source '%s' - "
+                    "playback is controlled by the source device (iPhone/Mac)",
+                    current_source,
+                )
+
+            # Get current shuffle state to preserve it
+            current_shuffle = self.get_shuffle_state()
+
+            # Map to loopmode values: 0=normal, 1=repeat_one, 2=repeat_all, 4=shuffle, 5=shuffle+repeat_one, 6=shuffle+repeat_all
+            if current_shuffle:
+                if repeat == "one":
+                    loop_mode = 5  # shuffle + repeat_one
+                elif repeat == "all":
+                    loop_mode = 6  # shuffle + repeat_all
+                else:
+                    loop_mode = 4  # shuffle only
             else:
-                self._logger.error("Invalid repeat mode received: '%s'", repeat)
-                raise ValueError(f"Unknown repeat mode '{repeat}' on {self.speaker.name}. Valid modes: off, one, all")
+                if repeat == "one":
+                    loop_mode = 1  # repeat_one
+                elif repeat == "all":
+                    loop_mode = 2  # repeat_all
+                else:
+                    loop_mode = 0  # normal
 
-            self._logger.debug("Mapped repeat='%s' to mode constant='%s'", repeat, repeat_mode)
-
-            # Log what we're about to send to the API
-            self._logger.debug("About to call client.set_repeat_mode('%s')", repeat_mode)
-
-            await self.speaker.coordinator.client.set_repeat_mode(repeat_mode)
-
-            self._logger.debug("Successfully sent repeat command to device")
-            self._logger.debug("=== REPEAT OPERATION END ===")
+            await self.speaker.coordinator.client.set_loop_mode(loop_mode)
+            self._logger.debug("Repeat command sent: loopmode=%s", loop_mode)
 
         except Exception as err:
-            self._logger.error("=== REPEAT OPERATION FAILED ===")
             self._logger.error("Failed to set repeat to '%s': %s", repeat, err)
-            self._logger.error("Error type: %s", type(err).__name__)
-            self._logger.error("=== REPEAT OPERATION END ===")
             raise HomeAssistantError(f"Failed to set repeat: {err}") from err
 
     def get_source_list(self) -> list[str]:
@@ -470,7 +496,12 @@ class MediaControllerCoreMixin:
             shuffle_state = self.speaker.get_shuffle_state()
 
             if shuffle_state != self._last_shuffle_state:
-                self._logger.debug("Detected shuffle state: %s for %s", shuffle_state, self.speaker.name)
+                self._logger.debug(
+                    "Shuffle state changed: %s → %s for %s",
+                    self._last_shuffle_state,
+                    shuffle_state,
+                    self.speaker.name,
+                )
                 self._last_shuffle_state = shuffle_state
 
             return shuffle_state
@@ -485,7 +516,12 @@ class MediaControllerCoreMixin:
 
             # Log only on change
             if repeat_mode != self._last_repeat_mode:
-                self._logger.debug("Detected repeat mode: '%s' for %s", repeat_mode, self.speaker.name)
+                self._logger.debug(
+                    "Repeat mode changed: '%s' → '%s' for %s",
+                    self._last_repeat_mode,
+                    repeat_mode,
+                    self.speaker.name,
+                )
                 self._last_repeat_mode = repeat_mode
 
             return repeat_mode

@@ -35,10 +35,12 @@ async def async_setup_entry(
     entities = []
     # Only create maintenance buttons if the option is enabled
     if entry.options.get("enable_maintenance_buttons", False):
-        entities.extend([
-            WiiMRebootButton(speaker),
-            WiiMSyncTimeButton(speaker),
-        ])
+        entities.extend(
+            [
+                WiiMRebootButton(speaker),
+                WiiMSyncTimeButton(speaker),
+            ]
+        )
 
     async_add_entities(entities)
     _LOGGER.info("Created %d maintenance button entities for %s", len(entities), speaker.name)

@@ -93,10 +93,12 @@ class PlayerStatus(_WiimBase):
     eq_preset: str | None = Field(None, alias="eq")
     wifi_rssi: int | None = Field(None, alias="RSSI")
     wifi_channel: int | None = Field(None, alias="WifiChannel")
-    loop_mode: str | None = Field(None, alias="loop_mode")
+    loop_mode: int | None = Field(None, alias="loop_mode")
     play_mode: str | None = Field(None, alias="play_mode")
-    repeat: str | None = None
-    shuffle: str | None = None
+
+    # Shuffle and repeat can come from different API fields depending on firmware
+    repeat: str | None = Field(None, alias="repeat")
+    shuffle: str | None = Field(None, alias="shuffle")
 
     # Group/multiroom fields (sometimes in status payload)
     group: str | None = None
@@ -115,11 +117,15 @@ class PlayerStatus(_WiimBase):
     def _normalize_source(cls, v: str | None) -> str | None:  # noqa: D401
         return v.lower() if isinstance(v, str) else v
 
-    # Normalize play_state to lowercase for consistency
+    # Normalize play_state to lowercase and convert 'none' to 'idle'
     @field_validator("play_state", mode="before")
     @classmethod
     def _normalize_play_state(cls, v: str | None) -> str | None:  # noqa: D401
-        return v.lower() if isinstance(v, str) else v
+        if not isinstance(v, str):
+            return v
+        normalized = v.lower()
+        # Convert WiiM's 'none' state to logical 'idle' state
+        return "idle" if normalized == "none" else normalized
 
 
 class SlaveInfo(BaseModel):

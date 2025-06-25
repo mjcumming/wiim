@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .api import WiiMClient, WiiMError
-from .const import FIXED_POLL_INTERVAL
 from .coordinator_backoff import BackoffController
 from .models import DeviceInfo, PlayerStatus
 
@@ -30,12 +29,13 @@ COMMAND_FAILURE_TIMEOUT = 30  # seconds - how long to remember command failures
 
 
 class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """WiiM coordinator with fixed 5-second polling.
+    """WiiM coordinator with adaptive smart polling per POLLING_STRATEGY.md.
 
-    This coordinator implements simple, reliable polling with fixed intervals:
-    - Fixed 5-second polling interval (HA compliant minimum)
-    - Defensive programming with graceful API fallbacks
-    - Never fails hard - always has fallbacks for unreliable endpoints
+    This coordinator implements smart polling that adapts to device activity:
+    - 1-second polling during active playback for real-time updates
+    - 5-second polling when idle for resource efficiency
+    - Conditional fetching based on data type and activity
+    - Graceful degradation with fallbacks for unreliable endpoints
 
     Key principles:
     - getPlayerStatus is universal endpoint (works on all devices)
@@ -50,12 +50,12 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         client: WiiMClient,
         entry=None,
     ) -> None:
-        """Initialize the coordinator with fixed 5-second polling."""
+        """Initialize the coordinator with adaptive polling."""
         super().__init__(
             hass,
             _LOGGER,
             name=f"WiiM {client.host}",
-            update_interval=timedelta(seconds=FIXED_POLL_INTERVAL),  # Fixed interval
+            update_interval=timedelta(seconds=5),  # Initial interval, will be adaptive
         )
         self.client = client
         self.hass = hass
@@ -97,9 +97,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._multiroom_working: bool | None = None
 
         _LOGGER.info(
-            "Coordinator initialized for %s with fixed %d-second polling",
+            "Coordinator initialized for %s with adaptive polling (1s when playing, 5s when idle)",
             client.host,
-            FIXED_POLL_INTERVAL,
         )
 
     @property
@@ -137,7 +136,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Check if this device has slaves (making it a master)."""
         if self.data and isinstance(self.data, dict):
             multiroom = self.data.get("multiroom", {})
-            return multiroom.get("slave_count", 0) > 0
+            # Handle both scenarios: slaves as list or as count
+            slaves_data = multiroom.get("slaves", 0)
+            if isinstance(slaves_data, list):
+                # If slaves is a list, check its length
+                return len(slaves_data) > 0
+            # If slaves is a number, use it directly
+            slave_count = slaves_data or multiroom.get("slave_count", 0)
+            return slave_count > 0
         return False
 
     async def _get_player_status(self) -> dict:
@@ -157,7 +163,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if VERBOSE_DEBUG:
                 _LOGGER.debug("Player status result for %s: %s", self.client.host, result)
             else:
-                _LOGGER.debug("Player status result for %s (keys=%s)", self.client.host, list(result.keys()))
+                _LOGGER.debug(
+                    "Player status result for %s (keys=%s)",
+                    self.client.host,
+                    list(result.keys()),
+                )
 
             return result
 
@@ -165,7 +175,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning("[WiiM] %s: getPlayerStatus failed: %s", self.client.host, err)
             raise
         except Exception as err:
-            _LOGGER.error("[WiiM] %s: Unexpected error in get_player_status: %s", self.client.host, err)
+            _LOGGER.error(
+                "[WiiM] %s: Unexpected error in get_player_status: %s",
+                self.client.host,
+                err,
+            )
             raise
 
     async def _fetch_device_info(self) -> dict[str, Any]:
@@ -180,14 +194,17 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Some devices don't provide UUID in their API responses - this is normal
                 # The integration uses the unique_id from config entry (set during discovery)
                 _LOGGER.debug(
-                    "Device API does not provide UUID for %s (using config entry unique_id instead)", self.client.host
+                    "Device API does not provide UUID for %s (using config entry unique_id instead)",
+                    self.client.host,
                 )
                 # Note: The unique ID established in ConfigFlow is the primary one and is sufficient
                 # This missing API UUID does not affect integration functionality
             return device_info
         except WiiMError as err:
             _LOGGER.debug(
-                "Failed to get device info for %s: %s, device info will be unavailable", self.client.host, err
+                "Failed to get device info for %s: %s, device info will be unavailable",
+                self.client.host,
+                err,
             )
         return {}
 
@@ -198,12 +215,40 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return await _poll.async_update_data(self)
 
     async def _fetch_multiroom_info(self) -> dict:
-        """Get multiroom info with graceful failure handling."""
+        """Get multiroom info with proper API usage per API guide.
+
+        According to the API guide:
+        - getSlaveList only works on MASTER devices
+        - Slave devices (group: "1") already know they're slaves
+        - Only call getSlaveList when group: "0" to distinguish master from solo
+        """
         try:
-            return await self.client.get_multiroom_status() or {}
+            # First check if this device is a slave - if so, no need for getSlaveList
+            device_info = await self._fetch_device_info()
+            group_field = device_info.get("group", "0")
+
+            # If device is a slave (group: "1"), don't call getSlaveList
+            if group_field == "1":
+                _LOGGER.debug(
+                    "Device %s is slave (group='1') - skipping getSlaveList",
+                    self.client.host,
+                )
+                return {"slaves": 0, "slave_list": []}
+
+            # For potential masters/solos (group: "0"), call getSlaveList to distinguish
+            _LOGGER.debug(
+                "Device %s checking slave status (group='%s')",
+                self.client.host,
+                group_field,
+            )
+            result = await self.client._request("/httpapi.asp?command=multiroom:getSlaveList")
+            _LOGGER.debug("Raw multiroom response for %s: %s", self.client.host, result)
+            return result or {}
+
         except WiiMError as err:
-            _LOGGER.debug("[WiiM] %s: get_multiroom_status failed: %s", self.client.host, err)
-            return {}
+            _LOGGER.debug("[WiiM] %s: getSlaveList failed: %s", self.client.host, err)
+            # Fallback to basic empty response
+            return {"slaves": 0, "slave_list": []}
 
     async def _fetch_track_metadata(self, status: PlayerStatus) -> dict:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_metadata* helper."""
@@ -248,7 +293,12 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         changed = current_title != last_title
 
         if changed:
-            _LOGGER.debug("[WiiM] %s: Track changed: %s -> %s", self.client.host, last_title, current_title)
+            _LOGGER.debug(
+                "[WiiM] %s: Track changed: %s -> %s",
+                self.client.host,
+                last_title,
+                current_title,
+            )
 
         self._last_status = status.copy()
         return changed
@@ -282,7 +332,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # User interaction methods
     def record_user_command(self, command_type: str) -> None:
         """Record user command and force immediate update."""
-        _LOGGER.debug("[WiiM] %s: User command '%s' - requesting immediate refresh", self.client.host, command_type)
+        _LOGGER.debug(
+            "[WiiM] %s: User command '%s' - requesting immediate refresh",
+            self.client.host,
+            command_type,
+        )
         # Force immediate refresh by setting short interval
         self.update_interval = timedelta(seconds=1)
 
@@ -334,7 +388,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Get cached group member IPs."""
         if self.data and isinstance(self.data, dict):
             multiroom = self.data.get("multiroom", {})
-            return [entry.get("ip") for entry in multiroom.get("slave_list", []) if entry.get("ip")]
+            # Check both possible field names for slaves
+            slaves_list = multiroom.get("slave_list", [])
+            return [
+                entry.get("ip") if isinstance(entry, dict) else str(entry)
+                for entry in slaves_list
+                if (isinstance(entry, dict) and entry.get("ip")) or (isinstance(entry, str) and entry)
+            ]
         return []
 
     def get_cached_group_leader(self) -> str | None:
@@ -417,12 +477,19 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if added:
                 _LOGGER.info(
-                    "[WiiM] %s: Added %d additional EQ presets from EQGetList: %s", self.client.host, len(added), added
+                    "[WiiM] %s: Added %d additional EQ presets from EQGetList: %s",
+                    self.client.host,
+                    len(added),
+                    added,
                 )
         except WiiMError as err:
             _LOGGER.debug("[WiiM] %s: EQGetList not supported (%s)", self.client.host, err)
         except Exception as err:  # pragma: no cover – safety
-            _LOGGER.debug("[WiiM] %s: Unexpected error during EQ list fetch: %s", self.client.host, err)
+            _LOGGER.debug(
+                "[WiiM] %s: Unexpected error during EQ list fetch: %s",
+                self.client.host,
+                err,
+            )
         finally:
             # Always mark as attempted so we do not retry every poll
             self._eq_list_extended = True

@@ -2,14 +2,24 @@
 
 Transform your WiiM and LinkPlay speakers into powerful Home Assistant media players with full multiroom support.
 
+## 📋 Quick Navigation
+
+- [✨ Key Features](#-key-features)
+- [📦 Installation](#-installation)
+- [🚀 Quick Setup](#-quick-setup)
+- [🏠 Multiroom Setup](#-quick-multiroom-setup)
+- [🔧 Troubleshooting](#-troubleshooting)
+- [📚 Complete Documentation](#-complete-documentation)
+
 ## ✨ Key Features
 
 - 🎵 **Complete Media Control** - Play, pause, volume, source selection
-- 🏠 **Multiroom Audio** - Synchronized playback across speaker groups
-- 🎛️ **Group Volume Controls** - Dedicated entities for group control
-- 🔧 **No Dependencies** - Uses only Home Assistant's built-in libraries
+- 🏠 **Virtual Group Coordinators** - Single entity controls entire speaker groups
+- 📻 **Media Browser** - Browse presets and HA media sources
+- 🎛️ **Advanced Audio** - EQ presets and source management
 - 🚀 **Auto-Discovery** - Automatically finds speakers on your network
 - 🎯 **Smart Source Detection** - Shows "Spotify" instead of "WiFi"
+- ⚡ **Adaptive Polling** - 1-second updates during playback
 
 ## 🛠️ Supported Devices
 
@@ -23,15 +33,13 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 1. **Add Integration to HACS**
 
-   - Open HACS → Integrations
-   - Click ⋮ → Custom repositories
+   - Open HACS → Integrations → ⋮ → Custom repositories
    - Add: `https://github.com/mjcumming/wiim`
    - Category: Integration
 
 2. **Install Integration**
 
-   - Search for "WiiM Audio"
-   - Click Download → Restart Home Assistant
+   - Search for "WiiM Audio" → Download → Restart HA
 
 3. **Add Integration**
    - Settings → Devices & Services → Add Integration
@@ -44,57 +52,27 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 3. Restart Home Assistant
 4. Add integration via Settings → Devices & Services
 
-## 🚀 Initial Setup
+## 🚀 Quick Setup
 
 ### Auto-Discovery
 
-The integration automatically finds WiiM speakers on your network using UPnP/SSDP and Zeroconf.
-
-1. **Settings** → **Devices & Services**
-2. New WiiM devices appear in discovered integrations
-3. Click **Configure** and follow setup wizard
+Speakers are automatically found using UPnP/SSDP. Go to **Settings** → **Devices & Services** and configure discovered devices.
 
 ### Manual Configuration
 
-If auto-discovery doesn't work:
+If auto-discovery doesn't work, add integration manually and enter the speaker's IP address.
 
-1. **Add Integration** manually
-2. Enter speaker IP address when prompted
-3. Integration validates connection and creates entities
+## 🎵 Essential Entities
 
-### Device Options
-
-Configure each speaker individually via **Configure** button:
-
-| Option                   | Default | Description                 |
-| ------------------------ | ------- | --------------------------- |
-| **Volume Step**          | 5%      | Volume button increment     |
-| **Enable Group Control** | Off     | Create virtual group entity |
-
-## 🎵 Basic Usage
-
-### Essential Entities (Always Available)
+Each speaker creates:
 
 - **Media Player** - `media_player.{device_name}` - Full device control
-- **🔴 Role Sensor** - `sensor.{device_name}_multiroom_role` - Shows group status
-  - States: `Solo`, `Master`, `Slave`
-  - **CRITICAL** for multiroom understanding
+- **Group Coordinator** - `media_player.{device_name}_group_coordinator` - Controls entire group (appears when master with slaves)
+- **Role Sensor** - `sensor.{device_name}_multiroom_role` - Shows `Solo`/`Master`/`Slave` status
 
-### Smart Source Detection
+## 🏠 Quick Multiroom Setup
 
-Shows what you actually care about:
-
-- **Amazon Music** 🎵 (instead of "WiFi")
-- **Spotify** 🎵 (instead of "Network")
-- **AirPlay** 📱 (instead of "Mode 99")
-
-### Quick Multiroom Setup
-
-1. Open any WiiM media player card
-2. Click the **group icon** (chain link)
-3. Select speakers to join the group
-
-Or use automation:
+### Create Groups
 
 ```yaml
 service: media_player.join
@@ -106,81 +84,85 @@ data:
     - media_player.bedroom
 ```
 
-## 🎛️ Dashboard Integration
+### Control Groups
 
-### Basic Media Control
+The group coordinator entity automatically appears:
 
 ```yaml
+# Control entire group with single entity
 type: media-control
-entity: media_player.living_room
+entity: media_player.living_room_group_coordinator
 ```
 
-### Group Control Dashboard
+### Smart Automations
 
 ```yaml
-type: horizontal-stack
-cards:
-  - type: button
-    tap_action:
-      action: call-service
-      service: media_player.join
-      service_data:
-        entity_id: media_player.living_room
-        group_members:
-          - media_player.kitchen
-          - media_player.bedroom
-    name: Create Group
-    icon: mdi:speaker-multiple
+# Target only group masters for efficiency
+service: media_player.volume_set
+target:
+  entity_id: >
+    {{ states.sensor
+       | selectattr('entity_id', 'match', '.*_multiroom_role$')
+       | selectattr('state', 'eq', 'Master')
+       | map(attribute='entity_id')
+       | map('replace', 'sensor.', 'media_player.')
+       | map('replace', '_multiroom_role', '_group_coordinator')
+       | list }}
+data:
+  volume_level: 0.5
 ```
 
 ## 🔧 Troubleshooting
 
-### Common Issues
+### Quick Fixes
 
 **No devices found:**
 
-- Ensure HA and speakers on same network
-- Check firewall allows UPnP/SSDP (port 1900)
+- Ensure HA and speakers on same network/VLAN
+- Check firewall allows UPnP (port 1900)
 - Try manual IP configuration
-
-**Connection errors:**
-
-- Verify speaker IP is correct
-- Check speaker is powered on
-- Integration handles SSL certificates automatically
 
 **Groups not working:**
 
-- Verify all speakers on same firmware version
-- Check network allows multicast traffic
-- Use role sensor to monitor group status
+- Check all speakers have same firmware
+- Use wired connection for master speaker
+- Ensure multicast traffic allowed
 
-### Debug Logging
+**Connection errors:**
+
+- Verify speaker IP hasn't changed
+- Power cycle the speaker
+
+### Debug Mode
 
 ```yaml
-# configuration.yaml
 logger:
   logs:
     custom_components.wiim: debug
 ```
 
-## 📚 More Information
+## 📚 Complete Documentation
 
-- **[Complete User Guide](user-guide.md)** - All features and advanced configuration
-- **[Automation Examples](automation-examples.md)** - Ready-to-use scripts
-- **[Diagnostics](diagnostics.md)** - Firmware sensors & update entity
-- **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
-- **[GitHub Issues](https://github.com/mjcumming/wiim/issues)** - Report bugs
-- **[HA Community](https://community.home-assistant.io/)** - Get help
+- **[🎛️ User Guide](user-guide.md)** - All features and configuration options
+- **[🤖 Automation Cookbook](automation-cookbook.md)** - Ready-to-use automation patterns
+- **[❓ FAQ](FAQ.md)** - Quick answers to common questions
+- **[🔧 Troubleshooting](troubleshooting.md)** - Fix common issues and network problems
+
+## 🎯 Pro Tips
+
+1. **Use Role Sensors** - Check `sensor.{device}_multiroom_role` before sending commands
+2. **Group Coordinators** - Use `*_group_coordinator` entities for group operations
+3. **DHCP Reservations** - Assign static IPs to prevent connection issues
+4. **Media Browser** - Access presets through any media player card → Browse Media
 
 ## 🙏 Support the Project
 
-If this integration helps you enjoy your music, consider:
+If this integration enhances your audio experience:
 
-- ⭐ **Star the repo** on GitHub
-- 🐛 **Report issues** you encounter
-- 💡 **Share automation examples**
-- 📖 **Improve documentation**
+- ⭐ **Star the repo** on [GitHub](https://github.com/mjcumming/wiim)
+- 🐛 **Report issues** with debug logs
+- 💡 **Share** automation examples
+- 💬 **Join** discussions on [HA Community](https://community.home-assistant.io/)
 
 ---
 
