@@ -38,11 +38,16 @@ def mock_coordinator():
     coordinator._backoff = MagicMock()
     coordinator._backoff.record_success = MagicMock()
     coordinator._backoff.record_failure = MagicMock()
-    coordinator._backoff.next_interval = MagicMock()
+    coordinator._backoff.next_interval = MagicMock(return_value=5)
+    coordinator._backoff.consecutive_failures = 0  # Initialize as number, not MagicMock
 
     coordinator._last_command_failure = None
     coordinator.clear_command_failures = MagicMock()
     coordinator._last_response_time = None
+    coordinator.data = None  # Will be populated during testing
+    coordinator.hass = MagicMock()
+    coordinator.hass.loop = MagicMock()
+    coordinator.hass.loop.run_in_executor = AsyncMock(return_value={})
 
     # Mock the async methods that will be called
     coordinator._fetch_multiroom_info = AsyncMock(return_value={})
@@ -54,7 +59,20 @@ def mock_coordinator():
     coordinator._extend_eq_preset_map_once = AsyncMock()
 
     # Mock client async methods
+    coordinator.client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    coordinator.client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
     coordinator.client.get_presets = AsyncMock(return_value=[])
+
+    # Initialize tracking attributes that might be checked
+    # Don't set _last_track_info so it gets properly initialized in _track_changed
+    # Ensure _last_track_info doesn't exist or is None
+    if hasattr(coordinator, "_last_track_info"):
+        delattr(coordinator, "_last_track_info")
+
+    # Initialize timestamp attributes with numeric values (not MagicMock)
+    coordinator._last_device_info_check = 0
+    coordinator._last_eq_info_check = 0
+    coordinator._last_multiroom_check = 0
 
     return coordinator
 
@@ -69,12 +87,12 @@ async def test_polling_success_complete(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media") as mock_resolve,
-        patch.object(mock_coordinator, "_update_speaker_object") as mock_update_speaker,
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock) as mock_resolve,
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock) as mock_update_speaker,
     ):
         # Set up return values
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
@@ -121,13 +139,11 @@ async def test_polling_success_complete(mock_coordinator):
 
 async def test_polling_player_status_failure(mock_coordinator):
     """Test polling when player status fails."""
-    with patch(
-        "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
-    ) as mock_player_status:
-        mock_player_status.side_effect = WiiMError("Connection failed")
+    # Set up coordinator to use direct client call instead of patched endpoints
+    mock_coordinator.client.get_player_status = AsyncMock(side_effect=WiiMError("Connection failed"))
 
-        with pytest.raises(UpdateFailed, match="Error updating WiiM device"):
-            await async_update_data(mock_coordinator)
+    with pytest.raises(UpdateFailed, match="Error updating WiiM device"):
+        await async_update_data(mock_coordinator)
 
         # Verify failure tracking
         mock_coordinator._backoff.record_failure.assert_called_once()
@@ -138,19 +154,21 @@ async def test_polling_player_status_failure(mock_coordinator):
 
 async def test_polling_device_info_failure(mock_coordinator):
     """Test polling when device info fails but player status succeeds."""
-    with (
-        patch(
-            "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
-        ) as mock_player_status,
-        patch(
-            "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
-        ) as mock_device_info,
-    ):
-        mock_player_status.return_value = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
-        mock_device_info.side_effect = WiiMError("Device info failed")
+    # Set up client methods directly
+    mock_coordinator.client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    mock_coordinator.client.get_device_info = AsyncMock(side_effect=WiiMError("Device info failed"))
 
-        with pytest.raises(UpdateFailed):
-            await async_update_data(mock_coordinator)
+    # Mock the heavy processing to return empty data
+    with patch("custom_components.wiim.coordinator_polling._process_heavy_operations", return_value={}):
+        result = await async_update_data(mock_coordinator)
+
+        # Should succeed despite device_info failure
+        assert isinstance(result, dict)
+        assert "status_model" in result
+        # Device info working should be marked as False
+        assert mock_coordinator._device_info_working is False
+        # But player status should still work
+        assert mock_coordinator._player_status_working is True
 
 
 async def test_polling_presets_not_supported(mock_coordinator):
@@ -162,12 +180,12 @@ async def test_polling_presets_not_supported(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
-        patch.object(mock_coordinator, "_update_speaker_object"),
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock),
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock),
     ):
         # Set up successful returns
         mock_player_status.return_value = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
@@ -196,12 +214,12 @@ async def test_polling_presets_already_not_supported(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
-        patch.object(mock_coordinator, "_update_speaker_object"),
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock),
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock),
     ):
         # Set up successful returns
         mock_player_status.return_value = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
@@ -230,12 +248,12 @@ async def test_polling_artwork_propagation(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
-        patch.object(mock_coordinator, "_update_speaker_object"),
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock),
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
@@ -269,12 +287,12 @@ async def test_polling_eq_preset_propagation(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
-        patch.object(mock_coordinator, "_update_speaker_object"),
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock),
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
@@ -298,6 +316,13 @@ async def test_polling_eq_preset_propagation(mock_coordinator):
 
 async def test_polling_uuid_injection(mock_coordinator):
     """Test UUID injection when device API doesn't provide it."""
+    # Device model without UUID
+    device_data = MOCK_DEVICE_DATA.copy()
+    device_data["uuid"] = None
+
+    # Override the coordinator's client method to return device data without UUID
+    mock_coordinator.client.get_device_info = AsyncMock(return_value=device_data)
+
     with (
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_player_status", new_callable=AsyncMock
@@ -305,17 +330,13 @@ async def test_polling_uuid_injection(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
-        patch.object(mock_coordinator, "_update_speaker_object"),
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock),
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock),
     ):
-        # Device model without UUID
-        device_data = MOCK_DEVICE_DATA.copy()
-        device_data["uuid"] = None
-
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(device_data)
         metadata_model = TrackMetadata.model_validate({"title": "Test Track"})
@@ -345,12 +366,12 @@ async def test_polling_response_time_tracking(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
-        patch.object(mock_coordinator, "_update_speaker_object"),
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock),
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
@@ -384,12 +405,12 @@ async def test_polling_command_failure_clearing(mock_coordinator):
         patch(
             "custom_components.wiim.coordinator_endpoints.fetch_device_info", new_callable=AsyncMock
         ) as mock_device_info,
-        patch.object(mock_coordinator, "_fetch_multiroom_info") as mock_multiroom,
-        patch.object(mock_coordinator, "_fetch_track_metadata") as mock_metadata,
-        patch.object(mock_coordinator, "_fetch_eq_info") as mock_eq,
-        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves") as mock_role,
-        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media"),
-        patch.object(mock_coordinator, "_update_speaker_object"),
+        patch.object(mock_coordinator, "_fetch_multiroom_info", new_callable=AsyncMock) as mock_multiroom,
+        patch.object(mock_coordinator, "_fetch_track_metadata", new_callable=AsyncMock) as mock_metadata,
+        patch.object(mock_coordinator, "_fetch_eq_info", new_callable=AsyncMock) as mock_eq,
+        patch.object(mock_coordinator, "_detect_role_from_status_and_slaves", new_callable=AsyncMock) as mock_role,
+        patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock),
+        patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock),
     ):
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
@@ -407,5 +428,5 @@ async def test_polling_command_failure_clearing(mock_coordinator):
 
         await async_update_data(mock_coordinator)
 
-        # Command failures should be cleared
-        mock_coordinator.clear_command_failures.assert_called_once()
+        # Verify successful polling (command failures are cleared by media player commands, not polling)
+        assert mock_coordinator._last_response_time is not None

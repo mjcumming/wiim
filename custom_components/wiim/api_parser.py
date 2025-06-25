@@ -167,11 +167,10 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
     if isinstance(eq_raw, int | str) and str(eq_raw).isdigit():
         data["eq_preset"] = EQ_NUMERIC_MAP.get(str(eq_raw), eq_raw)
 
-    # Qobuz quirk – always reports *stop* even when playing.
-    if data.get("source") == "qobuz" and (
-        not data.get("play_status") or str(data["play_status"]).lower() in {"stop", "stopped", "idle", ""}
-    ):
-        data["play_status"] = "play"
+    # Enhanced Qobuz Connect state detection (addresses GitHub issue #35)
+    # Qobuz Connect has complex state reporting issues that require sophisticated detection
+    if data.get("source") == "qobuz" or (vendor_val and "qobuz" in str(vendor_val).lower()):
+        _handle_qobuz_connect_state_quirks(data, raw)
 
     return data, new_last_track
 
@@ -184,6 +183,57 @@ def _hex_to_str(val: str | None) -> str | None:
         return bytes.fromhex(val).decode("utf-8", errors="replace")
     except ValueError:
         return val
+
+
+def _handle_qobuz_connect_state_quirks(data: dict[str, Any], raw: dict[str, Any]) -> None:
+    """Handle Qobuz Connect state detection quirks.
+
+    Addresses GitHub issue #35: Qobuz Connect shows playing briefly then switches to idle.
+    This implements the enhanced state detection logic that was added in python-linkplay v0.2.9.
+
+    Args:
+        data: Parsed data dictionary (modified in place)
+        raw: Raw API response for additional context
+    """
+    current_status = data.get("play_status", "").lower()
+
+    # Only apply workaround when status appears to be incorrectly reported as stopped/idle
+    if current_status not in {"stop", "stopped", "idle", ""}:
+        return  # Status appears correct, don't interfere
+
+    # Enhanced detection: Look for multiple indicators that suggest active playback
+    # This mimics the improved logic from python-linkplay v0.2.9
+
+    has_track_info = bool(data.get("title") and data.get("title").strip() and data.get("title") != "Unknown")
+    has_position_info = bool(data.get("position") or raw.get("curpos") or raw.get("offset_pts"))
+    has_duration_info = bool(data.get("duration") or raw.get("totlen"))
+    has_artwork = bool(data.get("entity_picture") or raw.get("cover") or raw.get("albumArtURI"))
+
+    # Additional context indicators
+    has_artist = bool(data.get("artist") and data.get("artist").strip() and data.get("artist") != "Unknown")
+    has_album = bool(data.get("album") and data.get("album").strip() and data.get("album") != "Unknown")
+
+    # Count the number of positive indicators
+    playback_indicators = sum(
+        [has_track_info, has_position_info, has_duration_info, has_artwork, has_artist, has_album]
+    )
+
+    # Qobuz Connect specific: If we have rich metadata but status is stopped,
+    # it's likely incorrectly reported. But be conservative to avoid false positives.
+    if playback_indicators >= 3:  # Need multiple indicators to be confident
+        _LOGGER.debug(
+            "🎵 Qobuz Connect state correction: status='%s' but %d indicators suggest active playback. "
+            "Correcting to 'play' (track: %s)",
+            current_status,
+            playback_indicators,
+            data.get("title", "Unknown"),
+        )
+        data["play_status"] = "play"
+    else:
+        # Not enough indicators - probably genuinely stopped/idle
+        _LOGGER.debug(
+            "🎵 Qobuz Connect: status='%s' with %d indicators - leaving unchanged", current_status, playback_indicators
+        )
 
 
 def _decode_text(val: str | None) -> str | None:
