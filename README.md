@@ -1,5 +1,9 @@
 # WiiM Audio Integration for Home Assistant
 
+<p align="center">
+  <img src="images/logo.png" alt="WiiM Integration Logo" width="200"/>
+</p>
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
 [![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
