@@ -263,11 +263,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Type ignore because helper expects coordinator instance first.
         return _meta._enhance_metadata_with_artwork(self, metadata, status)  # type: ignore[attr-defined]
 
-    def _extract_basic_metadata(self, status: dict) -> dict:  # noqa: D401
+    async def _extract_basic_metadata(self, status: dict) -> dict:  # noqa: D401
         """Delegated to *coordinator_metadata* (legacy shim)."""
         from . import coordinator_metadata as _meta
 
-        return _meta._extract_basic_metadata(self, status)
+        return await _meta._extract_basic_metadata(self, status)
 
     async def _fetch_eq_info(self) -> dict:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_eq* helper."""
@@ -426,9 +426,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return friendly name for the device."""
         return self.device_name
 
-    async def _resolve_multiroom_source_and_media(
-        self, status: PlayerStatus, metadata: dict, role: str
-    ) -> None:  # noqa: D401
+    async def _resolve_multiroom_source_and_media(self, status: PlayerStatus, metadata: dict, role: str) -> None:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_multiroom* helper."""
         from . import coordinator_multiroom as _mr
 

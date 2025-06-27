@@ -38,7 +38,7 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
     # ------------------------------------------------------------------
     if coordinator._metadata_supported is False:  # noqa: SLF001
         _LOGGER.debug("Device %s doesn't support getMetaInfo – using basic metadata", coordinator.client.host)
-        return TrackMetadata.model_validate(_extract_basic_metadata(coordinator, status_dict))
+        return TrackMetadata.model_validate(await _extract_basic_metadata(coordinator, status_dict))
 
     try:
         _LOGGER.debug("Attempting getMetaInfo for %s", coordinator.client.host)
@@ -67,7 +67,7 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
     # Fallback – old firmwares, missing endpoint, etc.
     # ------------------------------------------------------------------
     _LOGGER.debug("Using basic metadata fallback for %s", coordinator.client.host)
-    return TrackMetadata.model_validate(_extract_basic_metadata(coordinator, status_dict))
+    return TrackMetadata.model_validate(await _extract_basic_metadata(coordinator, status_dict))
 
 
 # ---------------------------------------------------------------------------
@@ -158,8 +158,12 @@ def _enhance_metadata_with_artwork(coordinator, metadata: dict, status: dict) ->
     return enhanced
 
 
-def _extract_basic_metadata(coordinator, status: dict) -> dict[str, Any]:
-    """Extract minimal metadata (title/artist/album/artwork) from *status*."""
+async def _extract_basic_metadata(coordinator, status: dict) -> dict[str, Any]:
+    """Extract minimal metadata (title/artist/album/artwork) from *status*.
+
+    For older LinkPlay devices, also attempts to fetch artwork from getPlayerStatus
+    if not found in the basic status payload.
+    """
 
     _LOGGER.debug("Extracting basic metadata from status for %s", coordinator.client.host)
 
@@ -198,6 +202,21 @@ def _extract_basic_metadata(coordinator, status: dict) -> dict[str, Any]:
         if artwork_url and artwork_url != "un_known":
             found_field = f"status.{field}"
             break
+
+    # If no artwork found in basic status, try fetching fresh status for older devices
+    if not artwork_url:
+        _LOGGER.debug("No artwork in basic status for %s, attempting fresh status fetch", coordinator.client.host)
+        try:
+            fresh_status = await coordinator.client.get_status()
+            if fresh_status:
+                _LOGGER.debug("Fresh status fields for %s: %s", coordinator.client.host, list(fresh_status.keys()))
+                for field in artwork_fields:
+                    artwork_url = fresh_status.get(field)  # type: ignore[index]
+                    if artwork_url and artwork_url != "un_known":
+                        found_field = f"fresh_status.{field}"
+                        break
+        except (WiiMError, Exception) as err:
+            _LOGGER.debug("Failed to fetch fresh status for artwork on %s: %s", coordinator.client.host, err)
 
     if artwork_url and artwork_url != "un_known":
         metadata["entity_picture"] = artwork_url
