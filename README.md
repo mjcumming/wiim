@@ -111,6 +111,23 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 | `wiim.set_eq`        | Set equalizer presets or custom values |
 | `wiim.reboot_device` | Reboot device                          |
 
+## Diagnostics & Troubleshooting
+
+When experiencing issues, you can download comprehensive diagnostic information to help with troubleshooting:
+
+1. **Device Diagnostics**: Go to Settings → Devices & Services → WiiM Audio → (Select device) → Download Diagnostics
+2. **Integration Diagnostics**: Go to Settings → Devices & Services → WiiM Audio → (⋮ Menu) → Download Diagnostics
+
+The diagnostics include:
+
+- Device information (model, firmware, network status)
+- Multiroom group configuration and roles
+- Media playback state and current sources
+- API polling status and error tracking
+- EQ settings and sound modes
+
+**All sensitive data (IP addresses, MAC addresses, network names) is automatically redacted.**
+
 ## Documentation
 
 - **[📚 Quick Start Guide](docs/README.md)** - Installation and basic setup

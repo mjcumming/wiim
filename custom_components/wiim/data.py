@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.media_player import MediaPlayerState
+from homeassistant.components.media_player.const import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -106,6 +106,9 @@ class Speaker:
         self._last_position_update: float | None = None
         self._last_position: int | None = None
         self._artwork_version: int = 0
+
+        # Missing device tracking (prevent spam warnings)
+        self._missing_devices_reported: set[str] = set()
 
         # Some unit tests use simplified MockConfigEntry objects that omit the
         # `entry_id` attribute.  Many helper functions use this field as a key
@@ -346,17 +349,32 @@ class Speaker:
             if slave_speaker:
                 new_group_members.append(slave_speaker)
                 slave_speaker.coordinator_speaker = self
+                # Clear from missing devices set if found
+                if slave_uuid in self._missing_devices_reported:
+                    self._missing_devices_reported.discard(slave_uuid)
             else:
-                # Missing slave - trigger discovery
-                _LOGGER.warning(
-                    "Master %s cannot find slave %s (IP: %s, UUID: %s)",
-                    self.name,
-                    slave_name,
-                    slave_ip,
-                    slave_uuid,
-                )
-                if slave_uuid:
-                    self.hass.async_create_task(self._trigger_missing_device_discovery(slave_uuid, slave_name))
+                # Missing slave - only warn and trigger discovery once per device
+                if slave_uuid and slave_uuid not in self._missing_devices_reported:
+                    _LOGGER.warning(
+                        "Master %s cannot find slave %s (IP: %s, UUID: %s) - triggering automatic discovery",
+                        self.name,
+                        slave_name,
+                        slave_ip,
+                        slave_uuid,
+                    )
+                    self._missing_devices_reported.add(slave_uuid)
+                    self.hass.async_create_task(
+                        self._trigger_missing_device_discovery(slave_uuid, slave_name, slave_ip)
+                    )
+                elif slave_uuid:
+                    # Subsequent polls - only log at debug level to avoid spam
+                    _LOGGER.debug(
+                        "Master %s still cannot find slave %s (IP: %s, UUID: %s) - discovery already triggered",
+                        self.name,
+                        slave_name,
+                        slave_ip,
+                        slave_uuid,
+                    )
 
         self.group_members = new_group_members
 
@@ -377,17 +395,37 @@ class Speaker:
             master_speaker = find_speaker_by_uuid(self.hass, master_uuid)
             if master_speaker:
                 self.coordinator_speaker = master_speaker
+                # Clear from missing devices set if found
+                if master_uuid in self._missing_devices_reported:
+                    self._missing_devices_reported.discard(master_uuid)
             else:
-                _LOGGER.warning("Slave %s cannot find master UUID: %s", self.name, master_uuid)
-                # Trigger discovery for missing master
-                self.hass.async_create_task(self._trigger_missing_device_discovery(master_uuid, "Missing Master"))
+                # Missing master - only warn and trigger discovery once per device
+                if master_uuid not in self._missing_devices_reported:
+                    _LOGGER.warning(
+                        "Slave %s cannot find master UUID: %s - triggering automatic discovery",
+                        self.name,
+                        master_uuid,
+                    )
+                    self._missing_devices_reported.add(master_uuid)
+                    self.hass.async_create_task(
+                        self._trigger_missing_device_discovery(master_uuid, "Missing Master", None)
+                    )
+                else:
+                    # Subsequent polls - only log at debug level to avoid spam
+                    _LOGGER.debug(
+                        "Slave %s still cannot find master UUID: %s - discovery already triggered",
+                        self.name,
+                        master_uuid,
+                    )
 
     def _clear_group_state(self) -> None:
         """Clear group state for solo speakers."""
         self.group_members = []
         self.coordinator_speaker = None
 
-    async def _trigger_missing_device_discovery(self, device_uuid: str, device_name: str) -> None:
+    async def _trigger_missing_device_discovery(
+        self, device_uuid: str, device_name: str, device_ip: str | None = None
+    ) -> None:
         """Trigger discovery flow for missing device."""
         try:
             from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
@@ -412,17 +450,26 @@ class Speaker:
                 device_uuid,
             )
 
+            # Prepare discovery data
+            discovery_data = {
+                "device_uuid": device_uuid,
+                "device_name": device_name,
+                "discovery_source": "missing_device" if not device_ip else "automatic_slave",
+            }
+
+            # Include IP if available (enables automatic setup without user input)
+            if device_ip:
+                from homeassistant.const import CONF_HOST
+
+                discovery_data[CONF_HOST] = device_ip
+
             await self.hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={
                     "source": SOURCE_INTEGRATION_DISCOVERY,
                     "unique_id": device_uuid,
                 },
-                data={
-                    "device_uuid": device_uuid,
-                    "device_name": device_name,
-                    "discovery_source": "missing_device",
-                },
+                data=discovery_data,
             )
         except Exception as err:
             _LOGGER.error("Failed to trigger discovery for %s: %s", device_name, err)
