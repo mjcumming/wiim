@@ -13,9 +13,9 @@ from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
@@ -90,13 +90,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow."""
         return WiiMOptionsFlow(config_entry)
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # type: ignore[override]
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
         """Handle user-initiated setup - go straight to manual entry."""
         # Skip the setup mode choice and go directly to manual entry
         # since autodiscovery often fails and manual is more reliable
         return await self.async_step_manual()
 
-    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # type: ignore[override]
+    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
         """Handle automatic discovery."""
         if not self._discovered_devices:
             # Run discovery
@@ -157,7 +157,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # No devices found
             return await self.async_step_manual()
 
-    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle manual IP entry with improved UX."""
         errors = {}
 
@@ -237,7 +237,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return discovered
 
-    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> FlowResult:
+    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
         """Handle Zeroconf discovery."""
         host = discovery_info.host
         _LOGGER.info("🔍 ZEROCONF DISCOVERY called for host: %s", host)
@@ -264,7 +264,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.data = {CONF_HOST: host, "name": device_name}
         return await self.async_step_discovery_confirm()
 
-    async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
+    async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> ConfigFlowResult:
         """Handle SSDP discovery."""
         _LOGGER.info("🔍 SSDP DISCOVERY called with: %s", discovery_info.ssdp_location)
 
@@ -301,7 +301,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.data = {CONF_HOST: host, "name": device_name}
         return await self.async_step_discovery_confirm()
 
-    async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> FlowResult:
+    async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> ConfigFlowResult:
         """Handle integration discovery (automatic slave discovery and missing devices)."""
         host = discovery_info.get(CONF_HOST)
         device_name = discovery_info.get("device_name", "Unknown Device")
@@ -351,11 +351,11 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.info("🔍 INTEGRATION DISCOVERY completed for %s at %s", final_name, host)
         return await self.async_step_discovery_confirm()
 
-    async def async_step_missing_device(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_missing_device(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle missing device discovery - user provides IP for known UUID."""
         errors = {}
         device_uuid = self.context.get("unique_id")
-        device_name = self.data.get("device_name", f"Device {device_uuid[:8]}...")
+        device_name = (self.data or {}).get("device_name", f"Device {device_uuid[:8] if device_uuid else 'Unknown'}...")
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
@@ -386,7 +386,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Confirm discovery."""
         if user_input is not None:
             return self.async_create_entry(
@@ -404,6 +404,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": self.data["name"]},
         )
 
+    def is_matching(self, other_flow: config_entries.ConfigFlow) -> bool:
+        """Check if two flows are matching."""
+        return False
+
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):
     """Handle WiiM options."""
@@ -412,7 +416,7 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         """Initialize options flow."""
         self.entry = entry
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle options flow."""
         if user_input is not None:
             options_data = {}
