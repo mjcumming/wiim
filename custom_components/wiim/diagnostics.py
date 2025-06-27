@@ -10,7 +10,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from .const import DOMAIN
 from .data import get_all_speakers, get_speaker_from_config_entry
 
 _LOGGER = logging.getLogger(__name__)
