@@ -162,7 +162,7 @@ async def _extract_basic_metadata(coordinator, status: dict) -> dict[str, Any]:
     """Extract minimal metadata (title/artist/album/artwork) from *status*.
 
     For older LinkPlay devices, also attempts to fetch artwork from getPlayerStatus
-    if not found in the basic status payload.
+    if not found in the basic status payload. Enhanced for v0.1.0 compatibility.
     """
 
     _LOGGER.debug("Extracting basic metadata from status for %s", coordinator.client.host)
@@ -175,17 +175,22 @@ async def _extract_basic_metadata(coordinator, status: dict) -> dict[str, Any]:
     if status.get("album"):
         metadata["album"] = status["album"]  # type: ignore[index]
 
+    # Enhanced artwork field search - prioritized for older LinkPlay devices
+    # Based on working v0.1.0 implementation that supported Audio Pro devices
     artwork_fields = [
-        "cover",
-        "cover_url",
-        "albumart",
+        # Primary artwork fields (most common)
         "albumArtURI",
+        "albumart",
+        "cover_url",
+        "cover",
+        # Secondary fields for older LinkPlay devices
         "albumArtUri",
         "albumarturi",
         "art_url",
         "artwork_url",
         "pic_url",
         "entity_picture",
+        # Alternative fields found in various LinkPlay firmware versions
         "thumbnail",
         "image",
         "coverart",
@@ -193,38 +198,105 @@ async def _extract_basic_metadata(coordinator, status: dict) -> dict[str, Any]:
         "album_art",
         "artworkUrl",
         "imageUrl",
+        "art",  # Simple "art" field used by some devices
+        "picture",  # Basic "picture" field
+        "albumcover",  # Alternative album cover field
+        "track_image",  # Track-specific image field
     ]
 
     artwork_url: str | None = None
     found_field: str | None = None
+
+    # First, try basic status fields
     for field in artwork_fields:
         artwork_url = status.get(field)  # type: ignore[index]
-        if artwork_url and artwork_url != "un_known":
+        if artwork_url and artwork_url != "un_known" and artwork_url.strip():
             found_field = f"status.{field}"
             break
 
-    # If no artwork found in basic status, try fetching fresh status for older devices
+    # If no artwork found in basic status, try multiple enhanced approaches for older devices
     if not artwork_url:
-        _LOGGER.debug("No artwork in basic status for %s, attempting fresh status fetch", coordinator.client.host)
+        _LOGGER.debug("No artwork in basic status for %s, trying enhanced extraction", coordinator.client.host)
+
+        # Approach 1: Try fetching fresh getPlayerStatus for more fields
         try:
             fresh_status = await coordinator.client.get_status()
             if fresh_status:
                 _LOGGER.debug("Fresh status fields for %s: %s", coordinator.client.host, list(fresh_status.keys()))
                 for field in artwork_fields:
                     artwork_url = fresh_status.get(field)  # type: ignore[index]
-                    if artwork_url and artwork_url != "un_known":
+                    if artwork_url and artwork_url != "un_known" and artwork_url.strip():
                         found_field = f"fresh_status.{field}"
                         break
         except (WiiMError, Exception) as err:
             _LOGGER.debug("Failed to fetch fresh status for artwork on %s: %s", coordinator.client.host, err)
 
+        # Approach 2: If still no artwork, try nested objects (some LinkPlay devices nest artwork)
+        if not artwork_url:
+            # Check if there are nested objects that might contain artwork
+            for key, value in status.items():
+                if isinstance(value, dict):
+                    for field in artwork_fields:
+                        nested_artwork = value.get(field)
+                        if nested_artwork and nested_artwork != "un_known" and str(nested_artwork).strip():
+                            artwork_url = str(nested_artwork)
+                            found_field = f"status.{key}.{field}"
+                            break
+                    if artwork_url:
+                        break
+
+        # Approach 3: Try different API endpoints that older devices might use
+        if not artwork_url:
+            _LOGGER.debug("Trying alternative API endpoints for artwork on %s", coordinator.client.host)
+
+            # Try device info endpoint (raw getStatusEx)
+            try:
+                alt_status = await coordinator.client.get_device_info()
+                if alt_status:
+                    _LOGGER.debug("Device info fields for %s: %s", coordinator.client.host, list(alt_status.keys()))
+                    for field in artwork_fields:
+                        artwork_url = alt_status.get(field)  # type: ignore[index]
+                        if artwork_url and artwork_url != "un_known" and artwork_url.strip():
+                            found_field = f"device_info.{field}"
+                            break
+            except (WiiMError, Exception) as err:
+                _LOGGER.debug("Device info endpoint failed for %s: %s", coordinator.client.host, err)
+
+            # Try player status endpoint if device info didn't work
+            if not artwork_url:
+                try:
+                    player_status = await coordinator.client.get_player_status()
+                    if player_status:
+                        _LOGGER.debug(
+                            "Player status fields for %s: %s", coordinator.client.host, list(player_status.keys())
+                        )
+                        for field in artwork_fields:
+                            artwork_url = player_status.get(field)  # type: ignore[index]
+                            if artwork_url and artwork_url != "un_known" and artwork_url.strip():
+                                found_field = f"player_status.{field}"
+                                break
+                except (WiiMError, Exception) as err:
+                    _LOGGER.debug("Player status endpoint failed for %s: %s", coordinator.client.host, err)
+
+    # Validate and clean the artwork URL
     if artwork_url and artwork_url != "un_known":
-        metadata["entity_picture"] = artwork_url
-        metadata["cover_url"] = artwork_url
-        _LOGGER.info(
-            "🎨 Artwork extracted from basic status for %s (%s): %s", coordinator.client.host, found_field, artwork_url
-        )
-    else:
+        artwork_url = str(artwork_url).strip()
+
+        # Basic URL validation - must look like a URL
+        if artwork_url and ("http" in artwork_url.lower() or artwork_url.startswith("/")):
+            metadata["entity_picture"] = artwork_url
+            metadata["cover_url"] = artwork_url
+            _LOGGER.info(
+                "🎨 Artwork extracted from basic status for %s (%s): %s",
+                coordinator.client.host,
+                found_field,
+                artwork_url,
+            )
+        else:
+            _LOGGER.debug("❌ Invalid artwork URL format for %s: '%s'", coordinator.client.host, artwork_url)
+            artwork_url = None
+
+    if not artwork_url:
         _LOGGER.debug("❌ No valid artwork URL found in basic status for %s", coordinator.client.host)
 
     _LOGGER.debug(

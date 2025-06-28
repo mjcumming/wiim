@@ -83,27 +83,43 @@ def _should_update_multiroom(coordinator, is_activity_triggered: bool = False) -
 
 
 def _track_changed(coordinator, status_model: PlayerStatus) -> bool:
-    """Detect if track has changed (for metadata updates)."""
+    """Detect if track has changed (for metadata updates and artwork cache clearing)."""
     current_title = status_model.title or ""
     current_artist = status_model.artist or ""
     current_source = status_model.source or ""
+    current_artwork = status_model.entity_picture or status_model.cover_url or ""
 
     if not hasattr(coordinator, "_last_track_info"):
-        coordinator._last_track_info = (current_title, current_artist, current_source)
+        coordinator._last_track_info = (current_title, current_artist, current_source, current_artwork)
         return True  # First time, consider it changed
 
-    last_title, last_artist, last_source = coordinator._last_track_info
-    track_changed = current_title != last_title or current_artist != last_artist or current_source != last_source
+    last_title, last_artist, last_source, last_artwork = coordinator._last_track_info
+    track_changed = (
+        current_title != last_title
+        or current_artist != last_artist
+        or current_source != last_source
+        or current_artwork != last_artwork  # Also detect artwork changes
+    )
 
     if track_changed:
-        coordinator._last_track_info = (current_title, current_artist, current_source)
-        _LOGGER.debug(
-            "Track/source changed for %s: %s - %s (%s)",
-            coordinator.client.host,
-            current_title,
-            current_artist,
-            current_source,
-        )
+        coordinator._last_track_info = (current_title, current_artist, current_source, current_artwork)
+
+        # Log specific change type for debugging
+        if current_artwork != last_artwork:
+            _LOGGER.debug(
+                "Artwork changed for %s: '%s' -> '%s'",
+                coordinator.client.host,
+                last_artwork or "None",
+                current_artwork or "None",
+            )
+        else:
+            _LOGGER.debug(
+                "Track/source changed for %s: %s - %s (%s)",
+                coordinator.client.host,
+                current_title,
+                current_artist,
+                current_source,
+            )
 
     return track_changed
 
