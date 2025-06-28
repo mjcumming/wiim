@@ -314,3 +314,41 @@ class TestDiagnosticsIntegration:
         assert integration_info["roles"]["slave"] == 1
         assert "WiiM Pro" in integration_info["models"]
         assert "WiiM Mini" in integration_info["models"]
+
+
+class TestArtworkDiagnostics:
+    """Test artwork-specific diagnostics for older LinkPlay device compatibility."""
+
+    @patch("custom_components.wiim.diagnostics.get_speaker_from_config_entry")
+    async def test_artwork_diagnostics_working(
+        self, mock_get_speaker, mock_speaker, mock_config_entry, mock_device_entry
+    ):
+        """Test artwork diagnostics when artwork is working."""
+        hass = MagicMock(spec=HomeAssistant)
+
+        # Mock speaker with working artwork
+        mock_speaker.get_media_image_url.return_value = "http://example.com/art.jpg"
+        mock_get_speaker.return_value = mock_speaker
+
+        result = await async_get_device_diagnostics(hass, mock_config_entry, mock_device_entry)
+
+        # Verify artwork is included in media_info
+        media_info = result["media_info"]
+        assert media_info["media_image_url"] == "http://example.com/art.jpg"
+
+    @patch("custom_components.wiim.diagnostics.get_speaker_from_config_entry")
+    async def test_artwork_diagnostics_older_device(
+        self, mock_get_speaker, mock_speaker, mock_config_entry, mock_device_entry
+    ):
+        """Test artwork diagnostics for older LinkPlay device (GitHub issue #40)."""
+        hass = MagicMock(spec=HomeAssistant)
+
+        # Mock speaker for older device without artwork
+        mock_speaker.get_media_image_url.return_value = None
+        mock_get_speaker.return_value = mock_speaker
+
+        result = await async_get_device_diagnostics(hass, mock_config_entry, mock_device_entry)
+
+        # Verify no artwork in media_info
+        media_info = result["media_info"]
+        assert media_info["media_image_url"] is None
