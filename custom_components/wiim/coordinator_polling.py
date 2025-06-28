@@ -235,7 +235,14 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             coordinator._last_multiroom_check = time.time()
 
         # Metadata (only on track change, if supported)
-        if track_changed and getattr(coordinator, "_metadata_supported", None) is not False:
+        # Skip metadata fetch during initial setup to prevent blocking on older devices
+        # that don't support getMetaInfo - only fetch after device is confirmed working
+        is_initial_setup = not hasattr(coordinator, "_initial_setup_complete")
+        should_fetch_metadata = (
+            track_changed and not is_initial_setup and getattr(coordinator, "_metadata_supported", None) is not False
+        )
+
+        if should_fetch_metadata:
             fetch_tasks.append(coordinator._fetch_track_metadata(status_model))
             task_names.append("metadata")
 
@@ -475,6 +482,30 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             http_time,
             heavy_time,
         )
+
+        total_time = (time.perf_counter() - _start_time) * 1000.0
+
+        if VERBOSE_DEBUG or total_time > 100:
+            _LOGGER.info(
+                "🚀 Coordinator update for %s: %0.1fms total (HTTP: %0.1fms, processing: %0.1fms) "
+                "| interval=%ds%s | role=%s | metadata=%s | multiroom=%s",
+                coordinator.client.host,
+                total_time,
+                http_time,
+                heavy_time,
+                int(new_interval),
+                " ⚡" if interval_changed else "",
+                role,
+                "✓" if track_metadata_model else "✗",
+                "✓" if multiroom_info else "✗",
+            )
+
+        # Mark initial setup as complete after first successful update
+        # This enables metadata fetching in subsequent updates
+        if not hasattr(coordinator, "_initial_setup_complete"):
+            coordinator._initial_setup_complete = True
+            _LOGGER.debug("Initial setup complete for %s - metadata fetching now enabled", coordinator.client.host)
+
         return data
 
     except WiiMError as err:

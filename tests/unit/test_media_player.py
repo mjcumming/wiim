@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.components.media_player import (
+from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
@@ -152,10 +152,28 @@ class TestMediaPlayerControls:
 
     @pytest.mark.asyncio
     async def test_async_select_source(self, media_player):
-        """Test source selection."""
+        """Test selecting a source using async_select_source method."""
+        # Call the media player's select_source method
         await media_player.async_select_source("bluetooth")
 
-        media_player.speaker.coordinator.client.set_source.assert_called_once_with("bluetooth")
+        # Verify that the underlying client _request method was called with correct endpoint
+        media_player.speaker.coordinator.client._request.assert_called_with(
+            "/httpapi.asp?command=setPlayerCmd:switchmode:bluetooth"
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_source_api_method(self, media_player):
+        """Test that the set_source API method exists and works correctly."""
+        # Test that the client has the set_source method
+        assert hasattr(media_player.speaker.coordinator.client, "set_source")
+
+        # Test calling set_source directly on the client
+        await media_player.speaker.coordinator.client.set_source("wifi")
+
+        # Verify the mock was called with correct endpoint
+        media_player.speaker.coordinator.client._request.assert_called_with(
+            "/httpapi.asp?command=setPlayerCmd:switchmode:wifi"
+        )
 
 
 class TestMediaPlayerGrouping:

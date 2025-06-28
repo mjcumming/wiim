@@ -232,6 +232,38 @@ SOURCE_MAP = {
     "following": "Following",  # Partial match for slave sources
 }
 
+# Selectable sources only - excludes status indicators
+# These are the actual sources that work with the switchmode API command
+SELECTABLE_SOURCES = [
+    "WiFi",  # Network/streaming mode (where Spotify, Tidal, etc. work)
+    "Bluetooth",  # Bluetooth input
+    "Line In",  # Analog input
+    "Optical",  # Digital optical input
+    "Coaxial",  # Digital coaxial input (if supported)
+    "ARC",  # HDMI ARC input (if supported)
+    "USB",  # USB input (if supported)
+    "Line In 2",  # Second analog input (if supported)
+]
+
+# Status-only sources that should be displayed but not selectable
+# These are either status indicators or streaming services that work through WiFi mode
+STATUS_ONLY_SOURCES = [
+    "Idle",
+    "Multiroom",
+    "Follower",
+    "Following",
+    "AirPlay",  # Protocol that works through WiFi mode
+    "DLNA",  # Protocol that works through WiFi mode
+    "Spotify",  # Streaming service (works through WiFi mode)
+    "Spotify Connect",  # Streaming service (works through WiFi mode)
+    "Tidal",  # Streaming service (works through WiFi mode)
+    "Amazon Music",  # Streaming service (works through WiFi mode)
+    "Qobuz",  # Streaming service (works through WiFi mode)
+    "Deezer",  # Streaming service (works through WiFi mode)
+    "Network",  # Generic network status
+    "USB DAC",  # May be a status rather than selectable input
+]
+
 # Services – extended diagnostic helpers
 SERVICE_REBOOT = "reboot_device"
 SERVICE_SYNC_TIME = "sync_time"

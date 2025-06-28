@@ -154,10 +154,21 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "media_album": speaker.get_media_album(),
             "media_duration": speaker.get_media_duration(),
             "media_position": speaker.get_media_position(),
+            "media_image_url": speaker.get_media_image_url(),
             "shuffle_state": speaker.get_shuffle_state(),
             "repeat_mode": speaker.get_repeat_mode(),
             "sound_mode": speaker.get_sound_mode(),
         }
+
+        # API capability diagnostics (simple flags only)
+        api_capabilities = {}
+        if speaker.coordinator:
+            api_capabilities = {
+                "metadata_supported": getattr(speaker.coordinator, "_metadata_supported", None),
+                "statusex_supported": getattr(speaker.coordinator, "_statusex_supported", None),
+                "eq_supported": getattr(speaker.coordinator, "_eq_supported", None),
+                "presets_supported": getattr(speaker.coordinator, "_presets_supported", None),
+            }
 
         # Model data (Pydantic models)
         model_data = {}
@@ -174,6 +185,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "device_info": device_info,
             "group_info": group_info,
             "media_info": media_info,
+            "api_capabilities": api_capabilities,
             "api_status": async_redact_data(api_status, TO_REDACT),
             "model_data": model_data,
             "raw_coordinator_data": async_redact_data(raw_data, TO_REDACT),

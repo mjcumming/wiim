@@ -459,12 +459,10 @@ class MediaControllerCoreMixin:
     def get_source_list(self) -> list[str]:
         """Get sources (master/slave aware)."""
         try:
-            from .const import SOURCE_MAP
+            from .const import SELECTABLE_SOURCES
 
-            # Built-in sources first
-            built_in = list(SOURCE_MAP.values())
-
-            return built_in
+            # Return only selectable sources - excludes status indicators like "Idle", "Multiroom", "Follower"
+            return SELECTABLE_SOURCES.copy()
         except Exception as err:
             self._logger.error("Failed to get source list: %s", err)
             return ["WiFi", "Bluetooth", "Line In", "Optical"]  # Basic fallback

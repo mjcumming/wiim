@@ -82,6 +82,35 @@ async def test_set_volume_command():
 
 
 @pytest.mark.asyncio
+async def test_set_source_command():
+    """Test set source command."""
+    client = WiiMClient("192.168.1.100")
+
+    # Mock the _request method directly (async)
+    with patch.object(client, "_request", new_callable=AsyncMock, return_value={"raw": "OK"}) as mock_request:
+        await client.set_source("wifi")  # Should not raise
+        mock_request.assert_called_once_with("/httpapi.asp?command=setPlayerCmd:switchmode:wifi")
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_set_source_different_sources():
+    """Test set source command with different source types."""
+    client = WiiMClient("192.168.1.100")
+
+    test_sources = ["wifi", "bluetooth", "optical", "line_in", "arc"]
+
+    for source in test_sources:
+        # Mock the _request method directly (async)
+        with patch.object(client, "_request", new_callable=AsyncMock, return_value={"raw": "OK"}) as mock_request:
+            await client.set_source(source)  # Should not raise
+            expected_endpoint = f"/httpapi.asp?command=setPlayerCmd:switchmode:{source}"
+            mock_request.assert_called_once_with(expected_endpoint)
+
+    await client.close()
+
+
+@pytest.mark.asyncio
 async def test_connection_error_handling():
     """Test connection error handling."""
     client = WiiMClient("192.168.1.100")

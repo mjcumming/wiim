@@ -24,6 +24,7 @@ from .const import (
     API_ENDPOINT_PLAY_URL,
     API_ENDPOINT_PREV,
     API_ENDPOINT_SEEK,
+    API_ENDPOINT_SOURCE,
     API_ENDPOINT_STOP,
     API_ENDPOINT_VOLUME,
 )
@@ -81,6 +82,18 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
         if mode not in (0, 1, 2, 4, 5, 6):
             raise ValueError(f"Invalid loop mode: {mode}. Valid values: 0,1,2,4,5,6")
         await self._request(f"{API_ENDPOINT_LOOPMODE}{mode}")  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------
+    # Source selection
+    # ------------------------------------------------------------------
+
+    async def set_source(self, source: str) -> None:  # type: ignore[override]
+        """Set audio source using WiiM's switchmode command.
+
+        Args:
+            source: Source to switch to (e.g., "wifi", "bluetooth", "line_in", "optical")
+        """
+        await self._request(f"{API_ENDPOINT_SOURCE}{source}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Playlist helpers
