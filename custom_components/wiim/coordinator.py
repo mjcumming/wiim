@@ -7,8 +7,9 @@ import time
 from datetime import timedelta
 from typing import Any
 
+import aiohttp
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
 from .coordinator_backoff import BackoffController
@@ -55,7 +56,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             _LOGGER,
             name=f"WiiM {client.host}",
-            update_interval=timedelta(seconds=5),  # Initial interval, will be adaptive
+            update_interval=timedelta(seconds=5),  # Default interval, will adapt based on state/failures
         )
         self.client = client
         self.hass = hass
@@ -209,10 +210,77 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {}
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Thin wrapper delegating polling logic to external module (see coordinator_polling)."""
+        """Centralized polling logic with adaptive intervals and backoff on failure."""
+        # Imports are here to prevent circular dependency issues at startup
         from . import coordinator_polling as _poll
+        from .coordinator_polling import (
+            NORMAL_POLL_INTERVAL,
+            _determine_adaptive_interval,
+        )
 
-        return await _poll.async_update_data(self)
+        try:
+            # Delegate the actual data fetching to the polling module
+            data = await _poll.async_update_data(self)
+
+            # On success, reset the backoff controller
+            if self._backoff.consecutive_failures > 0:
+                _LOGGER.info(
+                    "Successfully reconnected to %s, restoring normal polling",
+                    self.client.host,
+                )
+            self._backoff.record_success()
+
+            # Dynamically adjust polling interval based on the device's current state
+            status_model = data.get("status_model")
+            role = data.get("role")
+
+            if status_model and role:
+                new_interval_seconds = _determine_adaptive_interval(
+                    self, status_model, role
+                )
+            else:
+                # Fallback to normal idle polling if state is not fully determined
+                new_interval_seconds = NORMAL_POLL_INTERVAL
+
+            # Only update the interval if it has changed to avoid unnecessary churn
+            if self.update_interval.total_seconds() != new_interval_seconds:
+                _LOGGER.debug(
+                    "Polling interval for %s set to %ss",
+                    self.client.host,
+                    new_interval_seconds,
+                )
+                self.update_interval = timedelta(seconds=new_interval_seconds)
+
+            return data
+
+        except (WiiMError, aiohttp.ClientError) as err:
+            # If the update fails, engage the backoff strategy
+            self._backoff.record_failure()
+
+            # Determine the new interval from the backoff controller
+            base_interval = NORMAL_POLL_INTERVAL
+            new_interval = self._backoff.next_interval(default_seconds=base_interval)
+            self.update_interval = new_interval
+
+            # Escalate logging from WARNING to ERROR after several consecutive failures
+            log_level = (
+                logging.ERROR
+                if self._backoff.consecutive_failures >= FAILURE_ERROR_THRESHOLD
+                else logging.WARNING
+            )
+            _LOGGER.log(
+                log_level,
+                "Update failed for %s (%d consecutive), backing off to %ss. Error: %s",
+                self.client.host,
+                self._backoff.consecutive_failures,
+                new_interval.total_seconds(),
+                err,
+            )
+
+            # Raise UpdateFailed to notify Home Assistant of the failure
+            raise UpdateFailed(
+                f"Failed to communicate with {self.client.host}: {err}"
+            ) from err
 
     async def _fetch_multiroom_info(self) -> dict:
         """Get multiroom info with proper API usage per API guide.
@@ -341,24 +409,32 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.update_interval = timedelta(seconds=1)
 
     def record_command_failure(self, command_type: str, error: Exception) -> None:
-        """Record immediate command failure for user feedback.
-
-        This provides instant feedback when user commands fail, separate from
-        background polling failures. Device will appear temporarily unavailable
-        until either a command succeeds or the failure timeout expires.
-        """
-        import time
-
+        """Record command failure for immediate UI feedback."""
         self._last_command_failure = time.time()
         self._command_failure_count += 1
 
-        _LOGGER.warning(
-            "Command '%s' failed for %s (failure #%d): %s - device temporarily unavailable",
-            command_type,
-            self.client.host,
-            self._command_failure_count,
-            error,
-        )
+        # Log for debugging (avoid noise from common issues)
+        if self._command_failure_count <= 3:  # Only log first few failures
+            _LOGGER.warning(
+                "Command '%s' failed for %s: %s (failure count: %d)",
+                command_type,
+                self.client.host,
+                error,
+                self._command_failure_count,
+            )
+        
+        # Force endpoint reprobe on severe connection failures
+        if isinstance(error, (aiohttp.ClientConnectorError, aiohttp.ServerDisconnectedError)):
+            self.force_endpoint_reprobe()
+
+    def force_endpoint_reprobe(self) -> None:
+        """Force the client to reprobe protocol/port on next request.
+        
+        Useful when connection is completely lost and we need to re-establish
+        communication from scratch.
+        """
+        _LOGGER.info("Forcing endpoint reprobe for %s due to connection failure", self.client.host)
+        self.client._endpoint = None  # Clear established endpoint
 
     def clear_command_failures(self) -> None:
         """Clear command failure state when a command succeeds."""

@@ -63,7 +63,14 @@ def _should_update_device_info(coordinator) -> bool:
 
 
 def _should_update_eq_info(coordinator) -> bool:
-    """Check if EQ info should be updated (every 60s per POLLING_STRATEGY.md)."""
+    """Check if EQ info should be updated (every 60s per POLLING_STRATEGY.md).
+    
+    Respects capability detection - if EQ is permanently disabled, never fetch.
+    """
+    # CRITICAL: Don't waste time on unsupported endpoints
+    if getattr(coordinator, "_eq_supported", None) is False:
+        return False
+    
     if not hasattr(coordinator, "_last_eq_info_check"):
         coordinator._last_eq_info_check = 0
 
@@ -364,7 +371,9 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # ------------------------------------------------------------------
 
         # Light role detection (avoid heavy processing here)
-        role = await coordinator._detect_role_from_status_and_slaves(status_model, multiroom_info, device_model)
+        role = await coordinator._detect_role_from_status_and_slaves(
+            status_model, multiroom_info, device_model
+        )
 
         # Use pre-processed metadata or create light version
         track_metadata = processed_data.get("metadata", {})

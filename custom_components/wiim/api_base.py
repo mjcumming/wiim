@@ -36,7 +36,7 @@ _LOGGER = logging.getLogger(__name__)
 HEADERS: dict[str, str] = {"Connection": "close"}
 
 # -----------------------------------------------------------------------------
-# Exceptions (kept as-is so external call-sites don’t break during the trim).
+# Exceptions (kept as-is so external call-sites don't break during the trim).
 # -----------------------------------------------------------------------------
 
 
@@ -156,14 +156,20 @@ class WiiMClient:
     # ------------------------------------------------------------------
 
     async def _request(self, endpoint: str, method: str = "GET", **kwargs: Any) -> dict[str, Any]:
-        """Perform an HTTP(S) request with smart protocol fallback."""
+        """Perform an HTTP(S) request with smart protocol fallback.
+        
+        Protocol fallback strategy:
+        1. Try established endpoint first (fast-path)
+        2. Only do full probe if no established endpoint exists
+        3. After successful connection, stick with working protocol/port
+        """
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout))
 
         kwargs.setdefault("headers", HEADERS)
 
         # -----------------------------
-        # Fast-path: use last endpoint.
+        # Fast-path: use established endpoint.
         # -----------------------------
         if self._endpoint:
             from urllib.parse import urlsplit
@@ -184,11 +190,22 @@ class WiiMClient:
                             return {"raw": "OK"}
                         return json.loads(text)
             except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Fast-path failed: %s", err)
+                _LOGGER.debug("Established endpoint %s failed: %s", self._endpoint, err)
+                # Don't immediately fall back to full probe - this could be a temporary network issue
+                # Only clear endpoint after multiple consecutive failures or specific error types
+                if isinstance(err, (aiohttp.ClientConnectorError, aiohttp.ServerDisconnectedError)):
+                    _LOGGER.warning("Connection lost to %s, will retry with protocol probe", self._host)
+                    self._endpoint = None  # Clear to force probe
+                else:
+                    # For other errors (timeouts, HTTP errors), keep the endpoint and fail fast
+                    # This avoids expensive re-probing on temporary issues
+                    raise WiiMConnectionError(f"Request to {self._endpoint}{endpoint} failed: {err}") from err
 
         # -----------------------------
-        # Probe list – HTTPS first.
+        # Initial probe or connection lost - try all protocols
         # -----------------------------
+        _LOGGER.debug("No established endpoint for %s, performing protocol probe", self._host)
+        
         protocols: list[tuple[str, int, ssl.SSLContext | None]]
         if self._discovered_port:
             protocols = [
@@ -223,13 +240,16 @@ class WiiMClient:
                     async with self._session.request(method, url, **kwargs) as resp:
                         resp.raise_for_status()
                         text = await resp.text()
+                        # SUCCESS: Lock in this protocol/port combination
                         self._endpoint = f"{scheme}://{host_for_url}:{port}"
+                        _LOGGER.debug("Established endpoint for %s: %s", self._host, self._endpoint)
                         if text.strip() == "OK":
                             return {"raw": "OK"}
                         return json.loads(text)
             except (TimeoutError, aiohttp.ClientError, json.JSONDecodeError) as err:
                 last_error = err
                 continue
+        
         raise WiiMConnectionError(
             f"Failed to communicate with {self._host} after trying: {', '.join(tried)}\nLast error: {last_error}"
         )

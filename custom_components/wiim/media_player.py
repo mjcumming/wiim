@@ -92,11 +92,6 @@ class WiiMMediaPlayer(
         # Timestamps for optimistic state timeout (10 seconds)
         self._optimistic_state_timestamp: float | None = None
 
-        # Track transition smoothing
-        self._last_stable_state: MediaPlayerState | None = None
-        self._last_state_change_time: float | None = None
-        self._current_unstable_state: MediaPlayerState | None = None
-
         # Track info for album art cache management
         self._last_track_info: dict[str, Any] = {}
 
@@ -277,55 +272,17 @@ class WiiMMediaPlayer(
 
     @property
     def state(self) -> MediaPlayerState:
-        """State of the media player with transition smoothing.
+        """State of the media player.
 
-        Filters out brief idle/buffering states during track transitions to prevent
-        UI flickering. Only shows idle if it persists for more than 2 seconds.
+        Shows real device state immediately - no smoothing or filtering.
+        Optimistic state provides immediate feedback for user commands.
         """
-        import time
-
         # Use optimistic state if available for immediate feedback
         if self._optimistic_state is not None:
             return self._optimistic_state
 
-        current_state = self.controller.get_playback_state()
-        current_time = time.time()
-
-        # Initialize tracking on first call
-        if self._last_stable_state is None:
-            self._last_stable_state = current_state
-            self._last_state_change_time = current_time
-            return current_state
-
-        # State hasn't changed - keep showing stable state
-        if current_state == self._current_unstable_state or current_state == self._last_stable_state:
-            # Reset change tracking if back to stable state
-            if current_state == self._last_stable_state:
-                self._current_unstable_state = None
-                self._last_state_change_time = current_time
-            return self._last_stable_state
-
-        # New state detected
-        if current_state != self._current_unstable_state:
-            # This is a new unstable state
-            self._current_unstable_state = current_state
-            self._last_state_change_time = current_time
-
-            # For non-idle states, show immediately (playing, paused)
-            if current_state != MediaPlayerState.IDLE:
-                self._last_stable_state = current_state
-                self._current_unstable_state = None
-                return current_state
-
-        # Check if unstable state has persisted long enough
-        if self._current_unstable_state is not None and current_time - self._last_state_change_time > 2.0:
-            # State has been stable for 2+ seconds, accept it
-            self._last_stable_state = self._current_unstable_state
-            self._current_unstable_state = None
-            return self._last_stable_state
-
-        # Still in transition period, keep showing last stable state
-        return self._last_stable_state
+        # Show real device state immediately - no smoothing needed
+        return self.controller.get_playback_state()
 
     # ===== SOURCE PROPERTIES (delegate to controller) =====
 
