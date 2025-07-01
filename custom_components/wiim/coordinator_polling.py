@@ -64,13 +64,13 @@ def _should_update_device_info(coordinator) -> bool:
 
 def _should_update_eq_info(coordinator) -> bool:
     """Check if EQ info should be updated (every 60s per POLLING_STRATEGY.md).
-    
+
     Respects capability detection - if EQ is permanently disabled, never fetch.
     """
     # CRITICAL: Don't waste time on unsupported endpoints
     if getattr(coordinator, "_eq_supported", None) is False:
         return False
-    
+
     if not hasattr(coordinator, "_last_eq_info_check"):
         coordinator._last_eq_info_check = 0
 

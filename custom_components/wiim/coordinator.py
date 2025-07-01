@@ -235,9 +235,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             role = data.get("role")
 
             if status_model and role:
-                new_interval_seconds = _determine_adaptive_interval(
-                    self, status_model, role
-                )
+                new_interval_seconds = _determine_adaptive_interval(self, status_model, role)
             else:
                 # Fallback to normal idle polling if state is not fully determined
                 new_interval_seconds = NORMAL_POLL_INTERVAL
@@ -264,9 +262,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Escalate logging from WARNING to ERROR after several consecutive failures
             log_level = (
-                logging.ERROR
-                if self._backoff.consecutive_failures >= FAILURE_ERROR_THRESHOLD
-                else logging.WARNING
+                logging.ERROR if self._backoff.consecutive_failures >= FAILURE_ERROR_THRESHOLD else logging.WARNING
             )
             _LOGGER.log(
                 log_level,
@@ -278,9 +274,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             # Raise UpdateFailed to notify Home Assistant of the failure
-            raise UpdateFailed(
-                f"Failed to communicate with {self.client.host}: {err}"
-            ) from err
+            raise UpdateFailed(f"Failed to communicate with {self.client.host}: {err}") from err
 
     async def _fetch_multiroom_info(self) -> dict:
         """Get multiroom info with proper API usage per API guide.
@@ -422,14 +416,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 error,
                 self._command_failure_count,
             )
-        
+
         # Force endpoint reprobe on severe connection failures
-        if isinstance(error, (aiohttp.ClientConnectorError, aiohttp.ServerDisconnectedError)):
+        if isinstance(error, aiohttp.ClientConnectorError | aiohttp.ServerDisconnectedError):
             self.force_endpoint_reprobe()
 
     def force_endpoint_reprobe(self) -> None:
         """Force the client to reprobe protocol/port on next request.
-        
+
         Useful when connection is completely lost and we need to re-establish
         communication from scratch.
         """

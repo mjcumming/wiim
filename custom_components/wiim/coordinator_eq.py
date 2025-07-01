@@ -79,7 +79,7 @@ async def extend_eq_preset_map_once(coordinator) -> None:
 
 async def fetch_eq_info(coordinator) -> EQInfo:
     """Return EQ information model (may be empty).
-    
+
     Implements robust capability detection:
     - Once marked as unsupported, never retry EQ calls
     - Better detection of 'unknown command' responses
@@ -88,10 +88,14 @@ async def fetch_eq_info(coordinator) -> EQInfo:
 
     # STRICT CHECK: If we've already determined EQ is not supported, don't retry
     if coordinator._eq_supported is False:  # noqa: SLF001
-        _LOGGER.debug("[WiiM] %s: EQ permanently disabled (previously detected as unsupported)", coordinator.client.host)
+        _LOGGER.debug(
+            "[WiiM] %s: EQ permanently disabled (previously detected as unsupported)", coordinator.client.host
+        )
         return EQInfo()
 
-    _LOGGER.debug("[WiiM] %s: Collecting EQ information (supported=%s)", coordinator.client.host, coordinator._eq_supported)
+    _LOGGER.debug(
+        "[WiiM] %s: Collecting EQ information (supported=%s)", coordinator.client.host, coordinator._eq_supported
+    )
 
     eq_dict: dict[str, Any] = {}
     eq_status_failed = False
@@ -113,16 +117,18 @@ async def fetch_eq_info(coordinator) -> EQInfo:
         if eq_data:
             # ROBUST detection of 'unknown command' responses
             raw_response = eq_data.get("raw", "")
-            if (isinstance(raw_response, str) and 
-                ("unknown command" in raw_response.lower() or 
-                 "unknow command" in raw_response.lower() or  # Typo in some firmware
-                 raw_response.strip() == "")):
+            if (
+                isinstance(raw_response, str)
+                and raw_response.strip()
+                and ("unknown command" in raw_response.lower() or "unknow command" in raw_response.lower())
+            ):  # Typo in some firmware
                 _LOGGER.info(
                     "[WiiM] %s: Device responded 'unknown command' to getEQ – permanently disabling EQ polling",
                     coordinator.client.host,
                 )
                 coordinator._eq_supported = False  # noqa: SLF001
-                return EQInfo()  # Return empty - don't combine with status data
+                # Return with any data we collected from status call, but no preset data
+                return EQInfo.model_validate(eq_dict)
 
             # Check for other indicators of unsupported EQ
             if "error" in eq_data and "unsupported" in str(eq_data.get("error", "")).lower():
@@ -156,10 +162,12 @@ async def fetch_eq_info(coordinator) -> EQInfo:
     if eq_status_failed and eq_data_failed:
         # Both calls failed completely
         if coordinator._eq_supported is None:  # noqa: SLF001
-            _LOGGER.info("[WiiM] %s: EQ not supported by device - both getEQ and EQGetStat failed", coordinator.client.host)
+            _LOGGER.info(
+                "[WiiM] %s: EQ not supported by device - both getEQ and EQGetStat failed", coordinator.client.host
+            )
             coordinator._eq_supported = False  # noqa: SLF001
         return EQInfo()
-    
+
     # At least one call succeeded
     if coordinator._eq_supported is None:  # noqa: SLF001
         coordinator._eq_supported = True  # noqa: SLF001

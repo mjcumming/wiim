@@ -157,7 +157,7 @@ class WiiMClient:
 
     async def _request(self, endpoint: str, method: str = "GET", **kwargs: Any) -> dict[str, Any]:
         """Perform an HTTP(S) request with smart protocol fallback.
-        
+
         Protocol fallback strategy:
         1. Try established endpoint first (fast-path)
         2. Only do full probe if no established endpoint exists
@@ -193,7 +193,7 @@ class WiiMClient:
                 _LOGGER.debug("Established endpoint %s failed: %s", self._endpoint, err)
                 # Don't immediately fall back to full probe - this could be a temporary network issue
                 # Only clear endpoint after multiple consecutive failures or specific error types
-                if isinstance(err, (aiohttp.ClientConnectorError, aiohttp.ServerDisconnectedError)):
+                if isinstance(err, aiohttp.ClientConnectorError | aiohttp.ServerDisconnectedError):
                     _LOGGER.warning("Connection lost to %s, will retry with protocol probe", self._host)
                     self._endpoint = None  # Clear to force probe
                 else:
@@ -205,7 +205,7 @@ class WiiMClient:
         # Initial probe or connection lost - try all protocols
         # -----------------------------
         _LOGGER.debug("No established endpoint for %s, performing protocol probe", self._host)
-        
+
         protocols: list[tuple[str, int, ssl.SSLContext | None]]
         if self._discovered_port:
             protocols = [
@@ -249,7 +249,7 @@ class WiiMClient:
             except (TimeoutError, aiohttp.ClientError, json.JSONDecodeError) as err:
                 last_error = err
                 continue
-        
+
         raise WiiMConnectionError(
             f"Failed to communicate with {self._host} after trying: {', '.join(tried)}\nLast error: {last_error}"
         )
