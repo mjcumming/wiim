@@ -52,7 +52,7 @@ def mock_coordinator():
     # Mock the async methods that will be called
     coordinator._fetch_multiroom_info = AsyncMock(return_value={})
     coordinator._fetch_track_metadata = AsyncMock()
-    coordinator._fetch_eq_info = AsyncMock()
+    coordinator._fetch_eq_info = AsyncMock(return_value=EQInfo.model_validate({"eq_enabled": False}))
     coordinator._detect_role_from_status_and_slaves = AsyncMock(return_value="solo")
     coordinator._resolve_multiroom_source_and_media = AsyncMock()
     coordinator._update_speaker_object = AsyncMock()
@@ -157,6 +157,9 @@ async def test_polling_device_info_failure(mock_coordinator):
     # Set up client methods directly
     mock_coordinator.client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
     mock_coordinator.client.get_device_info = AsyncMock(side_effect=WiiMError("Device info failed"))
+
+    # Properly mock _fetch_eq_info to return an EQInfo object
+    mock_coordinator._fetch_eq_info = AsyncMock(return_value=EQInfo.model_validate({"eq_enabled": False}))
 
     # Mock the heavy processing to return empty data
     with patch("custom_components.wiim.coordinator_polling._process_heavy_operations", return_value={}):

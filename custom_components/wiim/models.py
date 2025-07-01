@@ -29,7 +29,7 @@ class _WiimBase(BaseModel):
     Allows unknown fields (extra="allow") and supports population by field name or alias.
     """
 
-    model_config = ConfigDict(extra="allow", populate_by_name=True, underscore_attrs_are_private=True)
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
 
 class DeviceInfo(_WiimBase):
