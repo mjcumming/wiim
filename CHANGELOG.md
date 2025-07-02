@@ -2,7 +2,7 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
-## [0.1.7]
+## [0.1.7] - 2024-12-27
 
 ### Improved
 
