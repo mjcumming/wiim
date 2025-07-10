@@ -112,8 +112,14 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState | None:
         """Return the state of the coordinator."""
-        if not self.available:
+        # Check if underlying device is offline first
+        if not self.speaker.available:
             return None  # Device offline - let HA show as unavailable
+
+        # If device is online but group is inactive, show idle
+        if not self.available:
+            return MediaPlayerState.IDLE  # Group inactive - show idle
+
         return self.speaker.get_playback_state()
 
     @property

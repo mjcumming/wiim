@@ -2,6 +2,15 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.10]
+
+### Fixed
+
+- **Group Media Player State Logic**: Fixed test failure in group media player state handling
+  - Device offline now correctly shows 'unavailable' (returns `None`)
+  - Group inactive (solo/no members) now correctly shows 'idle' (returns `MediaPlayerState.IDLE`)
+  - Improved state logic to distinguish between device availability and group activity
+
 ## [0.1.9]
 
 ### Fixed
