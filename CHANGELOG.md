@@ -2,7 +2,16 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
-## [0.1.8] 
+## [0.1.9]
+
+### Fixed
+
+- **Offline Device State**: Fixed media player entities showing 'idle' state when device goes offline
+  - Devices now correctly show as 'unavailable' in Home Assistant when power is disconnected or network connection is lost
+  - Both regular media player and group media player entities now return `None` state when unavailable
+  - Follows proper Home Assistant availability conventions for immediate user feedback
+
+## [0.1.8]
 
 ### Improved
 

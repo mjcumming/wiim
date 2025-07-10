@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.media_player import (
-    MediaPlayerEntity,
+from homeassistant.components.media_player import MediaPlayerEntity
+from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
@@ -271,12 +271,16 @@ class WiiMMediaPlayer(
     # ===== PLAYBACK PROPERTIES (delegate to controller) =====
 
     @property
-    def state(self) -> MediaPlayerState:
+    def state(self) -> MediaPlayerState | None:
         """State of the media player.
 
         Shows real device state immediately - no smoothing or filtering.
         Optimistic state provides immediate feedback for user commands.
         """
+        # Check availability first - if device is offline, return None
+        if not self.available:
+            return None  # Device offline - let HA show as unavailable
+
         # Use optimistic state if available for immediate feedback
         if self._optimistic_state is not None:
             return self._optimistic_state

@@ -10,8 +10,8 @@ import asyncio
 import logging
 from typing import Any
 
-from homeassistant.components.media_player import (
-    MediaPlayerEntity,
+from homeassistant.components.media_player import MediaPlayerEntity
+from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
@@ -113,7 +113,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     def state(self) -> MediaPlayerState | None:
         """Return the state of the coordinator."""
         if not self.available:
-            return MediaPlayerState.IDLE
+            return None  # Device offline - let HA show as unavailable
         return self.speaker.get_playback_state()
 
     @property
