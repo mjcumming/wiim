@@ -2,6 +2,15 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.11]
+
+### Fixed
+
+- **Group Coordinator Entity Naming**: Fixed inconsistent entity naming for group coordinator entities
+  - Group coordinator entities now correctly use `_group_coordinator` suffix instead of `_group`
+  - Entity IDs now match documentation examples (e.g., `media_player.living_room_group_coordinator`)
+  - Fixes device identifier inconsistency that caused entity IDs to differ from documented behavior
+
 ## [0.1.10]
 
 ### Fixed

@@ -47,7 +47,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # Create virtual device for the group
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{speaker.uuid}_group")},
+            identifiers={(DOMAIN, f"{speaker.uuid}_group_coordinator")},
             name=f"{speaker.name} Speaker Group",
             model="Multiroom Group",
             manufacturer="WiiM",
