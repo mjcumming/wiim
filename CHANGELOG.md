@@ -2,6 +2,25 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.12]
+
+### Fixed
+
+- **Volume Control Reliability**: Fixed volume up/down buttons and slider not working correctly
+  - Volume up/down buttons now properly change device volume with configurable step (default 5%)
+  - Volume slider now uses debouncing to prevent command flooding during rapid drags
+  - Fixed volume step calculation to handle both percentage and decimal values correctly
+  - Removed premature clearing of pending volume state that prevented debounced commands from being sent
+  - Volume commands now properly reach the device and change actual volume levels
+
+### Improved
+
+- **Volume Control Performance**: Enhanced volume control responsiveness and efficiency
+  - Implemented 0.5-second debouncing for all volume changes (buttons and slider)
+  - Optimistic UI updates provide immediate feedback while commands are queued
+  - Reduced network traffic by consolidating rapid volume changes into single commands
+  - Improved volume step handling with fallback to 5% when configuration is invalid
+
 ## [0.1.11]
 
 ### Fixed

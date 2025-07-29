@@ -102,8 +102,16 @@ class WiiMMediaPlayer(
         self._attr_unique_id = self.speaker.uuid
 
         # Debouncer for high-frequency volume changes (slider drags)
-        self._volume_debouncer: Debouncer | None = None
+        #   • cooldown = 0.5 s  → at most 2 cmds / s
+        #   • immediate = False → send after user stops moving slider
         self._pending_volume: float | None = None
+        self._volume_debouncer: Debouncer = Debouncer(
+            speaker.hass,
+            _LOGGER,
+            cooldown=0.5,
+            immediate=False,
+            function=self._send_volume_debounced,
+        )
 
         # Optimistic media title to show friendly station name immediately
         self._optimistic_media_title: str | None = None
@@ -136,15 +144,7 @@ class WiiMMediaPlayer(
             self.entity_id,
         )
 
-        # Create debouncer lazily once hass is available
-        if self._volume_debouncer is None:
-            self._volume_debouncer = Debouncer(
-                self.hass,
-                _LOGGER,
-                cooldown=0.4,  # max 1 cmd / 0.4 s  (~2.5 Hz)
-                immediate=False,
-                function=self._send_volume_debounced,
-            )
+        # Debouncer already created in __init__; nothing to do here
 
     @callback
     def async_write_ha_state(self) -> None:
@@ -201,6 +201,18 @@ class WiiMMediaPlayer(
 
         # Call parent to write state
         super().async_write_ha_state()
+
+    async def _send_volume_debounced(self) -> None:
+        """Send the pending volume after debounce period."""
+        if self._pending_volume is None:
+            _LOGGER.debug("Debounce called but no pending volume, ignoring")
+            return
+
+        volume = self._pending_volume
+        self._pending_volume = None  # Clear pending
+
+        _LOGGER.debug("Debounced volume command: %.2f", volume)
+        await self.controller.set_volume(volume)
 
     # ===== HOME ASSISTANT ENTITY PROPERTIES =====
 

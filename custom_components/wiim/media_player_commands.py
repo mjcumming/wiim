@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState, MediaType
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.debounce import Debouncer
 
 if TYPE_CHECKING:
     from .data import Speaker
@@ -61,75 +60,34 @@ class VolumeCommandsMixin:
         # Required attributes from implementing class
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
+        _LOGGER.debug("Setting volume to %.2f for %s", volume, self.speaker.name)  # type: ignore[attr-defined]
+
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_volume = volume  # type: ignore[attr-defined]
         self._pending_volume = volume  # type: ignore[attr-defined]
         self.async_write_ha_state()  # type: ignore[attr-defined]
 
-        # ------------------------------------------------------------------
-        # For single, infrequent volume changes (typical button click tests or
-        # manual user interaction) we can call the API immediately to keep the
-        # behaviour simple and deterministic.  When the debouncer has already
-        # been created (e.g. because the user is dragging the slider) we fall
-        # back to the debounced approach to avoid command-flooding.
-        # ------------------------------------------------------------------
-
-        if self._volume_debouncer is None:  # type: ignore[attr-defined]
-            # FIRST call → execute immediately, create debouncer for subsequent
-            # rapid updates.
-            await controller.set_volume(volume)
-            await self._async_execute_command_with_immediate_refresh("set_volume")  # type: ignore[attr-defined]
-
-            # Create debouncer for any follow-up rapid changes.
-            self._volume_debouncer = Debouncer(  # type: ignore[attr-defined]
-                self.hass,  # type: ignore[attr-defined]
-                _LOGGER,
-                cooldown=0.4,
-                immediate=False,
-                function=self._send_volume_debounced,
-            )
-
-            # Command executed – clear pending marker.
-            self._pending_volume = None  # type: ignore[attr-defined]
-            return
-
-        # Debouncer already exists → we're in a slider drag scenario, use it.
-        await self._volume_debouncer.async_call()  # type: ignore[attr-defined]
-
-    async def _send_volume_debounced(self) -> None:
-        """Send the last requested volume to the device (debounced)."""
-        if self._pending_volume is None:  # type: ignore[attr-defined]
-            return
-
-        controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
-        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
-
         try:
-            await controller.set_volume(self._pending_volume)  # type: ignore[attr-defined]
+            if hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None:  # type: ignore[attr-defined]
+                # Use the debouncer – command will be sent after cooldown
+                # _pending_volume already set above; do NOT clear it here!
+                await self._volume_debouncer.async_call()  # type: ignore[attr-defined]
+            else:
+                # Debouncer not available (shouldn’t happen) – send immediately
+                await controller.set_volume(volume)
+                # Command sent → clear the pending flag
+                self._pending_volume = None  # type: ignore[attr-defined]
 
-            # Immediate refresh to confirm actual device state
-            await self._async_execute_command_with_immediate_refresh("set_volume_debounced")  # type: ignore[attr-defined]
+            _LOGGER.debug("Volume set command completed successfully")
 
-        except HomeAssistantError as err:
-            # Record command failure for immediate user feedback
-            if hasattr(speaker.coordinator, "record_command_failure"):
-                speaker.coordinator.record_command_failure("set_volume", err)
-
-            # Clear optimistic state so UI snaps back gracefully
-            self._optimistic_volume = None  # type: ignore[attr-defined]
-            self.async_write_ha_state()  # type: ignore[attr-defined]
-
-            # Do NOT re-raise – prevents noisy stack traces & keeps entity alive
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
-            # Unexpected error – bubble up after clearing optimistic state
+            # Clear optimistic state on error
             self._optimistic_volume = None  # type: ignore[attr-defined]
+            self._pending_volume = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
-
-        finally:
-            # Reset pending value so next change is fresh
-            self._pending_volume = None  # type: ignore[attr-defined]
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute the volume."""
@@ -143,8 +101,7 @@ class VolumeCommandsMixin:
             # 2. Send command to device
             await controller.set_mute(mute)
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("set_mute")  # type: ignore[attr-defined]
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             # Clear optimistic state on error so real state shows
@@ -153,96 +110,63 @@ class VolumeCommandsMixin:
             raise
 
     async def async_volume_up(self) -> None:
-        """Increase volume using the configured step size."""
+        """Increase volume using debounced step updates."""
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
         speaker: Speaker = self.speaker  # type: ignore[attr-defined]
 
-        # Determine step from controller config (fallback to 5 %)
-        step = getattr(controller, "_volume_step", 0.05)
+        # Determine step (use controller config, 5 % fallback)
+        step = getattr(controller, "_volume_step", 0.05) or 0.05
 
-        # Base calculation on the value the UI currently shows. If we already
-        # applied an optimistic change that hasn't been confirmed yet use that
-        # value so consecutive clicks accumulate properly.
-        current_volume = (
+        current = (
             self._optimistic_volume  # type: ignore[attr-defined]
             if self._optimistic_volume is not None  # type: ignore[attr-defined]
             else controller.get_volume_level() or 0.0
         )
-        new_volume = min(1.0, current_volume + step)
+        new_volume = min(1.0, current + step)
 
-        # 1. Optimistic UI update
+        # Optimistic UI update
         self._optimistic_volume = new_volume  # type: ignore[attr-defined]
-        self._pending_volume = new_volume  # type: ignore[attr-defined]
-        self.async_write_ha_state()  # type: ignore[attr-defined]
+        self._pending_volume = new_volume  # type: ignore[attr_defined]
+        self.async_write_ha_state()  # type: ignore[attr_defined]
 
         try:
-            # 2. Send absolute volume so we don't double-apply the step
-            await controller.set_volume(new_volume)
-
-            # 3. Immediate refresh for confirmation
-            await self._async_execute_command_with_immediate_refresh("volume_up")  # type: ignore[attr-defined]
-
-            # Mark command complete
-            self._pending_volume = None  # type: ignore[attr-defined]
-
-        except HomeAssistantError as err:
-            # Record command failure for immediate user feedback
-            if hasattr(speaker.coordinator, "record_command_failure"):
-                speaker.coordinator.record_command_failure("volume_up", err)
-            self._optimistic_volume = None  # type: ignore[attr-defined]
-            self.async_write_ha_state()  # type: ignore[attr-defined]
-            # swallow to avoid traceback
-        except Exception:
-            # Clear optimistic state on error
-            self._optimistic_volume = None  # type: ignore[attr-defined]
-            self.async_write_ha_state()  # type: ignore[attr-defined]
-            raise
+            if hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None:  # type: ignore[attr-defined]
+                await self._volume_debouncer.async_call()  # type: ignore[attr_defined]
+            else:
+                await controller.set_volume(new_volume)
+        except Exception as err:
+            # Revert optimistic state on error
+            self._optimistic_volume = None  # type: ignore[attr_defined]
+            self.async_write_ha_state()  # type: ignore[attr_defined]
+            _LOGGER.warning("Volume up failed: %s", err)
 
     async def async_volume_down(self) -> None:
-        """Decrease volume using the configured step size."""
-        controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
-        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        """Decrease volume using debounced step updates."""
+        controller: MediaPlayerController = self.controller  # type: ignore[attr_defined]
+        speaker: Speaker = self.speaker  # type: ignore[attr_defined]
 
-        # Determine step from controller config (fallback to 5 %)
-        step = getattr(controller, "_volume_step", 0.05)
+        step = getattr(controller, "_volume_step", 0.05) or 0.05
 
-        # Base calculation on the value the UI currently shows. If we already
-        # applied an optimistic change that hasn't been confirmed yet use that
-        # value so consecutive clicks accumulate properly.
-        current_volume = (
-            self._optimistic_volume  # type: ignore[attr-defined]
-            if self._optimistic_volume is not None  # type: ignore[attr-defined]
+        current = (
+            self._optimistic_volume  # type: ignore[attr_defined]
+            if self._optimistic_volume is not None  # type: ignore[attr_defined]
             else controller.get_volume_level() or 0.0
         )
-        new_volume = max(0.0, current_volume - step)
+        new_volume = max(0.0, current - step)
 
-        # 1. Optimistic UI update
-        self._optimistic_volume = new_volume  # type: ignore[attr-defined]
-        self._pending_volume = new_volume  # type: ignore[attr-defined]
-        self.async_write_ha_state()  # type: ignore[attr-defined]
+        self._optimistic_volume = new_volume  # type: ignore[attr_defined]
+        self._pending_volume = new_volume  # type: ignore[attr_defined]
+        self.async_write_ha_state()  # type: ignore[attr_defined]
 
         try:
-            # 2. Send absolute volume so we don't double-apply the step
-            await controller.set_volume(new_volume)
-
-            # 3. Immediate refresh for confirmation
-            await self._async_execute_command_with_immediate_refresh("volume_down")  # type: ignore[attr-defined]
-
-            # Mark command complete
-            self._pending_volume = None  # type: ignore[attr-defined]
-
-        except HomeAssistantError as err:
-            # Record command failure for immediate user feedback
-            if hasattr(speaker.coordinator, "record_command_failure"):
-                speaker.coordinator.record_command_failure("volume_down", err)
-            self._optimistic_volume = None  # type: ignore[attr-defined]
-            self.async_write_ha_state()  # type: ignore[attr-defined]
-            # swallow to avoid traceback
-        except Exception:
-            # Clear optimistic state on error
-            self._optimistic_volume = None  # type: ignore[attr-defined]
-            self.async_write_ha_state()  # type: ignore[attr-defined]
-            raise
+            if hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None:  # type: ignore[attr_defined]
+                await self._volume_debouncer.async_call()  # type: ignore[attr_defined]
+            else:
+                await controller.set_volume(new_volume)
+        except Exception as err:
+            self._optimistic_volume = None  # type: ignore[attr_defined]
+            self.async_write_ha_state()  # type: ignore[attr_defined]
+            _LOGGER.warning("Volume down failed: %s", err)
 
 
 class PlaybackCommandsMixin:
@@ -287,8 +211,7 @@ class PlaybackCommandsMixin:
             # 2. Send command to device
             await controller.play()
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("play")  # type: ignore[attr-defined]
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             # Clear optimistic state on error so real state shows
@@ -312,8 +235,7 @@ class PlaybackCommandsMixin:
             # 2. Send command to device
             await controller.pause()
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("pause")  # type: ignore[attr-defined]
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             # Clear optimistic state on error so real state shows
@@ -337,8 +259,7 @@ class PlaybackCommandsMixin:
             # 2. Send command to device
             await controller.stop()
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("stop")  # type: ignore[attr-defined]
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             # Clear optimistic state on error so real state shows
@@ -355,8 +276,7 @@ class PlaybackCommandsMixin:
             # No predictable optimistic state for track changes
             await controller.next_track()
 
-            # Immediate refresh for fast track info update
-            await self._async_execute_command_with_immediate_refresh("next_track")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise
@@ -369,8 +289,7 @@ class PlaybackCommandsMixin:
             # No predictable optimistic state for track changes
             await controller.previous_track()
 
-            # Immediate refresh for fast track info update
-            await self._async_execute_command_with_immediate_refresh("previous_track")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise
@@ -383,8 +302,7 @@ class PlaybackCommandsMixin:
             # No predictable optimistic state for seeking
             await controller.seek(position)
 
-            # Immediate refresh for fast position update
-            await self._async_execute_command_with_immediate_refresh("seek")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise
@@ -421,8 +339,7 @@ class SourceCommandsMixin:
             # 2. Send command to device
             await controller.select_source(source)
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("select_source")  # type: ignore[attr-defined]
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             # Clear optimistic state on error so real state shows
@@ -438,8 +355,7 @@ class SourceCommandsMixin:
             # EQ changes don't have direct UI state, just refresh quickly
             await controller.set_eq_preset(sound_mode)
 
-            # Immediate refresh for fast EQ update
-            await self._async_execute_command_with_immediate_refresh("select_sound_mode")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise
@@ -456,8 +372,7 @@ class SourceCommandsMixin:
             # 2. Send command to device
             await controller.set_shuffle(shuffle)
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("set_shuffle")  # type: ignore[attr-defined]
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             # Clear optimistic state on error so real state shows
@@ -477,8 +392,7 @@ class SourceCommandsMixin:
             # 2. Send command to device
             await controller.set_repeat(repeat)
 
-            # 3. Immediate refresh for confirmation (don't wait 5 seconds)
-            await self._async_execute_command_with_immediate_refresh("set_repeat")  # type: ignore[attr-defined]
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             # Clear optimistic state on error so real state shows
@@ -505,8 +419,7 @@ class GroupCommandsMixin:
         try:
             await controller.join_group(group_members)
 
-            # Immediate refresh for fast group state update
-            await self._async_execute_command_with_immediate_refresh("join_group")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise
@@ -518,8 +431,7 @@ class GroupCommandsMixin:
         try:
             await controller.leave_group()
 
-            # Immediate refresh for fast group state update
-            await self._async_execute_command_with_immediate_refresh("leave_group")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise
@@ -656,8 +568,7 @@ class MediaCommandsMixin:
                 # Always send the URL to the device
                 await controller.play_url(media_id)
 
-                # Immediate refresh for fast media update
-                await self._async_execute_command_with_immediate_refresh("play_media")  # type: ignore[attr-defined]
+                # Let adaptive polling handle sync (no immediate refresh needed)
 
             else:
                 _LOGGER.warning("Unsupported media type: %s", media_type)
@@ -672,8 +583,7 @@ class MediaCommandsMixin:
         try:
             await controller.play_preset(preset)
 
-            # Immediate refresh for fast preset update
-            await self._async_execute_command_with_immediate_refresh("play_preset")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise
@@ -685,8 +595,7 @@ class MediaCommandsMixin:
         try:
             await controller.play_url(url)
 
-            # Immediate refresh for fast URL play update
-            await self._async_execute_command_with_immediate_refresh("play_url")  # type: ignore[attr-defined]
+            # Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
             raise

@@ -46,9 +46,25 @@ class MediaControllerCoreMixin:
         self._logger = logging.getLogger(f"{__name__}.{speaker.name}")
 
         # Get volume step from integration config or use default
-        self._volume_step = (
-            speaker.coordinator.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP) / 100.0
-        )  # Convert percentage to 0.0-1.0
+
+        config_volume_step = speaker.coordinator.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+
+        # If the user provided a percentage (e.g. 5 → 5 %), convert to 0-1 range.
+        # If the value already looks like a fraction (≤ 1.0) keep it as-is.
+        if config_volume_step is None:
+            self._volume_step = DEFAULT_VOLUME_STEP
+        elif isinstance(config_volume_step, int | float) and config_volume_step > 1:
+            self._volume_step = float(config_volume_step) / 100.0
+        else:
+            # Already in 0-1 range
+            self._volume_step = float(config_volume_step)
+
+        self._logger.debug(
+            "Volume step calculation: config_value=%s, default=%s, final_step=%.4f",
+            config_volume_step,
+            DEFAULT_VOLUME_STEP,
+            self._volume_step,
+        )
 
         # Internal trackers to avoid noisy duplicate logs on every property poll
         self._last_sound_mode: str | None = None
@@ -117,6 +133,11 @@ class MediaControllerCoreMixin:
             return
 
         step = step or self._volume_step
+        # Fallback to 5% if volume step is 0.00 (configuration issue)
+        if step == 0.0:
+            step = 0.05
+            self._logger.warning("Volume step was 0.00, using fallback of 5%%")
+
         new_volume = min(1.0, current_volume + step)
 
         self._logger.debug("Volume up: %.2f -> %.2f (step=%.2f)", current_volume, new_volume, step)
@@ -134,6 +155,11 @@ class MediaControllerCoreMixin:
             return
 
         step = step or self._volume_step
+        # Fallback to 5% if volume step is 0.00 (configuration issue)
+        if step == 0.0:
+            step = 0.05
+            self._logger.warning("Volume step was 0.00, using fallback of 5%%")
+
         new_volume = max(0.0, current_volume - step)
 
         self._logger.debug("Volume down: %.2f -> %.2f (step=%.2f)", current_volume, new_volume, step)
