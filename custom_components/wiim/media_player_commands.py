@@ -112,7 +112,6 @@ class VolumeCommandsMixin:
     async def async_volume_up(self) -> None:
         """Increase volume using debounced step updates."""
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
-        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
 
         # Determine step (use controller config, 5 % fallback)
         step = getattr(controller, "_volume_step", 0.05) or 0.05
@@ -143,7 +142,6 @@ class VolumeCommandsMixin:
     async def async_volume_down(self) -> None:
         """Decrease volume using debounced step updates."""
         controller: MediaPlayerController = self.controller  # type: ignore[attr_defined]
-        speaker: Speaker = self.speaker  # type: ignore[attr_defined]
 
         step = getattr(controller, "_volume_step", 0.05) or 0.05
 
