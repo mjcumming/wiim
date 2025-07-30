@@ -2,6 +2,26 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [1.0.14] - 2024-12-19
+
+### Fixed
+- **Speaker Grouping State Change Latency**: Fixed firmware compatibility issues causing delays in group state changes
+- **Legacy Device Support**: Improved support for older LinkPlay-based devices (Audio Pro, etc.)
+- **Adaptive Polling**: Enhanced polling intervals based on device type and activity state
+- **Error Recovery**: Better handling of malformed API responses from legacy devices
+- **Test Suite**: Fixed test environment issues and improved test coverage
+
+### Added
+- **Firmware Capability Detection**: Automatic detection of device capabilities and API support
+- **Enhanced Role Detection**: Improved master/slave role detection for multiroom groups
+- **Optimistic UI Updates**: Immediate UI feedback for better user experience
+- **Debounced Volume Control**: Reduced network traffic for volume slider operations
+
+### Technical
+- **API Client Improvements**: Firmware-specific request handling and retry logic
+- **Coordinator Enhancements**: Better error recovery and state synchronization
+- **Code Organization**: Refactored into focused, maintainable modules
+
 ## [0.1.12]
 
 ### Fixed

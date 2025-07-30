@@ -296,8 +296,13 @@ class MediaBrowserMixin:
 
                 # Filter audio content only for WiiM compatibility
                 if browse_result.children:
+                    # Handle case where children might be a coroutine
+                    children = browse_result.children
+                    if hasattr(children, "__await__"):
+                        children = await children
+
                     audio_children = []
-                    for child in browse_result.children:
+                    for child in children:
                         if self._is_audio_content(child):
                             audio_children.append(child)
                     browse_result.children = audio_children
@@ -326,6 +331,11 @@ class MediaBrowserMixin:
             try:
                 media_source_root = await media_source.async_browse_media(hass, None)
                 if media_source_root and media_source_root.children:
+                    # Handle case where children might be a coroutine
+                    root_children = media_source_root.children
+                    if hasattr(root_children, "__await__"):
+                        root_children = await root_children
+
                     children.append(
                         BrowseMedia(
                             media_class=MediaClass.DIRECTORY,

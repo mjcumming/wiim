@@ -108,19 +108,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
-    # Create client and coordinator
+    # Create client and coordinator with firmware capabilities
     session = async_get_clientsession(hass)
-    client = WiiMClient(
+
+    # Detect device capabilities first
+    from .firmware_capabilities import detect_device_capabilities
+
+    # Create temporary client for capability detection
+    temp_client = WiiMClient(
         host=entry.data["host"],
         port=entry.data.get("port", 443),
         timeout=entry.data.get("timeout", 10),
         session=session,
     )
 
+    # Detect capabilities
+    try:
+        device_info = await temp_client.get_device_info_model()
+        capabilities = detect_device_capabilities(device_info)
+        _LOGGER.info(
+            "Detected device capabilities for %s: %s",
+            entry.data["host"],
+            capabilities.get("device_type", "Unknown"),
+        )
+    except Exception as err:
+        _LOGGER.warning("Failed to detect device capabilities for %s: %s", entry.data["host"], err)
+        capabilities = {}
+
+    # Create client with capabilities
+    client = WiiMClient(
+        host=entry.data["host"],
+        port=entry.data.get("port", 443),
+        timeout=entry.data.get("timeout", 10),
+        session=session,
+        capabilities=capabilities,
+    )
+
     coordinator = WiiMCoordinator(
         hass,
         client,
         entry=entry,
+        capabilities=capabilities,
     )
 
     # ------------------------------------------------------------------

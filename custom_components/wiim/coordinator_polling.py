@@ -29,28 +29,21 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _determine_adaptive_interval(coordinator, status_model: PlayerStatus, role: str) -> int:
-    """Adaptive polling based on playback state per POLLING_STRATEGY.md.
+    """Enhanced adaptive polling with firmware awareness.
 
     Returns:
-        1 second when playing/loading for real-time updates (masters only)
-        5 seconds for slaves and when idle for resource efficiency
+        Optimal polling interval based on device capabilities and state
     """
-    # Slaves always use normal (5s) polling to avoid excessive API calls
-    # even when master is playing - they get updates via group sync
-    if role == "slave":
-        return NORMAL_POLL_INTERVAL  # 5 seconds for slaves
+    from .firmware_capabilities import get_optimal_polling_interval
 
-    # Check if device is actively playing (masters and solo only)
+    capabilities = getattr(coordinator, "_capabilities", {})
     is_playing = str(status_model.play_state or "").lower() in (
         "play",
         "playing",
         "load",
     )
 
-    if is_playing:
-        return FAST_POLL_INTERVAL  # 1 second for real-time updates
-    else:
-        return NORMAL_POLL_INTERVAL  # 5 seconds when idle
+    return get_optimal_polling_interval(capabilities, role, is_playing)
 
 
 def _should_update_device_info(coordinator) -> bool:
@@ -371,9 +364,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # ------------------------------------------------------------------
 
         # Light role detection (avoid heavy processing here)
-        role = await coordinator._detect_role_from_status_and_slaves(
-            status_model, multiroom_info, device_model
-        )
+        role = await coordinator._detect_role_from_status_and_slaves(status_model, multiroom_info, device_model)
 
         # Use pre-processed metadata or create light version
         track_metadata = processed_data.get("metadata", {})

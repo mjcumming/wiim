@@ -50,8 +50,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         client: WiiMClient,
         entry=None,
+        capabilities: dict[str, Any] | None = None,
     ) -> None:
-        """Initialize the coordinator with adaptive polling."""
+        """Initialize the coordinator with adaptive polling and firmware capabilities."""
         super().__init__(
             hass,
             _LOGGER,
@@ -61,6 +62,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.hass = hass
         self.entry = entry
+        self._capabilities = capabilities or {}
 
         # API capability flags (None = untested, True/False = tested)
         self._statusex_supported: bool | None = None
@@ -252,38 +254,74 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return data
 
         except (WiiMError, aiohttp.ClientError) as err:
-            # If the update fails, engage the backoff strategy
-            self._backoff.record_failure()
+            # Handle firmware-specific errors
+            from .firmware_capabilities import is_legacy_firmware_error
 
-            # Determine the new interval from the backoff controller
-            base_interval = NORMAL_POLL_INTERVAL
-            new_interval = self._backoff.next_interval(default_seconds=base_interval)
-            self.update_interval = new_interval
+            if self._capabilities.get("is_legacy_device", False) and is_legacy_firmware_error(err):
+                _LOGGER.debug("Legacy firmware error on %s: %s", self.client.host, err)
+                # Return cached data instead of failing completely for legacy devices
+                return self._get_cached_data_with_fallback()
+            else:
+                # If the update fails, engage the backoff strategy
+                self._backoff.record_failure()
 
-            # Escalate logging from WARNING to ERROR after several consecutive failures
-            log_level = (
-                logging.ERROR if self._backoff.consecutive_failures >= FAILURE_ERROR_THRESHOLD else logging.WARNING
-            )
-            _LOGGER.log(
-                log_level,
-                "Update failed for %s (%d consecutive), backing off to %ss. Error: %s",
-                self.client.host,
-                self._backoff.consecutive_failures,
-                new_interval.total_seconds(),
-                err,
-            )
+                # Determine the new interval from the backoff controller
+                base_interval = NORMAL_POLL_INTERVAL
+                new_interval = self._backoff.next_interval(default_seconds=base_interval)
+                self.update_interval = new_interval
 
-            # Raise UpdateFailed to notify Home Assistant of the failure
-            raise UpdateFailed(f"Failed to communicate with {self.client.host}: {err}") from err
+                # Escalate logging from WARNING to ERROR after several consecutive failures
+                log_level = (
+                    logging.ERROR if self._backoff.consecutive_failures >= FAILURE_ERROR_THRESHOLD else logging.WARNING
+                )
+                _LOGGER.log(
+                    log_level,
+                    "Update failed for %s (%d consecutive), backing off to %ss. Error: %s",
+                    self.client.host,
+                    self._backoff.consecutive_failures,
+                    new_interval.total_seconds(),
+                    err,
+                )
+
+                # Raise UpdateFailed to notify Home Assistant of the failure
+                raise UpdateFailed(f"Failed to communicate with {self.client.host}: {err}") from err
 
     async def _fetch_multiroom_info(self) -> dict:
-        """Get multiroom info with proper API usage per API guide.
+        """Enhanced multiroom info with firmware compatibility.
 
         According to the API guide:
         - getSlaveList only works on MASTER devices
         - Slave devices (group: "1") already know they're slaves
         - Only call getSlaveList when group: "0" to distinguish master from solo
         """
+        # For legacy devices, use simplified approach
+        if self._capabilities.get("is_legacy_device", False):
+            return await self._fetch_multiroom_info_legacy()
+
+        # Enhanced approach for WiiM devices
+        return await self._fetch_multiroom_info_enhanced()
+
+    async def _fetch_multiroom_info_legacy(self) -> dict:
+        """Simplified multiroom info for legacy Audio Pro units."""
+        try:
+            # Legacy devices may not support getSlaveList reliably
+            # Use basic group field detection instead
+            device_info = await self._fetch_device_info()
+            group_field = device_info.get("group", "0")
+
+            if group_field == "1":
+                # Device reports being in a group
+                return {"slaves": 0, "slave_list": [], "legacy_group": True}
+            else:
+                # Device reports being solo
+                return {"slaves": 0, "slave_list": [], "legacy_group": False}
+
+        except Exception as err:
+            _LOGGER.debug("Legacy multiroom info failed: %s", err)
+            return {"slaves": 0, "slave_list": [], "legacy_group": False}
+
+    async def _fetch_multiroom_info_enhanced(self) -> dict:
+        """Enhanced multiroom info for WiiM devices (original logic)."""
         try:
             # First check if this device is a slave - if so, no need for getSlaveList
             device_info = await self._fetch_device_info()
@@ -511,3 +549,19 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         from . import coordinator_eq as _eq
 
         await _eq.extend_eq_preset_map_once(self)
+
+    def _get_cached_data_with_fallback(self) -> dict[str, Any]:
+        """Return cached data with safe fallbacks for legacy devices.
+
+        Returns:
+            Dictionary with cached data or safe defaults
+        """
+        if not self.data:
+            return {"role": "solo", "status_model": None, "device_model": None}
+
+        # Ensure we have safe defaults for legacy devices
+        data = self.data.copy()
+        if "role" not in data:
+            data["role"] = "solo"
+
+        return data

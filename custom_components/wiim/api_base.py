@@ -83,6 +83,7 @@ class WiiMClient:
         timeout: float = DEFAULT_TIMEOUT,
         ssl_context: ssl.SSLContext | None = None,
         session: ClientSession | None = None,
+        capabilities: dict[str, Any] | None = None,
     ) -> None:
         """Instantiate the client.
 
@@ -92,6 +93,7 @@ class WiiMClient:
             timeout: Network timeout (seconds).
             ssl_context: Custom SSL context (tests/advanced use-cases only).
             session: Optional shared *aiohttp* session.
+            capabilities: Device capabilities for firmware-specific handling.
         """
         self._discovered_port: bool = False
 
@@ -112,9 +114,11 @@ class WiiMClient:
         # Normalise host for URL contexts (IPv6 needs brackets).
         self._host_url = f"[{self._host}]" if ":" in self._host and not self._host.startswith("[") else self._host
 
-        self.timeout = timeout
+        # Use firmware-specific timeout if provided
+        self.timeout = capabilities.get("response_timeout", timeout) if capabilities else timeout
         self.ssl_context = ssl_context
         self._session = session
+        self._capabilities = capabilities or {}
 
         # Start optimistic with HTTPS.
         self._endpoint = f"https://{self._host_url}:{self.port}"
@@ -156,17 +160,56 @@ class WiiMClient:
     # ------------------------------------------------------------------
 
     async def _request(self, endpoint: str, method: str = "GET", **kwargs: Any) -> dict[str, Any]:
-        """Perform an HTTP(S) request with smart protocol fallback.
+        """Perform an HTTP(S) request with smart protocol fallback and firmware-specific handling.
 
         Protocol fallback strategy:
         1. Try established endpoint first (fast-path)
         2. Only do full probe if no established endpoint exists
         3. After successful connection, stick with working protocol/port
+        4. Apply firmware-specific error handling and retries
         """
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout))
 
         kwargs.setdefault("headers", HEADERS)
+
+        # Use firmware-specific retry logic
+        retry_count = self._capabilities.get("retry_count", 3)
+        is_legacy_device = self._capabilities.get("is_legacy_device", False)
+
+        for attempt in range(retry_count):
+            try:
+                result = await self._request_with_protocol_fallback(endpoint, method, **kwargs)
+
+                # Validate response for legacy firmware
+                if is_legacy_device:
+                    result = self._validate_legacy_response(result, endpoint)
+
+                return result
+
+            except (aiohttp.ClientError, json.JSONDecodeError) as err:
+                if attempt == retry_count - 1:
+                    raise WiiMRequestError(f"Request failed after {retry_count} attempts: {err}") from err
+
+                # Exponential backoff for retries (longer for legacy devices)
+                backoff_delay = 0.5 * (2**attempt)
+                if is_legacy_device:
+                    backoff_delay *= 2  # Double delay for legacy devices
+
+                _LOGGER.debug(
+                    "Request attempt %d/%d failed for %s, retrying in %.1fs: %s",
+                    attempt + 1,
+                    retry_count,
+                    self._host,
+                    backoff_delay,
+                    err,
+                )
+                await asyncio.sleep(backoff_delay)
+
+    async def _request_with_protocol_fallback(
+        self, endpoint: str, method: str = "GET", **kwargs: Any
+    ) -> dict[str, Any]:
+        """Perform HTTP(S) request with protocol fallback (original logic)."""
 
         # -----------------------------
         # Fast-path: use established endpoint.
@@ -253,6 +296,37 @@ class WiiMClient:
         raise WiiMConnectionError(
             f"Failed to communicate with {self._host} after trying: {', '.join(tried)}\nLast error: {last_error}"
         )
+
+    def _validate_legacy_response(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+        """Handle malformed responses from older firmware.
+
+        Args:
+            response: Raw API response
+            endpoint: API endpoint that was called
+
+        Returns:
+            Validated response with safe defaults if needed
+        """
+        # Handle empty responses from Audio Pro units
+        if not response or response == {}:
+            _LOGGER.debug("Empty response from legacy device for %s", endpoint)
+
+            # Return safe defaults based on endpoint
+            if "getSlaveList" in endpoint:
+                return {"slaves": 0, "slave_list": []}
+            elif "getStatus" in endpoint:
+                return {"group": "0", "state": "stop"}
+            elif "getMetaInfo" in endpoint:
+                return {"title": "", "artist": "", "album": ""}
+            else:
+                return {"raw": "OK"}
+
+        # Handle malformed JSON responses
+        if not isinstance(response, dict):
+            _LOGGER.debug("Non-dict response from legacy device for %s: %s", endpoint, type(response))
+            return {"raw": str(response)}
+
+        return response
 
     # ------------------------------------------------------------------
     # Public helpers ----------------------------------------------------
