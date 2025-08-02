@@ -39,34 +39,42 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
-    """Validate device and get info using proven LinkPlay UUID pattern.
+    """Validate that a host is a WiiM/LinkPlay device and extract device info."""
 
-    Returns:
-        Tuple of (is_valid, device_name, device_uuid)
-    """
     client = WiiMClient(host)
     try:
-        if not await client.validate_connection():
+        # Try to get device status - this is the most reliable way to validate
+        status = await client.get_status()
+        if not status:
+            _LOGGER.debug("No status response from %s", host)
             return False, host, None
 
-        device_name = await client.get_device_name()
+        # Extract device name
+        device_name = status.get("ssid", host)
+        if not device_name or device_name == "Unknown":
+            device_name = f"WiiM Device ({host})"
 
-        # PROVEN PATTERN: Use getStatusEx exactly like working libraries
-        device_info = await client.get_device_info()  # Calls getStatusEx
-
-        # PROVEN PATTERN: Extract UUID from "uuid" field like HA Core does
-        device_uuid = device_info.get("uuid")
-
+        # Extract UUID - this is critical for device identification
+        device_uuid = status.get("uuid")
         if not device_uuid:
-            # PROVEN PATTERN: Fail setup if no UUID (like HA Core)
-            _LOGGER.error("LinkPlay device at %s did not provide UUID in getStatusEx response", host)
-            return False, host, None
+            # Some older devices may not provide UUID
+            _LOGGER.warning("Device at %s did not provide UUID, using host as fallback", host)
+            device_uuid = host
 
-        _LOGGER.debug("Successfully extracted UUID for %s: %s", host, device_uuid)
+        _LOGGER.debug("Successfully validated device %s at %s (UUID: %s)", device_name, host, device_uuid)
         return True, device_name, device_uuid
 
     except Exception as err:
-        _LOGGER.error("Failed to validate LinkPlay device at %s: %s", host, err)
+        # Log the specific error for debugging
+        error_str = str(err).lower()
+        if "404" in error_str:
+            _LOGGER.debug("Device at %s returned 404 - likely not a WiiM/LinkPlay device", host)
+        elif "timeout" in error_str:
+            _LOGGER.debug("Timeout connecting to %s - device may be offline", host)
+        elif "connection refused" in error_str:
+            _LOGGER.debug("Connection refused by %s - device may not support HTTP API", host)
+        else:
+            _LOGGER.debug("Failed to validate device at %s: %s", host, err)
         return False, host, None
     finally:
         await client.close()
@@ -266,25 +274,25 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> ConfigFlowResult:
         """Handle SSDP discovery."""
-        _LOGGER.info("🔍 SSDP DISCOVERY called with: %s", discovery_info.ssdp_location)
+        _LOGGER.debug("SSDP discovery from: %s", discovery_info.ssdp_location)
 
         if not discovery_info.ssdp_location:
-            _LOGGER.warning("🔍 SSDP DISCOVERY aborted: no ssdp_location")
+            _LOGGER.debug("SSDP discovery aborted: no ssdp_location")
             return self.async_abort(reason="no_host")
 
         host = urlparse(discovery_info.ssdp_location).hostname
         if not host:
-            _LOGGER.warning("🔍 SSDP DISCOVERY aborted: no host from %s", discovery_info.ssdp_location)
+            _LOGGER.debug("SSDP discovery aborted: no host from %s", discovery_info.ssdp_location)
             return self.async_abort(reason="no_host")
 
-        _LOGGER.info("🔍 SSDP DISCOVERY extracted host: %s", host)
+        _LOGGER.debug("SSDP discovery attempting validation for host: %s", host)
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
         if not is_valid or not device_uuid:
-            _LOGGER.warning("🔍 SSDP DISCOVERY validation failed for host: %s", host)
+            _LOGGER.debug("SSDP discovery validation failed for host: %s", host)
             return self.async_abort(reason="cannot_connect")
 
-        _LOGGER.info("🔍 SSDP DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
+        _LOGGER.info("SSDP discovery validated device: %s at %s", device_name, host)
 
         # Prefer the real device UUID when available. Otherwise fall back to the
         # host IP address to ensure we can still detect duplicates and satisfy

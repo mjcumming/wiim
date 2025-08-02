@@ -247,11 +247,14 @@ class TestMediaPlayerGrouping:
     """Test media player grouping functionality."""
 
     @pytest.fixture
-    def media_player(self, wiim_speaker):
-        """Create a WiiM media player entity."""
+    def media_player(self, wiim_speaker, hass):
+        """Create a WiiM media player entity with proper hass setup."""
         from custom_components.wiim.media_player import WiiMMediaPlayer
 
-        return WiiMMediaPlayer(wiim_speaker)
+        player = WiiMMediaPlayer(wiim_speaker)
+        player.hass = hass  # Set hass for async_write_ha_state
+        player.entity_id = "media_player.test_wiim"  # Set entity ID
+        return player
 
     @pytest.mark.asyncio
     async def test_async_join(self, media_player, wiim_speaker, wiim_speaker_slave):
@@ -293,21 +296,37 @@ class TestMediaPlayerState:
 
         attrs = media_player.extra_state_attributes
 
-        assert attrs["speaker_uuid"] == "test-speaker-uuid"
-        assert attrs["speaker_role"] == "master"
-        assert attrs["coordinator_ip"] == "192.168.1.100"
-        assert attrs["group_members_count"] == 2
+        # Check new simplified format - use actual values from mock
+        assert attrs["device_model"] == wiim_speaker.model
+        assert attrs["firmware_version"] == wiim_speaker.firmware
+        assert attrs["ip_address"] == wiim_speaker.ip_address
+        assert attrs["mac_address"] == wiim_speaker.mac_address
+        assert attrs["group_role"] == "master"
+        assert attrs["is_group_coordinator"] is True
+        assert attrs["music_assistant_compatible"] is True
+        assert attrs["integration_purpose"] == "individual_speaker_control"
 
-        # Test smart polling attributes
-        assert "activity_level" in attrs
-        assert "polling_interval" in attrs
+        # Check group info
+        assert "group_members" in attrs
+        assert "group_state" in attrs
 
     def test_extra_state_attributes_no_data(self, media_player, wiim_speaker):
         """Test extra state attributes when no coordinator data."""
         wiim_speaker.coordinator.data = None
 
         attrs = media_player.extra_state_attributes
-        assert attrs == {}
+
+        # Even with no coordinator data, we should still get basic device info
+        assert attrs["device_model"] == wiim_speaker.model
+        assert attrs["firmware_version"] == wiim_speaker.firmware
+        assert attrs["ip_address"] == wiim_speaker.ip_address
+        assert attrs["mac_address"] == wiim_speaker.mac_address
+        assert attrs["music_assistant_compatible"] is True
+        assert attrs["integration_purpose"] == "individual_speaker_control"
+
+        # Group info should still be available from speaker properties
+        assert "group_role" in attrs
+        assert "is_group_coordinator" in attrs
 
     def test_available_property(self, media_player, wiim_speaker):
         """Test availability property delegation."""

@@ -62,7 +62,20 @@ class DeviceAPI:  # mixin – must appear *before* the base client in MRO
             if led_format == "arylic":
                 # Arylic devices use MCU+PAS+RAKOIT:LED commands
                 # LED:1 = on, LED:0 = off
-                await self._request(f"{API_ENDPOINT_ARYLIC_LED}{1 if enabled else 0}")  # type: ignore[attr-defined]
+                # Note: These commands are experimental based on user research
+                try:
+                    await self._request(f"{API_ENDPOINT_ARYLIC_LED}{1 if enabled else 0}")  # type: ignore[attr-defined]
+                except Exception as arylic_err:
+                    # Fallback: try standard commands in case Arylic supports them
+                    import logging
+
+                    _logger = logging.getLogger(__name__)
+                    _logger.debug("Arylic LED command failed, trying standard: %s", arylic_err)
+                    try:
+                        await self._request(f"{API_ENDPOINT_LED}{1 if enabled else 0}")  # type: ignore[attr-defined]
+                    except Exception as std_err:
+                        _logger.debug("Standard LED command also failed: %s", std_err)
+                        raise arylic_err from std_err  # Re-raise original error
             else:
                 # Standard LinkPlay LED command
                 await self._request(f"{API_ENDPOINT_LED}{1 if enabled else 0}")  # type: ignore[attr-defined]
@@ -87,7 +100,20 @@ class DeviceAPI:  # mixin – must appear *before* the base client in MRO
             if led_format == "arylic":
                 # Arylic devices use MCU+PAS+RAKOIT:LEDBRIGHTNESS commands
                 # Brightness: 0-100 percentage
-                await self._request(f"{API_ENDPOINT_ARYLIC_LED_BRIGHTNESS}{brightness}")  # type: ignore[attr-defined]
+                # Note: These commands are experimental based on user research
+                try:
+                    await self._request(f"{API_ENDPOINT_ARYLIC_LED_BRIGHTNESS}{brightness}")  # type: ignore[attr-defined]
+                except Exception as arylic_err:
+                    # Fallback: try standard commands in case Arylic supports them
+                    import logging
+
+                    _logger = logging.getLogger(__name__)
+                    _logger.debug("Arylic LED brightness command failed, trying standard: %s", arylic_err)
+                    try:
+                        await self._request(f"{API_ENDPOINT_LED_BRIGHTNESS}{brightness}")  # type: ignore[attr-defined]
+                    except Exception as std_err:
+                        _logger.debug("Standard LED brightness command also failed: %s", std_err)
+                        raise arylic_err from std_err  # Re-raise original error
             else:
                 # Standard LinkPlay brightness command
                 await self._request(f"{API_ENDPOINT_LED_BRIGHTNESS}{brightness}")  # type: ignore[attr-defined]

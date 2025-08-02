@@ -652,9 +652,7 @@ class WiiMMediaPlayer(
             self._optimistic_group_state = None
 
         if self._optimistic_group_members is not None and real_group_members == self._optimistic_group_members:
-            _LOGGER.debug(
-                "Real group members match optimistic members, clearing optimistic group members"
-            )
+            _LOGGER.debug("Real group members match optimistic members, clearing optimistic group members")
             self._optimistic_group_members = None
 
         # Call parent to handle normal coordinator entity lifecycle
@@ -679,25 +677,28 @@ class WiiMMediaPlayer(
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes for diagnostics."""
-        if not self.speaker.coordinator.data:
-            return {}
-
+        """Return entity specific state attributes."""
         attrs = {
-            "speaker_uuid": self.speaker.uuid,
-            "speaker_role": self.group_state,  # Use optimistic group state
-            "coordinator_ip": self.speaker.ip_address,
-            "group_members_count": len(self.group_members),  # Use optimistic group members
+            "device_model": self.speaker.model,
+            "firmware_version": self.speaker.firmware,
+            "ip_address": self.speaker.ip_address,
+            "mac_address": self.speaker.mac_address,
+            "group_role": self.speaker.role,
+            "is_group_coordinator": self.speaker.is_group_coordinator,
+            # Music Assistant compatibility attributes
+            "music_assistant_compatible": True,
+            "integration_purpose": "individual_speaker_control",
         }
 
-        # Add smart polling diagnostics
-        polling_info = self.speaker.coordinator.data.get("polling", {})
-        if polling_info:
-            attrs.update(
-                {
-                    "activity_level": polling_info.get("activity_level", "unknown"),
-                    "polling_interval": polling_info.get("interval", 5.0),
-                }
-            )
+        # Add group info if in a group
+        if self.speaker.role in ["master", "slave"]:
+            attrs["group_members"] = self.group_members
+            attrs["group_state"] = self.group_state
+            if self.speaker.coordinator_speaker:
+                attrs["group_coordinator"] = self.speaker.coordinator_speaker.name
+
+        # Add playback info
+        if self.state == MediaPlayerState.PLAYING:
+            attrs["playback_progress"] = f"{self.media_position or 0}/{self.media_duration or 0}"
 
         return attrs
