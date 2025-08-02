@@ -137,6 +137,17 @@ media_content_id: "http://tunein.com/station"
 
 Use [Radio Browser](https://www.radio-browser.info) to find stream URLs.
 
+### Why does the stop button behave differently with Bluetooth?
+
+**Bluetooth sources** have limited playback control compared to network sources:
+
+- **Network sources** (WiFi, AirPlay, streaming): Support both pause and stop
+- **Bluetooth sources**: Only support pause (not stop)
+
+The integration automatically handles this by using pause instead of stop when Bluetooth is the active source. This ensures the stop button always works, regardless of the input source.
+
+**Note**: This is a device limitation, not an integration issue. The behavior is consistent across all WiiM devices.
+
 ## Control Questions
 
 ### Why do some buttons not work?
