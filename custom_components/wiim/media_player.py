@@ -125,6 +125,8 @@ class WiiMMediaPlayer(
         self._optimistic_source: str | None = None
         self._optimistic_shuffle: bool | None = None
         self._optimistic_repeat: str | None = None
+        self._optimistic_group_state: str | None = None
+        self._optimistic_group_members: list[str] | None = None
 
         # Timestamps for optimistic state timeout (10 seconds)
         self._optimistic_state_timestamp: float | None = None
@@ -494,7 +496,18 @@ class WiiMMediaPlayer(
     @property
     def group_members(self) -> list[str]:
         """List of group member entity IDs."""
+        # Use optimistic state if available, otherwise use real state
+        if self._optimistic_group_members is not None:
+            return self._optimistic_group_members
         return self.controller.get_group_members()
+
+    @property
+    def group_state(self) -> str:
+        """Current group state (solo, master, slave)."""
+        # Use optimistic state if available, otherwise use real state
+        if self._optimistic_group_state is not None:
+            return self._optimistic_group_state
+        return self.speaker.role
 
     # ===== OPTIMISTIC STATE MANAGEMENT =====
 
@@ -510,6 +523,8 @@ class WiiMMediaPlayer(
         self._optimistic_shuffle = None
         self._optimistic_repeat = None
         self._optimistic_media_title = None
+        self._optimistic_group_state = None
+        self._optimistic_group_members = None
 
     async def _async_execute_command_with_immediate_refresh(self, command_name: str) -> None:
         """Execute command with immediate polling for fast UI updates.
@@ -625,6 +640,23 @@ class WiiMMediaPlayer(
         if self._optimistic_media_title is not None:
             self._optimistic_media_title = None
 
+        # Clear optimistic group state when real data matches
+        real_group_state = self.speaker.role
+        real_group_members = self.controller.get_group_members()
+
+        if self._optimistic_group_state is not None and real_group_state == self._optimistic_group_state:
+            _LOGGER.debug(
+                "Real group state matches optimistic state (%s), clearing optimistic group state",
+                real_group_state,
+            )
+            self._optimistic_group_state = None
+
+        if self._optimistic_group_members is not None and real_group_members == self._optimistic_group_members:
+            _LOGGER.debug(
+                "Real group members match optimistic members, clearing optimistic group members"
+            )
+            self._optimistic_group_members = None
+
         # Call parent to handle normal coordinator entity lifecycle
         super()._handle_coordinator_update()
 
@@ -653,9 +685,9 @@ class WiiMMediaPlayer(
 
         attrs = {
             "speaker_uuid": self.speaker.uuid,
-            "speaker_role": self.speaker.role,
+            "speaker_role": self.group_state,  # Use optimistic group state
             "coordinator_ip": self.speaker.ip_address,
-            "group_members_count": len(self.speaker.group_members),
+            "group_members_count": len(self.group_members),  # Use optimistic group members
         }
 
         # Add smart polling diagnostics

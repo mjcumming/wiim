@@ -20,6 +20,8 @@ __all__ = [
     "detect_device_capabilities",
     "is_wiim_device",
     "is_legacy_device",
+    "supports_standard_led_control",
+    "get_led_command_format",
 ]
 
 
@@ -54,6 +56,8 @@ class WiiMFirmwareCapabilities:
             "supports_getslavelist": True,
             "supports_enhanced_grouping": False,
             "supports_metadata": True,
+            "supports_led_control": True,  # Assume yes, will be probed
+            "led_command_format": "standard",  # Default format
             "response_timeout": 5.0,  # Default timeout
             "retry_count": 3,
             "is_legacy_device": False,
@@ -63,6 +67,10 @@ class WiiMFirmwareCapabilities:
         # Detect device type
         capabilities["is_wiim_device"] = is_wiim_device(device_info)
         capabilities["is_legacy_device"] = is_legacy_device(device_info)
+
+        # Detect LED support
+        capabilities["supports_led_control"] = supports_standard_led_control(device_info)
+        capabilities["led_command_format"] = get_led_command_format(device_info)
 
         # Set capabilities based on device type
         if capabilities["is_wiim_device"]:
@@ -204,6 +212,53 @@ def is_legacy_device(device_info: DeviceInfo) -> bool:
     ]
 
     return any(legacy_model in model_lower for legacy_model in legacy_models)
+
+
+def supports_standard_led_control(device_info: DeviceInfo) -> bool:
+    """Check if device supports standard LinkPlay LED commands.
+
+    Args:
+        device_info: Device information
+
+    Returns:
+        True if device supports standard LED commands
+    """
+    if not device_info.model:
+        return True  # Assume yes for unknown devices
+
+    model_lower = device_info.model.lower()
+
+    # Devices known to NOT support standard LED commands
+    non_standard_led_devices = [
+        "arylic",
+        "up2stream",
+        "s10+",
+        "amp 2.0",
+        "amp 2.1",
+    ]
+
+    return not any(device_type in model_lower for device_type in non_standard_led_devices)
+
+
+def get_led_command_format(device_info: DeviceInfo) -> str:
+    """Get the LED command format for a specific device type.
+
+    Args:
+        device_info: Device information
+
+    Returns:
+        LED command format: "standard" or "arylic"
+    """
+    if not device_info.model:
+        return "standard"  # Default to standard for unknown devices
+
+    model_lower = device_info.model.lower()
+
+    # Arylic devices use different LED commands
+    if any(arylic_type in model_lower for arylic_type in ["arylic", "up2stream"]):
+        return "arylic"
+
+    return "standard"
 
 
 def get_optimal_polling_interval(capabilities: dict[str, Any], role: str, is_playing: bool) -> int:

@@ -9,12 +9,15 @@ from __future__ import annotations
 from typing import Any
 
 from .const import (
+    API_ENDPOINT_ARYLIC_LED,
+    API_ENDPOINT_ARYLIC_LED_BRIGHTNESS,
     API_ENDPOINT_FIRMWARE,
     API_ENDPOINT_LED,
     API_ENDPOINT_LED_BRIGHTNESS,
     API_ENDPOINT_MAC,
     API_ENDPOINT_STATUS,
 )
+from .firmware_capabilities import get_led_command_format
 from .models import DeviceInfo
 
 
@@ -50,11 +53,48 @@ class DeviceAPI:  # mixin – must appear *before* the base client in MRO
     # ------------------------------------------------------------------
 
     async def set_led(self, enabled: bool) -> None:  # type: ignore[override]
-        """Enable or disable the front LED."""
-        await self._request(f"{API_ENDPOINT_LED}{1 if enabled else 0}")  # type: ignore[attr-defined]
+        """Enable or disable the front LED with device-specific commands."""
+        try:
+            # Get device info to determine LED command format
+            device_info = await self.get_device_info_model()
+            led_format = get_led_command_format(device_info)
+
+            if led_format == "arylic":
+                # Arylic devices use MCU+PAS+RAKOIT:LED commands
+                # LED:1 = on, LED:0 = off
+                await self._request(f"{API_ENDPOINT_ARYLIC_LED}{1 if enabled else 0}")  # type: ignore[attr-defined]
+            else:
+                # Standard LinkPlay LED command
+                await self._request(f"{API_ENDPOINT_LED}{1 if enabled else 0}")  # type: ignore[attr-defined]
+
+        except Exception as err:
+            # Log but don't fail - LED control is optional
+            import logging
+
+            _logger = logging.getLogger(__name__)
+            _logger.debug("LED control not supported or failed for device: %s", err)
 
     async def set_led_brightness(self, brightness: int) -> None:  # type: ignore[override]
-        """Set LED brightness (0–100)."""
+        """Set LED brightness (0–100) with device-specific commands."""
         if not 0 <= brightness <= 100:
             raise ValueError("Brightness must be between 0 and 100")
-        await self._request(f"{API_ENDPOINT_LED_BRIGHTNESS}{brightness}")  # type: ignore[attr-defined]
+
+        try:
+            # Get device info to determine LED command format
+            device_info = await self.get_device_info_model()
+            led_format = get_led_command_format(device_info)
+
+            if led_format == "arylic":
+                # Arylic devices use MCU+PAS+RAKOIT:LEDBRIGHTNESS commands
+                # Brightness: 0-100 percentage
+                await self._request(f"{API_ENDPOINT_ARYLIC_LED_BRIGHTNESS}{brightness}")  # type: ignore[attr-defined]
+            else:
+                # Standard LinkPlay brightness command
+                await self._request(f"{API_ENDPOINT_LED_BRIGHTNESS}{brightness}")  # type: ignore[attr-defined]
+
+        except Exception as err:
+            # Log but don't fail - LED control is optional
+            import logging
+
+            _logger = logging.getLogger(__name__)
+            _logger.debug("LED brightness control not supported or failed for device: %s", err)

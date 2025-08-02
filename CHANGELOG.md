@@ -2,6 +2,17 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [1.0.15] - 2024-12-19
+
+### Fixed
+- **Group State UI Updates**: Added optimistic UI updates for group join/ungroup operations
+- **Ungroup Responsiveness**: Immediate UI feedback when ungrouping speakers
+- **Group State Synchronization**: Faster group state changes in mixed device setups
+
+### Added
+- **Optimistic Group State**: Immediate UI updates for group operations
+- **Group State Properties**: Enhanced group state tracking and display
+
 ## [1.0.14] - 2024-12-19
 
 ### Fixed
