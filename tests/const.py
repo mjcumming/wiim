@@ -1,9 +1,7 @@
 """Constants for WiiM tests."""
 
-from custom_components.wiim.const import CONF_HOST
-from custom_components.wiim.models import DeviceInfo, PlayerStatus
-
-MOCK_CONFIG = {CONF_HOST: "192.168.1.100"}
+# Define constants locally to avoid import issues in test environment
+CONF_HOST = "host"
 
 # Mock device data for testing
 _RAW_DEVICE_INFO = {
@@ -35,10 +33,9 @@ _RAW_STATUS = {
     "DeviceName": "WiiM Mini",
 }
 
-# Expose typed model instances for tests
-MOCK_DEVICE_MODEL: DeviceInfo = DeviceInfo.model_validate(_RAW_DEVICE_INFO)
-MOCK_STATUS_MODEL: PlayerStatus = PlayerStatus.model_validate(_RAW_STATUS)
-
-# Keep raw dicts for fixtures that still need them temporarily
+# Create mock data structures for tests
 MOCK_DEVICE_DATA = _RAW_DEVICE_INFO
 MOCK_STATUS_RESPONSE = _RAW_STATUS
+
+# Mock config for testing
+MOCK_CONFIG = {CONF_HOST: "192.168.1.100"}

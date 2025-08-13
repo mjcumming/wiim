@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.components.media_player import MediaPlayerEntity
 from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature,
@@ -14,7 +15,7 @@ from homeassistant.components.media_player.const import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback, async_get_current_platform
 
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
@@ -91,6 +92,65 @@ async def async_setup_entry(
 
     async_add_entities(entities)
     _LOGGER.info("Created media player entities for %s including group coordinator", speaker.name)
+
+    # Register WiiM custom services
+    platform = async_get_current_platform()
+
+    # Play Preset service
+    platform.async_register_entity_service(
+        "play_preset",
+        {vol.Required("preset"): vol.All(vol.Coerce(int), vol.Range(min=1, max=20))},
+        "async_play_preset",
+    )
+
+    # Play URL service
+    platform.async_register_entity_service(
+        "play_url",
+        {vol.Required("url"): str},
+        "async_play_url",
+    )
+
+    # Play Playlist service
+    platform.async_register_entity_service(
+        "play_playlist",
+        {vol.Required("playlist_url"): str},
+        "async_play_playlist",
+    )
+
+    # Set EQ service
+    platform.async_register_entity_service(
+        "set_eq",
+        {
+            vol.Required("preset"): vol.In(
+                ["flat", "classical", "jazz", "vocal", "pop", "rock", "dance", "country", "blues", "custom"]
+            ),
+            vol.Optional("custom_values"): vol.All(
+                vol.Coerce(list), vol.Length(min=10, max=10), [vol.All(vol.Coerce(float), vol.Range(min=-12, max=12))]
+            ),
+        },
+        "async_set_eq",
+    )
+
+    # Play Notification service
+    platform.async_register_entity_service(
+        "play_notification",
+        {vol.Required("url"): str},
+        "async_play_notification",
+    )
+
+    # Reboot Device service
+    platform.async_register_entity_service(
+        "reboot_device",
+        None,
+        "async_reboot_device",
+    )
+
+    # Sync Time service
+    platform.async_register_entity_service(
+        "sync_time",
+        None,
+        "async_sync_time",
+    )
 
 
 class WiiMMediaPlayer(
@@ -667,6 +727,68 @@ class WiiMMediaPlayer(
     # ===== GROUP COMMANDS (provided by GroupCommandsMixin) =====
 
     # ===== MEDIA COMMANDS (provided by MediaCommandsMixin) =====
+
+    # ===== ADDITIONAL WIIM SERVICES =====
+
+    async def async_play_playlist(self, playlist_url: str) -> None:
+        """Play an M3U playlist."""
+        try:
+            # Use the API client directly for playlist playback
+            await self.speaker.coordinator.client._request(f"/httpapi.asp?command=setPlayerCmd:playlist:{playlist_url}")
+        except Exception as err:
+            _LOGGER.error("Failed to play playlist for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_set_eq(self, preset: str, custom_values: list[float] | None = None) -> None:
+        """Set equalizer preset or custom values."""
+        controller: MediaPlayerController = self.controller
+
+        try:
+            if preset == "custom" and custom_values is not None:
+                # For custom EQ, we need to use the API client directly
+                # since the controller doesn't have set_eq_custom
+                if len(custom_values) != 10:
+                    raise ValueError("Custom EQ values must be exactly 10 bands")
+                for value in custom_values:
+                    if not -12 <= value <= 12:
+                        raise ValueError("EQ values must be between -12 and +12 dB")
+
+                # Use the API client directly for custom EQ
+                await self.speaker.coordinator.client.set_eq_custom(custom_values)
+            else:
+                # Use the existing controller method for presets
+                await controller.set_eq_preset(preset)
+
+        except Exception as err:
+            _LOGGER.error("Failed to set EQ for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_play_notification(self, url: str) -> None:
+        """Play a notification sound."""
+        try:
+            # Use the existing play_url method for notifications
+            await self.async_play_url(url)
+        except Exception as err:
+            _LOGGER.error("Failed to play notification for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_reboot_device(self) -> None:
+        """Reboot the WiiM device."""
+        try:
+            # Use the API client directly for reboot
+            await self.speaker.coordinator.client.reboot()
+        except Exception as err:
+            _LOGGER.error("Failed to reboot device %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_sync_time(self) -> None:
+        """Synchronize device time with Home Assistant."""
+        try:
+            # Use the API client directly for time sync
+            await self.speaker.coordinator.client.sync_time()
+        except Exception as err:
+            _LOGGER.error("Failed to sync time for %s: %s", self.speaker.name, err)
+            raise
 
     # ===== APP NAME PROPERTY (delegate to mixin) =====
 
