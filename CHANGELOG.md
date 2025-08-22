@@ -2,7 +2,38 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
-## [1.0.14] - 2024-12-19
+## [0.1.16]
+
+### Fixed
+
+- **Service Registration**: Fixed missing WiiM custom services not appearing in Home Assistant automations
+  - `wiim.play_preset` - Play hardware presets (1-20)
+  - `wiim.play_url` - Play from URL (radio streams, files)
+  - `wiim.play_playlist` - Play M3U playlists
+  - `wiim.set_eq` - Configure equalizer (presets or custom 10-band)
+  - `wiim.play_notification` - Play notification sounds
+  - `wiim.reboot_device` - Restart the WiiM device
+  - `wiim.sync_time` - Synchronize device time
+
+### Technical
+
+- **Service Implementation**: Added proper service registration in media player platform setup
+- **Test Environment**: Fixed test import issues and improved test coverage
+
+## [1.0.15]
+
+### Fixed
+
+- **Group State UI Updates**: Added optimistic UI updates for group join/ungroup operations
+- **Ungroup Responsiveness**: Immediate UI feedback when ungrouping speakers
+- **Group State Synchronization**: Faster group state changes in mixed device setups
+
+### Added
+
+- **Optimistic Group State**: Immediate UI updates for group operations
+- **Group State Properties**: Enhanced group state tracking and display
+
+## [1.0.14]
 
 ### Fixed
 

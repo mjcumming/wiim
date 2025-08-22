@@ -356,23 +356,19 @@ def test_extra_state_attributes_available(group_media_player, mock_speaker):
 
         attrs = group_media_player.extra_state_attributes
 
-        assert attrs["coordinator"] == "Living Room"
+        # Check new simplified format
+        assert attrs["group_leader"] == "Living Room"
+        assert attrs["group_role"] == "coordinator"
+        assert attrs["is_group_coordinator"] is True
+        assert attrs["music_assistant_excluded"] is True
+        assert attrs["integration_purpose"] == "home_assistant_multiroom_only"
         assert attrs["group_size"] == 2
+        assert attrs["group_status"] == "active"
+
+        # Check group members list (entity IDs)
         assert len(attrs["group_members"]) == 2
-
-        # Check coordinator info
-        coordinator_info = attrs["group_members"][0]
-        assert coordinator_info["name"] == "Living Room"
-        assert coordinator_info["role"] == "coordinator"
-        assert coordinator_info["volume_level"] == 0.5
-        assert coordinator_info["is_volume_muted"] is False
-
-        # Check member info
-        member_info = attrs["group_members"][1]
-        assert member_info["name"] == "Kitchen"
-        assert member_info["role"] == "member"
-        assert member_info["volume_level"] == 0.3
-        assert member_info["is_volume_muted"] is False
+        assert "media_player.living_room" in attrs["group_members"]
+        assert "media_player.kitchen" in attrs["group_members"]
 
 
 def test_extra_state_attributes_unavailable(group_media_player, mock_speaker):
@@ -381,8 +377,14 @@ def test_extra_state_attributes_unavailable(group_media_player, mock_speaker):
     mock_speaker.group_members = []
 
     attrs = group_media_player.extra_state_attributes
-    assert attrs["group_members"] == []
-    assert attrs["group_coordinator"] is None
+    # Coordinator is always included in group_members, even when unavailable
+    assert attrs["group_members"] == ["media_player.living_room"]
+    assert attrs["group_leader"] == "Living Room"
+    assert attrs["group_role"] == "coordinator"
+    assert attrs["is_group_coordinator"] is True
+    assert attrs["music_assistant_excluded"] is True
+    assert attrs["integration_purpose"] == "home_assistant_multiroom_only"
+    assert attrs["group_status"] == "inactive"
 
 
 @pytest.mark.asyncio
