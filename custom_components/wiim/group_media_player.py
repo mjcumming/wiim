@@ -356,51 +356,52 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return entity specific state attributes with group member info."""
-        if not self.available:
-            return {"group_members": [], "group_coordinator": None}
-
+        """Return entity specific state attributes."""
         attrs = {
-            "group_members": [],
-            "coordinator": self.speaker.name,
-            "coordinator_entity_id": self._get_speaker_entity_id(self.speaker),
-            "group_size": len(self.speaker.group_members) + 1,  # +1 for coordinator
+            "group_members": self.get_group_member_entity_ids(),
+            "group_leader": self.speaker.name,
+            "group_role": "coordinator",
+            "is_group_coordinator": True,
+            # Explicitly mark as not suitable for Music Assistant
+            "music_assistant_excluded": True,
+            "integration_purpose": "home_assistant_multiroom_only",
         }
 
-        # Add coordinator info first
-        attrs["group_members"].append(
-            {
-                "name": self.speaker.name,
-                "entity_id": self._get_speaker_entity_id(self.speaker),
-                "volume_level": self.speaker.get_volume_level(),
-                "is_volume_muted": self.speaker.is_volume_muted(),
-                "role": "coordinator",
-            }
-        )
-
-        # Add member info
-        for member in self.speaker.group_members:
-            attrs["group_members"].append(
-                {
-                    "name": member.name,
-                    "entity_id": self._get_speaker_entity_id(member),
-                    "volume_level": member.get_volume_level(),
-                    "is_volume_muted": member.is_volume_muted(),
-                    "role": "member",
-                }
-            )
+        # Add group composition info
+        if self.available:
+            member_count = len(self.speaker.group_members)
+            attrs["group_size"] = member_count + 1  # +1 for coordinator
+            attrs["group_status"] = "active"
+        else:
+            attrs["group_status"] = "inactive"
 
         return attrs
 
     # ===== HELPER METHODS =====
 
     def _get_speaker_entity_id(self, speaker: Speaker) -> str | None:
-        """Get the entity ID for a speaker using entity registry lookup."""
-        from homeassistant.helpers import entity_registry as er
+        """Get the entity ID for a speaker."""
+        try:
+            return f"media_player.{speaker.name.lower().replace(' ', '_')}"
+        except Exception:
+            return None
 
-        ent_reg = er.async_get(self.hass)
-        entity_id = ent_reg.async_get_entity_id("media_player", DOMAIN, speaker.uuid)
-        return entity_id
+    def get_group_member_entity_ids(self) -> list[str]:
+        """Get list of entity IDs for group members."""
+        entity_ids = []
+
+        # Add coordinator entity ID
+        coordinator_id = self._get_speaker_entity_id(self.speaker)
+        if coordinator_id:
+            entity_ids.append(coordinator_id)
+
+        # Add member entity IDs
+        for member in self.speaker.group_members:
+            member_id = self._get_speaker_entity_id(member)
+            if member_id:
+                entity_ids.append(member_id)
+
+        return entity_ids
 
     async def _set_speaker_volume(self, speaker: Speaker, volume: float, role: str) -> None:
         """Set volume for a specific speaker with error handling."""

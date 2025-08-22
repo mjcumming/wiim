@@ -411,27 +411,54 @@ class GroupCommandsMixin:
         self.hass.async_create_task(self.async_unjoin())  # type: ignore[attr-defined]
 
     async def async_join(self, group_members: list[str]) -> None:
-        """Join speakers into a group."""
+        """Join speakers into a group with optimistic UI update."""
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
+        # 1. Optimistic UI update for immediate feedback
+        if group_members:
+            # Joining as master with slaves
+            self._optimistic_group_state = "master"  # type: ignore[attr-defined]
+            self._optimistic_group_members = group_members  # type: ignore[attr-defined]
+        else:
+            # Joining as slave (no members means joining existing group)
+            self._optimistic_group_state = "slave"  # type: ignore[attr-defined]
+            self._optimistic_group_members = []  # type: ignore[attr-defined]
+
+        self.async_write_ha_state()  # type: ignore[attr-defined]
+
         try:
+            # 2. Send command to device
             await controller.join_group(group_members)
 
-            # Let adaptive polling handle sync (no immediate refresh needed)
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_group_state = None  # type: ignore[attr-defined]
+            self._optimistic_group_members = None  # type: ignore[attr-defined]
+            self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
 
     async def async_unjoin(self) -> None:
-        """Remove this speaker from any group."""
+        """Remove this speaker from any group with optimistic UI update."""
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
+        # 1. Optimistic UI update for immediate feedback
+        self._optimistic_group_state = "solo"  # type: ignore[attr-defined]
+        self._optimistic_group_members = []  # type: ignore[attr-defined]
+        self.async_write_ha_state()  # type: ignore[attr-defined]
+
         try:
+            # 2. Send command to device
             await controller.leave_group()
 
-            # Let adaptive polling handle sync (no immediate refresh needed)
+            # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
         except Exception:
+            # Clear optimistic state on error so real state shows
+            self._optimistic_group_state = None  # type: ignore[attr-defined]
+            self._optimistic_group_members = None  # type: ignore[attr-defined]
+            self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
 
     async def async_unjoin_player(self) -> None:
