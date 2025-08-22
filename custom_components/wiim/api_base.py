@@ -374,14 +374,21 @@ class WiiMClient:
             return {}
 
     async def get_player_status(self) -> dict[str, Any]:
-        """Return parsed output of *getPlayerStatusEx*."""
+        """Return parsed output of *getPlayerStatusEx* with better error handling."""
         try:
             raw = await self._request("/httpapi.asp?command=getPlayerStatusEx")
             parsed, self._last_track = parse_player_status(raw, self._last_track)
             return parsed
-        except WiiMError as err:
-            _LOGGER.error("get_player_status failed: %s", err)
-            return {}
+        except Exception as err:
+            # Log specific error types for debugging
+            error_str = str(err).lower()
+            if "404" in error_str:
+                _LOGGER.debug("getPlayerStatusEx not supported by device at %s", self.host)
+            elif "timeout" in error_str:
+                _LOGGER.debug("Timeout getting player status from %s", self.host)
+            else:
+                _LOGGER.debug("get_player_status failed: %s", err)
+            raise
 
     # ------------------------------------------------------------------
     # Typed wrappers (Pydantic) ----------------------------------------

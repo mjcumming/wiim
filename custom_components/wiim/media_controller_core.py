@@ -252,6 +252,14 @@ class MediaControllerCoreMixin:
         try:
             self._logger.debug("Stopping playback for %s", self.speaker.name)
 
+            # Check if current source is Bluetooth - use pause instead of stop
+            current_source = self.speaker.get_current_source()
+            if current_source and current_source.lower() in ["bluetooth", "bt"]:
+                self._logger.debug("Bluetooth source detected - using pause instead of stop for %s", self.speaker.name)
+                # Use pause for Bluetooth sources since stop is not supported
+                await self.pause()
+                return
+
             # Implement master/slave logic - slaves should control master
             if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
                 self._logger.debug("Slave speaker redirecting stop to master")

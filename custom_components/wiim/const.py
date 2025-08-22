@@ -33,7 +33,7 @@ DOMAIN = "wiim"
 
 # Integration metadata
 NAME = "WiiM"
-VERSION = "1.0.14"
+VERSION = "0.1.16"
 ATTRIBUTION = "Integration created by Michael Cumming @mjcumming"
 
 # Config keys
@@ -142,6 +142,13 @@ API_ENDPOINT_MAC = "/httpapi.asp?command=getMAC"
 # LED Control
 API_ENDPOINT_LED = "/httpapi.asp?command=setLED:"
 API_ENDPOINT_LED_BRIGHTNESS = "/httpapi.asp?command=setLEDBrightness:"
+
+# Arylic-specific LED commands (experimental - based on user research)
+# User reported: UART command "MCU+PAS+RAKOIT:LED:0" works
+# TCP API commands below are experimental and may need adjustment
+# Documentation: https://github.com/mjcumming/wiim/issues/55
+API_ENDPOINT_ARYLIC_LED = "/httpapi.asp?command=MCU+PAS+RAKOIT:LED:"
+API_ENDPOINT_ARYLIC_LED_BRIGHTNESS = "/httpapi.asp?command=MCU+PAS+RAKOIT:LEDBRIGHTNESS:"
 
 # Play Modes
 PLAY_MODE_NORMAL = "normal"
