@@ -157,7 +157,12 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def media_position_updated_at(self) -> float | None:
         """Last time media position was updated."""
-        return self.speaker.get_media_position_updated_at() if self.available else None
+        # Always return a valid timestamp to prevent Music Assistant issues
+        import time
+
+        if self.available:
+            return self.speaker.get_media_position_updated_at()
+        return time.time()
 
     @property
     def media_image_url(self) -> str | None:
@@ -429,7 +434,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         if hasattr(self, "_last_available") and self._last_available != current_available:
             if current_available:
                 _LOGGER.info(
-                    "Group coordinator %s became available with %d members", self.name, len(self.speaker.group_members)
+                    "Group coordinator %s became available with %d members",
+                    self.name,
+                    len(self.speaker.group_members),
                 )
             else:
                 _LOGGER.info("Group coordinator %s became unavailable", self.speaker.name)
@@ -442,7 +449,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             if current_available:  # Only log when active
                 member_names = [m.name for m in self.speaker.group_members]
                 _LOGGER.info(
-                    "Group composition changed for %s: coordinator + %s", self.speaker.name, ", ".join(member_names)
+                    "Group composition changed for %s: coordinator + %s",
+                    self.speaker.name,
+                    ", ".join(member_names),
                 )
 
         super().async_write_ha_state()

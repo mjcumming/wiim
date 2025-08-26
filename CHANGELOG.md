@@ -2,6 +2,39 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.18] - 2025-01-27
+
+### Fixed
+
+- **Reboot Device Service**: Fixed critical issue preventing WiiM device restart from Home Assistant
+  - Resolved "Failed to perform the action wiim.reboot_device. Unknown error" error
+  - Fixed JSON parsing error "Expecting value: line 1 column 1 (char 0)" when device doesn't respond after reboot command
+  - Added global service support for `wiim.reboot_device` and `wiim.sync_time`
+  - Service now works both as global service (`wiim.reboot_device`) and entity service (`media_player.reboot_device`)
+
+### Technical
+
+- **Service Registration**: Added global service registration using `async_register_admin_service`
+- **Response Handling**: Enhanced API client to gracefully handle empty responses and parsing errors from reboot commands
+- **Error Recovery**: Improved error handling for commands that don't return proper responses (like reboot)
+- **Service Documentation**: Updated services.yaml to include required entity_id field for global services
+
+## [0.1.17] - 2024-08-22
+
+### Fixed
+
+- **Music Assistant Integration**: Fixed critical issue preventing multiple WiiM devices from registering with Music Assistant
+  - Resolved `TypeError: fromisoformat: argument must be str` error in Music Assistant
+  - All WiiM devices now properly register with Music Assistant instead of just the first one
+  - Improved timestamp handling to ensure `media_position_updated_at` always returns valid values
+
+### Technical
+
+- **Timestamp Validation**: Enhanced `get_media_position_updated_at()` method to always return valid timestamps
+- **Position Validation**: Added robust validation for media position values to prevent edge case errors
+- **Code Quality**: Updated to modern Python syntax (`isinstance` with union types)
+- **Error Prevention**: Added safeguards to prevent `None` values from causing
+
 ## [0.1.16]
 
 ### Fixed
