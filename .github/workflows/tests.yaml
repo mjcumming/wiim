@@ -19,7 +19,7 @@ jobs:
         python-version: ["3.13"]
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Validate standalone integration structure with Home Assistant hassfest action
       - name: Validate with hassfest
