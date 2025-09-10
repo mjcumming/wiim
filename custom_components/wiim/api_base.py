@@ -229,9 +229,34 @@ class WiiMClient:
                     async with self._session.request(method, url, **kwargs) as resp:
                         resp.raise_for_status()
                         text = await resp.text()
+
+                        # Handle empty responses gracefully
+                        if not text or text.strip() == "":
+                            # For certain commands like reboot, empty response is expected
+                            if "reboot" in endpoint.lower():
+                                _LOGGER.debug("Reboot command sent successfully (empty response expected)")
+                                return {"raw": "OK"}
+                            else:
+                                _LOGGER.debug("Empty response from device for %s", endpoint)
+                                return {"raw": ""}
+
                         if text.strip() == "OK":
                             return {"raw": "OK"}
-                        return json.loads(text)
+
+                        # Try to parse JSON, but handle parsing errors gracefully
+                        try:
+                            return json.loads(text)
+                        except json.JSONDecodeError as json_err:
+                            # For certain commands, parsing errors are expected
+                            if "reboot" in endpoint.lower():
+                                _LOGGER.debug("Reboot command sent successfully (parsing error expected): %s", json_err)
+                                return {"raw": "OK"}
+                            else:
+                                # Re-raise for other commands
+                                raise WiiMConnectionError(
+                                    f"Invalid JSON response from {self._endpoint}{endpoint}: {json_err}"
+                                ) from json_err
+
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Established endpoint %s failed: %s", self._endpoint, err)
                 # Don't immediately fall back to full probe - this could be a temporary network issue
@@ -283,12 +308,42 @@ class WiiMClient:
                     async with self._session.request(method, url, **kwargs) as resp:
                         resp.raise_for_status()
                         text = await resp.text()
+
+                        # Handle empty responses gracefully
+                        if not text or text.strip() == "":
+                            # For certain commands like reboot, empty response is expected
+                            if "reboot" in endpoint.lower():
+                                _LOGGER.debug("Reboot command sent successfully (empty response expected)")
+                                # SUCCESS: Lock in this protocol/port combination
+                                self._endpoint = f"{scheme}://{host_for_url}:{port}"
+                                _LOGGER.debug("Established endpoint for %s: %s", self._host, self._endpoint)
+                                return {"raw": "OK"}
+                            else:
+                                _LOGGER.debug("Empty response from device for %s", endpoint)
+                                # SUCCESS: Lock in this protocol/port combination
+                                self._endpoint = f"{scheme}://{host_for_url}:{port}"
+                                _LOGGER.debug("Established endpoint for %s: %s", self._host, self._endpoint)
+                                return {"raw": ""}
+
                         # SUCCESS: Lock in this protocol/port combination
                         self._endpoint = f"{scheme}://{host_for_url}:{port}"
                         _LOGGER.debug("Established endpoint for %s: %s", self._host, self._endpoint)
+
                         if text.strip() == "OK":
                             return {"raw": "OK"}
-                        return json.loads(text)
+
+                        # Try to parse JSON, but handle parsing errors gracefully
+                        try:
+                            return json.loads(text)
+                        except json.JSONDecodeError as json_err:
+                            # For certain commands, parsing errors are expected
+                            if "reboot" in endpoint.lower():
+                                _LOGGER.debug("Reboot command sent successfully (parsing error expected): %s", json_err)
+                                return {"raw": "OK"}
+                            else:
+                                # Re-raise for other commands
+                                raise WiiMConnectionError(f"Invalid JSON response from {url}: {json_err}") from json_err
+
             except (TimeoutError, aiohttp.ClientError, json.JSONDecodeError) as err:
                 last_error = err
                 continue

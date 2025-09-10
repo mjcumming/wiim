@@ -197,7 +197,8 @@ def test_media_properties_unavailable(group_media_player, mock_speaker):
     assert group_media_player.media_album_name is None
     assert group_media_player.media_duration is None
     assert group_media_player.media_position is None
-    assert group_media_player.media_position_updated_at is None
+    # media_position_updated_at always returns a timestamp to prevent Music Assistant issues
+    assert isinstance(group_media_player.media_position_updated_at, int | float)
     assert group_media_player.media_image_url is None
 
 

@@ -99,6 +99,15 @@ reboot_device:
     entity:
       domain: media_player
       integration: wiim
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The media player entity to reboot
+      required: true
+      selector:
+        entity:
+          domain: media_player
+          integration: wiim
 
 sync_time:
   name: Sync Time
@@ -107,3 +116,12 @@ sync_time:
     entity:
       domain: media_player
       integration: wiim
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The media player entity to sync time with
+      required: true
+      selector:
+        entity:
+          domain: media_player
+          integration: wiim
