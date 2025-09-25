@@ -1,14 +1,33 @@
 version: 2
 updates:
-  - package-ecosystem: github-actions
+  # Python dependencies
+  - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: monthly
-  - package-ecosystem: pip
-    directory: "/.github/workflows"
-    schedule:
-      interval: monthly
-  - package-ecosystem: pip
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "mjcumming"
+    # Ignore Home Assistant-specific dependencies that need manual coordination
+    ignore:
+      - dependency-name: "pytest-homeassistant-custom-component"
+        reason: "Must match HA Core Python version requirements"
+      - dependency-name: "pytest"
+        reason: "Version controlled by pytest-homeassistant-custom-component"
+      - dependency-name: "pytest-cov"
+        reason: "Version controlled by pytest-homeassistant-custom-component"
+      - dependency-name: "aiohttp"
+        reason: "Must match Home Assistant Core aiohttp version"
+    # Only allow patch-level updates for these critical packages
+    allow:
+      - dependency-type: "direct"
+        update-type: "version-update:semver-patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: monthly
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
