@@ -2,11 +2,56 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.21] - 2025-09-25
+
+### Fixed
+
+- **Group Coordinator UI Issues**: Fixed multiple group coordinator display and behavior issues
+  - Group coordinators no longer appear in join/unjoin menus (excluded GROUPING feature)
+  - Dynamic naming now always shows "Group Master" suffix for consistency
+  - Fixed Master Bedroom group coordinator visibility issues
+  - Improved role detection and immediate UI updates when group roles change
+  - Fixed slave speaker input showing "unknown" instead of "Follower" after ungrouping
+  - Enhanced role change detection with explicit state updates for immediate UI refresh
+
+### Changed
+
+- **Group Coordinator Naming**: Group coordinator entities now consistently display "Speaker Name Group Master" regardless of availability state
+- **Role Change Detection**: Added immediate UI state updates when speaker roles change (master/slave/solo transitions)
+
+## [0.1.20] - 2025-01-27
+
+### Added
+
+- **TTS Support**: Full Text-to-Speech integration support for all TTS engines
+  - Google Cloud TTS, Google Translate TTS, Amazon Polly, eSpeak, Microsoft Azure, and more
+  - Automatic detection of TTS media sources (`media-source://tts/`)
+  - Enhanced media source resolution with TTS-specific error handling
+  - Comprehensive logging for TTS content playback
+  - Optimistic UI updates for immediate TTS feedback
+
+### Fixed
+
+- **Group Join Controls**: Fixed missing group join functionality in Home Assistant media player UI
+  - Improved availability logic to ensure group join controls are visible
+  - Added debug logging to help diagnose grouping feature issues
+  - Enhanced entity state handling for better UI compatibility
+  - Fixed `media_position_updated_at` property to respect entity availability (regression from v0.1.19)
+
+### Technical
+
+- **Media Source Handling**: Enhanced `_is_tts_media_source()` method for reliable TTS detection
+- **Audio Validation**: Improved `_is_audio_media_source()` to always allow TTS content
+- **Error Handling**: TTS-specific error messages and fallback handling
+- **Test Coverage**: Comprehensive test suite for TTS functionality
+- **Availability Logic**: Refined entity availability checks for better UI feature exposure
+
 ## [0.1.19] - 2025-01-27
 
 ### Fixed
 
 - **Test Suite**: Fixed failing test `test_media_properties_unavailable` in group media player
+
   - Updated test expectation for `media_position_updated_at` to expect timestamp instead of `None` when unavailable
   - Maintains Media Assistant compatibility by always returning valid timestamps
   - Test now correctly validates the intended behavior rather than expecting incorrect behavior

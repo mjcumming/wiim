@@ -247,6 +247,7 @@ SELECTABLE_SOURCES = [
     "Line In",  # Analog input
     "Optical",  # Digital optical input
     "Coaxial",  # Digital coaxial input (if supported)
+    "HDMI",  # HDMI input (if supported)
     "ARC",  # HDMI ARC input (if supported)
     "USB",  # USB input (if supported)
     "Line In 2",  # Second analog input (if supported)
