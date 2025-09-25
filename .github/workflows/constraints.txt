@@ -8,7 +8,8 @@ pytest-cov==4.1.0
 aiohttp==3.12.15
 
 pip==25.2
-pre-commit==4.2.0
+pre-commit==4.3.0
+
 black==24.3.0
 ruff==0.12.7
 flake8==7.2.0
