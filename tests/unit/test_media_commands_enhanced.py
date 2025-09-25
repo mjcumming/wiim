@@ -147,3 +147,99 @@ async def test_play_media_unsupported_media_type_warning(mock_media_player):
 
         # Should log warning
         mock_logger.warning.assert_called_with("Unsupported media type: %s", "unsupported_type")
+
+
+# TTS Support Tests
+@pytest.mark.asyncio
+async def test_is_tts_media_source_detection(mock_media_player):
+    """Test TTS media source detection."""
+    # Test various TTS URL patterns
+    tts_urls = [
+        "media-source://tts/google_cloud?message=Hello%20World",
+        "media-source://tts/google_translate?message=Bonjour",
+        "media-source://tts/cloud?message=Test",
+        "media-source://tts/amazon_polly?message=Hi",
+        "media-source://tts/espeak?message=Hello",
+        "media-source://tts/microsoft?message=Test",
+        "media-source://tts/azure?message=Hello",
+    ]
+
+    for url in tts_urls:
+        assert mock_media_player._is_tts_media_source(url), f"Failed to detect TTS URL: {url}"
+
+    # Test non-TTS URLs
+    non_tts_urls = [
+        "media-source://local/audio.mp3",
+        "http://example.com/audio.mp3",
+        "media-source://radio/stream",
+        "",
+        None,
+    ]
+
+    for url in non_tts_urls:
+        assert not mock_media_player._is_tts_media_source(url), f"False positive TTS detection: {url}"
+
+
+@pytest.mark.asyncio
+async def test_tts_audio_source_validation(mock_media_player):
+    """Test that TTS content is always considered valid audio."""
+    from unittest.mock import Mock
+
+    # Mock TTS play item
+    tts_play_item = Mock()
+    tts_play_item.url = "media-source://tts/google_cloud?message=Hello"
+    tts_play_item.mime_type = None  # TTS might not have MIME type initially
+
+    # Should be valid even without MIME type
+    assert mock_media_player._is_audio_media_source(tts_play_item)
+
+    # Test with MIME type
+    tts_play_item.mime_type = "audio/mpeg"
+    assert mock_media_player._is_audio_media_source(tts_play_item)
+
+
+@pytest.mark.asyncio
+async def test_play_media_tts_support(mock_media_player):
+    """Test TTS media playback support - basic functionality."""
+    # Test that TTS URLs are properly detected
+    tts_url = "media-source://tts/google_cloud?message=Hello%20World"
+
+    # Verify TTS detection works
+    assert mock_media_player._is_tts_media_source(tts_url)
+
+    # Test that TTS content is always considered valid audio
+    from unittest.mock import Mock
+
+    mock_play_item = Mock()
+    mock_play_item.url = tts_url
+    mock_play_item.mime_type = None  # TTS might not have MIME type initially
+
+    assert mock_media_player._is_audio_media_source(mock_play_item)
+
+
+@pytest.mark.asyncio
+async def test_play_media_tts_detection_comprehensive(mock_media_player):
+    """Test comprehensive TTS detection across different engines."""
+    # Test various TTS engine patterns
+    tts_patterns = [
+        "media-source://tts/google_cloud?message=Hello",
+        "media-source://tts/google_translate?message=Bonjour",
+        "media-source://tts/amazon_polly?message=Hi",
+        "media-source://tts/espeak?message=Hello",
+        "media-source://tts/microsoft?message=Test",
+        "media-source://tts/azure?message=Hello",
+        "media-source://tts/cloud?message=Test",
+    ]
+
+    for pattern in tts_patterns:
+        assert mock_media_player._is_tts_media_source(pattern), f"Failed to detect TTS: {pattern}"
+
+    # Test non-TTS patterns should not be detected
+    non_tts_patterns = [
+        "media-source://local/audio.mp3",
+        "http://example.com/audio.mp3",
+        "media-source://radio/stream",
+    ]
+
+    for pattern in non_tts_patterns:
+        assert not mock_media_player._is_tts_media_source(pattern), f"False positive: {pattern}"

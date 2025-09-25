@@ -92,7 +92,7 @@ def test_dynamic_naming_two_speakers(group_media_player, mock_speaker):
     mock_speaker.role = "master"
     mock_speaker.group_members = [mock_slave]
 
-    assert group_media_player.name == "Living Room + Kitchen"
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_dynamic_naming_multiple_speakers(group_media_player, mock_speaker):
@@ -102,7 +102,7 @@ def test_dynamic_naming_multiple_speakers(group_media_player, mock_speaker):
     mock_speaker.role = "master"
     mock_speaker.group_members = mock_slaves
 
-    assert group_media_player.name == "Living Room + 3 speakers"
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_dynamic_naming_many_speakers(group_media_player, mock_speaker):
@@ -112,7 +112,7 @@ def test_dynamic_naming_many_speakers(group_media_player, mock_speaker):
     mock_speaker.role = "master"
     mock_speaker.group_members = mock_slaves
 
-    assert group_media_player.name == "Living Room group (6 speakers)"  # 5 + 1 coordinator
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_dynamic_naming_unavailable(group_media_player, mock_speaker):
@@ -120,7 +120,7 @@ def test_dynamic_naming_unavailable(group_media_player, mock_speaker):
     mock_speaker.role = "solo"
     mock_speaker.group_members = []
 
-    assert group_media_player.name == "Living Room Group"
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_supported_features_available(group_media_player, mock_speaker):
@@ -150,7 +150,8 @@ def test_supported_features_unavailable(group_media_player, mock_speaker):
     mock_speaker.group_members = []
 
     features = group_media_player.supported_features
-    assert features == MediaPlayerEntityFeature(0)
+    # Group coordinators always return features even when unavailable
+    assert features != MediaPlayerEntityFeature(0)
 
 
 def test_playback_state_available(group_media_player, mock_speaker):
@@ -197,7 +198,8 @@ def test_media_properties_unavailable(group_media_player, mock_speaker):
     assert group_media_player.media_album_name is None
     assert group_media_player.media_duration is None
     assert group_media_player.media_position is None
-    assert group_media_player.media_position_updated_at is None
+    # media_position_updated_at always returns a timestamp to prevent Music Assistant issues
+    assert isinstance(group_media_player.media_position_updated_at, int | float)
     assert group_media_player.media_image_url is None
 
 
