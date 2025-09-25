@@ -412,17 +412,33 @@ class GroupCommandsMixin:
 
     async def async_join(self, group_members: list[str]) -> None:
         """Join speakers into a group with optimistic UI update."""
+        import time
+
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
         # 1. Optimistic UI update for immediate feedback
         if group_members:
             # Joining as master with slaves
             self._optimistic_group_state = "master"  # type: ignore[attr-defined]
-            self._optimistic_group_members = group_members  # type: ignore[attr-defined]
+            # Building prediction group - merge existing members with new ones
+            curr_members = controller.get_group_members()
+
+            for member in group_members:
+                if member not in curr_members:
+                    curr_members.append(member)
+
+            self._optimistic_group_members = curr_members  # type: ignore[attr-defined]
+
+            if not self._optimistic_group_members or len(self._optimistic_group_members) == 0:
+                _LOGGER.warning("async_join_players optimistic group doesnt have any members")
+                # Default to old method
+                self._optimistic_group_members = group_members  # type: ignore[attr-defined]
         else:
             # Joining as slave (no members means joining existing group)
             self._optimistic_group_state = "slave"  # type: ignore[attr-defined]
             self._optimistic_group_members = []  # type: ignore[attr-defined]
+
+        self._optimistic_group_timestamp = time.time()  # type: ignore[attr-defined]
 
         self.async_write_ha_state()  # type: ignore[attr-defined]
 
@@ -436,6 +452,7 @@ class GroupCommandsMixin:
             # Clear optimistic state on error so real state shows
             self._optimistic_group_state = None  # type: ignore[attr-defined]
             self._optimistic_group_members = None  # type: ignore[attr-defined]
+            self._optimistic_group_timestamp = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
 
@@ -446,6 +463,7 @@ class GroupCommandsMixin:
         # 1. Optimistic UI update for immediate feedback
         self._optimistic_group_state = "solo"  # type: ignore[attr-defined]
         self._optimistic_group_members = []  # type: ignore[attr-defined]
+        self._optimistic_group_timestamp = None  # type: ignore[attr-defined]
         self.async_write_ha_state()  # type: ignore[attr-defined]
 
         try:
@@ -458,6 +476,7 @@ class GroupCommandsMixin:
             # Clear optimistic state on error so real state shows
             self._optimistic_group_state = None  # type: ignore[attr-defined]
             self._optimistic_group_members = None  # type: ignore[attr-defined]
+            self._optimistic_group_timestamp = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
 
@@ -485,6 +504,38 @@ class GroupCommandsMixin:
 class MediaCommandsMixin:
     """Mixin for media playback commands (URLs, presets, media types)."""
 
+    def _is_tts_media_source(self, media_id: str) -> bool:
+        """Check if this is a TTS-generated media source.
+
+        Args:
+            media_id: Media ID to check
+
+        Returns:
+            True if this is TTS content
+        """
+        if not media_id:
+            return False
+
+        media_id_lower = media_id.lower()
+        return (
+            media_id.startswith("media-source://tts/")
+            or "tts" in media_id_lower
+            or any(
+                engine in media_id_lower
+                for engine in [
+                    "google_cloud",
+                    "google_translate",
+                    "cloud",
+                    "amazon_polly",
+                    "espeak",
+                    "festival",
+                    "picotts",
+                    "microsoft",
+                    "azure",
+                ]
+            )
+        )
+
     def _is_audio_media_source(self, play_item) -> bool:
         """Check if a resolved media source item is audio content compatible with WiiM.
 
@@ -494,6 +545,11 @@ class MediaCommandsMixin:
         Returns:
             True if item is audio content that WiiM can play
         """
+        # Always allow TTS content - it's always audio
+        if hasattr(play_item, "url") and self._is_tts_media_source(play_item.url):
+            _LOGGER.debug("Detected TTS content, allowing playback")
+            return True
+
         # Check MIME type if available
         if hasattr(play_item, "mime_type") and play_item.mime_type:
             mime_type = play_item.mime_type.lower()
@@ -535,7 +591,10 @@ class MediaCommandsMixin:
         try:
             # Handle media-source:// URLs by resolving them first
             if media_id.startswith("media-source://"):
-                _LOGGER.debug("Resolving media source: %s", media_id)
+                is_tts_content = self._is_tts_media_source(media_id)
+                content_type = "TTS" if is_tts_content else "media"
+                _LOGGER.debug("Resolving %s source: %s", content_type, media_id)
+
                 try:
                     from homeassistant.components import media_source
 
@@ -543,21 +602,26 @@ class MediaCommandsMixin:
                     play_item = await media_source.async_resolve_media(hass, media_id)
                     resolved_url = play_item.url
 
-                    _LOGGER.debug("Media source resolved: %s -> %s", media_id, resolved_url)
+                    _LOGGER.debug("%s source resolved: %s -> %s", content_type, media_id, resolved_url)
 
                     # Validate that it's audio content
                     if not self._is_audio_media_source(play_item):
-                        raise HomeAssistantError(
-                            f"Unsupported media type for WiiM: {getattr(play_item, 'mime_type', 'unknown')}"
-                        )
+                        error_msg = f"Unsupported media type for WiiM: {getattr(play_item, 'mime_type', 'unknown')}"
+                        if is_tts_content:
+                            error_msg += " (TTS content should always be audio)"
+                        raise HomeAssistantError(error_msg)
 
                     # Play the resolved URL
                     media_id = resolved_url
                     media_type = MediaType.URL
 
+                    if is_tts_content:
+                        _LOGGER.info("Playing TTS content on WiiM device")
+
                 except Exception as err:
-                    _LOGGER.error("Failed to resolve media source %s: %s", media_id, err)
-                    raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
+                    error_msg = f"Failed to resolve {content_type} source: {err}"
+                    _LOGGER.error(error_msg)
+                    raise HomeAssistantError(error_msg) from err
 
             # Continue with normal media handling logic
             # Preset numbers → play_preset (MCUKeyShortClick)

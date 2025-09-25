@@ -100,6 +100,9 @@ The integration creates two types of entities per speaker:
 
 2. **Group Coordinator** (`media_player.speaker_name_group_coordinator`)
    - Controls multiroom groups
+   - **Dynamic naming**: Changes based on speaker role
+     - Solo: `"Speaker Name"` (e.g., "Living Room")
+     - Group Master: `"Speaker Name Group Master"` (e.g., "Living Room Group Master")
    - For Home Assistant multiroom control only
    - **Do not use with Music Assistant**
 

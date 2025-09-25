@@ -76,6 +76,9 @@ media_player.living_room_group_coordinator
 - Only exists when actively coordinating a group
 - Provides unified control for entire group
 - Automatically appears/disappears with group changes
+- **Dynamic naming**: Changes based on speaker role
+  - Solo: `"Living Room"`
+  - Group Master: `"Living Room Group Master"`
 
 ## Volume Questions
 

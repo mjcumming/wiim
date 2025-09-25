@@ -531,6 +531,6 @@ async def async_update_data(coordinator) -> dict[str, Any]:
 
         # On error, use backoff logic
         backoff_interval = coordinator._backoff.next_interval(NORMAL_POLL_INTERVAL)
-        coordinator.update_interval = timedelta(seconds=backoff_interval)
+        coordinator.update_interval = backoff_interval
 
         raise UpdateFailed(f"Error updating WiiM device: {err}") from err
