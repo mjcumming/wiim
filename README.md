@@ -111,6 +111,56 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 | `wiim.set_eq`        | Set equalizer presets or custom values |
 | `wiim.reboot_device` | Reboot device                          |
 
+## Source Customization
+
+### Why Source Renaming Isn't Supported
+
+The WiiM integration doesn't support custom source names for several reasons:
+
+- **Device Limitation**: Source names come directly from the device's firmware and API
+- **Consistency**: Other major integrations (Sonos, Denon, Yamaha) also don't support source renaming
+- **API Compatibility**: The device expects specific source names for proper functionality
+- **Automation Reliability**: Custom names could break existing automations and scripts
+
+### How to Work Around This
+
+Instead of renaming sources, you can customize the display in several ways:
+
+#### 1. Rename the Media Player Entity
+
+```yaml
+# In customize.yaml
+media_player.living_room_speaker:
+  friendly_name: "Living Room TV Audio"
+```
+
+#### 2. Use Templates in Automations
+
+```yaml
+# In automations.yaml
+- alias: "When HDMI is selected"
+  trigger:
+    platform: state
+    entity_id: media_player.living_room_speaker
+    attribute: source
+    to: "HDMI"
+  action:
+    - service: notify.persistent_notification
+      data:
+        message: "TV audio is now active"
+```
+
+#### 3. Create Custom Dashboard Cards
+
+```yaml
+# In Lovelace dashboard
+type: entities
+entities:
+  - entity: media_player.living_room_speaker
+    name: "TV Audio"
+    secondary_info: "{{ states('media_player.living_room_speaker').attributes.source }}"
+```
+
 ## Diagnostics & Troubleshooting
 
 When experiencing issues, you can download comprehensive diagnostic information to help with troubleshooting:
