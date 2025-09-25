@@ -49,8 +49,18 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
             _LOGGER.debug("No status response from %s", host)
             return False, host, None
 
-        # Extract device name
-        device_name = status.get("ssid", host)
+        # Extract device name with priority order
+        # PRIORITY 1: DeviceName from WiiM API (custom name set in app)
+        # PRIORITY 2: Other name fields
+        # PRIORITY 3: SSID/Network name (less reliable)
+        device_name = (
+            status.get("DeviceName")  # Custom name set in WiiM app
+            or status.get("device_name")  # Alternative field name
+            or status.get("friendlyName")  # Common API field
+            or status.get("name")  # Generic name field
+            or status.get("ssid", host)  # Device hotspot name (fallback)
+        )
+
         if not device_name or device_name == "Unknown":
             device_name = f"WiiM Device ({host})"
 

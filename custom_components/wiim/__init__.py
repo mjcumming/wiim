@@ -44,6 +44,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service import async_register_admin_service
 
 # Import config_flow to make it available as a module attribute for tests
 from . import config_flow  # noqa: F401
@@ -101,8 +102,125 @@ async def _update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+async def _reboot_device_service(hass: HomeAssistant, call):
+    """Handle reboot_device service call."""
+    entity_id = call.data.get("entity_id")
+    if not entity_id:
+        _LOGGER.error("entity_id is required for reboot_device service")
+        return
+
+    # Find the entity and call its reboot method
+    entity = hass.states.get(entity_id)
+    if not entity:
+        _LOGGER.error("Entity %s not found", entity_id)
+        return
+
+    if entity.domain != "media_player":
+        _LOGGER.error("Entity %s is not a media_player", entity_id)
+        return
+
+    # Get the speaker from the entity's device
+    device_registry = hass.helpers.device_registry.async_get(hass)
+    entity_registry = hass.helpers.entity_registry.async_get(hass)
+
+    entity_entry = entity_registry.async_get(entity_id)
+    if not entity_entry or not entity_entry.device_id:
+        _LOGGER.error("Entity %s has no device", entity_id)
+        return
+
+    device_entry = device_registry.async_get(entity_entry.device_id)
+    if not device_entry:
+        _LOGGER.error("Device for entity %s not found", entity_id)
+        return
+
+    # Find the config entry for this device
+    for config_entry_id in device_entry.config_entries:
+        if config_entry_id in hass.data.get(DOMAIN, {}):
+            entry_data = hass.data[DOMAIN][config_entry_id]
+            speaker = entry_data.get("speaker")
+            if speaker:
+                try:
+                    await speaker.coordinator.client.reboot()
+                    _LOGGER.info("Reboot command sent successfully to %s", speaker.name)
+                except Exception as err:
+                    _LOGGER.info(
+                        "Reboot command sent to %s (device may not respond): %s",
+                        speaker.name,
+                        err,
+                    )
+                return
+
+    _LOGGER.error("No WiiM device found for entity %s", entity_id)
+
+
+async def _sync_time_service(hass: HomeAssistant, call):
+    """Handle sync_time service call."""
+    entity_id = call.data.get("entity_id")
+    if not entity_id:
+        _LOGGER.error("entity_id is required for sync_time service")
+        return
+
+    # Find the entity and call its sync_time method
+    entity = hass.states.get(entity_id)
+    if not entity:
+        _LOGGER.error("Entity %s not found", entity_id)
+        return
+
+    if entity.domain != "media_player":
+        _LOGGER.error("Entity %s is not a media_player", entity_id)
+        return
+
+    # Get the speaker from the entity's device
+    device_registry = hass.helpers.device_registry.async_get(hass)
+    entity_registry = hass.helpers.entity_registry.async_get(hass)
+
+    entity_entry = entity_registry.async_get(entity_id)
+    if not entity_entry or not entity_entry.device_id:
+        _LOGGER.error("Entity %s has no device", entity_id)
+        return
+
+    device_entry = device_registry.async_get(entity_entry.device_id)
+    if not device_entry:
+        _LOGGER.error("Device for entity %s not found", entity_id)
+        return
+
+    # Find the config entry for this device
+    for config_entry_id in device_entry.config_entries:
+        if config_entry_id in hass.data.get(DOMAIN, {}):
+            entry_data = hass.data[DOMAIN][config_entry_id]
+            speaker = entry_data.get("speaker")
+            if speaker:
+                try:
+                    await speaker.coordinator.client.sync_time()
+                    _LOGGER.info("Time sync command sent successfully to %s", speaker.name)
+                except Exception as err:
+                    _LOGGER.error("Failed to sync time for %s: %s", speaker.name, err)
+                    raise
+                return
+
+    _LOGGER.error("No WiiM device found for entity %s", entity_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
+
+    # Register global services if this is the first entry
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+
+        # Register global services
+        async_register_admin_service(
+            hass,
+            DOMAIN,
+            "reboot_device",
+            _reboot_device_service,
+        )
+        async_register_admin_service(
+            hass,
+            DOMAIN,
+            "sync_time",
+            _sync_time_service,
+        )
 
     # Simplified v2.0.0 architecture: no custom registry, just use HA config entries
     if DOMAIN not in hass.data:

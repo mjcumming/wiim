@@ -68,6 +68,8 @@ Each speaker creates:
 
 - **Media Player** - `media_player.{device_name}` - Full device control
 - **Group Coordinator** - `media_player.{device_name}_group_coordinator` - Controls entire group (appears when master with slaves)
+  - **Solo mode**: Shows as `"Speaker Name"` (e.g., "Living Room")
+  - **Group mode**: Shows as `"Speaker Name Group Master"` (e.g., "Living Room Group Master")
 - **Role Sensor** - `sensor.{device_name}_multiroom_role` - Shows `Solo`/`Master`/`Slave` status
 
 ## 🏠 Quick Multiroom Setup
@@ -93,6 +95,22 @@ The group coordinator entity automatically appears:
 type: media-control
 entity: media_player.living_room_group_coordinator
 ```
+
+### Dynamic Group Coordinator Naming
+
+Group coordinator entities have **dynamic names** that change based on the speaker's role:
+
+| Speaker State          | Group Coordinator Name        | Example                      |
+| ---------------------- | ----------------------------- | ---------------------------- |
+| **Solo**               | `"Speaker Name"`              | `"Living Room"`              |
+| **Master with Slaves** | `"Speaker Name Group Master"` | `"Living Room Group Master"` |
+
+**Key Points:**
+
+- Names update automatically when speakers join/leave groups
+- Solo speakers show clean names without suffixes
+- Group masters clearly indicate their coordinator role
+- Names are consistent with WiiM protocol terminology
 
 ### Smart Automations
 

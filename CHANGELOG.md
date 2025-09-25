@@ -2,6 +2,104 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.21] - 2025-09-25
+
+### Fixed
+
+- **Group Coordinator UI Issues**: Fixed multiple group coordinator display and behavior issues
+  - Group coordinators no longer appear in join/unjoin menus (excluded GROUPING feature)
+  - Dynamic naming now always shows "Group Master" suffix for consistency
+  - Fixed Master Bedroom group coordinator visibility issues
+  - Improved role detection and immediate UI updates when group roles change
+  - Fixed slave speaker input showing "unknown" instead of "Follower" after ungrouping
+  - Enhanced role change detection with explicit state updates for immediate UI refresh
+
+### Changed
+
+- **Group Coordinator Naming**: Group coordinator entities now consistently display "Speaker Name Group Master" regardless of availability state
+- **Role Change Detection**: Added immediate UI state updates when speaker roles change (master/slave/solo transitions)
+
+## [0.1.20] - 2025-01-27
+
+### Added
+
+- **TTS Support**: Full Text-to-Speech integration support for all TTS engines
+  - Google Cloud TTS, Google Translate TTS, Amazon Polly, eSpeak, Microsoft Azure, and more
+  - Automatic detection of TTS media sources (`media-source://tts/`)
+  - Enhanced media source resolution with TTS-specific error handling
+  - Comprehensive logging for TTS content playback
+  - Optimistic UI updates for immediate TTS feedback
+
+### Fixed
+
+- **Group Join Controls**: Fixed missing group join functionality in Home Assistant media player UI
+  - Improved availability logic to ensure group join controls are visible
+  - Added debug logging to help diagnose grouping feature issues
+  - Enhanced entity state handling for better UI compatibility
+  - Fixed `media_position_updated_at` property to respect entity availability (regression from v0.1.19)
+
+### Technical
+
+- **Media Source Handling**: Enhanced `_is_tts_media_source()` method for reliable TTS detection
+- **Audio Validation**: Improved `_is_audio_media_source()` to always allow TTS content
+- **Error Handling**: TTS-specific error messages and fallback handling
+- **Test Coverage**: Comprehensive test suite for TTS functionality
+- **Availability Logic**: Refined entity availability checks for better UI feature exposure
+
+## [0.1.19] - 2025-01-27
+
+### Fixed
+
+- **Test Suite**: Fixed failing test `test_media_properties_unavailable` in group media player
+
+  - Updated test expectation for `media_position_updated_at` to expect timestamp instead of `None` when unavailable
+  - Maintains Media Assistant compatibility by always returning valid timestamps
+  - Test now correctly validates the intended behavior rather than expecting incorrect behavior
+
+- **Coordinator Polling**: Fixed critical `TypeError` in backoff logic
+  - Resolved "unsupported type for timedelta seconds component: datetime.timedelta" error
+  - Fixed issue where `backoff_interval` was already a `timedelta` but was being wrapped in another `timedelta`
+  - Coordinator polling now properly handles connection failures without crashing
+
+### Technical
+
+- **Code Quality**: Updated to modern Python syntax (`isinstance` with union types)
+- **Error Handling**: Improved coordinator error recovery and backoff logic
+- **Test Accuracy**: Enhanced test coverage to reflect actual component behavior
+
+## [0.1.18] - 2025-01-27
+
+### Fixed
+
+- **Reboot Device Service**: Fixed critical issue preventing WiiM device restart from Home Assistant
+  - Resolved "Failed to perform the action wiim.reboot_device. Unknown error" error
+  - Fixed JSON parsing error "Expecting value: line 1 column 1 (char 0)" when device doesn't respond after reboot command
+  - Added global service support for `wiim.reboot_device` and `wiim.sync_time`
+  - Service now works both as global service (`wiim.reboot_device`) and entity service (`media_player.reboot_device`)
+
+### Technical
+
+- **Service Registration**: Added global service registration using `async_register_admin_service`
+- **Response Handling**: Enhanced API client to gracefully handle empty responses and parsing errors from reboot commands
+- **Error Recovery**: Improved error handling for commands that don't return proper responses (like reboot)
+- **Service Documentation**: Updated services.yaml to include required entity_id field for global services
+
+## [0.1.17] - 2024-08-22
+
+### Fixed
+
+- **Music Assistant Integration**: Fixed critical issue preventing multiple WiiM devices from registering with Music Assistant
+  - Resolved `TypeError: fromisoformat: argument must be str` error in Music Assistant
+  - All WiiM devices now properly register with Music Assistant instead of just the first one
+  - Improved timestamp handling to ensure `media_position_updated_at` always returns valid values
+
+### Technical
+
+- **Timestamp Validation**: Enhanced `get_media_position_updated_at()` method to always return valid timestamps
+- **Position Validation**: Added robust validation for media position values to prevent edge case errors
+- **Code Quality**: Updated to modern Python syntax (`isinstance` with union types)
+- **Error Prevention**: Added safeguards to prevent `None` values from causing
+
 ## [0.1.16]
 
 ### Fixed
