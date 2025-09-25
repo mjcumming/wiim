@@ -98,9 +98,7 @@ async def async_setup_entry(
     ]
 
     async_add_entities(entities)
-    _LOGGER.info(
-        "Created media player entities for %s including group coordinator", speaker.name
-    )
+    _LOGGER.info("Created media player entities for %s including group coordinator", speaker.name)
 
     # Register WiiM custom services
     platform = async_get_current_platform()
@@ -212,9 +210,13 @@ class WiiMMediaPlayer(
 
         # Timestamps for optimistic state timeout (10 seconds)
         self._optimistic_state_timestamp: float | None = None
+        self._optimistic_group_timestamp: float | None = None
 
         # Track info for album art cache management
         self._last_track_info: dict[str, Any] = {}
+
+        # Track previous role for source handling
+        self._previous_role: str | None = None
 
         # HA convention: Use device name as entity name
         self._attr_name = None
@@ -279,25 +281,19 @@ class WiiMMediaPlayer(
         }
 
         # Remove None values for comparison
-        current_track_info = {
-            k: v for k, v in current_track_info.items() if v is not None
-        }
+        current_track_info = {k: v for k, v in current_track_info.items() if v is not None}
 
         # Check if track changed (title/artist change indicates new song)
-        track_changed = current_track_info.get("title") != self._last_track_info.get(
-            "title"
-        ) or current_track_info.get("artist") != self._last_track_info.get("artist")
+        track_changed = current_track_info.get("title") != self._last_track_info.get("title") or current_track_info.get(
+            "artist"
+        ) != self._last_track_info.get("artist")
 
         # Check if image URL changed
-        image_url_changed = current_track_info.get(
-            "image_url"
-        ) != self._last_track_info.get("image_url")
+        image_url_changed = current_track_info.get("image_url") != self._last_track_info.get("image_url")
 
         if current_track_info != self._last_track_info:
             # Track metadata changed - clear image cache
-            for key in set(current_track_info.keys()) | set(
-                self._last_track_info.keys()
-            ):
+            for key in set(current_track_info.keys()) | set(self._last_track_info.keys()):
                 old_val = self._last_track_info.get(key)
                 new_val = current_track_info.get(key)
                 if old_val != new_val:
@@ -318,17 +314,26 @@ class WiiMMediaPlayer(
             # CRITICAL: Clear cache when track changes OR when image URL changes
             # WiiM devices often keep the same URL but change the image content
             if track_changed or image_url_changed:
-                if (
-                    track_changed
-                    and not image_url_changed
-                    and current_track_info.get("image_url")
-                ):
+                if track_changed and not image_url_changed and current_track_info.get("image_url"):
                     _LOGGER.debug(
                         "🎨 Media player forcing image cache clear - track changed but URL stayed same (WiiM behavior)"
                     )
                 self.controller.clear_media_image_cache()
 
             self._last_track_info = current_track_info.copy()
+
+        # Track role changes for source handling
+        current_role = self.speaker.role
+        if self._previous_role != current_role:
+            _LOGGER.info(
+                "Media player %s role changed: %s -> %s",
+                self.name,
+                self._previous_role,
+                current_role,
+            )
+            self._previous_role = current_role
+            # Force immediate state update when role changes
+            self.async_write_ha_state()
 
         # Call parent to write state
         super().async_write_ha_state()
@@ -383,17 +388,37 @@ class WiiMMediaPlayer(
         if duration and duration > 0:
             features |= MediaPlayerEntityFeature.SEEK
 
+        # Debug logging for group join issue
+        if not hasattr(self, "_debug_logged_features"):
+            _LOGGER.info(
+                "WiiM %s supported features: %s (GROUPING: %s, Available: %s, State: %s)",
+                self.speaker.name,
+                features,
+                bool(features & MediaPlayerEntityFeature.GROUPING),
+                self.available,
+                self.state,
+            )
+            self._debug_logged_features = True
+
         return features
 
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        # Follows the test logic: available if both flags are True
-        return bool(getattr(self.speaker, "_available", True)) and bool(
-            getattr(
-                getattr(self.speaker, "coordinator", None), "last_update_success", True
-            )
-        )
+        # Check speaker availability first
+        speaker_available = bool(getattr(self.speaker, "_available", True))
+
+        # Check coordinator availability - be more lenient for grouping functionality
+        coordinator = getattr(self.speaker, "coordinator", None)
+        if coordinator is None:
+            # No coordinator means device is offline/unavailable
+            return False
+
+        coordinator_success = bool(getattr(coordinator, "last_update_success", True))
+
+        # Entity is available if speaker is available AND coordinator is working
+        # This ensures group join controls are visible when the device is reachable
+        return speaker_available and coordinator_success
 
     # ===== VOLUME PROPERTIES (delegate to controller) =====
 
@@ -441,6 +466,17 @@ class WiiMMediaPlayer(
         # Use optimistic state if available for immediate feedback
         if self._optimistic_source is not None:
             return self._optimistic_source
+
+        # Check for role transition from slave to solo
+        current_role = self.speaker.role
+        if (
+            self._previous_role == "slave"
+            and current_role == "solo"
+            and self.controller.get_current_source() == "Follower"
+        ):
+            # Speaker just ungrouped from slave to solo, show unknown instead of Follower
+            return "unknown"
+
         return self.controller.get_current_source()
 
     @property
@@ -540,17 +576,17 @@ class WiiMMediaPlayer(
         """Position of current playing media in seconds."""
         position = self.controller.get_media_position()
         # Ensure position is valid (non-negative integer)
-        if (
-            position is not None
-            and isinstance(position, int | float)
-            and position >= 0
-        ):
+        if position is not None and isinstance(position, int | float) and position >= 0:
             return int(position)
         return None
 
     @property
     def media_position_updated_at(self) -> float | None:
         """When the position was last updated."""
+        # Only return timestamp if entity is available
+        if not self.available:
+            return None
+
         # Ensure we always return a valid timestamp for Music Assistant compatibility
         timestamp = self.controller.get_media_position_updated_at()
         if timestamp is None:
@@ -558,6 +594,29 @@ class WiiMMediaPlayer(
 
             timestamp = time.time()
         return timestamp
+
+    @property
+    def elapsed_time_last_updated(self) -> str | None:
+        """ISO format timestamp when the elapsed time was last updated.
+
+        This attribute is required by Music Assistant's hass_players provider.
+        Returns an ISO format datetime string that can be parsed by fromisoformat().
+        """
+        # Only return timestamp if entity is available
+        if not self.available:
+            return None
+
+        timestamp = self.controller.get_media_position_updated_at()
+        if timestamp is None:
+            import time
+
+            timestamp = time.time()
+
+        # Convert timestamp to ISO format string
+        from datetime import datetime, timezone
+
+        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # noqa: UP017
+        return dt.isoformat()
 
     @property
     def media_image_url(self) -> str | None:
@@ -585,9 +644,7 @@ class WiiMMediaPlayer(
 
         # Include track metadata in hash to force cache refresh when track changes
         # even if URL stays the same (common WiiM behavior)
-        track_info = (
-            f"{url}|{self.media_title}|{self.media_artist}|{self.media_album_name}"
-        )
+        track_info = f"{url}|{self.media_title}|{self.media_artist}|{self.media_album_name}"
 
         import hashlib
 
@@ -636,9 +693,7 @@ class WiiMMediaPlayer(
         self._optimistic_group_state = None
         self._optimistic_group_members = None
 
-    async def _async_execute_command_with_immediate_refresh(
-        self, command_name: str
-    ) -> None:
+    async def _async_execute_command_with_immediate_refresh(self, command_name: str) -> None:
         """Execute command with immediate polling for fast UI updates.
 
         This provides much better UX than waiting 5 seconds for next poll cycle.
@@ -678,16 +733,12 @@ class WiiMMediaPlayer(
             age = time.time() - self._optimistic_state_timestamp
             # Shorter timeout for playback state (3 seconds) since media players should respond quickly
             if age > 3.0:
-                _LOGGER.debug(
-                    "Optimistic playback state timeout (%.1fs), clearing state", age
-                )
+                _LOGGER.debug("Optimistic playback state timeout (%.1fs), clearing state", age)
                 self._optimistic_state = None
                 self._optimistic_state_timestamp = None
             # General timeout for other optimistic state (10 seconds)
             elif age > 10.0:
-                _LOGGER.debug(
-                    "Optimistic state timeout (10s), clearing all optimistic state"
-                )
+                _LOGGER.debug("Optimistic state timeout (10s), clearing all optimistic state")
                 self._optimistic_volume = None
                 self._optimistic_mute = None
                 self._optimistic_source = None
@@ -731,30 +782,21 @@ class WiiMMediaPlayer(
             )
             self._optimistic_mute = None
 
-        if (
-            self._optimistic_source is not None
-            and real_source == self._optimistic_source
-        ):
+        if self._optimistic_source is not None and real_source == self._optimistic_source:
             _LOGGER.debug(
                 "Real source matches optimistic source (%s), clearing optimistic source",
                 real_source,
             )
             self._optimistic_source = None
 
-        if (
-            self._optimistic_shuffle is not None
-            and real_shuffle == self._optimistic_shuffle
-        ):
+        if self._optimistic_shuffle is not None and real_shuffle == self._optimistic_shuffle:
             _LOGGER.debug(
                 "Real shuffle matches optimistic shuffle (%s), clearing optimistic shuffle",
                 real_shuffle,
             )
             self._optimistic_shuffle = None
 
-        if (
-            self._optimistic_repeat is not None
-            and real_repeat == self._optimistic_repeat
-        ):
+        if self._optimistic_repeat is not None and real_repeat == self._optimistic_repeat:
             _LOGGER.debug(
                 "Real repeat matches optimistic repeat (%s), clearing optimistic repeat",
                 real_repeat,
@@ -765,28 +807,36 @@ class WiiMMediaPlayer(
         if self._optimistic_media_title is not None:
             self._optimistic_media_title = None
 
-        # Clear optimistic group state when real data matches
+        # Clear optimistic group state when real data matches or timeout occurs
         real_group_state = self.speaker.role
         real_group_members = self.controller.get_group_members()
 
-        if (
-            self._optimistic_group_state is not None
-            and real_group_state == self._optimistic_group_state
-        ):
+        # Check for group state timeout (15 seconds)
+        if self._optimistic_group_timestamp is not None:
+            import time
+
+            age = time.time() - self._optimistic_group_timestamp
+
+            if age > 15:
+                self._optimistic_group_state = None
+                self._optimistic_group_members = None
+                self._optimistic_group_timestamp = None
+                _LOGGER.warning(
+                    "Group timeout (15s), clearing all optimistic group for %s",
+                    self.speaker.name,
+                )
+
+        if self._optimistic_group_state is not None and real_group_state == self._optimistic_group_state:
             _LOGGER.debug(
                 "Real group state matches optimistic state (%s), clearing optimistic group state",
                 real_group_state,
             )
             self._optimistic_group_state = None
 
-        if (
-            self._optimistic_group_members is not None
-            and real_group_members == self._optimistic_group_members
-        ):
-            _LOGGER.debug(
-                "Real group members match optimistic members, clearing optimistic group members"
-            )
+        if self._optimistic_group_members is not None and real_group_members == self._optimistic_group_members:
+            _LOGGER.debug("Real group members match optimistic members, clearing optimistic group members")
             self._optimistic_group_members = None
+            self._optimistic_group_timestamp = None
 
         # Call parent to handle normal coordinator entity lifecycle
         super()._handle_coordinator_update()
@@ -807,16 +857,12 @@ class WiiMMediaPlayer(
         """Play an M3U playlist."""
         try:
             # Use the API client directly for playlist playback
-            await self.speaker.coordinator.client._request(
-                f"/httpapi.asp?command=setPlayerCmd:playlist:{playlist_url}"
-            )
+            await self.speaker.coordinator.client._request(f"/httpapi.asp?command=setPlayerCmd:playlist:{playlist_url}")
         except Exception as err:
             _LOGGER.error("Failed to play playlist for %s: %s", self.speaker.name, err)
             raise
 
-    async def async_set_eq(
-        self, preset: str, custom_values: list[float] | None = None
-    ) -> None:
+    async def async_set_eq(self, preset: str, custom_values: list[float] | None = None) -> None:
         """Set equalizer preset or custom values."""
         controller: MediaPlayerController = self.controller
 
@@ -846,9 +892,7 @@ class WiiMMediaPlayer(
             # Use the existing play_url method for notifications
             await self.async_play_url(url)
         except Exception as err:
-            _LOGGER.error(
-                "Failed to play notification for %s: %s", self.speaker.name, err
-            )
+            _LOGGER.error("Failed to play notification for %s: %s", self.speaker.name, err)
             raise
 
     async def async_reboot_device(self) -> None:
@@ -908,8 +952,6 @@ class WiiMMediaPlayer(
 
         # Add playback info
         if self.state == MediaPlayerState.PLAYING:
-            attrs["playback_progress"] = (
-                f"{self.media_position or 0}/{self.media_duration or 0}"
-            )
+            attrs["playback_progress"] = f"{self.media_position or 0}/{self.media_duration or 0}"
 
         return attrs

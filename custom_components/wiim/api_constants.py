@@ -73,6 +73,7 @@ MODE_MAP: dict[str, str] = {
     "41": "bluetooth",
     "43": "optical",
     "47": "line_in_2",
+    "49": "hdmi",
     "51": "usb",
     "99": "follower",
 }
