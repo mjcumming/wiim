@@ -46,6 +46,7 @@ class TestWiiMMediaPlayer:
             | MediaPlayerEntityFeature.GROUPING
             | MediaPlayerEntityFeature.PLAY_MEDIA  # Always supported
             | MediaPlayerEntityFeature.BROWSE_MEDIA  # browsing supported
+            | MediaPlayerEntityFeature.MEDIA_ANNOUNCE  # TTS announcement support
             # SEEK is conditionally added, don't include in test
         )
         assert media_player.supported_features == expected_features

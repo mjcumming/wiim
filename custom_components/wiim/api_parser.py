@@ -22,6 +22,47 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _normalize_time_value(value: int, field_name: str, source: str | None = None) -> int:
+    """Normalize time values that may be in milliseconds or microseconds.
+
+    The LinkPlay API returns time in different units depending on the streaming source:
+    - Most sources: milliseconds (1,000 ms = 1 second)
+    - Streaming services (Spotify, etc.): microseconds (1,000,000 μs = 1 second)
+
+    This function uses a sanity check approach: if a value would represent > 10 hours
+    when interpreted as milliseconds, it's likely in microseconds instead.
+
+    Args:
+        value: Raw time value from API
+        field_name: Name of field for logging ("position" or "duration")
+        source: Optional source name for enhanced logging
+
+    Returns:
+        Time in seconds
+
+    See: https://github.com/mjcumming/wiim/issues/75
+    """
+    # Sanity threshold: 10 hours in milliseconds
+    # Most music tracks are < 10 minutes; if > 10 hours in "ms", likely microseconds
+    MS_THRESHOLD = 36_000_000  # 10 hours * 3600 seconds * 1000 ms
+
+    if value > MS_THRESHOLD:
+        # Value appears to be in microseconds
+        result = value // 1_000_000
+        _LOGGER.debug(
+            "🎵 %s value %d appears to be in microseconds (> 10 hours if ms), "
+            "converting from μs to seconds: %d seconds (source: %s)",
+            field_name.capitalize(),
+            value,
+            result,
+            source or "unknown",
+        )
+        return result
+    else:
+        # Standard millisecond conversion
+        return value // 1_000
+
+
 def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> tuple[dict[str, Any], str | None]:
     """Normalise *getPlayerStatusEx* / *getStatusEx* responses.
 
@@ -67,20 +108,30 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         except ValueError:
             _LOGGER.debug("Invalid volume value: %s", vol)
 
-    # Playback position & duration (ms → s).
-    # Parse position and duration (convert ms to seconds)
+    # Playback position & duration (auto-detect ms vs μs).
+    # The API returns time in milliseconds for most sources but microseconds for streaming services.
+    # Use intelligent normalization to handle both cases.
+    # See: https://github.com/mjcumming/wiim/issues/75
+    source_hint = raw.get("mode")  # Will be used for enhanced logging
     if (pos := raw.get("curpos") or raw.get("offset_pts")) is not None:
         try:
-            data["position"] = int(pos) // 1_000
-            data["position_updated_at"] = asyncio.get_running_loop().time()
+            pos_int = int(pos)
+            data["position"] = _normalize_time_value(pos_int, "position", source_hint)
+            # Try to use event loop time if available (async context), otherwise use time.time()
+            try:
+                data["position_updated_at"] = asyncio.get_running_loop().time()
+            except RuntimeError:
+                import time
+
+                data["position_updated_at"] = time.time()
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid position value: %s", pos)
 
     if raw.get("totlen") is not None:
         try:
-            duration_ms = int(raw["totlen"])
-            if duration_ms > 0:  # Only set duration if it's actually provided
-                data["duration"] = duration_ms // 1_000
+            duration_val = int(raw["totlen"])
+            if duration_val > 0:  # Only set duration if it's actually provided
+                data["duration"] = _normalize_time_value(duration_val, "duration", source_hint)
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid duration value: %s", raw.get("totlen"))
 

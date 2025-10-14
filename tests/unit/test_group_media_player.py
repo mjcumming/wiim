@@ -139,6 +139,8 @@ def test_supported_features_available(group_media_player, mock_speaker):
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.NEXT_TRACK
         | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        | MediaPlayerEntityFeature.PLAY_MEDIA  # TTS and media playback support
+        | MediaPlayerEntityFeature.MEDIA_ANNOUNCE  # TTS announcement support
         # NOTE: GROUPING feature is intentionally excluded for virtual group players
     )
     assert features == expected_features

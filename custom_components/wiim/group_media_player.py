@@ -133,6 +133,8 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.STOP
             | MediaPlayerEntityFeature.NEXT_TRACK
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            | MediaPlayerEntityFeature.PLAY_MEDIA
+            | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
             # NOTE: GROUPING feature is intentionally excluded
             # Virtual group players should not participate in join/unjoin operations
         )
@@ -392,6 +394,24 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Send previous track command to coordinator."""
         if self.available:
             await self.speaker.coordinator.client.previous_track()
+            await self.coordinator.async_request_refresh()
+
+    async def async_play_media(
+        self, media_type: str, media_id: str, announce: bool | None = None, **kwargs: Any
+    ) -> None:
+        """Handle TTS announcements for the entire group."""
+        if not self.available:
+            _LOGGER.warning("Cannot play media - group not active")
+            return
+
+        if announce:
+            # Delegate to master speaker for group-wide TTS
+            _LOGGER.debug("Group TTS announcement requested for %s", self.speaker.name)
+            await self.speaker._async_handle_tts_announcement(media_id, **kwargs)
+        else:
+            # Normal group media playback
+            _LOGGER.debug("Group media playback requested for %s", self.speaker.name)
+            await self.speaker.coordinator.client.play_url(media_id)
             await self.coordinator.async_request_refresh()
 
     # ===== GROUP MANAGEMENT =====

@@ -376,6 +376,8 @@ class WiiMMediaPlayer(
             | MediaPlayerEntityFeature.REPEAT_SET
             # Media Playback (API: supports URLs and streams)
             | MediaPlayerEntityFeature.PLAY_MEDIA
+            # TTS Announcements (API: supports TTS via media sources)
+            | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
             # Multiroom Grouping (API: multiroom commands)
             | MediaPlayerEntityFeature.GROUPING
             # Media Browsing (API: preset navigation)

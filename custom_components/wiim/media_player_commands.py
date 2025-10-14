@@ -15,6 +15,7 @@ Following the successful API refactor pattern with logical cohesion over arbitra
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -582,13 +583,20 @@ class MediaCommandsMixin:
         """Play a piece of media (sync wrapper)."""
         self.hass.async_create_task(self.async_play_media(media_type, media_id, **kwargs))  # type: ignore[attr-defined]
 
-    async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
-        """Play a piece of media."""
-        _LOGGER.debug("Play media called: type=%s, id=%s", media_type, media_id)
+    async def async_play_media(
+        self, media_type: str, media_id: str, announce: bool | None = None, **kwargs: Any
+    ) -> None:
+        """Play a piece of media with TTS announcement support."""
+        _LOGGER.debug("Play media called: type=%s, id=%s, announce=%s", media_type, media_id, announce)
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
         hass = self.hass  # type: ignore[attr-defined]
 
         try:
+            # Handle TTS announcements
+            if announce:
+                await self._async_handle_tts_announcement(media_id, **kwargs)
+                return
+
             # Handle media-source:// URLs by resolving them first
             if media_id.startswith("media-source://"):
                 is_tts_content = self._is_tts_media_source(media_id)
@@ -664,6 +672,166 @@ class MediaCommandsMixin:
         except Exception as err:
             _LOGGER.error("Failed to play media %s: %s", media_id, err)
             raise
+
+    async def _async_handle_tts_announcement(self, media_id: str, **kwargs: Any) -> None:
+        """Handle TTS announcements with role-aware behavior following Sonos pattern."""
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        _LOGGER.debug("Handling TTS announcement for %s (role=%s)", speaker.name, speaker.role)
+
+        # Check user preference for TTS behavior
+        tts_behavior = kwargs.get("extra", {}).get("tts_behavior", "auto")
+
+        if tts_behavior == "force_local":
+            # User wants TTS on this specific speaker regardless of role
+            _LOGGER.debug("Force local TTS requested for %s", speaker.name)
+            await self._async_play_local_tts(media_id, **kwargs)
+
+        elif tts_behavior == "force_group":
+            # User wants group-wide TTS (delegate to master if slave)
+            if speaker.role == "slave":
+                await self._async_delegate_tts_to_master(media_id, **kwargs)
+            else:
+                await self._async_play_local_tts(media_id, **kwargs)
+
+        else:  # "auto" - default behavior
+            # Use role-based logic
+            if speaker.role == "slave":
+                await self._async_delegate_tts_to_master(media_id, **kwargs)
+            else:
+                await self._async_play_local_tts(media_id, **kwargs)
+
+    async def _async_delegate_tts_to_master(self, media_id: str, **kwargs: Any) -> None:
+        """Delegate TTS to the group master for group-wide announcement."""
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+
+        if not speaker.coordinator_speaker:
+            _LOGGER.warning("Slave %s has no coordinator - cannot play TTS", speaker.name)
+            raise HomeAssistantError(f"Slave speaker '{speaker.name}' cannot play TTS independently")
+
+        _LOGGER.debug("Slave %s delegating TTS to master %s", speaker.name, speaker.coordinator_speaker.name)
+
+        # Delegate to master speaker
+        await speaker.coordinator_speaker._async_handle_tts_announcement(media_id, **kwargs)
+
+    async def _async_play_local_tts(self, media_id: str, **kwargs: Any) -> None:
+        """Play TTS locally on this speaker."""
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+
+        _LOGGER.debug("Playing local TTS on %s", speaker.name)
+
+        # Save current state for restoration
+        original_state = await self._save_current_state()
+
+        try:
+            # Set TTS volume
+            await self._set_tts_volume(**kwargs)
+
+            # Pause current playback if playing
+            if self.state == MediaPlayerState.PLAYING:  # type: ignore[attr-defined]
+                await controller.pause()
+
+            # Play TTS audio
+            await controller.play_url(media_id)
+
+            # Wait for TTS completion
+            await self._wait_for_tts_completion()
+
+            # Resume original playback
+            if original_state["state"] == MediaPlayerState.PLAYING:
+                await controller.play()
+
+        except Exception as err:
+            _LOGGER.error("TTS announcement failed for %s: %s", speaker.name, err)
+            raise
+        finally:
+            # Always restore state
+            await self._restore_state(original_state)
+
+    async def _save_current_state(self) -> dict[str, Any]:
+        """Save current playback state for restoration after TTS."""
+        return {
+            "volume": self.volume_level,  # type: ignore[attr-defined]
+            "mute": self.is_volume_muted,  # type: ignore[attr-defined]
+            "state": self.state,  # type: ignore[attr-defined]
+            "position": self.media_position,  # type: ignore[attr-defined]
+            "source": self.source,  # type: ignore[attr-defined]
+        }
+
+    async def _restore_state(self, saved_state: dict[str, Any]) -> None:
+        """Restore saved playback state after TTS."""
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+
+        try:
+            # Restore volume
+            if saved_state["volume"] is not None:
+                await controller.set_volume(saved_state["volume"])
+
+            # Restore mute state
+            if saved_state["mute"] is not None:
+                await controller.set_mute(saved_state["mute"])
+
+            # Note: Don't restore playback state - let user control that
+            # The resume logic is handled in _async_play_local_tts
+
+        except Exception as err:
+            _LOGGER.warning("Failed to restore state for %s: %s", speaker.name, err)
+
+    async def _set_tts_volume(self, **kwargs: Any) -> None:
+        """Set appropriate volume for TTS announcements."""
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+
+        # Check for custom TTS volume in kwargs
+        extra = kwargs.get("extra", {})
+        tts_volume = extra.get("tts_volume")
+
+        if tts_volume is not None:
+            # Use specified TTS volume (0-100)
+            volume_level = min(max(float(tts_volume) / 100.0, 0.0), 1.0)
+            await controller.set_volume(volume_level)
+            _LOGGER.debug("Set TTS volume to %.1f%% for %s", tts_volume, speaker.name)
+        else:
+            # Use default TTS volume: 70% of current volume, but not below 30%
+            current_volume = self.volume_level  # type: ignore[attr-defined]
+            if current_volume is not None:
+                tts_volume_level = max(current_volume * 0.7, 0.3)
+                await controller.set_volume(tts_volume_level)
+                _LOGGER.debug("Set TTS volume to %.1f%% (70%% of current) for %s", tts_volume_level * 100, speaker.name)
+            else:
+                # Default TTS volume if current volume unknown
+                await controller.set_volume(0.5)
+                _LOGGER.debug("Set default TTS volume (50%%) for %s", speaker.name)
+
+    async def _wait_for_tts_completion(self, timeout: float = 30.0) -> None:
+        """Wait for TTS audio to complete playing."""
+        import time
+
+        speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+        start_time = time.time()
+
+        _LOGGER.debug("Waiting for TTS completion on %s", speaker.name)
+
+        while time.time() - start_time < timeout:
+            # Check if still playing TTS content
+            if self.state != MediaPlayerState.PLAYING:  # type: ignore[attr-defined]
+                _LOGGER.debug("TTS completed - no longer playing")
+                break
+
+            # Check if position has advanced (indicates active playback)
+            current_position = self.media_position  # type: ignore[attr-defined]
+            if current_position is not None:
+                # If position hasn't changed in 2 seconds, assume TTS is done
+                await asyncio.sleep(2.0)
+                new_position = self.media_position  # type: ignore[attr-defined]
+                if new_position == current_position:
+                    _LOGGER.debug("TTS completed - position unchanged")
+                    break
+
+            await asyncio.sleep(0.5)
+
+        _LOGGER.debug("TTS completion detected or timeout reached for %s", speaker.name)
 
     async def async_play_preset(self, preset: int) -> None:
         """Play a WiiM preset (1-6)."""
