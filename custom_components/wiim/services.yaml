@@ -1,6 +1,12 @@
 play_preset:
   name: Play Preset
-  description: Play a specific preset (device dependent)
+  description: >
+    Play a specific preset (device dependent).
+
+    WARNING: Due to WiiM firmware behavior, presets may automatically resume/override other sources
+    (e.g., Spotify, AirPlay) after a few seconds. If you experience this issue, use the
+    media_player.play_media service with the stream URL instead, or ensure you stop preset playback
+    before switching to external sources. See: https://github.com/mjcumming/wiim/issues/68
   target:
     entity:
       domain: media_player
