@@ -58,6 +58,10 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
                 coordinator._metadata_supported = True  # noqa: SLF001
                 _LOGGER.info("getMetaInfo works for %s – full metadata available", coordinator.client.host)
 
+            # Extract audio quality fields
+            audio_quality = _extract_audio_quality_fields(metadata)
+            metadata.update(audio_quality)
+
             # Enhance metadata with cover art extraction and merge with status fallbacks.
             # FIXED: Use raw status dict for artwork extraction, not Pydantic-filtered
             enhanced_metadata = _enhance_metadata_with_artwork(coordinator, metadata, raw_status_dict)
@@ -84,6 +88,37 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
 # ---------------------------------------------------------------------------
 # Internal helpers – kept private to this module
 # ---------------------------------------------------------------------------
+
+
+def _extract_audio_quality_fields(metadata: dict) -> dict[str, Any]:
+    """Extract audio quality fields from metadata response."""
+    audio_quality = {}
+
+    # Extract sample rate
+    sample_rate = metadata.get("sampleRate")
+    if sample_rate:
+        try:
+            audio_quality["sample_rate"] = int(sample_rate)
+        except (ValueError, TypeError):
+            _LOGGER.debug("Invalid sample rate value: %s", sample_rate)
+
+    # Extract bit depth
+    bit_depth = metadata.get("bitDepth")
+    if bit_depth:
+        try:
+            audio_quality["bit_depth"] = int(bit_depth)
+        except (ValueError, TypeError):
+            _LOGGER.debug("Invalid bit depth value: %s", bit_depth)
+
+    # Extract bit rate
+    bit_rate = metadata.get("bitRate")
+    if bit_rate:
+        try:
+            audio_quality["bit_rate"] = int(bit_rate)
+        except (ValueError, TypeError):
+            _LOGGER.debug("Invalid bit rate value: %s", bit_rate)
+
+    return audio_quality
 
 
 def _merge_metadata_with_status_fallback(metadata: dict, status: dict) -> dict[str, Any]:

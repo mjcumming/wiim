@@ -2,6 +2,27 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.24] - 2025-10-15
+
+### Added
+
+- **Audio Quality Sensors**: Added comprehensive audio quality monitoring sensors
+  - **Audio Quality Sensor**: Consolidated sensor showing sample rate, bit depth, and bit rate
+  - **Sample Rate Sensor**: Individual sensor for current track's sample rate (Hz)
+  - **Bit Depth Sensor**: Individual sensor for current track's bit depth (bits)
+  - **Bit Rate Sensor**: Individual sensor for current track's bit rate (kbps)
+  - Sensors automatically detect and display audio quality information from getMetaInfo API
+  - Only created for devices that support metadata (getMetaInfo endpoint)
+  - Provides detailed audio specifications for audiophiles and technical users
+  - Addresses GitHub issue #78: Metadata Info sensors request
+
+### Technical
+
+- **Metadata Processing**: Enhanced TrackMetadata model with audio quality fields
+- **Field Extraction**: Added robust audio quality field extraction from getMetaInfo responses
+- **Sensor Architecture**: Integrated audio quality sensors into existing sensor platform
+- **Device Compatibility**: Graceful handling of devices without metadata support
+
 ## [0.1.21] - 2025-09-25
 
 ### Fixed

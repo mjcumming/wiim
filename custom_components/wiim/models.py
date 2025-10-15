@@ -157,6 +157,11 @@ class TrackMetadata(_WiimBase):
     entity_picture: str | None = None
     cover_url: str | None = None
 
+    # Audio quality fields from getMetaInfo response
+    sample_rate: int | None = None
+    bit_depth: int | None = None
+    bit_rate: int | None = None
+
 
 class EQInfo(_WiimBase):
     """Represents equalizer state & current preset."""

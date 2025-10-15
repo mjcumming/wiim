@@ -46,6 +46,15 @@ async def async_setup_entry(
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))
 
+    # Audio quality sensors (only if metadata is supported)
+    # Check if metadata support has been determined and is not False
+    metadata_supported = getattr(speaker.coordinator, "_metadata_supported", None)
+    if metadata_supported is not False:
+        entities.append(WiiMAudioQualitySensor(speaker))
+        entities.append(WiiMSampleRateSensor(speaker))
+        entities.append(WiiMBitDepthSensor(speaker))
+        entities.append(WiiMBitRateSensor(speaker))
+
     async_add_entities(entities)
     _LOGGER.info(
         "Created %d sensor entities for %s (role sensor always included)",
@@ -319,3 +328,115 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self):
         return self.speaker.get_current_source()
+
+
+# ------------------- Audio Quality Sensors -------------------
+
+
+class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
+    """Audio quality sensor showing current track's audio specifications."""
+
+    _attr_icon = "mdi:audio-high"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_audio_quality"
+        self._attr_name = "Audio Quality"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> str:
+        """Return formatted audio quality string."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        if not metadata:
+            return "Unknown"
+
+        sample_rate = metadata.get("sample_rate")
+        bit_depth = metadata.get("bit_depth")
+        bit_rate = metadata.get("bit_rate")
+
+        if all([sample_rate, bit_depth, bit_rate]):
+            return f"{sample_rate}Hz / {bit_depth}bit / {bit_rate}kbps"
+        elif sample_rate and bit_depth:
+            return f"{sample_rate}Hz / {bit_depth}bit"
+        elif sample_rate:
+            return f"{sample_rate}Hz"
+        return "Unknown"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed audio quality attributes."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        if not metadata:
+            return {}
+
+        attrs = {}
+        if sample_rate := metadata.get("sample_rate"):
+            attrs["sample_rate"] = sample_rate
+        if bit_depth := metadata.get("bit_depth"):
+            attrs["bit_depth"] = bit_depth
+        if bit_rate := metadata.get("bit_rate"):
+            attrs["bit_rate"] = bit_rate
+
+        return attrs
+
+
+class WiiMSampleRateSensor(WiimEntity, SensorEntity):
+    """Sample rate sensor showing current track's sample rate."""
+
+    _attr_icon = "mdi:waveform"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "Hz"
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_sample_rate"
+        self._attr_name = "Sample Rate"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> int | None:
+        """Return current track's sample rate in Hz."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        return metadata.get("sample_rate")
+
+
+class WiiMBitDepthSensor(WiimEntity, SensorEntity):
+    """Bit depth sensor showing current track's bit depth."""
+
+    _attr_icon = "mdi:chart-line"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "bit"
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_bit_depth"
+        self._attr_name = "Bit Depth"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> int | None:
+        """Return current track's bit depth."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        return metadata.get("bit_depth")
+
+
+class WiiMBitRateSensor(WiimEntity, SensorEntity):
+    """Bit rate sensor showing current track's bit rate."""
+
+    _attr_icon = "mdi:speedometer"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "kbps"
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_bit_rate"
+        self._attr_name = "Bit Rate"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> int | None:
+        """Return current track's bit rate in kbps."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        return metadata.get("bit_rate")
