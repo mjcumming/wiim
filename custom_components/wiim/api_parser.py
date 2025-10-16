@@ -60,7 +60,15 @@ def _normalize_time_value(value: int, field_name: str, source: str | None = None
         return result
     else:
         # Standard millisecond conversion
-        return value // 1_000
+        result = value // 1_000
+        _LOGGER.debug(
+            "🎵 %s value %d appears to be in milliseconds, converting to seconds: %d seconds (source: %s)",
+            field_name.capitalize(),
+            value,
+            result,
+            source or "unknown",
+        )
+        return result
 
 
 def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> tuple[dict[str, Any], str | None]:
@@ -131,6 +139,12 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         try:
             duration_val = int(raw["totlen"])
             if duration_val > 0:  # Only set duration if it's actually provided
+                _LOGGER.debug(
+                    "🎵 Raw duration value: %d (source: %s, play_state: %s)",
+                    duration_val,
+                    source_hint or "unknown",
+                    raw.get("state") or raw.get("player_state") or raw.get("status") or "unknown",
+                )
                 data["duration"] = _normalize_time_value(duration_val, "duration", source_hint)
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid duration value: %s", raw.get("totlen"))
