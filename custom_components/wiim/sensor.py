@@ -405,7 +405,7 @@ class WiiMSampleRateSensor(WiimEntity, SensorEntity):
 class WiiMBitDepthSensor(WiimEntity, SensorEntity):
     """Bit depth sensor showing current track's bit depth."""
 
-    _attr_icon = "mdi:chart-line"
+    _attr_icon = "mdi:binary"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "bit"

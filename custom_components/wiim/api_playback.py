@@ -35,6 +35,8 @@ _LOGGER = logging.getLogger(__name__)
 class PlaybackAPI:  # mix-in – must be left of base client in MRO
     """Transport-level playback controls (play, volume, seek, …)."""
 
+    # pylint: disable=no-member
+
     # ------------------------------------------------------------------
     # Core transport helpers
     # ------------------------------------------------------------------
@@ -147,6 +149,6 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
         try:
             await asyncio.sleep(0.5)
             status = await self.get_player_status()  # type: ignore[attr-defined]
-            _LOGGER.debug("Status after mode change: %%s", status.get("loop_mode"))
+            _LOGGER.debug("Status after mode change: %s", status.get("loop_mode"))
         except Exception:  # noqa: BLE001 – best-effort only
             pass

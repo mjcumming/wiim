@@ -10,6 +10,8 @@ from urllib.parse import quote
 class DiagnosticsAPI:  # mix-in
     """Low-level device maintenance helpers."""
 
+    # pylint: disable=no-member
+
     async def reboot(self) -> None:  # type: ignore[override]
         """Reboot the device. Note: This command may not return a response."""
         try:
@@ -34,6 +36,7 @@ class DiagnosticsAPI:  # mix-in
             # If the request fails due to parsing issues (common with reboot),
             # we still consider it successful since the command was sent
             import logging
+
             _LOGGER = logging.getLogger(__name__)
 
             error_str = str(err).lower()

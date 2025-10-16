@@ -10,6 +10,8 @@ from .const import API_ENDPOINT_PRESET, API_ENDPOINT_PRESET_INFO
 class PresetAPI:  # mix-in
     """List and play device presets."""
 
+    # pylint: disable=no-member
+
     async def get_presets(self) -> list[dict[str, Any]]:  # type: ignore[override]
         """Return list of preset entries from getPresetInfo.
 

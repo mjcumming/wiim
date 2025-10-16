@@ -27,6 +27,8 @@ from .const import (
 class EQAPI:  # mix-in – appear before base client in MRO
     """Equaliser helpers (presets, on/off, custom bands)."""
 
+    # pylint: disable=no-member
+
     # ------------------------------------------------------------------
     # Preset handling
     # ------------------------------------------------------------------

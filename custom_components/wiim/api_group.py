@@ -21,6 +21,8 @@ from .const import (
 class GroupAPI:  # mix-in – must precede base client in MRO
     """Helpers for creating / managing LinkPlay multi-room groups."""
 
+    # pylint: disable=no-member
+
     # --------------------------
     # internal convenience state
     # --------------------------

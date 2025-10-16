@@ -188,7 +188,9 @@ def _enhance_metadata_with_artwork(coordinator, metadata: dict, status: dict) ->
     if not artwork_url:
         for field in artwork_fields:
             artwork_url = status.get(field)  # type: ignore[index]
-            if artwork_url and artwork_url != "un_known" and str(artwork_url).strip():  # Enhanced validation
+            if (
+                artwork_url and artwork_url not in ("un_known", "unknow") and str(artwork_url).strip()
+            ):  # Enhanced validation
                 found_field = f"status.{field}"
                 break
 
@@ -196,7 +198,7 @@ def _enhance_metadata_with_artwork(coordinator, metadata: dict, status: dict) ->
     if not hasattr(coordinator, "_last_artwork_url"):
         coordinator._last_artwork_url = None  # type: ignore[attr-defined]
 
-    if artwork_url and artwork_url != "un_known":
+    if artwork_url and artwork_url not in ("un_known", "unknow"):
         artwork_url = str(artwork_url).strip()
 
         # Basic URL validation - must look like a URL

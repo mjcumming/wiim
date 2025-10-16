@@ -24,26 +24,26 @@ from .models import DeviceInfo
 class DeviceAPI:  # mixin – must appear *before* the base client in MRO
     """Device-information and LED helpers expected by the integration."""
 
-    # The mixin relies on the base client providing `_request` and `timeout`.
+    # pylint: disable=no-member
 
     # ------------------------------------------------------------------
     # Information helpers
     # ------------------------------------------------------------------
 
-    async def get_device_info(self) -> dict[str, Any]:  # type: ignore[override]
+    async def get_device_info(self) -> dict[str, Any]:  # type: ignore[misc]
         """Return the raw `getStatusEx` JSON payload."""
         return await self._request(API_ENDPOINT_STATUS)  # type: ignore[attr-defined]
 
-    async def get_device_info_model(self) -> DeviceInfo:  # type: ignore[override]
+    async def get_device_info_model(self) -> DeviceInfo:  # type: ignore[misc]
         """Return a pydantic-validated :class:`DeviceInfo`."""
         return DeviceInfo.model_validate(await self.get_device_info())
 
-    async def get_firmware_version(self) -> str:  # type: ignore[override]
+    async def get_firmware_version(self) -> str:  # type: ignore[misc]
         """Return firmware version string (empty on error)."""
         resp = await self._request(API_ENDPOINT_FIRMWARE)  # type: ignore[attr-defined]
         return resp.get("firmware", "") if isinstance(resp, dict) else ""
 
-    async def get_mac_address(self) -> str:  # type: ignore[override]
+    async def get_mac_address(self) -> str:  # type: ignore[misc]
         """Return MAC address string (empty on error)."""
         resp = await self._request(API_ENDPOINT_MAC)  # type: ignore[attr-defined]
         return resp.get("mac", "") if isinstance(resp, dict) else ""
@@ -52,7 +52,7 @@ class DeviceAPI:  # mixin – must appear *before* the base client in MRO
     # LED helpers
     # ------------------------------------------------------------------
 
-    async def set_led(self, enabled: bool) -> None:  # type: ignore[override]
+    async def set_led(self, enabled: bool) -> None:  # type: ignore[misc]
         """Enable or disable the front LED with device-specific commands."""
         try:
             # Get device info to determine LED command format
@@ -87,7 +87,7 @@ class DeviceAPI:  # mixin – must appear *before* the base client in MRO
             _logger = logging.getLogger(__name__)
             _logger.debug("LED control not supported or failed for device: %s", err)
 
-    async def set_led_brightness(self, brightness: int) -> None:  # type: ignore[override]
+    async def set_led_brightness(self, brightness: int) -> None:  # type: ignore[misc]
         """Set LED brightness (0–100) with device-specific commands."""
         if not 0 <= brightness <= 100:
             raise ValueError("Brightness must be between 0 and 100")
