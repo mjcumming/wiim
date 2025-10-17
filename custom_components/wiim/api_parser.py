@@ -195,13 +195,22 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         or raw.get("artwork_url")
         or raw.get("pic_url")
     )
-    if cover:
-        cache_key = f"{data.get('title', '')}-{data.get('artist', '')}-{data.get('album', '')}"
-        if cache_key:
-            encoded = quote(cache_key)
-            sep = "&" if "?" in cover else "?"
-            cover = f"{cover}{sep}cache={encoded}"
-        data["entity_picture"] = cover
+
+    # Validate artwork URL - filter out invalid values like "unknow", "unknown", etc.
+    if cover and str(cover).strip() not in ("unknow", "unknown", "un_known", "", "none"):
+        try:
+            # Basic URL validation - must contain http or start with /
+            if "http" in str(cover).lower() or str(cover).startswith("/"):
+                cache_key = f"{data.get('title', '')}-{data.get('artist', '')}-{data.get('album', '')}"
+                if cache_key:
+                    encoded = quote(cache_key)
+                    sep = "&" if "?" in cover else "?"
+                    cover = f"{cover}{sep}cache={encoded}"
+                data["entity_picture"] = cover
+            else:
+                _LOGGER.debug("Invalid artwork URL format: %s", cover)
+        except Exception as e:
+            _LOGGER.debug("Error processing artwork URL %s: %s", cover, e)
 
     # Source mapping from *mode* field.
     if (mode_val := raw.get("mode")) is not None and "source" not in data:

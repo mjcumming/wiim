@@ -78,6 +78,9 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
                     "bit_depth": merged_metadata.get("bit_depth"),
                     "bit_rate": merged_metadata.get("bit_rate"),
                 }
+            else:
+                # Clear stored metadata if no valid audio quality data is available
+                coordinator._last_valid_metadata = None
 
             return TrackMetadata.model_validate(merged_metadata)
 
@@ -191,7 +194,11 @@ def _enhance_metadata_with_artwork(coordinator, metadata: dict, status: dict) ->
     # 1. Try metaData payload first …
     for field in artwork_fields:
         artwork_url = metadata.get(field)  # type: ignore[index]
-        if artwork_url and artwork_url != "un_known" and str(artwork_url).strip():  # Enhanced validation
+        if (
+            artwork_url
+            and artwork_url not in ("un_known", "unknow", "unknown", "none", "")
+            and str(artwork_url).strip()
+        ):  # Enhanced validation
             found_field = f"metadata.{field}"
             break
 
@@ -200,7 +207,9 @@ def _enhance_metadata_with_artwork(coordinator, metadata: dict, status: dict) ->
         for field in artwork_fields:
             artwork_url = status.get(field)  # type: ignore[index]
             if (
-                artwork_url and artwork_url not in ("un_known", "unknow") and str(artwork_url).strip()
+                artwork_url
+                and artwork_url not in ("un_known", "unknow", "unknown", "none", "")
+                and str(artwork_url).strip()
             ):  # Enhanced validation
                 found_field = f"status.{field}"
                 break
@@ -209,7 +218,7 @@ def _enhance_metadata_with_artwork(coordinator, metadata: dict, status: dict) ->
     if not hasattr(coordinator, "_last_artwork_url"):
         coordinator._last_artwork_url = None  # type: ignore[attr-defined]
 
-    if artwork_url and artwork_url not in ("un_known", "unknow"):
+    if artwork_url and artwork_url not in ("un_known", "unknow", "unknown", "none", ""):
         artwork_url = str(artwork_url).strip()
 
         # Basic URL validation - must look like a URL
