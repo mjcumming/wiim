@@ -2,6 +2,24 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.27] - 2025-01-15
+
+### Fixed
+
+- **Critical NAS Duration Display Issue**: Fixed incorrect song length display when playing from NAS sources
+  - Root cause was `media_position_updated_at` returning `float` (Unix timestamp) instead of `datetime.datetime` object
+  - Home Assistant's optimistic playback time calculations require proper datetime objects to function correctly
+  - Duration now displays correctly during both playback and pause states for NAS sources
+  - Fixed by converting Unix timestamps to datetime objects using `utc_from_timestamp()`
+  - Addresses GitHub issue #77: Song Length Wrong from NAS
+
+### Technical
+
+- **Data Type Compliance**: `media_position_updated_at` now returns proper `datetime.datetime | None` type
+- **Timestamp Conversion**: Added proper Unix timestamp to datetime conversion for Music Assistant compatibility
+- **Code Cleanup**: Removed unnecessary duration tracking workaround code that was added to try to fix the wrong problem
+- **Architecture Compliance**: Follows established Home Assistant patterns used by other integrations (Sonos, Cast, Bang & Olufsen)
+
 ## [0.1.24] - 2025-10-15
 
 ### Added

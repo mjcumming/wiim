@@ -114,7 +114,9 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
             self.speaker.is_group_coordinator,
             len(self.speaker.group_members),
         )
-        if not hasattr(self, "_last_logged_attrs") or self._last_logged_attrs != current_attrs:
+        if not hasattr(self, "_last_logged_attrs"):
+            self._last_logged_attrs = None
+        if self._last_logged_attrs != current_attrs:
             _LOGGER.info(
                 "🎯 ROLE SENSOR ATTRS CHANGED for %s: is_coordinator=%s, group_count=%s, members=%s",
                 self.speaker.name,
@@ -336,7 +338,7 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
 class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
     """Audio quality sensor showing current track's audio specifications."""
 
-    _attr_icon = "mdi:audio-high"
+    _attr_icon = "mdi:ear-hearing"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
 
@@ -355,6 +357,16 @@ class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
         sample_rate = metadata.get("sample_rate")
         bit_depth = metadata.get("bit_depth")
         bit_rate = metadata.get("bit_rate")
+
+        # If all values are None/empty, check if we have previous values to persist
+        if not any([sample_rate, bit_depth, bit_rate]):
+            # Try to get previous values from coordinator to avoid flickering during track changes
+            if hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+                last_metadata = self.speaker.coordinator._last_valid_metadata
+                if last_metadata:
+                    sample_rate = last_metadata.get("sample_rate")
+                    bit_depth = last_metadata.get("bit_depth")
+                    bit_rate = last_metadata.get("bit_rate")
 
         if all([sample_rate, bit_depth, bit_rate]):
             return f"{sample_rate}Hz / {bit_depth}bit / {bit_rate}kbps"
@@ -385,7 +397,7 @@ class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
 class WiiMSampleRateSensor(WiimEntity, SensorEntity):
     """Sample rate sensor showing current track's sample rate."""
 
-    _attr_icon = "mdi:waveform"
+    _attr_icon = "mdi:sine-wave"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "Hz"
@@ -399,13 +411,21 @@ class WiiMSampleRateSensor(WiimEntity, SensorEntity):
     def native_value(self) -> int | None:
         """Return current track's sample rate in Hz."""
         metadata = self.speaker.coordinator.data.get("metadata", {})
-        return metadata.get("sample_rate")
+        sample_rate = metadata.get("sample_rate")
+
+        # If no current value, try to get previous valid value to avoid flickering
+        if sample_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+            last_metadata = self.speaker.coordinator._last_valid_metadata
+            if last_metadata:
+                sample_rate = last_metadata.get("sample_rate")
+
+        return sample_rate
 
 
 class WiiMBitDepthSensor(WiimEntity, SensorEntity):
     """Bit depth sensor showing current track's bit depth."""
 
-    _attr_icon = "mdi:binary"
+    _attr_icon = "mdi:database"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "bit"
@@ -419,13 +439,21 @@ class WiiMBitDepthSensor(WiimEntity, SensorEntity):
     def native_value(self) -> int | None:
         """Return current track's bit depth."""
         metadata = self.speaker.coordinator.data.get("metadata", {})
-        return metadata.get("bit_depth")
+        bit_depth = metadata.get("bit_depth")
+
+        # If no current value, try to get previous valid value to avoid flickering
+        if bit_depth is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+            last_metadata = self.speaker.coordinator._last_valid_metadata
+            if last_metadata:
+                bit_depth = last_metadata.get("bit_depth")
+
+        return bit_depth
 
 
 class WiiMBitRateSensor(WiimEntity, SensorEntity):
     """Bit rate sensor showing current track's bit rate."""
 
-    _attr_icon = "mdi:speedometer"
+    _attr_icon = "mdi:transmission-tower"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "kbps"
@@ -439,4 +467,12 @@ class WiiMBitRateSensor(WiimEntity, SensorEntity):
     def native_value(self) -> int | None:
         """Return current track's bit rate in kbps."""
         metadata = self.speaker.coordinator.data.get("metadata", {})
-        return metadata.get("bit_rate")
+        bit_rate = metadata.get("bit_rate")
+
+        # If no current value, try to get previous valid value to avoid flickering
+        if bit_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+            last_metadata = self.speaker.coordinator._last_valid_metadata
+            if last_metadata:
+                bit_rate = last_metadata.get("bit_rate")
+
+        return bit_rate

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Any
 
@@ -238,9 +239,6 @@ class WiiMMediaPlayer(
 
         # Optimistic media title to show friendly station name immediately
         self._optimistic_media_title: str | None = None
-
-        # Duration tracking for supported_features updates
-        self._last_duration: int | None = None
 
         # Initialize mixins
         QuickStationsMixin.__init__(self)
@@ -563,15 +561,7 @@ class WiiMMediaPlayer(
     @property
     def media_duration(self) -> int | None:
         """Duration of current playing media in seconds."""
-        duration = self.controller.get_media_duration()
-
-        # Force supported_features re-evaluation when duration changes
-        if duration != getattr(self, "_last_duration", None):
-            self._last_duration = duration
-            # Schedule a state update to refresh supported_features
-            self.schedule_update_ha_state(force_refresh=True)
-
-        return duration
+        return self.controller.get_media_duration()
 
     @property
     def media_position(self) -> int | None:
@@ -583,7 +573,7 @@ class WiiMMediaPlayer(
         return None
 
     @property
-    def media_position_updated_at(self) -> float | None:
+    def media_position_updated_at(self) -> datetime.datetime | None:
         """When the position was last updated."""
         # Only return timestamp if entity is available
         if not self.available:
@@ -592,10 +582,14 @@ class WiiMMediaPlayer(
         # Ensure we always return a valid timestamp for Music Assistant compatibility
         timestamp = self.controller.get_media_position_updated_at()
         if timestamp is None:
-            import time
+            from homeassistant.util.dt import utcnow
 
-            timestamp = time.time()
-        return timestamp
+            return utcnow()
+
+        # Convert Unix timestamp to datetime object
+        from homeassistant.util.dt import utc_from_timestamp
+
+        return utc_from_timestamp(timestamp)
 
     @property
     def elapsed_time_last_updated(self) -> str | None:

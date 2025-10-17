@@ -68,6 +68,17 @@ async def fetch_track_metadata(coordinator, status: PlayerStatus) -> TrackMetada
             # Merge missing fields from status data as fallback
             merged_metadata = _merge_metadata_with_status_fallback(enhanced_metadata, status_dict)
             _LOGGER.debug("Enhanced and merged metadata for %s: %s", coordinator.client.host, merged_metadata)
+
+            # Store valid metadata for persistence during track changes
+            if any(
+                [merged_metadata.get("sample_rate"), merged_metadata.get("bit_depth"), merged_metadata.get("bit_rate")]
+            ):
+                coordinator._last_valid_metadata = {
+                    "sample_rate": merged_metadata.get("sample_rate"),
+                    "bit_depth": merged_metadata.get("bit_depth"),
+                    "bit_rate": merged_metadata.get("bit_rate"),
+                }
+
             return TrackMetadata.model_validate(merged_metadata)
 
     except WiiMError as err:
@@ -96,7 +107,7 @@ def _extract_audio_quality_fields(metadata: dict) -> dict[str, Any]:
 
     # Extract sample rate
     sample_rate = metadata.get("sampleRate")
-    if sample_rate:
+    if sample_rate and sample_rate not in ("unknow", "unknown", "un_known", ""):
         try:
             audio_quality["sample_rate"] = int(sample_rate)
         except (ValueError, TypeError):
@@ -104,7 +115,7 @@ def _extract_audio_quality_fields(metadata: dict) -> dict[str, Any]:
 
     # Extract bit depth
     bit_depth = metadata.get("bitDepth")
-    if bit_depth:
+    if bit_depth and bit_depth not in ("unknow", "unknown", "un_known", ""):
         try:
             audio_quality["bit_depth"] = int(bit_depth)
         except (ValueError, TypeError):
@@ -112,7 +123,7 @@ def _extract_audio_quality_fields(metadata: dict) -> dict[str, Any]:
 
     # Extract bit rate
     bit_rate = metadata.get("bitRate")
-    if bit_rate:
+    if bit_rate and bit_rate not in ("unknow", "unknown", "un_known", ""):
         try:
             audio_quality["bit_rate"] = int(bit_rate)
         except (ValueError, TypeError):

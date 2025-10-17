@@ -49,7 +49,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 | **Multiroom Groups** | Synchronized playback across speaker groups              |
 | **Quick Stations**   | Custom radio station list in Browse Media                |
 | **EQ Control**       | 10-band equalizer with presets                           |
-| **Presets**          | Hardware preset buttons (1-6)                            |
+| **Presets**          | Hardware preset buttons (device dependent, up to 20)     |
 | **Auto-Discovery**   | Finds speakers automatically via UPnP/Zeroconf           |
 
 ## Usage Examples
@@ -104,12 +104,12 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 ## Advanced Services
 
-| Service              | Description                            |
-| -------------------- | -------------------------------------- |
-| `wiim.play_preset`   | Play hardware preset (1-6)             |
-| `wiim.play_url`      | Play audio from URL                    |
-| `wiim.set_eq`        | Set equalizer presets or custom values |
-| `wiim.reboot_device` | Reboot device                          |
+| Service              | Description                             |
+| -------------------- | --------------------------------------- |
+| `wiim.play_preset`   | Play hardware preset (device dependent) |
+| `wiim.play_url`      | Play audio from URL                     |
+| `wiim.set_eq`        | Set equalizer presets or custom values  |
+| `wiim.reboot_device` | Reboot device                           |
 
 ## Source Customization
 
