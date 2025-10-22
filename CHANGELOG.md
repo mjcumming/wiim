@@ -18,12 +18,14 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 ### Fixed
 
 - **Source Field Display**: Fixed blank "Source" field in Home Assistant media player UI
+
   - **Apple Music Support**: Added proper mapping for Apple Music streaming service
   - **Source Mapping**: All streaming services (AirPlay, Spotify, Apple Music, etc.) now correctly map to "Ethernet" input
   - **UI Consistency**: Source dropdown now shows all supported input sources consistently
   - **Media Content Source**: Implemented `media_content_source` property for streaming service identification
 
 - **Audio Output Mode Stability**: Fixed audio output mode constantly changing from "Line Out" to blank
+
   - **Polling Optimization**: Improved 15-second polling interval for audio output status
   - **Data Flow**: Fixed audio output data propagation from API to status model
   - **Error Handling**: Added robust error handling for test environments and production
