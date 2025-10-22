@@ -2,6 +2,12 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.31] - 2025-01-22
+
+### Fixed
+
+- **Auto Release Workflow**: Fixed version detection issue that was preventing releases from being created
+
 ## [0.1.30] - 2025-01-22
 
 ### Added
