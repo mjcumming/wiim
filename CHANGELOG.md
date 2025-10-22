@@ -2,6 +2,12 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.30] - 2025-01-22
+
+### Added
+
+- **GitHub Star Request**: Added prominent call-to-action in README for users to star the repository
+
 ## [0.1.29] - 2025-01-22
 
 ### Added
