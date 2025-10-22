@@ -2,6 +2,48 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.29] - 2025-01-22
+
+### Added
+
+- **Audio Output Mode Control**: Added comprehensive audio output mode selection and monitoring
+  - **Audio Output Mode Select**: New select entity for controlling hardware output modes
+  - **Output Modes**: Line Out, Optical Out, Coax Out, Bluetooth Out
+  - **Bluetooth Output Status**: Sensor showing when Bluetooth output is active
+  - **Audio Cast Status**: Sensor showing when audio cast mode is active
+  - **Real-time Monitoring**: 15-second polling for output status updates
+  - **Automation Support**: Full automation and script integration for output switching
+  - **Device Compatibility**: Works with WiiM Amp and other devices with multiple output options
+
+### Fixed
+
+- **Source Field Display**: Fixed blank "Source" field in Home Assistant media player UI
+  - **Apple Music Support**: Added proper mapping for Apple Music streaming service
+  - **Source Mapping**: All streaming services (AirPlay, Spotify, Apple Music, etc.) now correctly map to "Ethernet" input
+  - **UI Consistency**: Source dropdown now shows all supported input sources consistently
+  - **Media Content Source**: Implemented `media_content_source` property for streaming service identification
+
+- **Audio Output Mode Stability**: Fixed audio output mode constantly changing from "Line Out" to blank
+  - **Polling Optimization**: Improved 15-second polling interval for audio output status
+  - **Data Flow**: Fixed audio output data propagation from API to status model
+  - **Error Handling**: Added robust error handling for test environments and production
+
+- **Source List Restoration**: Restored all previously supported input sources
+  - **Complete Source List**: Re-added Coaxial, HDMI, ARC, USB, and Line In 2 to selectable sources
+  - **User Experience**: Maintains compatibility with existing automations and configurations
+  - **Device Support**: Full support for all WiiM device input types
+
+### Technical
+
+- **API Integration**: Added `getNewAudioOutputHardwareMode` and `setAudioOutputHardwareMode` API endpoints
+- **Output Mode Mapping**: Proper mapping between API values and user-friendly mode names
+- **Status Propagation**: Audio output data integrated into device status model
+- **Entity Architecture**: New select platform entity for output mode control
+- **Sensor Enhancement**: Additional sensors for Bluetooth and audio cast status monitoring
+- **Polling Optimization**: Efficient 15-second polling interval for output status updates
+- **Source System**: Enhanced two-layer source system (Input/Connection + Service/Content)
+- **Code Quality**: Removed temporary debugging code, improved error handling, and enhanced test compatibility
+
 ## [0.1.27] - 2025-01-15
 
 ### Fixed

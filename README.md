@@ -41,16 +41,17 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ## Key Features
 
-| Feature              | Description                                              |
-| -------------------- | -------------------------------------------------------- |
-| **Media Control**    | Play, pause, stop, next/previous, seek                   |
-| **Volume Control**   | Individual and synchronized group volume                 |
-| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, etc.) |
-| **Multiroom Groups** | Synchronized playback across speaker groups              |
-| **Quick Stations**   | Custom radio station list in Browse Media                |
-| **EQ Control**       | 10-band equalizer with presets                           |
-| **Presets**          | Hardware preset buttons (device dependent, up to 20)     |
-| **Auto-Discovery**   | Finds speakers automatically via UPnP/Zeroconf           |
+| Feature              | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| **Media Control**    | Play, pause, stop, next/previous, seek                             |
+| **Volume Control**   | Individual and synchronized group volume                           |
+| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, etc.)           |
+| **Audio Output**     | Control hardware output modes (Line Out, Optical, Coax, Bluetooth) |
+| **Multiroom Groups** | Synchronized playback across speaker groups                        |
+| **Quick Stations**   | Custom radio station list in Browse Media                          |
+| **EQ Control**       | 10-band equalizer with presets                                     |
+| **Presets**          | Hardware preset buttons (device dependent, up to 20)               |
+| **Auto-Discovery**   | Finds speakers automatically via UPnP/Zeroconf                     |
 
 ## Usage Examples
 
@@ -84,6 +85,22 @@ Create `wiim_stations.yaml` in your config folder:
 ```
 
 Access via **Browse Media → Quick Stations** on any WiiM device.
+
+### Audio Output Control
+
+```yaml
+# Switch to Bluetooth output
+- service: select.select_option
+  target: select.living_room_audio_output_mode
+  data:
+    option: "Bluetooth Out"
+
+# Switch to Line Out
+- service: select.select_option
+  target: select.living_room_audio_output_mode
+  data:
+    option: "Line Out"
+```
 
 ### Automation Examples
 

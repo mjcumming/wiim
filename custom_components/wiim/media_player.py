@@ -465,7 +465,13 @@ class WiiMMediaPlayer(
         """Name of the current input source."""
         # Use optimistic state if available for immediate feedback
         if self._optimistic_source is not None:
-            return self._optimistic_source
+            result = self._optimistic_source
+            _LOGGER.debug(
+                "[DEBUG] %s: source property (optimistic) - result=%s",
+                self.speaker.name,
+                result,
+            )
+            return result
 
         # Check for role transition from slave to solo
         current_role = self.speaker.role
@@ -475,14 +481,32 @@ class WiiMMediaPlayer(
             and self.controller.get_current_source() == "Follower"
         ):
             # Speaker just ungrouped from slave to solo, show unknown instead of Follower
-            return "unknown"
+            result = "unknown"
+            _LOGGER.debug(
+                "[DEBUG] %s: source property (role transition) - result=%s",
+                self.speaker.name,
+                result,
+            )
+            return result
 
-        return self.controller.get_current_source()
+        result = self.controller.get_current_source()
+        _LOGGER.debug(
+            "[DEBUG] %s: source property (normal) - result=%s",
+            self.speaker.name,
+            result,
+        )
+        return result
 
     @property
     def source_list(self) -> list[str]:
         """List of available input sources."""
-        return self.controller.get_source_list()
+        result = self.controller.get_source_list()
+        _LOGGER.debug(
+            "[DEBUG] %s: source_list property - result=%s",
+            self.speaker.name,
+            result,
+        )
+        return result
 
     @property
     def sound_mode(self) -> str | None:
@@ -493,6 +517,17 @@ class WiiMMediaPlayer(
     def sound_mode_list(self) -> list[str]:
         """List of available sound modes."""
         return self.controller.get_sound_mode_list()
+
+    @property
+    def media_content_source(self) -> str | None:
+        """Return the content source (streaming service name)."""
+        result = self.get_app_name()
+        _LOGGER.debug(
+            "[DEBUG] %s: media_content_source property - result=%s",
+            self.speaker.name,
+            result,
+        )
+        return result
 
     @property
     def shuffle(self) -> bool | None:
@@ -517,6 +552,18 @@ class WiiMMediaPlayer(
         """Content type of current playing media."""
         # Most WiiM content is music
         return MediaType.MUSIC
+
+    @property
+    def media_content_id(self) -> str | None:
+        """Content ID of current playing media."""
+        # Return the current source as the content ID
+        result = self.get_app_name()
+        _LOGGER.debug(
+            "[DEBUG] %s: media_content_id property - result=%s",
+            self.speaker.name,
+            result,
+        )
+        return result
 
     @property
     def media_title(self) -> str | None:
@@ -922,7 +969,13 @@ class WiiMMediaPlayer(
     @property
     def app_name(self) -> str | None:
         """Return the name of the current streaming service."""
-        return self.get_app_name()
+        result = self.get_app_name()
+        _LOGGER.debug(
+            "[DEBUG] %s: app_name property - result=%s",
+            self.speaker.name,
+            result,
+        )
+        return result
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -937,6 +990,10 @@ class WiiMMediaPlayer(
             # Music Assistant compatibility attributes
             "music_assistant_compatible": True,
             "integration_purpose": "individual_speaker_control",
+            # Audio output status
+            "bluetooth_output_active": self.speaker.is_bluetooth_output_active(),
+            "hardware_output_mode": self.speaker.get_hardware_output_mode(),
+            "audio_cast_active": self.speaker.is_audio_cast_active(),
         }
 
         # Add group info if in a group

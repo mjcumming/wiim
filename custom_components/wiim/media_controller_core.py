@@ -402,6 +402,47 @@ class MediaControllerCoreMixin:
             self._logger.error("Failed to set EQ preset '%s': %s", preset, err)
             raise HomeAssistantError(f"Failed to set EQ preset '{preset}' on {self.speaker.name}: {err}") from err
 
+    async def select_output_mode(self, output_mode: str) -> None:
+        """Select hardware output mode.
+
+        Args:
+            output_mode: Output mode to select (Line Out, Optical Out, Coax Out, Bluetooth Out)
+        """
+        try:
+            self._logger.info(
+                "WiiM Media Controller: Selecting output mode '%s' for %s", output_mode, self.speaker.name
+            )
+
+            # Map friendly output mode names to API values
+            from .const import AUDIO_OUTPUT_MODES
+
+            # Find the API value for the output mode
+            api_value = None
+            for api_val, friendly_name in AUDIO_OUTPUT_MODES.items():
+                if output_mode == friendly_name or output_mode.lower() == friendly_name.lower():
+                    api_value = api_val
+                    break
+
+            if api_value is None:
+                raise ValueError(
+                    f"Invalid output mode: {output_mode}. Valid modes: {list(AUDIO_OUTPUT_MODES.values())}"
+                )
+
+            self._logger.info(
+                "WiiM Media Controller: Mapped output mode '%s' to API value '%s'", output_mode, api_value
+            )
+
+            await self.speaker.coordinator.client.set_audio_output_hardware_mode(int(api_value))
+            self._logger.info(
+                "WiiM Media Controller: Successfully sent API command setAudioOutputHardwareMode:%s", api_value
+            )
+
+        except Exception as err:
+            self._logger.error("Failed to select output mode '%s': %s", output_mode, err)
+            raise HomeAssistantError(
+                f"Failed to select output mode '{output_mode}' on {self.speaker.name}: {err}"
+            ) from err
+
     async def set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode using WiiM's loopmode command.
 

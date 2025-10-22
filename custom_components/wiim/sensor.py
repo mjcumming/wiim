@@ -15,7 +15,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+# from .const import DOMAIN
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
@@ -33,7 +33,6 @@ async def async_setup_entry(
     Diagnostic sensors only created when user enables them.
     """
     speaker = get_speaker_from_config_entry(hass, config_entry)
-    hass.data[DOMAIN][config_entry.entry_id]["entry"]
 
     entities = []
 
@@ -42,6 +41,9 @@ async def async_setup_entry(
 
     # Current Input sensor (always useful)
     entities.append(WiiMInputSensor(speaker))
+
+    # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
+    entities.append(WiiMBluetoothOutputSensor(speaker))
 
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))
@@ -330,6 +332,32 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self):
         return self.speaker.get_current_source()
+
+
+class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
+    """Shows Bluetooth output status (whether audio is being sent to Bluetooth device)."""
+
+    _attr_icon = "mdi:bluetooth"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_bluetooth_output"
+        self._attr_name = "Bluetooth Output"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> str:
+        """Return 'on' if Bluetooth output is active, 'off' if not."""
+        return "on" if self.speaker.is_bluetooth_output_active() else "off"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        return {
+            "hardware_output_mode": self.speaker.get_hardware_output_mode(),
+            "audio_cast_active": self.speaker.is_audio_cast_active(),
+        }
 
 
 # ------------------- Audio Quality Sensors -------------------

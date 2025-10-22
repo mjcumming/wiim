@@ -659,6 +659,84 @@ make stats
 
 ---
 
+## 🔊 **Audio Output Mode Control**
+
+### **Hardware Output Management**
+
+WiiM devices with multiple output options (like the WiiM Amp) support hardware output mode switching through dedicated API endpoints. This allows users to control which physical output the audio is routed to.
+
+#### **API Endpoints**
+
+**Get Current Output Status:**
+
+```
+GET https://<device_ip>/httpapi.asp?command=getNewAudioOutputHardwareMode
+```
+
+**Response:**
+
+```json
+{
+  "hardware": "2", // Current hardware output mode (1-4)
+  "source": "0", // Bluetooth output status (0=disabled, 1=active)
+  "audiocast": "0" // Audio cast status (0=disabled, 1=active)
+}
+```
+
+**Set Output Mode:**
+
+```
+GET https://<device_ip>/httpapi.asp?command=setAudioOutputHardwareMode:<mode>
+```
+
+#### **Output Mode Mapping**
+
+| API Mode | Output Type   | Description                  | Device Support     |
+| -------- | ------------- | ---------------------------- | ------------------ |
+| **1**    | Optical Out   | SPDIF/Optical digital output | WiiM Amp, Pro Plus |
+| **2**    | Line Out      | AUX/Analog line output       | WiiM Amp, Pro Plus |
+| **3**    | Coax Out      | Coaxial digital output       | WiiM Amp, Pro Plus |
+| **4**    | Bluetooth Out | Bluetooth audio output       | WiiM Amp, Pro Plus |
+
+#### **Implementation Strategy**
+
+Our integration provides:
+
+1. **Select Entity**: `select.<device>_audio_output_mode` for easy mode switching
+2. **Status Sensors**: Individual sensors for Bluetooth and audio cast status
+3. **Automation Support**: Full automation integration for output switching
+4. **Real-time Updates**: 15-second polling for status changes
+
+#### **Bluetooth Output Behavior**
+
+The `source` field indicates when Bluetooth output is active:
+
+- **`"source": "0"`**: Bluetooth output disabled (using hardware outputs)
+- **`"source": "1"`**: Bluetooth output active (audio routed to paired Bluetooth device)
+
+**Important**: Bluetooth output is controlled by firmware auto-connection behavior, not direct API commands. When a previously paired Bluetooth device becomes available, the WiiM automatically switches to Bluetooth output.
+
+#### **User Experience**
+
+**Before**: Users had to manually switch output modes using the WiiM app
+**After**: Complete output control through Home Assistant automations and UI
+
+```yaml
+# Example automation: Switch to Bluetooth when headphones connect
+- alias: "Switch to Bluetooth Output"
+  trigger:
+    platform: device_tracker
+    entity_id: device_tracker.headphones
+    to: "home"
+  action:
+    - service: select.select_option
+      target: select.living_room_audio_output_mode
+      data:
+        option: "Bluetooth Out"
+```
+
+---
+
 ## 🎵 **Multiroom Group Controls**
 
 ### **Group Volume & Mute Entities**
@@ -742,12 +820,37 @@ async def async_set_native_value(self, value: float) -> None:
 
 ### **Status Queries**
 
-| Command       | Endpoint                 | Response Type | Notes                         |
-| ------------- | ------------------------ | ------------- | ----------------------------- |
-| Player Status | `getPlayerStatus`        | JSON          | Universal - always works      |
-| Device Info   | `getStatusEx`            | JSON          | WiiM enhanced - probe first   |
-| Metadata      | `getMetaInfo`            | JSON          | Often missing - have fallback |
-| Multiroom     | `multiroom:getSlaveList` | JSON          | Only works on masters         |
+| Command       | Endpoint                        | Response Type | Notes                         |
+| ------------- | ------------------------------- | ------------- | ----------------------------- |
+| Player Status | `getPlayerStatus`               | JSON          | Universal - always works      |
+| Device Info   | `getStatusEx`                   | JSON          | WiiM enhanced - probe first   |
+| Metadata      | `getMetaInfo`                   | JSON          | Often missing - have fallback |
+| Audio Output  | `getNewAudioOutputHardwareMode` | JSON          | Hardware output status        |
+| Multiroom     | `multiroom:getSlaveList`        | JSON          | Only works on masters         |
+
+### **Audio Output Controls**
+
+| Command    | Endpoint                            | Parameters | Notes                    |
+| ---------- | ----------------------------------- | ---------- | ------------------------ |
+| Get Output | `getNewAudioOutputHardwareMode`     | None       | Hardware output status   |
+| Set Output | `setAudioOutputHardwareMode:<mode>` | mode: 1-4  | Set hardware output mode |
+
+**Audio Output Modes:**
+
+- **Mode 1**: Optical Out (SPDIF)
+- **Mode 2**: Line Out (AUX/Analog)
+- **Mode 3**: Coax Out (Coaxial)
+- **Mode 4**: Bluetooth Out
+
+**Response Format:**
+
+```json
+{
+  "hardware": "2", // Current hardware output mode
+  "source": "0", // Bluetooth output status (0=disabled, 1=active)
+  "audiocast": "0" // Audio cast status (0=disabled, 1=active)
+}
+```
 
 ### **EQ Controls**
 

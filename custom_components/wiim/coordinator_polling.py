@@ -82,6 +82,25 @@ def _should_update_multiroom(coordinator, is_activity_triggered: bool = False) -
     return time_based or is_activity_triggered
 
 
+def _should_update_audio_output(coordinator) -> bool:
+    """Check if audio output status should be updated (15s interval, or on first update)."""
+    if not hasattr(coordinator, "_last_audio_output_check"):
+        coordinator._last_audio_output_check = 0
+
+    # Always fetch on first update (when _last_audio_output_check is 0)
+    if coordinator._last_audio_output_check == 0:
+        return True
+
+    try:
+        current_time = time.time()
+        time_since_last = current_time - coordinator._last_audio_output_check
+        # Then every 15 seconds thereafter for production
+        return time_since_last >= 15
+    except (TypeError, AttributeError):
+        # Handle test environments where time.time() might be mocked
+        return True
+
+
 def _check_and_clear_metadata_on_stop(coordinator, status_model: PlayerStatus) -> None:
     """Clear stored metadata when playback stops to prevent stale data persistence."""
     play_state = str(status_model.play_state or "").lower()
@@ -284,6 +303,12 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             task_names.append("multiroom")
             coordinator._last_multiroom_check = time.time()
 
+        # Audio Output Status (every 15s - not critical, but useful for automation)
+        if _should_update_audio_output(coordinator):
+            fetch_tasks.append(coordinator.client.get_audio_output_status())
+            task_names.append("audio_output")
+            coordinator._last_audio_output_check = time.time()
+
         # Metadata (only on track change, if supported)
         # Skip metadata fetch during initial setup to prevent blocking on older devices
         # that don't support getMetaInfo - only fetch after device is confirmed working
@@ -319,7 +344,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Execute fast HTTP calls in parallel
         results = []
         if fetch_tasks:
-            _LOGGER.debug(
+            _LOGGER.info(
                 "Fast-fetching %s in parallel for %s",
                 ", ".join(task_names),
                 coordinator.client.host,
@@ -354,6 +379,15 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             else:
                 multiroom_info = results[result_idx] or {}
                 coordinator._multiroom_working = bool(multiroom_info)
+            result_idx += 1
+
+        # Process audio output result
+        audio_output_data = {}
+        if "audio_output" in task_names:
+            if isinstance(results[result_idx], Exception):
+                _LOGGER.debug("Audio output fetch failed: %s", results[result_idx])
+            else:
+                audio_output_data = results[result_idx] or {}
             result_idx += 1
 
         # Process metadata result
@@ -515,11 +549,16 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             "role": role,
             "polling_metrics": polling_data_model,
             "polling": polling_data,
+            "audio_output": audio_output_data,
         }
 
         # Propagate EQ preset to status
         if eq_info_model and eq_info_model.eq_preset:
             status_model.eq_preset = eq_info_model.eq_preset
+
+        # Propagate audio output data to status model
+        if audio_output_data:
+            status_model.audio_output = audio_output_data
 
         # Ensure UUID is present
         if device_model and not device_model.uuid and coordinator.entry:

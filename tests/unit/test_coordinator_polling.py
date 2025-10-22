@@ -115,6 +115,11 @@ async def test_polling_success_complete(mock_coordinator):
         # Mock presets call
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         # Verify result structure
@@ -167,6 +172,11 @@ async def test_polling_device_info_failure(mock_coordinator):
     # Properly mock _fetch_eq_info to return an EQInfo object
     mock_coordinator._fetch_eq_info = AsyncMock(return_value=EQInfo.model_validate({"eq_enabled": False}))
 
+    # Mock audio output call
+    mock_coordinator.client.get_audio_output_status = AsyncMock(
+        return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+    )
+
     # Mock the heavy processing to return empty data
     with patch("custom_components.wiim.coordinator_polling._process_heavy_operations", return_value={}):
         result = await async_update_data(mock_coordinator)
@@ -208,6 +218,11 @@ async def test_polling_presets_not_supported(mock_coordinator):
         mock_coordinator._presets_supported = None
         mock_coordinator.client.get_presets = AsyncMock(side_effect=WiiMError("Not supported"))
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         assert result["presets"] == []
@@ -240,6 +255,11 @@ async def test_polling_presets_already_not_supported(mock_coordinator):
 
         # Presets already known to be unsupported
         mock_coordinator._presets_supported = False
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         result = await async_update_data(mock_coordinator)
 
@@ -280,6 +300,11 @@ async def test_polling_artwork_propagation(mock_coordinator):
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         # Artwork should be propagated to status model
@@ -316,6 +341,11 @@ async def test_polling_eq_preset_propagation(mock_coordinator):
         mock_role.return_value = "solo"
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         result = await async_update_data(mock_coordinator)
 
@@ -360,6 +390,11 @@ async def test_polling_uuid_injection(mock_coordinator):
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         # UUID should be injected from config entry
@@ -395,6 +430,11 @@ async def test_polling_response_time_tracking(mock_coordinator):
         mock_role.return_value = "solo"
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         await async_update_data(mock_coordinator)
 
@@ -434,6 +474,11 @@ async def test_polling_command_failure_clearing(mock_coordinator):
         mock_role.return_value = "solo"
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         await async_update_data(mock_coordinator)
 

@@ -13,6 +13,8 @@ from typing import Any
 from urllib.parse import quote
 
 from .const import (
+    API_ENDPOINT_AUDIO_OUTPUT_SET,
+    API_ENDPOINT_AUDIO_OUTPUT_STATUS,
     API_ENDPOINT_CLEAR_PLAYLIST,
     API_ENDPOINT_LOOPMODE,
     API_ENDPOINT_MUTE,
@@ -96,6 +98,35 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
             source: Source to switch to (e.g., "wifi", "bluetooth", "line_in", "optical")
         """
         await self._request(f"{API_ENDPOINT_SOURCE}{source}")  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------
+    # Audio Output Control
+    # ------------------------------------------------------------------
+
+    async def get_audio_output_status(self) -> dict[str, Any]:  # type: ignore[override]
+        """Get current audio output status including Bluetooth output mode.
+
+        Returns:
+            dict with keys: hardware, source, audiocast
+            - hardware: Hardware output mode (0=Line Out, 1=Optical Out, 2=Line Out, 3=Coax Out, 4=Bluetooth Out)
+            - source: Bluetooth output mode (0=disabled, 1=active)
+            - audiocast: Audio cast mode (0=disabled, 1=active)
+        """
+        try:
+            result = await self._request(API_ENDPOINT_AUDIO_OUTPUT_STATUS)  # type: ignore[attr-defined]
+            _LOGGER.debug("[DEBUG] %s: Audio output API result: %s", self.host, result)
+            return result if result else {}
+        except Exception as e:
+            _LOGGER.debug("Audio output API call failed: %s", e)
+            return {}
+
+    async def set_audio_output_hardware_mode(self, mode: int) -> None:  # type: ignore[override]
+        """Set hardware audio output mode.
+
+        Args:
+            mode: Hardware output mode (1=SPDIF, 2=AUX, 3=COAX)
+        """
+        await self._request(f"{API_ENDPOINT_AUDIO_OUTPUT_SET}{mode}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Playlist helpers

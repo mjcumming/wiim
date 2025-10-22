@@ -116,13 +116,8 @@ class Speaker:
         # placeholder) so the test fixtures don't crash while still keeping a
         # stable identifier for look-ups.
 
-        if (
-            not hasattr(self.config_entry, "entry_id")
-            or self.config_entry.entry_id is None
-        ):
-            fallback_entry_id = (
-                getattr(self.config_entry, "unique_id", None) or "mock_entry_id"
-            )
+        if not hasattr(self.config_entry, "entry_id") or self.config_entry.entry_id is None:
+            fallback_entry_id = getattr(self.config_entry, "unique_id", None) or "mock_entry_id"
             # Direct assignment is safe on MagicMock / MockConfigEntry instances used in tests
             self.config_entry.entry_id = fallback_entry_id
 
@@ -131,9 +126,7 @@ class Speaker:
         # _populate_device_info is a synchronous helper; no need to await.
         self._populate_device_info()
         await self._register_ha_device(entry)
-        _LOGGER.info(
-            "Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name
-        )
+        _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
     @property
     def uuid(self) -> str:
@@ -165,27 +158,15 @@ class Speaker:
 
     def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
-        status_model = (
-            self.coordinator.data.get("status_model")
-            if self.coordinator and self.coordinator.data
-            else None
-        )
+        status_model = self.coordinator.data.get("status_model") if self.coordinator and self.coordinator.data else None
         status: dict[str, Any] = (
-            status_model.model_dump(exclude_none=True)
-            if isinstance(status_model, PlayerStatus)
-            else {}
+            status_model.model_dump(exclude_none=True) if isinstance(status_model, PlayerStatus) else {}
         )
 
         # Debug: Log available fields for device naming
         _LOGGER.debug(
             "Available status fields for device naming: %s",
-            {
-                k: v
-                for k, v in status.items()
-                if any(
-                    name in k.lower() for name in ["name", "device", "group", "ssid"]
-                )
-            },
+            {k: v for k, v in status.items() if any(name in k.lower() for name in ["name", "device", "group", "ssid"])},
         )
 
         self.ip_address = self.coordinator.client.host
@@ -208,11 +189,7 @@ class Speaker:
         # Group info - role is stored in main coordinator data, not multiroom section
         # Only set role if it hasn't been set by role detection yet (avoid overriding)
         if not hasattr(self, "role") or self.role is None:
-            self.role = (
-                self.coordinator.data.get("role", "solo")
-                if self.coordinator.data
-                else "solo"
-            )
+            self.role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
 
     async def _register_ha_device(self, entry: ConfigEntry) -> None:
         """Register device in HA registry."""
@@ -246,14 +223,10 @@ class Speaker:
         device_model = data.get("device_model")
 
         status: dict[str, Any] = (
-            status_model.model_dump(exclude_none=True)
-            if isinstance(status_model, PlayerStatus)
-            else {}
+            status_model.model_dump(exclude_none=True) if isinstance(status_model, PlayerStatus) else {}
         )
         device_info: dict[str, Any] = (
-            device_model.model_dump(exclude_none=True)
-            if isinstance(device_model, WiiMDeviceInfo)
-            else {}
+            device_model.model_dump(exclude_none=True) if isinstance(device_model, WiiMDeviceInfo) else {}
         )
         # Get role from coordinator data, preserving existing role if coordinator data unavailable
         # Role detection sets the role correctly, don't override with fallback defaults
@@ -295,18 +268,14 @@ class Speaker:
                 "WiiM Speaker",
                 "WiiM Device",
             ]:
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, title=new_name
-                )
+                self.hass.config_entries.async_update_entry(self.config_entry, title=new_name)
 
         # Update role and group state
         old_role = self.role
         self.role = role
 
         if old_role != self.role:
-            _LOGGER.info(
-                "Speaker %s role changed: %s -> %s", self.name, old_role, self.role
-            )
+            _LOGGER.info("Speaker %s role changed: %s -> %s", self.name, old_role, self.role)
 
         # Handle group relationships using simple lookups
         if self.role == "master":
@@ -340,9 +309,7 @@ class Speaker:
         self.coordinator_speaker = None  # Masters don't have coordinators
 
         # Only log when group composition actually changes
-        current_slave_ips = [
-            m.ip_address for m in self.group_members if hasattr(m, "ip_address")
-        ]
+        current_slave_ips = [m.ip_address for m in self.group_members if hasattr(m, "ip_address")]
         new_slave_ips = []
         for slave_info in slave_list:
             if isinstance(slave_info, dict):
@@ -397,9 +364,7 @@ class Speaker:
                     )
                     self._missing_devices_reported.add(slave_uuid)
                     self.hass.async_create_task(
-                        self._trigger_missing_device_discovery(
-                            slave_uuid, slave_name, slave_ip
-                        )
+                        self._trigger_missing_device_discovery(slave_uuid, slave_name, slave_ip)
                     )
                 elif slave_uuid:
                     # Subsequent polls - only log at debug level to avoid spam
@@ -443,9 +408,7 @@ class Speaker:
                     )
                     self._missing_devices_reported.add(master_uuid)
                     self.hass.async_create_task(
-                        self._trigger_missing_device_discovery(
-                            master_uuid, "Missing Master", None
-                        )
+                        self._trigger_missing_device_discovery(master_uuid, "Missing Master", None)
                     )
                 else:
                     # Subsequent polls - only log at debug level to avoid spam
@@ -468,18 +431,14 @@ class Speaker:
             from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 
             # Check if already have config entry
-            existing = self.hass.config_entries.async_entry_for_domain_unique_id(
-                DOMAIN, device_uuid
-            )
+            existing = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, device_uuid)
             if existing:
                 return
 
             # Check for existing discovery flows
             existing_flows = [
                 flow
-                for flow in self.hass.config_entries.flow.async_progress_by_handler(
-                    DOMAIN
-                )
+                for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN)
                 if flow.get("context", {}).get("unique_id") == device_uuid
             ]
             if existing_flows:
@@ -495,9 +454,7 @@ class Speaker:
             discovery_data = {
                 "device_uuid": device_uuid,
                 "device_name": device_name,
-                "discovery_source": "missing_device"
-                if not device_ip
-                else "automatic_slave",
+                "discovery_source": "missing_device" if not device_ip else "automatic_slave",
             }
 
             # Include IP if available (enables automatic setup without user input)
@@ -550,9 +507,7 @@ class Speaker:
             or status.get("friendlyName")  # Common API field
             or status.get("name")  # Generic name field
             or status.get("GroupName")  # Group name field
-            or status.get("ssid", "").replace(
-                "_", " "
-            )  # Device hotspot name (fallback)
+            or status.get("ssid", "").replace("_", " ")  # Device hotspot name (fallback)
             # REMOVED: or status.get("title")  # This is SONG TITLE, not device name!
             or "WiiM Speaker"  # Clean final fallback (no IP)
         )
@@ -616,9 +571,7 @@ class Speaker:
             ordered_members = [self] + self.group_members
 
         # Map to entity IDs and filter out any unresolved speakers (None)
-        return [
-            eid for eid in (_speaker_to_entity_id(s) for s in ordered_members) if eid
-        ]
+        return [eid for eid in (_speaker_to_entity_id(s) for s in ordered_members) if eid]
 
     async def async_join_group(self, target_speakers: list[Speaker]) -> None:
         """Create or extend a multiroom group with *self* as master.
@@ -653,9 +606,7 @@ class Speaker:
                 await self.coordinator.client.leave_group()
             elif self.role == "slave" and self.coordinator_speaker:
                 # Ask master to kick us out.
-                await self.coordinator_speaker.coordinator.client.kick_slave(
-                    self.ip_address
-                )
+                await self.coordinator_speaker.coordinator.client.kick_slave(self.ip_address)
             # Solo => nothing to do.
         except Exception as err:  # pragma: no cover
             _LOGGER.error("Failed to leave group: %s", err)
@@ -828,18 +779,108 @@ class Speaker:
         if self.status_model is None:
             return None
 
-        source_internal = self.status_model.source or getattr(
-            self.status_model, "mode", None
-        )
+        source_internal = self.status_model.source or getattr(self.status_model, "mode", None)
 
         if not source_internal:
             return None
         try:
             from .const import SOURCE_MAP
 
-            return SOURCE_MAP.get(str(source_internal).lower(), str(source_internal))
+            result = SOURCE_MAP.get(str(source_internal).lower(), str(source_internal))
+            return result
         except Exception:
             return str(source_internal)
+
+    # ----- AUDIO OUTPUT HELPERS -----
+
+    def is_bluetooth_output_active(self) -> bool:
+        """Return True if Bluetooth output is currently active."""
+        if self.status_model is None:
+            return False
+
+        # Check if audio output data is available
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None:
+            return False
+
+        return audio_output.get("source") == "1"
+
+    def get_hardware_output_mode(self) -> str | None:
+        """Return current hardware output mode name."""
+        if self.status_model is None:
+            return None
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None:
+            return None
+
+        mode_map = {"1": "SPDIF", "2": "AUX", "3": "COAX"}
+
+        hardware_mode = audio_output.get("hardware")
+        return mode_map.get(str(hardware_mode), f"Unknown ({hardware_mode})")
+
+    def is_audio_cast_active(self) -> bool:
+        """Return True if audio cast mode is currently active."""
+        if self.status_model is None:
+            return False
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None:
+            return False
+
+        return audio_output.get("audiocast") == "1"
+
+    def get_current_output_mode(self) -> str | None:
+        """Return current hardware output mode name."""
+        if self.status_model is None:
+            return None
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+
+        if audio_output is None:
+            return None
+
+        from .const import AUDIO_OUTPUT_MODES
+
+        hardware_mode = audio_output.get("hardware")
+
+        if hardware_mode is None:
+            return None
+
+        mode_str = str(hardware_mode)
+
+        # Return known mode or "Unknown" with the raw value
+        result = AUDIO_OUTPUT_MODES.get(mode_str, f"Unknown ({hardware_mode})")
+        return result
+
+    def get_output_mode_list(self) -> list[str]:
+        """Return list of selectable output modes."""
+        from .const import SELECTABLE_OUTPUT_MODES
+
+        return SELECTABLE_OUTPUT_MODES.copy()
+
+    def get_discovered_output_modes(self) -> list[str]:
+        """Return list of output modes discovered from device status."""
+        if self.status_model is None:
+            return []
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None:
+            return []
+
+        from .const import AUDIO_OUTPUT_MODES
+
+        # Get all known modes plus any unknown ones we've seen
+        discovered_modes = []
+        hardware_mode = audio_output.get("hardware")
+        if hardware_mode is not None:
+            mode_str = str(hardware_mode)
+            if mode_str in AUDIO_OUTPUT_MODES:
+                discovered_modes.append(AUDIO_OUTPUT_MODES[mode_str])
+            else:
+                discovered_modes.append(f"Unknown ({hardware_mode})")
+
+        return discovered_modes
 
     def get_shuffle_state(self) -> bool | None:
         """Return True if shuffle is active, False if off, None if unknown."""

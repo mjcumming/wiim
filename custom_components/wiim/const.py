@@ -134,6 +134,24 @@ API_ENDPOINT_EQ_LIST = "/httpapi.asp?command=EQGetList"
 API_ENDPOINT_SOURCE = "/httpapi.asp?command=setPlayerCmd:switchmode:"
 API_ENDPOINT_SOURCES = "/httpapi.asp?command=getPlayerCmd:switchmode"
 
+# Audio Output Control
+API_ENDPOINT_AUDIO_OUTPUT_STATUS = "/httpapi.asp?command=getNewAudioOutputHardwareMode"
+API_ENDPOINT_AUDIO_OUTPUT_SET = "/httpapi.asp?command=setAudioOutputHardwareMode:"
+
+# Audio Output Modes
+# Based on API documentation: 1=SPDIF, 2=AUX, 3=COAX
+# WiiM Amp has 4 options: Line Out, Optical Out, Coax Out, BT Out
+# Mode 0 likely = Line Out, Mode 4 likely = Bluetooth Out
+AUDIO_OUTPUT_MODES = {
+    "1": "Optical Out",  # SPDIF/Optical Out
+    "2": "Line Out",  # AUX/Analog Out (shows as Line Out in WiiM app)
+    "3": "Coax Out",  # Coaxial Out
+    "4": "Bluetooth Out",  # Bluetooth Out
+}
+
+# Selectable output modes (hardware only - Bluetooth is firmware-controlled)
+SELECTABLE_OUTPUT_MODES = ["Line Out", "Optical Out", "Coax Out", "Bluetooth Out"]
+
 # Device Info
 API_ENDPOINT_DEVICE_INFO = "/httpapi.asp?command=getDeviceInfo"
 API_ENDPOINT_FIRMWARE = "/httpapi.asp?command=getFirmwareVersion"
@@ -214,23 +232,25 @@ SOURCE_ARC = "arc"
 SOURCE_FOLLOWER = "follower"
 
 SOURCE_MAP = {
-    "wifi": "WiFi",
+    "wifi": "Ethernet",
+    "ethernet": "Ethernet",
     "line_in": "Line In",
     "bluetooth": "Bluetooth",
     "optical": "Optical",
     "coaxial": "Coaxial",
     "arc": "ARC",
     "follower": "Follower",
-    "airplay": "AirPlay",
-    "dlna": "DLNA",
-    "spotify": "Spotify",
-    "spotify connect": "Spotify Connect",
-    "tidal": "Tidal",
-    "amazon": "Amazon Music",
-    "qobuz": "Qobuz",
-    "deezer": "Deezer",
+    "airplay": "Ethernet",  # AirPlay works through Ethernet/WiFi
+    "dlna": "Ethernet",  # DLNA works through Ethernet/WiFi
+    "spotify": "Ethernet",  # Spotify works through Ethernet/WiFi
+    "spotify connect": "Ethernet",  # Spotify Connect works through Ethernet/WiFi
+    "tidal": "Ethernet",  # Tidal works through Ethernet/WiFi
+    "amazon": "Ethernet",  # Amazon Music works through Ethernet/WiFi
+    "apple_music": "Ethernet",  # Apple Music works through Ethernet/WiFi
+    "qobuz": "Ethernet",  # Qobuz works through Ethernet/WiFi
+    "deezer": "Ethernet",  # Deezer works through Ethernet/WiFi
     "usb": "USB",
-    "network": "Network",
+    "network": "Ethernet",
     "idle": "Idle",
     "multiroom": "Multiroom",
     "usb dac": "USB DAC",
@@ -242,7 +262,7 @@ SOURCE_MAP = {
 # Selectable sources only - excludes status indicators
 # These are the actual sources that work with the switchmode API command
 SELECTABLE_SOURCES = [
-    "WiFi",  # Network/streaming mode (where Spotify, Tidal, etc. work)
+    "Ethernet",  # Network/streaming mode (where Spotify, Tidal, AirPlay, etc. work)
     "Bluetooth",  # Bluetooth input
     "Line In",  # Analog input
     "Optical",  # Digital optical input
