@@ -83,7 +83,11 @@ def _should_update_multiroom(coordinator, is_activity_triggered: bool = False) -
 
 
 def _should_update_audio_output(coordinator) -> bool:
-    """Check if audio output status should be updated (15s interval, or on first update)."""
+    """Check if audio output status should be updated (15s interval, or on first update).
+
+    Audio output modes change rarely, but we need to understand why the API is failing.
+    Keeping original 15s polling to maintain consistency with other features.
+    """
     if not hasattr(coordinator, "_last_audio_output_check"):
         coordinator._last_audio_output_check = 0
 
@@ -94,7 +98,7 @@ def _should_update_audio_output(coordinator) -> bool:
     try:
         current_time = time.time()
         time_since_last = current_time - coordinator._last_audio_output_check
-        # Then every 15 seconds thereafter for production
+        # Keep original 15 second polling - if it was working before, no need to change
         return time_since_last >= 15
     except (TypeError, AttributeError):
         # Handle test environments where time.time() might be mocked
@@ -305,6 +309,9 @@ async def async_update_data(coordinator) -> dict[str, Any]:
 
         # Audio Output Status (every 15s - not critical, but useful for automation)
         if _should_update_audio_output(coordinator):
+            _LOGGER.debug(
+                "[AUDIO OUTPUT DEBUG] %s: Scheduling audio output status fetch (every 15s)", coordinator.client.host
+            )
             fetch_tasks.append(coordinator.client.get_audio_output_status())
             task_names.append("audio_output")
             coordinator._last_audio_output_check = time.time()
@@ -361,14 +368,37 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         track_metadata_model = coordinator.data.get("metadata_model") if coordinator.data else None
         eq_info_model = coordinator.data.get("eq_model") if coordinator.data else None
 
-        # Process device info result
+        # Process device info result (core status)
         if "device_info" in task_names:
             if isinstance(results[result_idx], Exception):
                 _LOGGER.debug("Device info fetch failed: %s", results[result_idx])
                 coordinator._device_info_working = False
+
+                # Track consecutive failures for core device communication
+                if not hasattr(coordinator, "_core_comm_failures"):
+                    coordinator._core_comm_failures = 0
+                coordinator._core_comm_failures += 1
+
+                # Only log core communication failures occasionally to reduce spam
+                if coordinator._core_comm_failures <= 3:
+                    _LOGGER.warning(
+                        "Core device communication failed (%d consecutive): %s",
+                        coordinator._core_comm_failures,
+                        results[result_idx],
+                    )
+                    _LOGGER.info("This may cause audio output and other features to be unavailable")
+                elif coordinator._core_comm_failures % 10 == 1:
+                    _LOGGER.debug(
+                        "Core device communication still failing after %d attempts", coordinator._core_comm_failures
+                    )
             else:
                 raw_data["device_raw"] = results[result_idx]
                 coordinator._device_info_working = True
+                # Reset failure counter on success
+                if hasattr(coordinator, "_core_comm_failures"):
+                    if coordinator._core_comm_failures > 0:
+                        _LOGGER.info("Device communication restored after %d failures", coordinator._core_comm_failures)
+                    coordinator._core_comm_failures = 0
             result_idx += 1
 
         # Process multiroom result
@@ -382,12 +412,39 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             result_idx += 1
 
         # Process audio output result
-        audio_output_data = {}
+        audio_output_data: dict[str, Any] | None = None
         if "audio_output" in task_names:
             if isinstance(results[result_idx], Exception):
-                _LOGGER.debug("Audio output fetch failed: %s", results[result_idx])
+                # Log audio output failures with full details for first few attempts
+                if not hasattr(coordinator, "_audio_output_error_count"):
+                    coordinator._audio_output_error_count = 0
+                coordinator._audio_output_error_count += 1
+
+                if coordinator._audio_output_error_count <= 3:
+                    _LOGGER.warning(
+                        "[AUDIO OUTPUT DEBUG] %s: Audio output fetch failed (attempt %d): %s",
+                        coordinator.client.host,
+                        coordinator._audio_output_error_count,
+                        results[result_idx],
+                    )
+                elif coordinator._audio_output_error_count % 10 == 1:
+                    _LOGGER.debug(
+                        "[AUDIO OUTPUT DEBUG] %s: Audio output still failing after %d attempts",
+                        coordinator.client.host,
+                        coordinator._audio_output_error_count,
+                    )
+
+                audio_output_data = None
             else:
-                audio_output_data = results[result_idx] or {}
+                audio_output_data = results[result_idx]  # Can be None if API not supported
+                _LOGGER.debug(
+                    "[AUDIO OUTPUT DEBUG] %s: Audio output fetch succeeded, data: %s",
+                    coordinator.client.host,
+                    audio_output_data,
+                )
+                # Reset error counter on success
+                if hasattr(coordinator, "_audio_output_error_count"):
+                    coordinator._audio_output_error_count = 0
             result_idx += 1
 
         # Process metadata result
@@ -557,8 +614,15 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             status_model.eq_preset = eq_info_model.eq_preset
 
         # Propagate audio output data to status model
-        if audio_output_data:
+        # Audio output is polled every 15s, so preserve last known value between polls
+        if audio_output_data is not None:
+            # We fetched it this cycle - use fresh data
             status_model.audio_output = audio_output_data
+            coordinator._last_audio_output_data = audio_output_data
+        elif hasattr(coordinator, "_last_audio_output_data") and coordinator._last_audio_output_data is not None:
+            # Not fetched this cycle, but we have a previous value - reuse it
+            status_model.audio_output = coordinator._last_audio_output_data
+        # else: Never fetched successfully - leave audio_output as None
 
         # Ensure UUID is present
         if device_model and not device_model.uuid and coordinator.entry:

@@ -27,8 +27,19 @@ async def async_setup_entry(
 
     entities = []
 
-    # Audio Output Mode Select
-    entities.append(WiiMOutputModeSelect(speaker))
+    # Check if device supports audio output before creating select entity
+    if hasattr(speaker.coordinator.client, "capabilities"):
+        capabilities = speaker.coordinator.client.capabilities
+        supports_audio_output = capabilities.get("supports_audio_output", True)
+        if supports_audio_output:
+            # Audio Output Mode Select
+            entities.append(WiiMOutputModeSelect(speaker))
+        else:
+            _LOGGER.debug("Skipping audio output select entity - device does not support audio output")
+    else:
+        # Fallback: create entity if capabilities not available (assume supported)
+        _LOGGER.debug("Capabilities not available, creating audio output select entity as fallback")
+        entities.append(WiiMOutputModeSelect(speaker))
 
     async_add_entities(entities)
     _LOGGER.info(
@@ -52,22 +63,45 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the current selected option."""
-        return self.speaker.get_current_output_mode()
+        try:
+            # Check if core device communication is working
+            if (
+                hasattr(self.speaker.coordinator, "_device_info_working")
+                and not self.speaker.coordinator._device_info_working
+            ):
+                # Device communication is failing - return None to show as unavailable
+                # This indicates a device connectivity issue rather than audio output issue
+                return None
+
+            return self.speaker.get_current_output_mode()
+        except Exception:
+            # Return None if we can't determine the current option
+            # This will show as "unknown" in the UI instead of "unavailable"
+            _LOGGER.debug("Could not determine current audio output mode for %s", self.speaker.name)
+            return None
 
     @property
     def options(self) -> list[str]:
         """Return a list of available options."""
-        # Get standard selectable modes
-        standard_modes = self.speaker.get_output_mode_list()
+        try:
+            # Get standard selectable modes
+            standard_modes = self.speaker.get_output_mode_list()
 
-        # Get any discovered modes from the device
-        discovered_modes = self.speaker.get_discovered_output_modes()
+            # Get any discovered modes from the device
+            discovered_modes = self.speaker.get_discovered_output_modes()
 
-        # Combine and deduplicate
-        all_modes = list(set(standard_modes + discovered_modes))
+            # Combine and deduplicate
+            all_modes = list(set(standard_modes + discovered_modes))
 
-        # Sort for consistent ordering
-        return sorted(all_modes)
+            # Sort for consistent ordering
+            return sorted(all_modes)
+        except Exception:
+            # If we can't determine available options, return basic modes
+            # This prevents the entity from becoming unavailable
+            _LOGGER.debug("Could not determine audio output options for %s, using defaults", self.speaker.name)
+            from .const import SELECTABLE_OUTPUT_MODES
+
+            return SELECTABLE_OUTPUT_MODES.copy()
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
@@ -81,8 +115,9 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             await controller.select_output_mode(option)
             _LOGGER.info("WiiM Output Mode Select: Successfully set output mode to '%s'", option)
         except Exception as err:
-            _LOGGER.error("WiiM Output Mode Select: Failed to select output mode '%s': %s", option, err)
-            raise
+            _LOGGER.warning("WiiM Output Mode Select: Failed to select output mode '%s': %s", option, err)
+            # Don't re-raise the exception - let Home Assistant handle it
+            # This prevents the entity from becoming unavailable
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

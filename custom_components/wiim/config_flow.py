@@ -39,55 +39,115 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
-    """Validate that a host is a WiiM/LinkPlay device and extract device info."""
+    """Validate that a host is a WiiM/LinkPlay device and extract device info.
 
-    client = WiiMClient(host)
-    try:
-        # Try to get device status - this is the most reliable way to validate
-        status = await client.get_status()
-        if not status:
-            _LOGGER.debug("No status response from %s", host)
-            return False, host, None
+    Uses enhanced validation with protocol fallback similar to python-linkplay library.
+    Tries multiple protocols and ports to handle different device configurations.
+    """
 
-        # Extract device name with priority order
-        # PRIORITY 1: DeviceName from WiiM API (custom name set in app)
-        # PRIORITY 2: Other name fields
-        # PRIORITY 3: SSID/Network name (less reliable)
-        device_name = (
-            status.get("DeviceName")  # Custom name set in WiiM app
-            or status.get("device_name")  # Alternative field name
-            or status.get("friendlyName")  # Common API field
-            or status.get("name")  # Generic name field
-            or status.get("ssid", host)  # Device hotspot name (fallback)
-        )
+    # Protocol fallback strategy like python-linkplay
+    protocols_to_try = [
+        ("https", 443),  # Standard HTTPS
+        ("https", 4443),  # Alternative HTTPS port
+        ("http", 80),  # Standard HTTP
+        ("http", 8080),  # Alternative HTTP port (some devices use this)
+    ]
 
-        if not device_name or device_name == "Unknown":
-            device_name = f"WiiM Device ({host})"
+    # Also try the original host string in case it includes a custom port
+    if ":" in host and not host.startswith("["):
+        try:
+            _, port_part = host.rsplit(":", 1)
+            port_int = int(port_part)
+            protocols_to_try.insert(0, ("https", port_int))
+            protocols_to_try.insert(1, ("http", port_int))
+        except (ValueError, TypeError):
+            pass  # Not a valid host:port format, use defaults
 
-        # Extract UUID - this is critical for device identification
-        device_uuid = status.get("uuid")
-        if not device_uuid:
-            # Some older devices may not provide UUID
-            _LOGGER.warning("Device at %s did not provide UUID, using host as fallback", host)
-            device_uuid = host
+    last_error = None
+    for protocol, port in protocols_to_try:
+        client = WiiMClient(f"{protocol}://{host}:{port}")
+        try:
+            _LOGGER.debug("Trying %s://%s:%s for validation", protocol, host, port)
 
-        _LOGGER.debug("Successfully validated device %s at %s (UUID: %s)", device_name, host, device_uuid)
-        return True, device_name, device_uuid
+            # Try to get device status - this is the most reliable way to validate
+            status = await client.get_status()
+            if not status:
+                _LOGGER.debug("No status response from %s:%s via %s", host, port, protocol)
+                continue
 
-    except Exception as err:
-        # Log the specific error for debugging
-        error_str = str(err).lower()
-        if "404" in error_str:
-            _LOGGER.debug("Device at %s returned 404 - likely not a WiiM/LinkPlay device", host)
-        elif "timeout" in error_str:
-            _LOGGER.debug("Timeout connecting to %s - device may be offline", host)
-        elif "connection refused" in error_str:
-            _LOGGER.debug("Connection refused by %s - device may not support HTTP API", host)
-        else:
-            _LOGGER.debug("Failed to validate device at %s: %s", host, err)
-        return False, host, None
-    finally:
-        await client.close()
+            # Extract device name with priority order
+            # PRIORITY 1: DeviceName from WiiM API (custom name set in app)
+            # PRIORITY 2: Other name fields
+            # PRIORITY 3: SSID/Network name (less reliable)
+            device_name = (
+                status.get("DeviceName")  # Custom name set in WiiM app
+                or status.get("device_name")  # Alternative field name
+                or status.get("friendlyName")  # Common API field
+                or status.get("name")  # Generic name field
+                or status.get("ssid", host)  # Device hotspot name (fallback)
+            )
+
+            if not device_name or device_name == "Unknown":
+                device_name = f"WiiM Device ({host})"
+
+            # Extract UUID - this is critical for device identification
+            device_uuid = status.get("uuid")
+            if not device_uuid:
+                # Some older devices may not provide UUID
+                _LOGGER.debug("Device at %s:%s did not provide UUID, using host as fallback", host, port)
+                device_uuid = host
+
+            _LOGGER.info(
+                "Successfully validated device %s at %s:%s via %s (UUID: %s)",
+                device_name,
+                host,
+                port,
+                protocol,
+                device_uuid,
+            )
+
+            # Success! Store the working connection details for later use
+            # Note: We can't easily pass the working protocol/port back, but
+            # the WiiMClient will remember the working endpoint
+
+            return True, device_name, device_uuid
+
+        except (OSError, TimeoutError, ValueError) as err:
+            # Log the specific error for debugging but continue trying other protocols
+            error_str = str(err).lower()
+            last_error = err
+            if "404" in error_str:
+                _LOGGER.debug("Device at %s:%s returned 404 via %s - not a LinkPlay device", host, port, protocol)
+            elif "timeout" in error_str:
+                _LOGGER.debug("Timeout connecting to %s:%s via %s - device may be slow", host, port, protocol)
+            elif "connection refused" in error_str:
+                _LOGGER.debug("Connection refused by %s:%s via %s - wrong protocol/port", host, port, protocol)
+            elif "ssl" in error_str or "certificate" in error_str:
+                _LOGGER.debug("SSL error with %s:%s via %s - device may not support HTTPS", host, port, protocol)
+            else:
+                _LOGGER.debug("Failed to validate device at %s:%s via %s: %s", host, port, protocol, err)
+            continue
+        finally:
+            await client.close()
+
+    # If we get here, all protocols failed
+    _LOGGER.warning("All validation attempts failed for %s. Last error: %s", host, last_error)
+
+    # Instead of failing completely, provide a fallback that allows manual setup
+    # This matches python-linkplay's approach of being permissive
+    error_str = str(last_error).lower() if last_error else ""
+    if "404" in error_str:
+        _LOGGER.info("Device at %s returned 404 - likely not a WiiM/LinkPlay device", host)
+    elif "timeout" in error_str:
+        _LOGGER.info("Timeout connecting to %s - device may be offline or slow", host)
+    elif "connection refused" in error_str:
+        _LOGGER.info("Connection refused by %s - device may not support HTTP API", host)
+    else:
+        _LOGGER.info("Failed to validate device at %s - may need manual configuration", host)
+
+    # Return a "soft failure" that still allows the device to be configured manually
+    # The UI can show this as "Validation failed but manual setup available"
+    return False, f"WiiM Device ({host})", host
 
 
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -114,14 +174,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # since autodiscovery often fails and manual is more reliable
         return await self.async_step_manual()
 
-    async def async_step_discovery(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
+    async def async_step_discovery(self, discovery_info: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
         """Handle automatic discovery."""
         if not self._discovered_devices:
             # Run discovery
             self._discovered_devices = await self._discover_devices()
 
-        if user_input is not None:
-            selected = user_input[CONF_HOST]
+        if discovery_info is not None:
+            selected = discovery_info[CONF_HOST]
 
             if selected == "manual_entry":
                 return await self.async_step_manual()
@@ -136,9 +196,20 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not host:
                 return await self.async_step_manual()
 
-            # Validate and create entry
+            # Validate and create entry (enhanced validation)
             is_valid, device_name, device_uuid = await validate_wiim_device(host)
-            if not is_valid or not device_uuid:
+
+            # Enhanced logic: handle both successful validation and soft failures
+            if is_valid and device_uuid:
+                # Full success - proceed with auto-configuration
+                pass  # Continue with the existing logic below
+            elif device_uuid:
+                # Soft failure - validation failed but we got a fallback UUID
+                # Still proceed but log the issue
+                _LOGGER.warning("Using fallback validation for selected device %s", host)
+            else:
+                # Hard failure - no UUID at all
+                _LOGGER.error("Validation completely failed for selected device %s", host)
                 return self.async_abort(reason="cannot_connect")
 
             # Prefer the real device UUID when available. Otherwise fall back to the
@@ -242,45 +313,64 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not host or host in discovered or host in known_hosts:
                 return
 
-            is_valid, device_name, _ = await validate_wiim_device(host)
-            if is_valid:
+            is_valid, device_name, device_uuid = await validate_wiim_device(host)
+            if is_valid or device_uuid:
+                # Include devices that either validate successfully OR have a fallback UUID
+                # This matches python-linkplay's permissive approach
                 discovered[host] = device_name
 
         try:
             await async_search(
                 async_callback=_on_device, timeout=5, search_target="urn:schemas-upnp-org:device:MediaRenderer:1"
             )
-        except Exception as err:
+        except (OSError, TimeoutError, ValueError) as err:
             _LOGGER.debug("Discovery error: %s", err)
 
         return discovered
 
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
-        """Handle Zeroconf discovery."""
+        """Handle Zeroconf discovery.
+
+        Enhanced to handle devices that are discovered but fail initial validation,
+        similar to python-linkplay's permissive approach.
+        """
         host = discovery_info.host
         _LOGGER.info("🔍 ZEROCONF DISCOVERY called for host: %s", host)
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
-        if not is_valid or not device_uuid:
-            _LOGGER.warning("🔍 ZEROCONF DISCOVERY validation failed for host: %s", host)
+
+        # Enhanced logic: handle both successful validation and soft failures
+        if is_valid and device_uuid:
+            # Full success - auto-configure
+            _LOGGER.info("🔍 ZEROCONF DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
+            unique_id = device_uuid
+
+            await self.async_set_unique_id(unique_id)
+            # Abort if this unique_id (UUID or host) is already configured.
+            self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+            # Store data for discovery confirmation
+            self.data = {CONF_HOST: host, "name": device_name}
+            return await self.async_step_discovery_confirm()
+
+        elif device_uuid:
+            # Soft failure - validation failed but we got a fallback UUID
+            # This means the device might still work but needs manual confirmation
+            _LOGGER.warning("🔍 ZEROCONF DISCOVERY got fallback UUID for %s: %s", host, device_uuid)
+
+            unique_id = device_uuid
+            await self.async_set_unique_id(unique_id)
+            # Abort if this unique_id (UUID or host) is already configured.
+            self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+            # Store data for discovery confirmation with a note about manual setup
+            self.data = {CONF_HOST: host, "name": device_name, "needs_manual": True}
+            return await self.async_step_discovery_confirm()
+
+        else:
+            # Hard failure - no UUID at all, likely not a LinkPlay device
+            _LOGGER.warning("🔍 ZEROCONF DISCOVERY validation completely failed for host: %s", host)
             return self.async_abort(reason="cannot_connect")
-
-        _LOGGER.info("🔍 ZEROCONF DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
-
-        # Prefer the real device UUID when available. Otherwise fall back to the
-        # host IP address to ensure we can still detect duplicates and satisfy
-        # older unit-tests that patch `validate_wiim_device` to return only a
-        # 2-tuple.
-
-        unique_id = device_uuid or host
-
-        await self.async_set_unique_id(unique_id)
-        # Abort if this unique_id (UUID or host) is already configured.
-        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
-
-        # Store data for discovery confirmation
-        self.data = {CONF_HOST: host, "name": device_name}
-        return await self.async_step_discovery_confirm()
 
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> ConfigFlowResult:
         """Handle SSDP discovery."""
@@ -298,26 +388,38 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.debug("SSDP discovery attempting validation for host: %s", host)
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
-        if not is_valid or not device_uuid:
-            _LOGGER.debug("SSDP discovery validation failed for host: %s", host)
+
+        # Enhanced logic: handle both successful validation and soft failures
+        if is_valid and device_uuid:
+            # Full success - auto-configure
+            _LOGGER.info("SSDP discovery validated device: %s at %s", device_name, host)
+            unique_id = device_uuid
+
+            await self.async_set_unique_id(unique_id)
+            # Abort if this unique_id (UUID or host) is already configured.
+            self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+            # Store data for discovery confirmation
+            self.data = {CONF_HOST: host, "name": device_name}
+            return await self.async_step_discovery_confirm()
+
+        elif device_uuid:
+            # Soft failure - validation failed but we got a fallback UUID
+            _LOGGER.debug("SSDP discovery got fallback UUID for %s: %s", host, device_uuid)
+
+            unique_id = device_uuid
+            await self.async_set_unique_id(unique_id)
+            # Abort if this unique_id (UUID or host) is already configured.
+            self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+            # Store data for discovery confirmation with a note about manual setup
+            self.data = {CONF_HOST: host, "name": device_name, "needs_manual": True}
+            return await self.async_step_discovery_confirm()
+
+        else:
+            # Hard failure - no UUID at all, likely not a LinkPlay device
+            _LOGGER.debug("SSDP discovery validation completely failed for host: %s", host)
             return self.async_abort(reason="cannot_connect")
-
-        _LOGGER.info("SSDP discovery validated device: %s at %s", device_name, host)
-
-        # Prefer the real device UUID when available. Otherwise fall back to the
-        # host IP address to ensure we can still detect duplicates and satisfy
-        # older unit-tests that patch `validate_wiim_device` to return only a
-        # 2-tuple.
-
-        unique_id = device_uuid or host
-
-        await self.async_set_unique_id(unique_id)
-        # Abort if this unique_id (UUID or host) is already configured.
-        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
-
-        # Store data for discovery confirmation
-        self.data = {CONF_HOST: host, "name": device_name}
-        return await self.async_step_discovery_confirm()
 
     async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> ConfigFlowResult:
         """Handle integration discovery (automatic slave discovery and missing devices)."""
@@ -344,13 +446,24 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Validate the device is still reachable
         is_valid, validated_name, validated_uuid = await validate_wiim_device(host)
-        if not is_valid or not validated_uuid:
-            _LOGGER.warning("Integration discovery failed validation for %s at %s", device_name, host)
-            return self.async_abort(reason="cannot_connect")
 
-        # Use validated data (more accurate than discovery data)
-        final_name = validated_name or device_name
-        final_uuid = validated_uuid
+        # Enhanced logic: handle both successful validation and soft failures
+        if is_valid and validated_uuid:
+            # Full success - use validated data
+            final_name = validated_name or device_name
+            final_uuid = validated_uuid
+            _LOGGER.info("Integration discovery validated device: %s at %s", final_name, host)
+
+        elif validated_uuid:
+            # Soft failure - validation failed but we got a fallback UUID
+            final_name = validated_name or device_name
+            final_uuid = validated_uuid
+            _LOGGER.warning("Integration discovery got fallback UUID for %s at %s", final_name, host)
+
+        else:
+            # Hard failure - no UUID at all
+            _LOGGER.warning("Integration discovery validation completely failed for %s at %s", device_name, host)
+            return self.async_abort(reason="cannot_connect")
 
         # Prefer the real device UUID when available. Otherwise fall back to the
         # host IP address to ensure we can still detect duplicates and satisfy

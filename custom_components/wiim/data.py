@@ -800,10 +800,14 @@ class Speaker:
 
         # Check if audio output data is available
         audio_output = getattr(self.status_model, "audio_output", None)
-        if audio_output is None:
+        if audio_output is None or audio_output == {}:
             return False
 
-        return audio_output.get("source") == "1"
+        try:
+            return audio_output.get("source") == "1"
+        except Exception:
+            # Handle any unexpected data format issues
+            return False
 
     def get_hardware_output_mode(self) -> str | None:
         """Return current hardware output mode name."""
@@ -811,13 +815,16 @@ class Speaker:
             return None
 
         audio_output = getattr(self.status_model, "audio_output", None)
-        if audio_output is None:
+        if audio_output is None or audio_output == {}:
             return None
 
-        mode_map = {"1": "SPDIF", "2": "AUX", "3": "COAX"}
-
-        hardware_mode = audio_output.get("hardware")
-        return mode_map.get(str(hardware_mode), f"Unknown ({hardware_mode})")
+        try:
+            mode_map = {"1": "SPDIF", "2": "AUX", "3": "COAX"}
+            hardware_mode = audio_output.get("hardware")
+            return mode_map.get(str(hardware_mode), f"Unknown ({hardware_mode})")
+        except Exception:
+            # Handle any unexpected data format issues
+            return None
 
     def is_audio_cast_active(self) -> bool:
         """Return True if audio cast mode is currently active."""
@@ -837,21 +844,25 @@ class Speaker:
 
         audio_output = getattr(self.status_model, "audio_output", None)
 
-        if audio_output is None:
+        if audio_output is None or audio_output == {}:
             return None
 
-        from .const import AUDIO_OUTPUT_MODES
+        try:
+            from .const import AUDIO_OUTPUT_MODES
 
-        hardware_mode = audio_output.get("hardware")
+            hardware_mode = audio_output.get("hardware")
 
-        if hardware_mode is None:
+            if hardware_mode is None:
+                return None
+
+            mode_str = str(hardware_mode)
+
+            # Return known mode or "Unknown" with the raw value
+            result = AUDIO_OUTPUT_MODES.get(mode_str, f"Unknown ({hardware_mode})")
+            return result
+        except Exception:
+            # Handle any unexpected data format issues
             return None
-
-        mode_str = str(hardware_mode)
-
-        # Return known mode or "Unknown" with the raw value
-        result = AUDIO_OUTPUT_MODES.get(mode_str, f"Unknown ({hardware_mode})")
-        return result
 
     def get_output_mode_list(self) -> list[str]:
         """Return list of selectable output modes."""
@@ -865,22 +876,26 @@ class Speaker:
             return []
 
         audio_output = getattr(self.status_model, "audio_output", None)
-        if audio_output is None:
+        if audio_output is None or audio_output == {}:
             return []
 
-        from .const import AUDIO_OUTPUT_MODES
+        try:
+            from .const import AUDIO_OUTPUT_MODES
 
-        # Get all known modes plus any unknown ones we've seen
-        discovered_modes = []
-        hardware_mode = audio_output.get("hardware")
-        if hardware_mode is not None:
-            mode_str = str(hardware_mode)
-            if mode_str in AUDIO_OUTPUT_MODES:
-                discovered_modes.append(AUDIO_OUTPUT_MODES[mode_str])
-            else:
-                discovered_modes.append(f"Unknown ({hardware_mode})")
+            # Get all known modes plus any unknown ones we've seen
+            discovered_modes = []
+            hardware_mode = audio_output.get("hardware")
+            if hardware_mode is not None:
+                mode_str = str(hardware_mode)
+                if mode_str in AUDIO_OUTPUT_MODES:
+                    discovered_modes.append(AUDIO_OUTPUT_MODES[mode_str])
+                else:
+                    discovered_modes.append(f"Unknown ({hardware_mode})")
 
-        return discovered_modes
+            return discovered_modes
+        except Exception:
+            # Handle any unexpected data format issues
+            return []
 
     def get_shuffle_state(self) -> bool | None:
         """Return True if shuffle is active, False if off, None if unknown."""

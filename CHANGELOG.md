@@ -2,6 +2,25 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.32] - 2025-10-23
+
+### Added
+
+- **Enhanced Device Validation**: Multi-protocol fallback system (HTTPS:443 → HTTPS:4443 → HTTP:80 → HTTP:8080)
+- **Audio Pro MkII Support**: Added compatibility for A10 MkII, A15 MkII, A28, and C10 MkII models
+- **Improved Discovery**: Enhanced zeroconf, SSDP, and integration discovery with better error handling
+
+### Fixed
+
+- **Validation Failures**: Devices that fail auto-validation are now offered for manual setup instead of being rejected
+- **Protocol Compatibility**: Better handling of devices with non-standard HTTP/HTTPS configurations
+- **Error Logging**: More detailed logging to help troubleshoot connection issues
+
+### Technical
+
+- **Graceful Degradation**: Enhanced error handling matches python-linkplay library's robust approach
+- **Legacy Device Detection**: Improved firmware capability detection for newer Audio Pro models
+
 ## [0.1.31] - 2025-01-22
 
 ### Fixed

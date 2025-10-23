@@ -43,7 +43,18 @@ async def async_setup_entry(
     entities.append(WiiMInputSensor(speaker))
 
     # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
-    entities.append(WiiMBluetoothOutputSensor(speaker))
+    # Only create if device supports audio output modes
+    if hasattr(speaker.coordinator.client, "capabilities"):
+        capabilities = speaker.coordinator.client.capabilities
+        supports_audio_output = capabilities.get("supports_audio_output", True)
+        if supports_audio_output:
+            entities.append(WiiMBluetoothOutputSensor(speaker))
+        else:
+            _LOGGER.debug("Skipping Bluetooth output sensor - device does not support audio output")
+    else:
+        # Fallback: create sensor if capabilities not available (assume supported)
+        _LOGGER.debug("Capabilities not available, creating Bluetooth output sensor as fallback")
+        entities.append(WiiMBluetoothOutputSensor(speaker))
 
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))
@@ -349,15 +360,37 @@ class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self) -> str:
         """Return 'on' if Bluetooth output is active, 'off' if not."""
-        return "on" if self.speaker.is_bluetooth_output_active() else "off"
+        try:
+            # Check if core device communication is working
+            if (
+                hasattr(self.speaker.coordinator, "_device_info_working")
+                and not self.speaker.coordinator._device_info_working
+            ):
+                # Device communication is failing - return "unavailable" to indicate device issue
+                return "unavailable"
+
+            return "on" if self.speaker.is_bluetooth_output_active() else "off"
+        except Exception:
+            # Return "unknown" if we can't determine the status
+            # This prevents the entity from becoming unavailable
+            _LOGGER.debug("Could not determine Bluetooth output status for %s", self.speaker.name)
+            return "unknown"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
-        return {
-            "hardware_output_mode": self.speaker.get_hardware_output_mode(),
-            "audio_cast_active": self.speaker.is_audio_cast_active(),
-        }
+        try:
+            return {
+                "hardware_output_mode": self.speaker.get_hardware_output_mode(),
+                "audio_cast_active": self.speaker.is_audio_cast_active(),
+            }
+        except Exception:
+            # Return minimal attributes if we can't get the full information
+            _LOGGER.debug("Could not get extra state attributes for Bluetooth output sensor on %s", self.speaker.name)
+            return {
+                "hardware_output_mode": "unknown",
+                "audio_cast_active": "unknown",
+            }
 
 
 # ------------------- Audio Quality Sensors -------------------

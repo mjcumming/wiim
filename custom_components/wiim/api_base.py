@@ -262,7 +262,19 @@ class WiiMClient:
                 # Don't immediately fall back to full probe - this could be a temporary network issue
                 # Only clear endpoint after multiple consecutive failures or specific error types
                 if isinstance(err, aiohttp.ClientConnectorError | aiohttp.ServerDisconnectedError):
-                    _LOGGER.warning("Connection lost to %s, will retry with protocol probe", self._host)
+                    # Only log occasionally to reduce noise - this is normal during network issues
+                    if not hasattr(self, "_connection_retry_count"):
+                        self._connection_retry_count = 0
+                    self._connection_retry_count += 1
+
+                    # Only log the first few connection losses, then throttle
+                    if self._connection_retry_count <= 3:
+                        _LOGGER.warning("Connection lost to %s, will retry with protocol probe", self._host)
+                    elif self._connection_retry_count % 5 == 1:  # Every 5th failure
+                        _LOGGER.debug(
+                            "Connection still failing to %s (attempt %d)", self._host, self._connection_retry_count
+                        )
+
                     self._endpoint = None  # Clear to force probe
                 else:
                     # For other errors (timeouts, HTTP errors), keep the endpoint and fail fast
@@ -272,7 +284,15 @@ class WiiMClient:
         # -----------------------------
         # Initial probe or connection lost - try all protocols
         # -----------------------------
-        _LOGGER.debug("No established endpoint for %s, performing protocol probe", self._host)
+        # Only log protocol probing occasionally to reduce noise during network issues
+        if not hasattr(self, "_protocol_probe_count"):
+            self._protocol_probe_count = 0
+        self._protocol_probe_count += 1
+
+        if self._protocol_probe_count <= 2:
+            _LOGGER.info("No established endpoint for %s, performing protocol probe", self._host)
+        elif self._protocol_probe_count % 3 == 1:  # Every 3rd probe
+            _LOGGER.debug("Protocol probe still needed for %s (attempt %d)", self._host, self._protocol_probe_count)
 
         protocols: list[tuple[str, int, ssl.SSLContext | None]]
         if self._discovered_port:

@@ -38,6 +38,7 @@ except ModuleNotFoundError:  # pragma: no cover – only executed in test env
     importlib.import_module("homeassistant")
 
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -78,9 +79,46 @@ OPTIONAL_PLATFORMS: dict[str, Platform] = {
 }
 
 
-def get_enabled_platforms(entry: ConfigEntry) -> list[Platform]:
-    """Get list of platforms that should be enabled based on user options."""
+def get_enabled_platforms(
+    hass: HomeAssistant, entry: ConfigEntry, capabilities: dict[str, Any] | None = None
+) -> list[Platform]:
+    """Get list of platforms that should be enabled based on user options and device capabilities.
+
+    Args:
+        hass: Home Assistant instance
+        entry: Config entry
+        capabilities: Device capabilities dict (if not provided, will try to get from coordinator)
+    """
     platforms = CORE_PLATFORMS.copy()
+
+    # Remove SELECT platform from core list (we'll add it conditionally based on capabilities)
+    if Platform.SELECT in platforms:
+        platforms.remove(Platform.SELECT)
+
+    # Conditionally add SELECT platform based on device audio output capabilities
+    if capabilities is None:
+        # Try to get capabilities from coordinator (fallback for reload/update scenarios)
+        if entry.entry_id in hass.data.get(DOMAIN, {}):
+            coordinator_data = hass.data[DOMAIN][entry.entry_id]
+            if "coordinator" in coordinator_data:
+                coordinator = coordinator_data["coordinator"]
+                # Capabilities are stored in coordinator but not in client
+                capabilities = getattr(coordinator, "_capabilities", {})
+
+    if capabilities:
+        supports_audio_output = capabilities.get("supports_audio_output", False)
+        _LOGGER.debug(
+            "Audio output capability check for %s: supports_audio_output=%s",
+            entry.data.get("host"),
+            supports_audio_output,
+        )
+        if supports_audio_output:
+            platforms.append(Platform.SELECT)
+            _LOGGER.info("Enabling SELECT platform - device supports audio output control")
+        else:
+            _LOGGER.info("Skipping SELECT platform - device does not support audio output control")
+    else:
+        _LOGGER.warning("Capabilities not available for %s - skipping SELECT platform", entry.data.get("host"))
 
     # Add optional platforms based on user preferences
     for config_key, platform in OPTIONAL_PLATFORMS.items():
@@ -323,8 +361,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Unexpected error fetching initial data from %s: %s", entry.data["host"], err, exc_info=True)
         raise
 
-    # Get enabled platforms based on user options
-    enabled_platforms = get_enabled_platforms(entry)
+    # Get enabled platforms based on user options and device capabilities
+    enabled_platforms = get_enabled_platforms(hass, entry, capabilities)
 
     # Set up only enabled platforms
     await hass.config_entries.async_forward_entry_setups(entry, enabled_platforms)
@@ -341,7 +379,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     # Get the platforms that were actually set up
-    enabled_platforms = get_enabled_platforms(entry)
+    enabled_platforms = get_enabled_platforms(hass, entry)
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, enabled_platforms):
         entry_data = hass.data[DOMAIN].pop(entry.entry_id, {})

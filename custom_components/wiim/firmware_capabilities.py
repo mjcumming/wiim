@@ -56,6 +56,7 @@ class WiiMFirmwareCapabilities:
             "supports_getslavelist": True,
             "supports_enhanced_grouping": False,
             "supports_metadata": True,
+            "supports_audio_output": True,  # Assume yes, will be probed
             "supports_led_control": True,  # Assume yes, will be probed
             "led_command_format": "standard",  # Default format
             "response_timeout": 5.0,  # Default timeout
@@ -104,6 +105,23 @@ class WiiMFirmwareCapabilities:
             capabilities["supports_metadata"] = False
             _LOGGER.debug("Device %s does not support getMetaInfo", client.host)
 
+        # Probe for audio output support (getNewAudioOutputHardwareMode)
+        # This is primarily a WiiM enhancement, but many devices support audio output modes
+        try:
+            result = await client._request("/httpapi.asp?command=getNewAudioOutputHardwareMode")
+            capabilities["supports_audio_output"] = True
+            _LOGGER.info(
+                "[AUDIO OUTPUT DEBUG] Device %s supports getNewAudioOutputHardwareMode, result: %s", client.host, result
+            )
+        except WiiMError as e:
+            # Log the failure with details to help diagnose issues
+            capabilities["supports_audio_output"] = False
+            _LOGGER.warning(
+                "[AUDIO OUTPUT DEBUG] Device %s getNewAudioOutputHardwareMode probe failed: %s - audio output entities will not be created",
+                client.host,
+                e,
+            )
+
         self._capabilities[device_id] = capabilities
         _LOGGER.info(
             "Detected capabilities for %s (%s): %s",
@@ -147,12 +165,14 @@ def detect_device_capabilities(device_info: DeviceInfo) -> dict[str, Any]:
         "is_wiim_device": is_wiim_device(device_info),
         "is_legacy_device": is_legacy_device(device_info),
         "supports_enhanced_grouping": False,
+        "supports_audio_output": False,  # Default to False, enable for WiiM devices
         "response_timeout": 5.0,
         "retry_count": 3,
     }
 
     if capabilities["is_wiim_device"]:
         capabilities["supports_enhanced_grouping"] = True
+        capabilities["supports_audio_output"] = True  # All WiiM devices support audio output control
         capabilities["response_timeout"] = 2.0
         capabilities["retry_count"] = 2
     elif capabilities["is_legacy_device"]:
@@ -203,6 +223,10 @@ def is_legacy_device(device_info: DeviceInfo) -> bool:
     model_lower = device_info.model.lower()
     legacy_models = [
         "audio pro",
+        "a10",  # Audio Pro A10 (including MkII)
+        "a15",  # Audio Pro A15 (including MkII)
+        "a28",  # Audio Pro A28
+        "c10",  # Audio Pro C10 (including MkII)
         "arylic",
         "doss",
         "dayton audio",

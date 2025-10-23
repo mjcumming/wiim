@@ -103,22 +103,44 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
     # Audio Output Control
     # ------------------------------------------------------------------
 
-    async def get_audio_output_status(self) -> dict[str, Any]:  # type: ignore[override]
+    async def get_audio_output_status(self) -> dict[str, Any] | None:  # type: ignore[override]
         """Get current audio output status including Bluetooth output mode.
 
         Returns:
-            dict with keys: hardware, source, audiocast
+            dict with keys: hardware, source, audiocast if supported, None if not supported
             - hardware: Hardware output mode (0=Line Out, 1=Optical Out, 2=Line Out, 3=Coax Out, 4=Bluetooth Out)
             - source: Bluetooth output mode (0=disabled, 1=active)
             - audiocast: Audio cast mode (0=disabled, 1=active)
         """
         try:
+            _LOGGER.debug(
+                "[AUDIO OUTPUT DEBUG] %s: Calling API endpoint: %s", self.host, API_ENDPOINT_AUDIO_OUTPUT_STATUS
+            )
             result = await self._request(API_ENDPOINT_AUDIO_OUTPUT_STATUS)  # type: ignore[attr-defined]
-            _LOGGER.debug("[DEBUG] %s: Audio output API result: %s", self.host, result)
-            return result if result else {}
+            _LOGGER.debug("[AUDIO OUTPUT DEBUG] %s: Audio output API result: %s", self.host, result)
+            return result if result else None
         except Exception as e:
-            _LOGGER.debug("Audio output API call failed: %s", e)
-            return {}
+            # Log with more details for first few failures
+            if not hasattr(self, "_audio_output_error_count"):
+                self._audio_output_error_count = 0
+            self._audio_output_error_count += 1
+
+            # Log first 5 failures with full details, then throttle
+            if self._audio_output_error_count <= 5:
+                _LOGGER.warning(
+                    "[AUDIO OUTPUT DEBUG] %s: Audio output API call failed (attempt %d), error type: %s, error: %s",
+                    self.host,
+                    self._audio_output_error_count,
+                    type(e).__name__,
+                    str(e),
+                )
+            elif self._audio_output_error_count % 10 == 1:
+                _LOGGER.debug(
+                    "[AUDIO OUTPUT DEBUG] %s: Audio output API still failing (%d consecutive failures)",
+                    self.host,
+                    self._audio_output_error_count,
+                )
+            return None
 
     async def set_audio_output_hardware_mode(self, mode: int) -> None:  # type: ignore[override]
         """Set hardware audio output mode.

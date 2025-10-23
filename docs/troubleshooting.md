@@ -62,7 +62,47 @@ The integration supports:
 
 - **WiiM devices**: Mini, Pro, Pro Plus, Amp, Ultra
 - **Arylic devices**: Up2Stream Amp 2.0, 2.1, S10+
-- **Other LinkPlay devices**: Audio Pro, DOSS, Dayton Audio, etc.
+- **Audio Pro devices**: Including newer MkII models (A10 MkII, A15 MkII, A28, C10 MkII)
+- **Other LinkPlay devices**: DOSS, Dayton Audio, iEast, and many more
+
+### Enhanced Device Compatibility
+
+The integration includes enhanced validation with automatic protocol fallback:
+
+- **Multi-Protocol Support**: Automatically tries HTTPS (443, 4443) and HTTP (80, 8080)
+- **Graceful Fallback**: Devices that can't be auto-configured are still offered for manual setup
+- **Legacy Device Support**: Special handling for older LinkPlay-based devices
+
+If a device is discovered but shows "Validation failed" in the logs, it may still work with manual IP configuration.
+
+## Discovery and Validation Issues
+
+### Understanding Validation Failures
+
+The integration tries multiple protocols and ports when validating devices:
+
+1. **HTTPS on port 443** (standard)
+2. **HTTPS on port 4443** (alternative)
+3. **HTTP on port 80** (standard)
+4. **HTTP on port 8080** (alternative)
+
+**Common validation failure reasons:**
+
+- **SSL Certificate Issues**: Some devices don't have proper SSL certificates
+- **Port Differences**: Devices may use non-standard ports
+- **Protocol Restrictions**: Some devices only support HTTP, not HTTPS
+- **Slow Response**: Older devices may be slow to respond to API calls
+
+### Manual Configuration Workaround
+
+If auto-discovery fails, you can still manually configure the device:
+
+1. Note the IP address from the discovery logs
+2. Use **Settings → Devices & Services → Add Integration → WiiM Audio**
+3. Select **"Enter IP manually"** when prompted
+4. Enter the device's IP address
+
+The device should work normally after manual configuration, even if auto-validation failed.
 
 ## LED Control Issues
 
