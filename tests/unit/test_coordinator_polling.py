@@ -22,17 +22,18 @@ def mock_coordinator():
     coordinator.entry = MagicMock()
     coordinator.entry.unique_id = "test-unique-id"
 
-    # API capability flags
-    coordinator._statusex_supported = None
-    coordinator._metadata_supported = None
-    coordinator._eq_supported = None
-    coordinator._presets_supported = None
+    # API capability flags (initialize as True for testing)
+    coordinator._statusex_supported = True
+    coordinator._metadata_supported = True
+    coordinator._eq_supported = True
+    coordinator._presets_supported = True
     coordinator._eq_list_extended = True
 
-    # Endpoint health flags
-    coordinator._player_status_working = None
-    coordinator._device_info_working = None
-    coordinator._multiroom_working = None
+    # Endpoint health flags (initialize as working for testing)
+    coordinator._player_status_working = True
+    coordinator._device_info_working = True
+    coordinator._multiroom_working = True
+    coordinator._initial_setup_complete = False  # Start as False, will be set to True during testing
 
     # Backoff controller
     coordinator._backoff = MagicMock()
@@ -41,9 +42,21 @@ def mock_coordinator():
     coordinator._backoff.next_interval = MagicMock(return_value=5)
     coordinator._backoff.consecutive_failures = 0  # Initialize as number, not MagicMock
 
+    # Core communication failure tracking
+    coordinator._core_comm_failures = 0  # Initialize as number, not MagicMock
+
+    # Audio output error tracking
+    coordinator._audio_output_error_count = 0  # Initialize as number, not MagicMock
+
+    # Time tracking attributes
+    coordinator._last_device_info_check = 0.0
+    coordinator._last_eq_info_check = 0.0
+    coordinator._last_multiroom_check = 0.0
+    coordinator._last_audio_output_check = 0.0
+    coordinator._last_response_time = 0.0
+
     coordinator._last_command_failure = None
     coordinator.clear_command_failures = MagicMock()
-    coordinator._last_response_time = None
     coordinator.data = None  # Will be populated during testing
     coordinator.hass = MagicMock()
     coordinator.hass.loop = MagicMock()
@@ -68,11 +81,6 @@ def mock_coordinator():
     # Ensure _last_track_info doesn't exist or is None
     if hasattr(coordinator, "_last_track_info"):
         delattr(coordinator, "_last_track_info")
-
-    # Initialize timestamp attributes with numeric values (not MagicMock)
-    coordinator._last_device_info_check = 0
-    coordinator._last_eq_info_check = 0
-    coordinator._last_multiroom_check = 0
 
     # Set test mode to avoid delayed metadata fetching
     coordinator._test_mode = True
