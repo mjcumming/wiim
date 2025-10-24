@@ -2,6 +2,25 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.36] - 2024-12-19
+
+### Fixed
+
+- **Enhanced Impossible Position/Duration Validation**: Improved logic to handle duration firmware bugs more intelligently
+  - Root cause: WiiM device reporting duration too short (e.g., 0:49 instead of 6:08)
+  - Enhanced validation to detect when duration is suspiciously short (< 2 minutes) with reasonable position (> 30 seconds)
+  - When detected, hides duration instead of resetting position to preserve correct elapsed time
+  - Prevents impossible displays like "05:19 / 00:49" by showing "05:19 / --:--" instead
+  - This preserves the correct position while hiding the incorrect duration
+
+### Technical
+
+- **Smart Duration Validation**: Enhanced `parse_player_status()` with intelligent impossible scenario detection
+  - Detects when position > duration AND duration < 120 seconds AND position > 30 seconds
+  - In this case, assumes duration is wrong (firmware bug) and hides it
+  - For other impossible scenarios, still resets position to 0 as before
+  - Logs detailed warning explaining the decision (duration too short vs position too high)
+
 ## [0.1.35] - 2024-12-19
 
 ### Fixed
