@@ -7,6 +7,7 @@ A persistent entity that becomes available when a speaker acts as group master.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 from typing import Any
 
@@ -201,14 +202,23 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         return self.speaker.get_media_position() if self.available else None
 
     @property
-    def media_position_updated_at(self) -> float | None:
+    def media_position_updated_at(self) -> datetime.datetime | None:
         """Last time media position was updated."""
-        # Always return a valid timestamp to prevent Music Assistant issues
-        import time
+        # Only return timestamp if entity is available
+        if not self.available:
+            return None
 
-        if self.available:
-            return self.speaker.get_media_position_updated_at()
-        return time.time()
+        # Ensure we always return a valid timestamp for Music Assistant compatibility
+        timestamp = self.speaker.get_media_position_updated_at()
+        if timestamp is None:
+            from homeassistant.util.dt import utcnow
+
+            return utcnow()
+
+        # Convert Unix timestamp to datetime object
+        from homeassistant.util.dt import utc_from_timestamp
+
+        return utc_from_timestamp(timestamp)
 
     @property
     def elapsed_time_last_updated(self) -> str | None:
@@ -218,7 +228,6 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         Returns an ISO format datetime string that can be parsed by fromisoformat().
         """
         import time
-        from datetime import datetime
 
         if self.available:
             timestamp = self.speaker.get_media_position_updated_at()
@@ -226,9 +235,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             timestamp = time.time()
 
         # Convert timestamp to ISO format string
-        from datetime import timezone
-
-        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # noqa: UP017
+        dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)  # noqa: UP017
         return dt.isoformat()
 
     @property

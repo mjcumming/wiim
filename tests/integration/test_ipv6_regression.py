@@ -61,7 +61,9 @@ def test_ipv6_url_construction_logic():
         urlsplit(url)
 
         # Verify the URL is correctly formatted
-        assert url == test_case["expected_url"], f"URL mismatch for {test_case['name']}. Expected: {test_case['expected_url']}, Got: {url}"
+        assert url == test_case["expected_url"], (
+            f"URL mismatch for {test_case['name']}. Expected: {test_case['expected_url']}, Got: {url}"
+        )
         print(f"  ✅ {test_case['name']}: PASSED")
 
 

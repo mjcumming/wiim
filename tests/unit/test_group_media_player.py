@@ -1,5 +1,6 @@
 """Test WiiM group media player entity."""
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -185,7 +186,9 @@ def test_media_properties_available(group_media_player, mock_speaker):
     assert group_media_player.media_album_name == "Test Album"
     assert group_media_player.media_duration == 180
     assert group_media_player.media_position == 30
-    assert group_media_player.media_position_updated_at == 1234567890.0
+    # media_position_updated_at now returns datetime object, not float
+    expected_dt = datetime.fromtimestamp(1234567890.0, tz=timezone.utc)
+    assert group_media_player.media_position_updated_at == expected_dt
     assert group_media_player.media_image_url == "http://example.com/image.jpg"
     assert group_media_player.media_image_remotely_accessible is False
 
@@ -200,8 +203,8 @@ def test_media_properties_unavailable(group_media_player, mock_speaker):
     assert group_media_player.media_album_name is None
     assert group_media_player.media_duration is None
     assert group_media_player.media_position is None
-    # media_position_updated_at always returns a timestamp to prevent Music Assistant issues
-    assert isinstance(group_media_player.media_position_updated_at, int | float)
+    # media_position_updated_at returns None when unavailable (not a datetime object anymore to match HA MediaPlayerEntity standard)
+    assert group_media_player.media_position_updated_at is None
     assert group_media_player.media_image_url is None
 
 

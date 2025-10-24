@@ -121,7 +121,9 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
     # Use intelligent normalization to handle both cases.
     # See: https://github.com/mjcumming/wiim/issues/75
     source_hint = raw.get("mode")  # Will be used for enhanced logging
-    if (pos := raw.get("curpos") or raw.get("offset_pts")) is not None:
+
+    # Check both original field names and mapped field names (since generic mapping happens first)
+    if (pos := raw.get("curpos") or raw.get("offset_pts") or data.get("position_ms")) is not None:
         try:
             pos_int = int(pos)
             data["position"] = _normalize_time_value(pos_int, "position", source_hint)
@@ -135,13 +137,13 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid position value: %s", pos)
 
-    if raw.get("totlen") is not None:
+    if (duration_val := raw.get("totlen") or data.get("duration_ms")) is not None:
         try:
-            duration_val = int(raw["totlen"])
-            if duration_val > 0:  # Only set duration if it's actually provided
-                data["duration"] = _normalize_time_value(duration_val, "duration", source_hint)
+            duration_int = int(duration_val)
+            if duration_int > 0:  # Only set duration if it's actually provided
+                data["duration"] = _normalize_time_value(duration_int, "duration", source_hint)
         except (ValueError, TypeError):
-            _LOGGER.debug("Invalid duration value: %s", raw.get("totlen"))
+            _LOGGER.debug("Invalid duration value: %s", duration_val)
 
     # Mute → bool.
     if "mute" in data:

@@ -2,6 +2,44 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.34] - 2024-12-19
+
+### Fixed
+
+- **Critical Media Position Display Bug**: Fixed group media player showing absurd elapsed times (e.g., "488752:34:56" = 488,752 hours!)
+
+  - Root cause: `media_position_updated_at` was returning `float` (Unix timestamp) instead of `datetime.datetime` object
+  - Home Assistant's UI was interpreting the timestamp as seconds of elapsed time
+  - Both group player and master player were affected
+  - Fixed by matching Home Assistant's MediaPlayerEntity standard which requires datetime objects
+  - Updated return type from `float | None` to `datetime.datetime | None`
+  - Added proper datetime conversion using `utc_from_timestamp()`
+
+- **Critical Position/Duration Field Mapping Bug**: Fixed impossible time displays (e.g., "05:13" elapsed / "00:55" total duration)
+  - Root cause: API parser was looking for `curpos`/`totlen` fields AFTER generic field mapping renamed them to `position_ms`/`duration_ms`
+  - Time normalization never happened because fields were already renamed
+  - Fixed by checking both original field names (`curpos`/`totlen`) AND mapped field names (`position_ms`/`duration_ms`)
+  - Now properly converts milliseconds to seconds for all sources (AirPlay, Spotify, etc.)
+  - Resolves impossible scenarios where elapsed time exceeds total duration
+
+### Technical
+
+- **Group Media Player API Compliance**: Aligned `media_position_updated_at` property with Home Assistant's MediaPlayerEntity standard
+
+  - Changed return type: `float | None` → `datetime.datetime | None`
+  - Returns None when unavailable (instead of current timestamp)
+  - Uses `homeassistant.util.dt.utc_from_timestamp()` for proper timezone handling
+  - Updated `elapsed_time_last_updated` to use module-level datetime import (no shadowing)
+  - Updated unit tests to expect datetime objects instead of float timestamps
+
+- **API Parser Field Resolution**: Enhanced field lookup to handle both original and mapped field names
+  - Added fallback logic: `raw.get("curpos") or data.get("position_ms")`
+  - Added fallback logic: `raw.get("totlen") or data.get("duration_ms")`
+  - Ensures time normalization works regardless of field mapping order
+  - Maintains backward compatibility with existing API responses
+
+## [Unreleased]
+
 ## [0.1.33] - 2025-10-24
 
 ### Fixed
