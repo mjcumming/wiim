@@ -135,6 +135,15 @@ class PlayerStatus(_WiimBase):
             return None  # Streaming services report 0 duration - treat as unknown
         return v
 
+    # Handle eq field - convert dictionary to string or None
+    @field_validator("eq_preset", mode="before")
+    @classmethod
+    def _normalize_eq_preset(cls, v: str | dict | None) -> str | None:  # noqa: D401
+        if isinstance(v, dict):
+            # If it's a dictionary like {'eq_enabled': False}, return None
+            return None
+        return v
+
 
 class SlaveInfo(BaseModel):
     """Represents a slave device in a multiroom group."""

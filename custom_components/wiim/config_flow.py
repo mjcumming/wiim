@@ -19,7 +19,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
-from .api import WiiMClient
+from .api import WiiMClient, WiiMError
 from .const import (
     CONF_DEBUG_LOGGING,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
@@ -64,7 +64,10 @@ def _extract_device_name(status: dict[str, Any], fallback_host: str) -> str:
             device_name = "Audio Pro A28"
         elif "c10" in fallback_host.lower() or "c10" in status_str:
             device_name = "Audio Pro C10"
-        elif any(audio_pro_term in status_str for audio_pro_term in ["audio pro", "audio_pro"]):
+        elif any(
+            audio_pro_term in status_str
+            for audio_pro_term in ["audio pro", "audio_pro"]
+        ):
             device_name = "Audio Pro Speaker"
         else:
             device_name = f"WiiM Device ({fallback_host})"
@@ -136,7 +139,9 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
             # Try to get device status - this is the most reliable way to validate
             status = await client.get_status()
             if not status:
-                _LOGGER.debug("No status response from %s:%s via %s", host, port, protocol)
+                _LOGGER.debug(
+                    "No status response from %s:%s via %s", host, port, protocol
+                )
                 continue
 
             # Extract device name with enhanced Audio Pro support
@@ -149,7 +154,11 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
             device_uuid = status.get("uuid")
             if not device_uuid:
                 # Some older devices may not provide UUID
-                _LOGGER.debug("Device at %s:%s did not provide UUID, using host as fallback", host, port)
+                _LOGGER.debug(
+                    "Device at %s:%s did not provide UUID, using host as fallback",
+                    host,
+                    port,
+                )
                 device_uuid = host
 
             # Enhanced logging with Audio Pro specific messages
@@ -178,11 +187,18 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
 
             return True, device_name, device_uuid
 
-        except (OSError, TimeoutError, ValueError) as err:
+        except (OSError, TimeoutError, ValueError, WiiMError) as err:
             # Check if this appears to be an Audio Pro device for enhanced error messages
             is_audio_pro = any(
                 audio_pro_model in host.lower() or audio_pro_model in str(err).lower()
-                for audio_pro_model in ["a10", "a15", "a28", "c10", "audio pro", "audio_pro"]
+                for audio_pro_model in [
+                    "a10",
+                    "a15",
+                    "a28",
+                    "c10",
+                    "audio pro",
+                    "audio_pro",
+                ]
             )
 
             # Log the specific error for debugging but continue trying other protocols
@@ -191,14 +207,26 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
 
             if is_audio_pro:
                 # Audio Pro specific error logging
-                _LOGGER.debug("Audio Pro device %s:%s failed via %s: %s", host, port, protocol, err)
+                _LOGGER.debug(
+                    "Audio Pro device %s:%s failed via %s: %s",
+                    host,
+                    port,
+                    protocol,
+                    err,
+                )
                 if "404" in error_str:
                     _LOGGER.debug(
-                        "Audio Pro device %s:%s returned 404 via %s - may be HTTPS-only device", host, port, protocol
+                        "Audio Pro device %s:%s returned 404 via %s - may be HTTPS-only device",
+                        host,
+                        port,
+                        protocol,
                     )
                 elif "timeout" in error_str:
                     _LOGGER.debug(
-                        "Audio Pro device %s:%s timeout via %s - device may be slow to respond", host, port, protocol
+                        "Audio Pro device %s:%s timeout via %s - device may be slow to respond",
+                        host,
+                        port,
+                        protocol,
                     )
                 elif "connection refused" in error_str:
                     _LOGGER.debug(
@@ -209,20 +237,49 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
                     )
                 elif "ssl" in error_str or "certificate" in error_str:
                     _LOGGER.debug(
-                        "Audio Pro device %s:%s SSL error via %s - may need HTTP instead", host, port, protocol
+                        "Audio Pro device %s:%s SSL error via %s - may need HTTP instead",
+                        host,
+                        port,
+                        protocol,
                     )
             else:
                 # Standard error logging for non-Audio Pro devices
                 if "404" in error_str:
-                    _LOGGER.debug("Device at %s:%s returned 404 via %s - not a LinkPlay device", host, port, protocol)
+                    _LOGGER.debug(
+                        "Device at %s:%s returned 404 via %s - not a LinkPlay device",
+                        host,
+                        port,
+                        protocol,
+                    )
                 elif "timeout" in error_str:
-                    _LOGGER.debug("Timeout connecting to %s:%s via %s - device may be slow", host, port, protocol)
+                    _LOGGER.debug(
+                        "Timeout connecting to %s:%s via %s - device may be slow",
+                        host,
+                        port,
+                        protocol,
+                    )
                 elif "connection refused" in error_str:
-                    _LOGGER.debug("Connection refused by %s:%s via %s - wrong protocol/port", host, port, protocol)
+                    _LOGGER.debug(
+                        "Connection refused by %s:%s via %s - wrong protocol/port",
+                        host,
+                        port,
+                        protocol,
+                    )
                 elif "ssl" in error_str or "certificate" in error_str:
-                    _LOGGER.debug("SSL error with %s:%s via %s - device may not support HTTPS", host, port, protocol)
+                    _LOGGER.debug(
+                        "SSL error with %s:%s via %s - device may not support HTTPS",
+                        host,
+                        port,
+                        protocol,
+                    )
                 else:
-                    _LOGGER.debug("Failed to validate device at %s:%s via %s: %s", host, port, protocol, err)
+                    _LOGGER.debug(
+                        "Failed to validate device at %s:%s via %s: %s",
+                        host,
+                        port,
+                        protocol,
+                        err,
+                    )
             continue
         finally:
             await client.close()
@@ -230,17 +287,24 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
     # If we get here, all protocols failed
     # Check if this appears to be an Audio Pro device for enhanced error messages
     is_audio_pro = any(
-        audio_pro_model in host.lower() for audio_pro_model in ["a10", "a15", "a28", "c10", "audio pro", "audio_pro"]
+        audio_pro_model in host.lower()
+        for audio_pro_model in ["a10", "a15", "a28", "c10", "audio pro", "audio_pro"]
     )
 
     if is_audio_pro:
-        _LOGGER.warning("🔊 Audio Pro device validation failed for %s. Last error: %s", host, last_error)
+        _LOGGER.warning(
+            "🔊 Audio Pro device validation failed for %s. Last error: %s",
+            host,
+            last_error,
+        )
         _LOGGER.info(
             "Audio Pro device %s validation failed - this is common for MkII/W-Series devices. Manual setup is recommended.",
             host,
         )
     else:
-        _LOGGER.warning("All validation attempts failed for %s. Last error: %s", host, last_error)
+        _LOGGER.warning(
+            "All validation attempts failed for %s. Last error: %s", host, last_error
+        )
 
     # Instead of failing completely, provide a fallback that allows manual setup
     # This matches python-linkplay's approach of being permissive
@@ -254,25 +318,43 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
                 host,
             )
         elif "timeout" in error_str:
-            _LOGGER.info("Audio Pro device %s timeout - device may be slow or offline. Manual setup available.", host)
+            _LOGGER.info(
+                "Audio Pro device %s timeout - device may be slow or offline. Manual setup available.",
+                host,
+            )
         elif "connection refused" in error_str:
-            _LOGGER.info("Audio Pro device %s connection refused - may need manual IP configuration.", host)
+            _LOGGER.info(
+                "Audio Pro device %s connection refused - may need manual IP configuration.",
+                host,
+            )
         elif "ssl" in error_str or "certificate" in error_str:
             _LOGGER.info(
-                "Audio Pro device %s SSL error - device may require specific protocol. Manual setup available.", host
+                "Audio Pro device %s SSL error - device may require specific protocol. Manual setup available.",
+                host,
             )
         else:
-            _LOGGER.info("Audio Pro device %s failed validation - manual setup is recommended and will work.", host)
+            _LOGGER.info(
+                "Audio Pro device %s failed validation - manual setup is recommended and will work.",
+                host,
+            )
     else:
         # Standard final error messages for non-Audio Pro devices
         if "404" in error_str:
-            _LOGGER.info("Device at %s returned 404 - likely not a WiiM/LinkPlay device", host)
+            _LOGGER.info(
+                "Device at %s returned 404 - likely not a WiiM/LinkPlay device", host
+            )
         elif "timeout" in error_str:
-            _LOGGER.info("Timeout connecting to %s - device may be offline or slow", host)
+            _LOGGER.info(
+                "Timeout connecting to %s - device may be offline or slow", host
+            )
         elif "connection refused" in error_str:
-            _LOGGER.info("Connection refused by %s - device may not support HTTP API", host)
+            _LOGGER.info(
+                "Connection refused by %s - device may not support HTTP API", host
+            )
         else:
-            _LOGGER.info("Failed to validate device at %s - may need manual configuration", host)
+            _LOGGER.info(
+                "Failed to validate device at %s - may need manual configuration", host
+            )
 
     # Return a "soft failure" that still allows the device to be configured manually
     # The UI can show this as "Validation failed but manual setup available"
@@ -298,13 +380,17 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow."""
         return WiiMOptionsFlow(config_entry)
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:  # type: ignore[override]
         """Handle user-initiated setup - go straight to manual entry."""
         # Skip the setup mode choice and go directly to manual entry
         # since autodiscovery often fails and manual is more reliable
         return await self.async_step_manual()
 
-    async def async_step_discovery(self, discovery_info: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
+    async def async_step_discovery(
+        self, discovery_info: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:  # type: ignore[override]
         """Handle automatic discovery."""
         if not self._discovered_devices:
             # Run discovery
@@ -336,10 +422,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             elif device_uuid:
                 # Soft failure - validation failed but we got a fallback UUID
                 # Still proceed but log the issue
-                _LOGGER.warning("Using fallback validation for selected device %s", host)
+                _LOGGER.warning(
+                    "Using fallback validation for selected device %s", host
+                )
             else:
                 # Hard failure - no UUID at all
-                _LOGGER.error("Validation completely failed for selected device %s", host)
+                _LOGGER.error(
+                    "Validation completely failed for selected device %s", host
+                )
                 return self.async_abort(reason="cannot_connect")
 
             # Prefer the real device UUID when available. Otherwise fall back to the
@@ -357,7 +447,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if self._discovered_devices:
             # Show discovered devices
-            options = [f"{name} ({host})" for host, name in self._discovered_devices.items()]
+            options = [
+                f"{name} ({host})" for host, name in self._discovered_devices.items()
+            ]
             options.append("Enter IP manually")
 
             option_map = {}
@@ -376,7 +468,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # No devices found
             return await self.async_step_manual()
 
-    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle manual IP entry with improved UX."""
         errors = {}
 
@@ -411,13 +505,17 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Abort if this unique_id (UUID or host) is already configured.
                 self._abort_if_unique_id_configured()
 
-                return self.async_create_entry(title=device_name, data={CONF_HOST: host})
+                return self.async_create_entry(
+                    title=device_name, data={CONF_HOST: host}
+                )
 
             # Validation failed – surface the standard connection error so the form
             # stays open for the user to correct the input.
             errors["base"] = "cannot_connect"
 
-        schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of your WiiM device"): str})
+        schema = vol.Schema(
+            {vol.Required(CONF_HOST, description="IP address of your WiiM device"): str}
+        )
 
         return self.async_show_form(
             step_id="manual",
@@ -451,14 +549,18 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             await async_search(
-                async_callback=_on_device, timeout=5, search_target="urn:schemas-upnp-org:device:MediaRenderer:1"
+                async_callback=_on_device,
+                timeout=5,
+                search_target="urn:schemas-upnp-org:device:MediaRenderer:1",
             )
         except (OSError, TimeoutError, ValueError) as err:
             _LOGGER.debug("Discovery error: %s", err)
 
         return discovered
 
-    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
         """Handle Zeroconf discovery.
 
         Enhanced to handle devices that are discovered but fail initial validation,
@@ -472,7 +574,12 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Enhanced logic: handle both successful validation and soft failures
         if is_valid and device_uuid:
             # Full success - auto-configure
-            _LOGGER.info("🔍 ZEROCONF DISCOVERY validated device: %s at %s (UUID: %s)", device_name, host, device_uuid)
+            _LOGGER.info(
+                "🔍 ZEROCONF DISCOVERY validated device: %s at %s (UUID: %s)",
+                device_name,
+                host,
+                device_uuid,
+            )
             unique_id = device_uuid
 
             await self.async_set_unique_id(unique_id)
@@ -486,7 +593,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         elif device_uuid:
             # Soft failure - validation failed but we got a fallback UUID
             # This means the device might still work but needs manual confirmation
-            _LOGGER.warning("🔍 ZEROCONF DISCOVERY got fallback UUID for %s: %s", host, device_uuid)
+            _LOGGER.warning(
+                "🔍 ZEROCONF DISCOVERY got fallback UUID for %s: %s", host, device_uuid
+            )
 
             unique_id = device_uuid
             await self.async_set_unique_id(unique_id)
@@ -499,10 +608,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         else:
             # Hard failure - no UUID at all, likely not a LinkPlay device
-            _LOGGER.warning("🔍 ZEROCONF DISCOVERY validation completely failed for host: %s", host)
+            _LOGGER.warning(
+                "🔍 ZEROCONF DISCOVERY validation completely failed for host: %s", host
+            )
             return self.async_abort(reason="cannot_connect")
 
-    async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> ConfigFlowResult:
+    async def async_step_ssdp(
+        self, discovery_info: SsdpServiceInfo
+    ) -> ConfigFlowResult:
         """Handle SSDP discovery."""
         _LOGGER.debug("SSDP discovery from: %s", discovery_info.ssdp_location)
 
@@ -512,7 +625,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         host = urlparse(discovery_info.ssdp_location).hostname
         if not host:
-            _LOGGER.debug("SSDP discovery aborted: no host from %s", discovery_info.ssdp_location)
+            _LOGGER.debug(
+                "SSDP discovery aborted: no host from %s", discovery_info.ssdp_location
+            )
             return self.async_abort(reason="no_host")
 
         _LOGGER.debug("SSDP discovery attempting validation for host: %s", host)
@@ -535,7 +650,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         elif device_uuid:
             # Soft failure - validation failed but we got a fallback UUID
-            _LOGGER.debug("SSDP discovery got fallback UUID for %s: %s", host, device_uuid)
+            _LOGGER.debug(
+                "SSDP discovery got fallback UUID for %s: %s", host, device_uuid
+            )
 
             unique_id = device_uuid
             await self.async_set_unique_id(unique_id)
@@ -548,10 +665,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         else:
             # Hard failure - no UUID at all, likely not a LinkPlay device
-            _LOGGER.debug("SSDP discovery validation completely failed for host: %s", host)
+            _LOGGER.debug(
+                "SSDP discovery validation completely failed for host: %s", host
+            )
             return self.async_abort(reason="cannot_connect")
 
-    async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> ConfigFlowResult:
+    async def async_step_integration_discovery(
+        self, discovery_info: dict[str, Any]
+    ) -> ConfigFlowResult:
         """Handle integration discovery (automatic slave discovery and missing devices)."""
         host = discovery_info.get(CONF_HOST)
         device_name = discovery_info.get("device_name", "Unknown Device")
@@ -582,17 +703,25 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Full success - use validated data
             final_name = validated_name or device_name
             final_uuid = validated_uuid
-            _LOGGER.info("Integration discovery validated device: %s at %s", final_name, host)
+            _LOGGER.info(
+                "Integration discovery validated device: %s at %s", final_name, host
+            )
 
         elif validated_uuid:
             # Soft failure - validation failed but we got a fallback UUID
             final_name = validated_name or device_name
             final_uuid = validated_uuid
-            _LOGGER.warning("Integration discovery got fallback UUID for %s at %s", final_name, host)
+            _LOGGER.warning(
+                "Integration discovery got fallback UUID for %s at %s", final_name, host
+            )
 
         else:
             # Hard failure - no UUID at all
-            _LOGGER.warning("Integration discovery validation completely failed for %s at %s", device_name, host)
+            _LOGGER.warning(
+                "Integration discovery validation completely failed for %s at %s",
+                device_name,
+                host,
+            )
             return self.async_abort(reason="cannot_connect")
 
         # Prefer the real device UUID when available. Otherwise fall back to the
@@ -609,14 +738,20 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Store data for discovery confirmation
         self.data = {CONF_HOST: host, "name": final_name}
 
-        _LOGGER.info("🔍 INTEGRATION DISCOVERY completed for %s at %s", final_name, host)
+        _LOGGER.info(
+            "🔍 INTEGRATION DISCOVERY completed for %s at %s", final_name, host
+        )
         return await self.async_step_discovery_confirm()
 
-    async def async_step_missing_device(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_missing_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle missing device discovery - user provides IP for known UUID."""
         errors = {}
         device_uuid = self.context.get("unique_id")
-        device_name = (self.data or {}).get("device_name", f"Device {device_uuid[:8] if device_uuid else 'Unknown'}...")
+        device_name = (self.data or {}).get(
+            "device_name", f"Device {device_uuid[:8] if device_uuid else 'Unknown'}..."
+        )
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
@@ -628,14 +763,24 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             elif validated_uuid != device_uuid:
                 errors["base"] = "uuid_mismatch"
-                _LOGGER.warning("UUID mismatch: expected %s, got %s", device_uuid, validated_uuid)
+                _LOGGER.warning(
+                    "UUID mismatch: expected %s, got %s", device_uuid, validated_uuid
+                )
             else:
                 # Success - create entry
                 await self.async_set_unique_id(device_uuid)
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(title=validated_name, data={CONF_HOST: host})
+                return self.async_create_entry(
+                    title=validated_name, data={CONF_HOST: host}
+                )
 
-        schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of the missing device"): str})
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_HOST, description="IP address of the missing device"
+                ): str
+            }
+        )
 
         return self.async_show_form(
             step_id="missing_device",
@@ -647,7 +792,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_discovery_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Confirm discovery."""
         if user_input is not None:
             return self.async_create_entry(
@@ -657,7 +804,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Set title placeholders here where the UI actually processes them
         self.context["title_placeholders"] = {"name": self.data["name"]}
-        _LOGGER.info("🔍 DISCOVERY CONFIRM set title_placeholders: %s", {"name": self.data["name"]})
+        _LOGGER.info(
+            "🔍 DISCOVERY CONFIRM set title_placeholders: %s",
+            {"name": self.data["name"]},
+        )
 
         self._set_confirm_only()
         return self.async_show_form(
@@ -677,36 +827,48 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         """Initialize options flow."""
         self.entry = entry
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle options flow."""
         if user_input is not None:
             options_data = {}
 
             # Volume step: convert from percentage (UI) to decimal (internal)
             if CONF_VOLUME_STEP_PERCENT in user_input:
-                options_data[CONF_VOLUME_STEP] = user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
+                options_data[CONF_VOLUME_STEP] = (
+                    user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
+                )
 
             # Feature toggles
             if CONF_ENABLE_MAINTENANCE_BUTTONS in user_input:
-                options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[CONF_ENABLE_MAINTENANCE_BUTTONS]
+                options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[
+                    CONF_ENABLE_MAINTENANCE_BUTTONS
+                ]
             if CONF_DEBUG_LOGGING in user_input:
                 options_data[CONF_DEBUG_LOGGING] = user_input[CONF_DEBUG_LOGGING]
 
             return self.async_create_entry(title="", data=options_data)
 
         # Populate form with current or default values
-        current_volume_step_decimal = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+        current_volume_step_decimal = self.entry.options.get(
+            CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
+        )
         volume_step_percent = int(current_volume_step_decimal * 100)
 
-        current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, False)
+        current_maintenance_buttons = self.entry.options.get(
+            CONF_ENABLE_MAINTENANCE_BUTTONS, False
+        )
         current_debug_logging = self.entry.options.get(CONF_DEBUG_LOGGING, False)
 
         schema = vol.Schema(
             {
-                vol.Optional(CONF_VOLUME_STEP_PERCENT, default=volume_step_percent): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=50)
-                ),
-                vol.Optional(CONF_ENABLE_MAINTENANCE_BUTTONS, default=current_maintenance_buttons): bool,
+                vol.Optional(
+                    CONF_VOLUME_STEP_PERCENT, default=volume_step_percent
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
+                vol.Optional(
+                    CONF_ENABLE_MAINTENANCE_BUTTONS, default=current_maintenance_buttons
+                ): bool,
                 vol.Optional(CONF_DEBUG_LOGGING, default=current_debug_logging): bool,
             }
         )

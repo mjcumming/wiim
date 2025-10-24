@@ -65,6 +65,22 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Set initial name based on current state
         self._update_name()
 
+    async def async_added_to_hass(self) -> None:
+        """Set up entity."""
+        await super().async_added_to_hass()
+
+        # Listen for state updates from the speaker
+        from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+        dispatcher_signal = f"wiim_state_updated_{self.speaker.uuid}"
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                dispatcher_signal,
+                self._handle_coordinator_update,
+            )
+        )
+
     # ===== ENTITY PROPERTIES =====
 
     def _update_name(self) -> None:
@@ -194,12 +210,14 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def media_duration(self) -> int | None:
         """Duration of current playing media in seconds."""
-        return self.speaker.get_media_duration() if self.available else None
+        duration = self.speaker.get_media_duration() if self.available else None
+        return duration
 
     @property
     def media_position(self) -> int | None:
         """Position of current playing media in seconds."""
-        return self.speaker.get_media_position() if self.available else None
+        position = self.speaker.get_media_position() if self.available else None
+        return position
 
     @property
     def media_position_updated_at(self) -> datetime.datetime | None:

@@ -50,10 +50,14 @@ async def async_setup_entry(
         if supports_audio_output:
             entities.append(WiiMBluetoothOutputSensor(speaker))
         else:
-            _LOGGER.debug("Skipping Bluetooth output sensor - device does not support audio output")
+            _LOGGER.debug(
+                "Skipping Bluetooth output sensor - device does not support audio output"
+            )
     else:
         # Fallback: create sensor if capabilities not available (assume supported)
-        _LOGGER.debug("Capabilities not available, creating Bluetooth output sensor as fallback")
+        _LOGGER.debug(
+            "Capabilities not available, creating Bluetooth output sensor as fallback"
+        )
         entities.append(WiiMBluetoothOutputSensor(speaker))
 
     # Always add diagnostic sensor
@@ -96,7 +100,9 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
     @property
     def name(self) -> str:
         """Return the name of the entity."""
-        return f"{self.speaker.name} Multiroom Role"  # Display name includes description
+        return (
+            f"{self.speaker.name} Multiroom Role"  # Display name includes description
+        )
 
     @property
     def native_value(self) -> str:
@@ -143,7 +149,9 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
             attrs["coordinator_name"] = self.speaker.coordinator_speaker.name
 
         if len(self.speaker.group_members) > 1:
-            attrs["group_member_names"] = [member.name for member in self.speaker.group_members]
+            attrs["group_member_names"] = [
+                member.name for member in self.speaker.group_members
+            ]
 
         return attrs
 
@@ -202,7 +210,11 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
         return self.speaker.device_model.model_dump(exclude_none=True)
 
     def _multiroom(self) -> dict[str, Any]:
-        return self.speaker.coordinator.data.get("multiroom", {}) if self.speaker.coordinator.data else {}
+        return (
+            self.speaker.coordinator.data.get("multiroom", {})
+            if self.speaker.coordinator.data
+            else {}
+        )
 
     # -------------------------- State ----------------------------
 
@@ -269,27 +281,39 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             if self.speaker.coordinator._last_command_failure is not None:
                 import time
 
-                time_since_failure = time.time() - self.speaker.coordinator._last_command_failure
+                time_since_failure = (
+                    time.time() - self.speaker.coordinator._last_command_failure
+                )
                 attrs.update(
                     {
                         "last_command_failure": int(time_since_failure),  # seconds ago
-                        "command_failure_count": getattr(self.speaker.coordinator, "_command_failure_count", 0),
+                        "command_failure_count": getattr(
+                            self.speaker.coordinator, "_command_failure_count", 0
+                        ),
                         "has_recent_failures": (
                             self.speaker.coordinator.has_recent_command_failures()
-                            if hasattr(self.speaker.coordinator, "has_recent_command_failures")
+                            if hasattr(
+                                self.speaker.coordinator, "has_recent_command_failures"
+                            )
                             else False
                         ),
                     }
                 )
 
         # Add adaptive polling diagnostics
-        polling_data = self.speaker.coordinator.data.get("polling", {}) if self.speaker.coordinator.data else {}
+        polling_data = (
+            self.speaker.coordinator.data.get("polling", {})
+            if self.speaker.coordinator.data
+            else {}
+        )
         if polling_data:
             attrs.update(
                 {
                     "polling_interval": polling_data.get("interval", 5),
                     "polling_reason": polling_data.get("interval_reason", "unknown"),
-                    "fast_polling_active": polling_data.get("fast_polling_active", False),
+                    "fast_polling_active": polling_data.get(
+                        "fast_polling_active", False
+                    ),
                     "adaptive_polling": polling_data.get("adaptive_polling", False),
                     "is_playing": polling_data.get("is_playing", False),
                 }
@@ -373,7 +397,9 @@ class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
         except Exception:
             # Return "unknown" if we can't determine the status
             # This prevents the entity from becoming unavailable
-            _LOGGER.debug("Could not determine Bluetooth output status for %s", self.speaker.name)
+            _LOGGER.debug(
+                "Could not determine Bluetooth output status for %s", self.speaker.name
+            )
             return "unknown"
 
     @property
@@ -386,7 +412,10 @@ class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
             }
         except Exception:
             # Return minimal attributes if we can't get the full information
-            _LOGGER.debug("Could not get extra state attributes for Bluetooth output sensor on %s", self.speaker.name)
+            _LOGGER.debug(
+                "Could not get extra state attributes for Bluetooth output sensor on %s",
+                self.speaker.name,
+            )
             return {
                 "hardware_output_mode": "unknown",
                 "audio_cast_active": "unknown",
@@ -475,7 +504,9 @@ class WiiMSampleRateSensor(WiimEntity, SensorEntity):
         sample_rate = metadata.get("sample_rate")
 
         # If no current value, try to get previous valid value to avoid flickering
-        if sample_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+        if sample_rate is None and hasattr(
+            self.speaker.coordinator, "_last_valid_metadata"
+        ):
             last_metadata = self.speaker.coordinator._last_valid_metadata
             if last_metadata:
                 sample_rate = last_metadata.get("sample_rate")
@@ -503,7 +534,9 @@ class WiiMBitDepthSensor(WiimEntity, SensorEntity):
         bit_depth = metadata.get("bit_depth")
 
         # If no current value, try to get previous valid value to avoid flickering
-        if bit_depth is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+        if bit_depth is None and hasattr(
+            self.speaker.coordinator, "_last_valid_metadata"
+        ):
             last_metadata = self.speaker.coordinator._last_valid_metadata
             if last_metadata:
                 bit_depth = last_metadata.get("bit_depth")
@@ -531,7 +564,9 @@ class WiiMBitRateSensor(WiimEntity, SensorEntity):
         bit_rate = metadata.get("bit_rate")
 
         # If no current value, try to get previous valid value to avoid flickering
-        if bit_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+        if bit_rate is None and hasattr(
+            self.speaker.coordinator, "_last_valid_metadata"
+        ):
             last_metadata = self.speaker.coordinator._last_valid_metadata
             if last_metadata:
                 bit_rate = last_metadata.get("bit_rate")

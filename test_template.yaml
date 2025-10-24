@@ -1,0 +1,21 @@
+template:
+  - trigger:
+      - platform: time_pattern
+        seconds: "/1"
+    sensor:
+      - name: "Master Bedroom Elapsed Test"
+        unit_of_measurement: "s"
+        state: >
+          {% set player = 'media_player.master_bedroom' %}
+          {% if is_state(player, 'playing') %}
+            {% set duration = state_attr(player, 'media_duration') %}
+            {% set position = state_attr(player, 'media_position') %}
+            {% set updated_at = state_attr(player, 'media_position_updated_at') %}
+            {% if duration is not none and position is not none and updated_at is not none %}
+              {{ (position + (now() - updated_at).total_seconds()) | round(0) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            {{ state_attr(player, 'media_position') or 0 }}
+          {% endif %}

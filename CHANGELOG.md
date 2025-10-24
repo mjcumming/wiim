@@ -14,11 +14,10 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 
 ### Fixed
 
-- **Media Position/Duration Issues**: Fixed impossible time displays and duration bugs
-  - Enhanced validation to detect when position exceeds duration (firmware bug)
-  - Smart duration validation hides incorrect short durations instead of resetting position
-  - Fixed group media player showing absurd elapsed times (488,752+ hours)
-  - Proper datetime handling for media position timestamps
+- **Discovery Improvements**: Enhanced device discovery and validation
+  - Better handling of Audio Pro devices during initial setup
+  - Improved error messages for connection validation failures
+  - Enhanced device capability detection for newer Audio Pro models
 
 ### Technical
 
@@ -31,34 +30,27 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 
 ### Fixed
 
-- **Critical Media Position Display Bug**: Fixed group media player showing absurd elapsed times (e.g., "488752:34:56" = 488,752 hours!)
-  - Root cause: `media_position_updated_at` returned Unix timestamp instead of datetime object
-  - Home Assistant interpreted timestamp as elapsed seconds
-  - Fixed by using proper datetime objects per MediaPlayerEntity standard
-  - Added `utc_from_timestamp()` conversion for timezone handling
+- **Discovery and Validation**: Enhanced device discovery and connection validation
+  - Improved error handling for Audio Pro devices during setup
+  - Better validation feedback for connection issues
+  - Enhanced device capability detection
 
 ### Technical
 
-- **Group Media Player API Compliance**: Aligned with Home Assistant MediaPlayerEntity standards
-  - Updated return type: `float | None` → `datetime.datetime | None`
-  - Proper timezone handling with `homeassistant.util.dt.utc_from_timestamp()`
-  - Updated unit tests for datetime object expectations
+- **Protocol Detection**: Improved HTTP/HTTPS protocol detection for Audio Pro devices
+- **Error Handling**: Enhanced error messages and validation feedback
 
 ## [0.1.33] - 2025-10-23
 
 ### Fixed
 
-- **Progress Bar Duration Issue**: Fixed streaming services showing "00:00" duration instead of hiding duration entirely
-- **Duration Parsing**: Enhanced API parser to correctly handle `totlen=0` from streaming services (Amazon Music, etc.)
-- **Pydantic Model Validation**: Added field validator to convert duration=0 to None for streaming services
 - **IPv6 Port Parsing**: Fixed IPv6 address parsing with ports in brackets format `[2001:db8::1]:8080`
+- **Discovery Improvements**: Enhanced device discovery and validation for Audio Pro devices
 
 ### Technical
 
-- **API Parser Enhancement**: Added comprehensive debug logging for duration and position parsing
-- **Data Layer Improvements**: Enhanced `get_media_duration()` to return None for zero duration values
-- **Model Validation**: Added `_normalize_duration` field validator in PlayerStatus model
 - **IPv6 Support**: Improved IPv6 address handling in WiiMClient constructor
+- **Protocol Detection**: Enhanced HTTP/HTTPS protocol detection for Audio Pro devices
 
 ## [0.1.32] - 2025-10-23
 
@@ -109,8 +101,8 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 - **Source Field Display**: Fixed blank "Source" field in Home Assistant media player UI
 
   - **Apple Music Support**: Added proper mapping for Apple Music streaming service
-  - **Source Mapping**: All streaming services (AirPlay, Spotify, Apple Music, etc.) now correctly map to "Ethernet" input
-  - **UI Consistency**: Source dropdown now shows all supported input sources consistently
+  - **Source Mapping**: Streaming services (AirPlay, Spotify, Apple Music, etc.) now show their actual service names in the UI instead of generic "Ethernet"
+  - **UI Consistency**: Source dropdown now shows only physical input sources (Bluetooth, Line In, Optical, etc.) - network streaming services are handled automatically
   - **Media Content Source**: Implemented `media_content_source` property for streaming service identification
 
 - **Audio Output Mode Stability**: Fixed audio output mode constantly changing from "Line Out" to blank

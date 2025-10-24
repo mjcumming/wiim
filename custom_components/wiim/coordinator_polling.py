@@ -653,6 +653,9 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             device_model.uuid = getattr(coordinator.entry, "unique_id", None)
 
         # Update speaker object
+        _LOGGER.debug(
+            "🎵 About to call _update_speaker_object with data keys: %s", list(data.keys()) if data else "None"
+        )
         await coordinator._update_speaker_object(data)
 
         # Success handling

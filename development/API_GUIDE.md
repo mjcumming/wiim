@@ -382,7 +382,7 @@ async def async_join_group(self, speakers: list[Speaker]) -> None:
 
 #### **Audio Pro Specific Considerations**
 
-Audio Pro devices have unique characteristics due to their generational evolution:
+Audio Pro devices have unique characteristics due to their generational evolution and require special handling in our integration:
 
 **API Protocol Evolution:**
 
@@ -390,25 +390,73 @@ Audio Pro devices have unique characteristics due to their generational evolutio
 - **MkII Generation**: HTTPS (port 443) - enhanced security, same commands
 - **W-Generation**: HTTPS (port 443) - latest features, backward compatible
 
-**Integration Strategy:**
+**Enhanced Integration Features:**
 
-- **Multi-protocol probing**: HTTP → HTTPS → fallback ports
-- **Graceful degradation**: Works even when validation fails during discovery
-- **Manual setup friendly**: Always allows IP-based configuration
+**🔍 Generation Detection:**
+Our integration automatically detects Audio Pro generations for optimized handling:
+
+```python
+# Automatic detection based on model name and firmware
+generation = detect_audio_pro_generation(device_info)
+# Returns: "original", "mkii", "w_generation", or "unknown"
+```
+
+**⚡ Protocol Priority System:**
+Smart protocol ordering based on device generation:
+
+```python
+# Generation-specific protocol priorities
+if generation == "mkii":
+    capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first
+elif generation == "w_generation":
+    capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first
+else:  # original
+    capabilities["protocol_priority"] = ["http", "https"]  # HTTP first
+```
+
+**🛡️ Enhanced Response Validation:**
+Comprehensive Audio Pro response handling system:
+
+```python
+def _validate_audio_pro_response(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+    """Handle Audio Pro specific response variations."""
+    # Handles empty responses, string responses, and field normalization
+    # Audio Pro devices may return different formats than WiiM devices
+```
 
 **Common Response Differences:**
 
-- **Status codes**: May return different HTTP status codes than WiiM devices
-- **Metadata format**: Some fields may be missing or in different format
-- **Error responses**: More likely to return plain text errors vs JSON
-- **Connection timing**: May require longer timeouts for some operations
+- **Empty responses**: Audio Pro devices may return empty responses that need safe defaults
+- **String responses**: Some endpoints return plain text instead of JSON
+- **Field variations**: Different field names (`player_state` vs `state`, `vol` vs `volume`)
+- **Error formats**: More likely to return plain text errors vs structured JSON
+
+**Field Normalization:**
+Our integration automatically maps Audio Pro field variations:
+
+```python
+# Audio Pro → Standard field mappings
+field_mappings = {
+    "player_state": "state",    # Audio Pro specific → standard
+    "play_status": "state",     # Alternative Audio Pro field
+    "vol": "volume",            # Volume field variations
+    "muted": "mute",            # Mute state variations
+}
+```
+
+**Integration Strategy:**
+
+- **Multi-protocol probing**: HTTP → HTTPS → fallback ports with generation-aware ordering
+- **Graceful degradation**: Works even when validation fails during discovery
+- **Manual setup friendly**: Always allows IP-based configuration with clear guidance
+- **Generation-aware timeouts**: Optimized retry counts and timeouts per generation
 
 **Best Practices:**
 
-- **Always probe protocols**: Don't assume HTTP works (MkII+ devices)
+- **Always probe protocols**: Don't assume HTTP works (MkII+ devices use HTTPS)
 - **Accept validation failures**: They're often cosmetic for Audio Pro devices
-- **Enable fallback modes**: Use manual setup when auto-discovery warns
-- **Log protocol detection**: Helps users understand which protocol is being used
+- **Enable fallback modes**: Use manual setup when auto-discovery shows warnings
+- **Check device generation**: Logging shows which generation optimizations are active
 
 ---
 
@@ -634,6 +682,8 @@ class MediaPlayerController:
 - ❌ **Require EQ endpoints** - often missing entirely
 - ❌ **Use only WiiM API docs** - covers enhanced features only
 - ❌ **Fail hard on missing features** - always have fallbacks
+- ❌ **Assume HTTP protocol** - Audio Pro MkII+ devices use HTTPS
+- ❌ **Expect consistent field names** - Audio Pro uses different field variations
 
 ### **DO**
 
@@ -641,6 +691,41 @@ class MediaPlayerController:
 - ✅ **Use getPlayerStatus as foundation** - universally supported
 - ✅ **Implement graceful fallbacks** - for all enhanced features
 - ✅ **Log missing capabilities** - for user troubleshooting
+- ✅ **Test multiple protocols** - HTTP and HTTPS with fallback ports
+- ✅ **Normalize field names** - handle Audio Pro field variations automatically
+
+### **Audio Pro Specific Warnings**
+
+**Protocol Assumptions:**
+
+```python
+# ❌ WRONG: Assume HTTP always works
+await client.get_status()  # Fails on Audio Pro MkII devices
+
+# ✅ CORRECT: Let integration handle protocol detection
+# Integration automatically tries HTTPS first for Audio Pro devices
+```
+
+**Response Format Assumptions:**
+
+```python
+# ❌ WRONG: Assume always JSON
+response = await client._request("/httpapi.asp?command=getPlayerStatus")
+# Audio Pro may return string responses that need parsing
+
+# ✅ CORRECT: Use our response validation
+# Integration automatically handles Audio Pro response variations
+```
+
+**Field Name Assumptions:**
+
+```python
+# ❌ WRONG: Assume standard field names
+state = response.get("state")  # May be "player_state" on Audio Pro
+
+# ✅ CORRECT: Use normalized fields
+# Integration maps Audio Pro fields to standard names automatically
+```
 
 ---
 

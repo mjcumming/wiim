@@ -122,11 +122,30 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
     # See: https://github.com/mjcumming/wiim/issues/75
     source_hint = raw.get("mode")  # Will be used for enhanced logging
 
+    # Debug: Log raw API response for AirPlay troubleshooting
+    if source_hint and "airplay" in source_hint.lower():
+        _LOGGER.debug(
+            "🔍 AirPlay raw API response: %s",
+            {k: v for k, v in raw.items() if k in ["curpos", "totlen", "position_ms", "duration_ms", "mode"]},
+        )
+
     # Check both original field names and mapped field names (since generic mapping happens first)
     if (pos := raw.get("curpos") or raw.get("offset_pts") or data.get("position_ms")) is not None:
         try:
             pos_int = int(pos)
-            data["position"] = _normalize_time_value(pos_int, "position", source_hint)
+            normalized_position = _normalize_time_value(pos_int, "position", source_hint)
+            data["position"] = normalized_position
+            _LOGGER.debug("🎵 API PARSER: Setting data['position'] = %s", normalized_position)
+
+            # Enhanced logging for position parsing
+            source_type = "AirPlay" if source_hint and "airplay" in source_hint.lower() else source_hint or "unknown"
+            _LOGGER.debug(
+                "🎵 Position from API: %d seconds (source: %s, raw_value: %d)",
+                normalized_position,
+                source_type,
+                pos_int,
+            )
+
             # Try to use event loop time if available (async context), otherwise use time.time()
             try:
                 data["position_updated_at"] = asyncio.get_running_loop().time()
@@ -143,24 +162,15 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
             if duration_int > 0:  # Only set duration if it's actually provided
                 normalized_duration = _normalize_time_value(duration_int, "duration", source_hint)
 
-                # Check if this might be remaining time instead of total duration
-                # If we have a position and the "duration" is much smaller, it's likely remaining time
-                if (
-                    data.get("position") is not None
-                    and normalized_duration < data["position"]
-                    and normalized_duration < 300
-                ):  # Less than 5 minutes
-                    # Calculate total duration = position + remaining time
-                    total_duration = data["position"] + normalized_duration
-                    _LOGGER.debug(
-                        "🎵 Interpreting totlen as remaining time: %d seconds remaining + %d seconds elapsed = %d seconds total duration",
-                        normalized_duration,
-                        data["position"],
-                        total_duration,
-                    )
-                    data["duration"] = total_duration
-                else:
-                    data["duration"] = normalized_duration
+                # For AirPlay and other streaming sources, totlen is the actual total duration
+                # The previous logic incorrectly interpreted it as remaining time
+                # AirPlay provides both position (elapsed) and totlen (total duration) correctly
+                data["duration"] = normalized_duration
+
+                # Enhanced logging to help identify AirPlay and other sources
+                source_type = (
+                    "AirPlay" if source_hint and "airplay" in source_hint.lower() else source_hint or "unknown"
+                )
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid duration value: %s", duration_val)
 
@@ -175,8 +185,8 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
             if position > 30 and duration < 120:
                 _LOGGER.warning(
                     "🚨 Impossible media position detected: %d seconds elapsed > %d seconds duration "
-                    "(device: %s, source: %s). Duration appears too short - likely firmware bug. "
-                    "Hiding duration to prevent UI confusion.",
+                    "(device: %s, source: %s). Duration appears too short - likely firmware bug "
+                    "Hiding duration to prevent UI confusion",
                     position,
                     duration,
                     raw.get("device_name", "unknown"),
@@ -186,8 +196,8 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
             else:
                 _LOGGER.warning(
                     "🚨 Impossible media position detected: %d seconds elapsed > %d seconds duration "
-                    "(device: %s, source: %s). This appears to be a device firmware bug. "
-                    "Setting position to 0 to prevent UI confusion.",
+                    "(device: %s, source: %s). This appears to be a device firmware bug "
+                    "Setting position to 0 to prevent UI confusion",
                     position,
                     duration,
                     raw.get("device_name", "unknown"),
@@ -243,7 +253,13 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
     )
 
     # Validate artwork URL - filter out invalid values like "unknow", "unknown", etc.
-    if cover and str(cover).strip() not in ("unknow", "unknown", "un_known", "", "none"):
+    if cover and str(cover).strip() not in (
+        "unknow",
+        "unknown",
+        "un_known",
+        "",
+        "none",
+    ):
         try:
             # Basic URL validation - must contain http or start with /
             if "http" in str(cover).lower() or str(cover).startswith("/"):
@@ -335,7 +351,14 @@ def _handle_qobuz_connect_state_quirks(data: dict[str, Any], raw: dict[str, Any]
 
     # Count the number of positive indicators
     playback_indicators = sum(
-        [has_track_info, has_position_info, has_duration_info, has_artwork, has_artist, has_album]
+        [
+            has_track_info,
+            has_position_info,
+            has_duration_info,
+            has_artwork,
+            has_artist,
+            has_album,
+        ]
     )
 
     # Qobuz Connect specific: If we have rich metadata but status is stopped,
@@ -352,7 +375,9 @@ def _handle_qobuz_connect_state_quirks(data: dict[str, Any], raw: dict[str, Any]
     else:
         # Not enough indicators - probably genuinely stopped/idle
         _LOGGER.debug(
-            "🎵 Qobuz Connect: status='%s' with %d indicators - leaving unchanged", current_status, playback_indicators
+            "🎵 Qobuz Connect: status='%s' with %d indicators - leaving unchanged",
+            current_status,
+            playback_indicators,
         )
 
 

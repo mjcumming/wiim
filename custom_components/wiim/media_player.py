@@ -265,7 +265,24 @@ class WiiMMediaPlayer(
             self.entity_id,
         )
 
+        # Listen for state updates from the speaker
+        from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+        dispatcher_signal = f"wiim_state_updated_{self.speaker.uuid}"
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                dispatcher_signal,
+                self._handle_coordinator_update,
+            )
+        )
+
         # Debouncer already created in __init__; nothing to do here
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle coordinator data update."""
+        self.async_schedule_update_ha_state()
 
     @callback
     def async_write_ha_state(self) -> None:
@@ -629,14 +646,15 @@ class WiiMMediaPlayer(
         # Ensure we always return a valid timestamp for Music Assistant compatibility
         timestamp = self.controller.get_media_position_updated_at()
         if timestamp is None:
-            from homeassistant.util.dt import utcnow
+            from homeassistant.util.dt import utcnow as _utcnow
 
-            return utcnow()
+            return _utcnow()
 
         # Convert Unix timestamp to datetime object
-        from homeassistant.util.dt import utc_from_timestamp
+        from homeassistant.util.dt import utc_from_timestamp as _utc_from_timestamp
 
-        return utc_from_timestamp(timestamp)
+        result = _utc_from_timestamp(timestamp)
+        return result
 
     @property
     def elapsed_time_last_updated(self) -> str | None:
@@ -651,9 +669,9 @@ class WiiMMediaPlayer(
 
         timestamp = self.controller.get_media_position_updated_at()
         if timestamp is None:
-            import time
+            import time as _time
 
-            timestamp = time.time()
+            timestamp = _time.time()
 
         # Convert timestamp to ISO format string
         from datetime import datetime, timezone
@@ -758,132 +776,6 @@ class WiiMMediaPlayer(
         # real data from the device that confirms the state change. This prevents
         # the UI from flickering back to the old state before the device responds.
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle coordinator update - smartly clear optimistic state when real data confirms changes."""
-        import time
-
-        # Only clear optimistic state if real data shows the change we expected
-        real_state = self.controller.get_playback_state()
-        real_volume = self.controller.get_volume_level()
-        real_mute = self.controller.is_volume_muted()
-        real_source = self.controller.get_current_source()
-        real_shuffle = self.controller.get_shuffle_state()
-        real_repeat = self.controller.get_repeat_mode()
-
-        # Check for timeout - playback state should respond faster
-        if self._optimistic_state_timestamp is not None:
-            age = time.time() - self._optimistic_state_timestamp
-            # Shorter timeout for playback state (3 seconds) since media players should respond quickly
-            if age > 3.0:
-                _LOGGER.debug("Optimistic playback state timeout (%.1fs), clearing state", age)
-                self._optimistic_state = None
-                self._optimistic_state_timestamp = None
-            # General timeout for other optimistic state (10 seconds)
-            elif age > 10.0:
-                _LOGGER.debug("Optimistic state timeout (10s), clearing all optimistic state")
-                self._optimistic_volume = None
-                self._optimistic_mute = None
-                self._optimistic_source = None
-                self._optimistic_shuffle = None
-                self._optimistic_repeat = None
-
-        # Debug logging for state comparison (at debug level)
-        if self._optimistic_state is not None:
-            _LOGGER.debug(
-                "Optimistic state comparison: optimistic=%s, real=%s, match=%s, age=%.1fs",
-                self._optimistic_state,
-                real_state,
-                real_state == self._optimistic_state,
-                time.time() - (self._optimistic_state_timestamp or 0),
-            )
-
-        # Clear optimistic state only when real data matches expected changes
-        if self._optimistic_state is not None and real_state == self._optimistic_state:
-            _LOGGER.debug(
-                "Real state matches optimistic state (%s), clearing optimistic state",
-                real_state,
-            )
-            self._optimistic_state = None
-            self._optimistic_state_timestamp = None
-
-        if (
-            self._optimistic_volume is not None
-            and real_volume is not None
-            and abs(real_volume - self._optimistic_volume) < 0.01
-        ):
-            _LOGGER.debug(
-                "Real volume matches optimistic volume (%.2f), clearing optimistic volume",
-                real_volume,
-            )
-            self._optimistic_volume = None
-
-        if self._optimistic_mute is not None and real_mute == self._optimistic_mute:
-            _LOGGER.debug(
-                "Real mute matches optimistic mute (%s), clearing optimistic mute",
-                real_mute,
-            )
-            self._optimistic_mute = None
-
-        if self._optimistic_source is not None and real_source == self._optimistic_source:
-            _LOGGER.debug(
-                "Real source matches optimistic source (%s), clearing optimistic source",
-                real_source,
-            )
-            self._optimistic_source = None
-
-        if self._optimistic_shuffle is not None and real_shuffle == self._optimistic_shuffle:
-            _LOGGER.debug(
-                "Real shuffle matches optimistic shuffle (%s), clearing optimistic shuffle",
-                real_shuffle,
-            )
-            self._optimistic_shuffle = None
-
-        if self._optimistic_repeat is not None and real_repeat == self._optimistic_repeat:
-            _LOGGER.debug(
-                "Real repeat matches optimistic repeat (%s), clearing optimistic repeat",
-                real_repeat,
-            )
-            self._optimistic_repeat = None
-
-        # Always clear optimistic media title - it's transient
-        if self._optimistic_media_title is not None:
-            self._optimistic_media_title = None
-
-        # Clear optimistic group state when real data matches or timeout occurs
-        real_group_state = self.speaker.role
-        real_group_members = self.controller.get_group_members()
-
-        # Check for group state timeout (15 seconds)
-        if self._optimistic_group_timestamp is not None:
-            import time
-
-            age = time.time() - self._optimistic_group_timestamp
-
-            if age > 15:
-                self._optimistic_group_state = None
-                self._optimistic_group_members = None
-                self._optimistic_group_timestamp = None
-                _LOGGER.warning(
-                    "Group timeout (15s), clearing all optimistic group for %s",
-                    self.speaker.name,
-                )
-
-        if self._optimistic_group_state is not None and real_group_state == self._optimistic_group_state:
-            _LOGGER.debug(
-                "Real group state matches optimistic state (%s), clearing optimistic group state",
-                real_group_state,
-            )
-            self._optimistic_group_state = None
-
-        if self._optimistic_group_members is not None and real_group_members == self._optimistic_group_members:
-            _LOGGER.debug("Real group members match optimistic members, clearing optimistic group members")
-            self._optimistic_group_members = None
-            self._optimistic_group_timestamp = None
-
-        # Call parent to handle normal coordinator entity lifecycle
-        super()._handle_coordinator_update()
-
     # ===== VOLUME COMMANDS (provided by VolumeCommandsMixin) =====
 
     # ===== PLAYBACK COMMANDS (provided by PlaybackCommandsMixin) =====
@@ -899,8 +791,8 @@ class WiiMMediaPlayer(
     async def async_play_playlist(self, playlist_url: str) -> None:
         """Play an M3U playlist."""
         try:
-            # Use the API client directly for playlist playback
-            await self.speaker.coordinator.client._request(f"/httpapi.asp?command=setPlayerCmd:playlist:{playlist_url}")
+            # Use the existing play_url method for playlists
+            await self.async_play_url(playlist_url)
         except Exception as err:
             _LOGGER.error("Failed to play playlist for %s: %s", self.speaker.name, err)
             raise

@@ -154,7 +154,8 @@ class Speaker:
 
     def async_write_entity_states(self) -> None:
         """Notify all entities of state changes."""
-        async_dispatcher_send(self.hass, f"wiim_state_updated_{self.uuid}")
+        signal = f"wiim_state_updated_{self.uuid}"
+        async_dispatcher_send(self.hass, signal)
 
     def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
@@ -216,6 +217,11 @@ class Speaker:
 
     def update_from_coordinator_data(self, data: dict[str, Any]) -> None:
         """Update speaker state from coordinator data."""
+        _LOGGER.debug(
+            "🎵 update_from_coordinator_data called with data keys: %s",
+            list(data.keys()) if data else "None",
+        )
+
         if not data:
             return
 
@@ -622,7 +628,6 @@ class Speaker:
     def get_playback_state(self) -> MediaPlayerState:
         """Map WiiM play_status to Home Assistant MediaPlayerState."""
         if self.status_model is None:
-            _LOGGER.debug("🎵 DEVICE STATE: status_model=None")
             return MediaPlayerState.IDLE
 
         # Debug: Show ALL fields in the status model to see what the device provides
@@ -634,8 +639,7 @@ class Speaker:
             )
 
             # Check if status field exists under a different name
-            raw_status = getattr(self.status_model, "status", None)
-            _LOGGER.debug("🎵 DEVICE STATE: checking raw 'status' field=%s", raw_status)
+            getattr(self.status_model, "status", None)
             return MediaPlayerState.IDLE
 
         play_status = str(self.status_model.play_state)
@@ -661,7 +665,6 @@ class Speaker:
             )
             mapped_state = MediaPlayerState.IDLE
 
-        _LOGGER.debug("🎵 DEVICE STATE: '%s' → %s", play_status, mapped_state)
         return mapped_state
 
     def is_volume_muted(self) -> bool | None:
@@ -731,6 +734,11 @@ class Speaker:
 
     def get_media_duration(self) -> int | None:
         duration = self._status_field("duration")
+        _LOGGER.debug(
+            "🎵 get_media_duration: raw duration=%s (type: %s)",
+            duration,
+            type(duration),
+        )
 
         try:
             if duration is not None:
@@ -746,6 +754,11 @@ class Speaker:
 
     def get_media_position(self) -> int | None:
         position = self._status_field("position", "seek")
+        _LOGGER.debug(
+            "🎵 get_media_position: raw position=%s (type: %s)",
+            position,
+            type(position),
+        )
 
         # Position may vary by source type and streaming service
 
@@ -753,28 +766,107 @@ class Speaker:
             if position is not None:
                 pos_value = int(float(position))
                 # Ensure position is non-negative
-                if pos_value >= 0:
-                    return pos_value
+                if pos_value < 0:
+                    return None
+
+                # Clamp to known duration if available
+                try:
+                    duration_value = self.get_media_duration()
+                except Exception:  # pragma: no cover - defensive
+                    duration_value = None
+                if duration_value is not None and duration_value > 0:
+                    if pos_value > duration_value:
+                        _LOGGER.debug(
+                            "🎵 get_media_position: clamping %s to duration %s",
+                            pos_value,
+                            duration_value,
+                        )
+                        pos_value = duration_value
+
+                return pos_value
             return None
         except (TypeError, ValueError):
             return None
 
     def get_media_position_updated_at(self) -> float | None:
-        # Coordinator could track this precisely; for now, update time when we last saw a position.
+        # Only bump the timestamp when actually playing and either
+        # the numeric position increases or the track changes.
         import time
 
-        pos = self.get_media_position()
-        if pos is not None:
-            self._last_position_update = time.time()
-            self._last_position = pos
+        current_position = self.get_media_position()
 
-        # Always return a valid timestamp to prevent Music Assistant integration errors
-        # If we haven't seen a position update yet, return current time
-        if self._last_position_update is None:
-            self._last_position_update = time.time()
-            _LOGGER.debug("Initialized position update timestamp for %s", self.name)
+        # Derive a simple track signature from current metadata
+        try:
+            title = self._status_field("title") or ""
+            artist = self._status_field("artist") or ""
+            album = self._status_field("album") or ""
+            content_id = self._status_field("media_content_id", "uri") or ""
+            current_signature = f"{title}|{artist}|{album}|{content_id}"
+        except Exception:  # pragma: no cover - best-effort
+            current_signature = ""
 
-        return self._last_position_update
+        # Initialize storage if not present
+        if not hasattr(self, "_last_position_update"):
+            self._last_position_update = None  # type: ignore[attr-defined]
+        if not hasattr(self, "_last_position"):
+            self._last_position = None  # type: ignore[attr-defined]
+        if not hasattr(self, "_last_track_signature"):
+            self._last_track_signature = None  # type: ignore[attr-defined]
+
+        previous_position = getattr(self, "_last_position", None)
+        previous_signature = getattr(self, "_last_track_signature", None)
+
+        # Determine if we are actively playing (avoid advancing while paused/idle)
+        try:
+            raw_state = self._status_field("state", "play_state", "status")
+            is_playing = str(raw_state).lower() in ("play", "playing")
+        except Exception:
+            is_playing = True  # fall back to permissive behavior
+
+        # Update timestamp on new track or real position change while playing
+        track_changed = current_signature and current_signature != previous_signature
+
+        # Treat clear position decrease as implicit track switch (some sources delay metadata)
+        position_decreased = (
+            current_position is not None and previous_position is not None and current_position + 2 < previous_position
+        )
+
+        _LOGGER.debug(
+            "🎵 get_media_position_updated_at: current_pos=%s, prev_pos=%s, is_playing=%s, track_changed=%s, pos_decreased=%s",
+            current_position,
+            previous_position,
+            is_playing,
+            track_changed,
+            position_decreased,
+        )
+
+        if (track_changed or position_decreased) and current_position is not None:
+            self._last_position_update = time.time()
+            self._last_position = current_position
+            self._last_track_signature = current_signature
+            _LOGGER.debug(
+                "🎵 get_media_position_updated_at: Updated timestamp due to track change or position decrease"
+            )
+        elif (
+            is_playing
+            and current_position is not None
+            and previous_position is not None
+            and current_position > previous_position
+        ):
+            self._last_position_update = time.time()
+            self._last_position = current_position
+            self._last_track_signature = current_signature or previous_signature
+        elif previous_position is None and current_position is not None:
+            self._last_position_update = time.time()
+            self._last_position = current_position
+            self._last_track_signature = current_signature or previous_signature
+
+        # Ensure we always return a valid timestamp
+        if getattr(self, "_last_position_update", None) is None:
+            self._last_position_update = time.time()
+
+        result = self._last_position_update
+        return result
 
     def get_media_image_url(self) -> str | None:
         return self._status_field("entity_picture", "cover_url")

@@ -231,26 +231,28 @@ SOURCE_NETWORK = "network"
 SOURCE_ARC = "arc"
 SOURCE_FOLLOWER = "follower"
 
+# Map internal API source names to user-friendly display names
+# Note: We prioritize showing the actual streaming service name over generic "Ethernet"
 SOURCE_MAP = {
-    "wifi": "Ethernet",
-    "ethernet": "Ethernet",
+    "wifi": "Network",  # Generic network connection - fallback only
+    "ethernet": "Network",  # Generic network connection - fallback only
     "line_in": "Line In",
     "bluetooth": "Bluetooth",
     "optical": "Optical",
     "coaxial": "Coaxial",
     "arc": "ARC",
     "follower": "Follower",
-    "airplay": "Ethernet",  # AirPlay works through Ethernet/WiFi
-    "dlna": "Ethernet",  # DLNA works through Ethernet/WiFi
-    "spotify": "Ethernet",  # Spotify works through Ethernet/WiFi
-    "spotify connect": "Ethernet",  # Spotify Connect works through Ethernet/WiFi
-    "tidal": "Ethernet",  # Tidal works through Ethernet/WiFi
-    "amazon": "Ethernet",  # Amazon Music works through Ethernet/WiFi
-    "apple_music": "Ethernet",  # Apple Music works through Ethernet/WiFi
-    "qobuz": "Ethernet",  # Qobuz works through Ethernet/WiFi
-    "deezer": "Ethernet",  # Deezer works through Ethernet/WiFi
+    "airplay": "AirPlay",  # Show actual service name
+    "dlna": "DLNA",  # Show actual service name
+    "spotify": "Spotify",  # Show actual service name
+    "spotify connect": "Spotify Connect",  # Show actual service name
+    "tidal": "Tidal",  # Show actual service name
+    "amazon": "Amazon Music",  # Show actual service name
+    "apple_music": "Apple Music",  # Show actual service name
+    "qobuz": "Qobuz",  # Show actual service name
+    "deezer": "Deezer",  # Show actual service name
     "usb": "USB",
-    "network": "Ethernet",
+    "network": "Network",  # Generic network status - fallback only
     "idle": "Idle",
     "multiroom": "Multiroom",
     "usb dac": "USB DAC",
@@ -259,10 +261,10 @@ SOURCE_MAP = {
     "following": "Following",  # Partial match for slave sources
 }
 
-# Selectable sources only - excludes status indicators
+# Selectable sources only - physical inputs that users can manually switch to
 # These are the actual sources that work with the switchmode API command
+# Network-based streaming services (Spotify, AirPlay, etc.) are handled automatically
 SELECTABLE_SOURCES = [
-    "Ethernet",  # Network/streaming mode (where Spotify, Tidal, AirPlay, etc. work)
     "Bluetooth",  # Bluetooth input
     "Line In",  # Analog input
     "Optical",  # Digital optical input
@@ -274,21 +276,14 @@ SELECTABLE_SOURCES = [
 ]
 
 # Status-only sources that should be displayed but not selectable
-# These are either status indicators or streaming services that work through WiFi mode
+# These are either status indicators or generic network modes
 STATUS_ONLY_SOURCES = [
     "Idle",
     "Multiroom",
     "Follower",
     "Following",
-    "AirPlay",  # Protocol that works through WiFi mode
-    "DLNA",  # Protocol that works through WiFi mode
-    "Spotify",  # Streaming service (works through WiFi mode)
-    "Spotify Connect",  # Streaming service (works through WiFi mode)
-    "Tidal",  # Streaming service (works through WiFi mode)
-    "Amazon Music",  # Streaming service (works through WiFi mode)
-    "Qobuz",  # Streaming service (works through WiFi mode)
-    "Deezer",  # Streaming service (works through WiFi mode)
-    "Network",  # Generic network status
+    "Network",  # Generic network mode (fallback when specific service unknown)
+    "Ethernet",  # Legacy network mode name (fallback)
     "USB DAC",  # May be a status rather than selectable input
 ]
 

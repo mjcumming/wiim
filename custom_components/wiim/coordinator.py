@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import time
+import time as _time
 from datetime import timedelta
 from typing import Any
 
@@ -73,15 +73,27 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if is_legacy_device:
             if audio_pro_generation == "mkii":
-                _LOGGER.info("🔊 Audio Pro MkII device detected: %s - using enhanced compatibility mode", client.host)
+                _LOGGER.info(
+                    "🔊 Audio Pro MkII device detected: %s - using enhanced compatibility mode",
+                    client.host,
+                )
             elif audio_pro_generation == "w_generation":
-                _LOGGER.info("🔊 Audio Pro W-Generation device detected: %s - using advanced features", client.host)
+                _LOGGER.info(
+                    "🔊 Audio Pro W-Generation device detected: %s - using advanced features",
+                    client.host,
+                )
             else:
-                _LOGGER.info("🔊 Audio Pro legacy device detected: %s - using compatibility mode", client.host)
+                _LOGGER.info(
+                    "🔊 Audio Pro legacy device detected: %s - using compatibility mode",
+                    client.host,
+                )
         elif self._capabilities.get("is_wiim_device", False):
             _LOGGER.info("✅ WiiM device detected: %s - using full feature set", client.host)
         else:
-            _LOGGER.info("📻 LinkPlay device detected: %s - using standard compatibility", client.host)
+            _LOGGER.info(
+                "📻 LinkPlay device detected: %s - using standard compatibility",
+                client.host,
+            )
 
         # API capability flags (None = untested, True/False = tested)
         self._statusex_supported: bool | None = None
@@ -320,7 +332,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # For legacy devices, use simplified approach
         if self._capabilities.get("is_legacy_device", False):
             generation = self._capabilities.get("audio_pro_generation", "original")
-            _LOGGER.debug("Using legacy multiroom approach for %s (generation: %s)", self.client.host, generation)
+            _LOGGER.debug(
+                "Using legacy multiroom approach for %s (generation: %s)",
+                self.client.host,
+                generation,
+            )
             return await self._fetch_multiroom_info_legacy()
 
         # Enhanced approach for WiiM devices
@@ -402,7 +418,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _should_update_device_info(self) -> bool:
         """Check if we should update device info (every 30-60 seconds)."""
-        now = time.time()
+        now = _time.time()
         if now - self._last_device_info_update >= self._device_info_interval:
             self._last_device_info_update = now  # type: ignore[assignment]
             return True
@@ -436,7 +452,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return await _role.detect_role_from_status_and_slaves(self, status, multiroom, device_info)
 
-    async def _update_speaker_object(self, status: dict) -> None:
+    async def _update_speaker_object(self, data: dict) -> None:
         """Update Speaker object if it exists."""
         try:
             from .data import get_speaker_from_config_entry
@@ -444,8 +460,15 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # In v2.0.0 simplified architecture, get speaker directly from config entry
             speaker = get_speaker_from_config_entry(self.hass, self.entry)
 
-            # Build data structure for speaker update
-            speaker.update_from_coordinator_data(status)
+            if speaker:
+                _LOGGER.debug(
+                    "🎵 Found speaker %s, calling update_from_coordinator_data",
+                    speaker.name,
+                )
+                # Build data structure for speaker update
+                speaker.update_from_coordinator_data(data)
+            else:
+                _LOGGER.debug("🎵 No speaker found for config entry %s", self.entry.entry_id)
 
         except Exception as speaker_err:
             _LOGGER.debug(
@@ -467,6 +490,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def record_command_failure(self, command_type: str, error: Exception) -> None:
         """Record command failure for immediate UI feedback."""
+        import time
+
         self._last_command_failure = time.time()
         self._command_failure_count += 1
 
@@ -490,7 +515,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Useful when connection is completely lost and we need to re-establish
         communication from scratch.
         """
-        _LOGGER.info("Forcing endpoint reprobe for %s due to connection failure", self.client.host)
+        _LOGGER.info(
+            "Forcing endpoint reprobe for %s due to connection failure",
+            self.client.host,
+        )
         self.client._endpoint = None  # Clear established endpoint
 
     def clear_command_failures(self) -> None:
@@ -505,9 +533,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._last_command_failure is None:
             return False
 
-        import time
-
-        time_since_failure = time.time() - self._last_command_failure
+        time_since_failure = _time.time() - self._last_command_failure
         return time_since_failure < COMMAND_FAILURE_TIMEOUT
 
     # Group management methods (simplified from legacy)
