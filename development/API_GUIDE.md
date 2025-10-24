@@ -380,6 +380,36 @@ async def async_join_group(self, speakers: list[Speaker]) -> None:
 - ✅ **Basic playback** - Core functions usually work
 - ❌ **Advanced features** - Often missing or non-standard
 
+#### **Audio Pro Specific Considerations**
+
+Audio Pro devices have unique characteristics due to their generational evolution:
+
+**API Protocol Evolution:**
+
+- **Original Generation**: HTTP (port 80) - standard LinkPlay API
+- **MkII Generation**: HTTPS (port 443) - enhanced security, same commands
+- **W-Generation**: HTTPS (port 443) - latest features, backward compatible
+
+**Integration Strategy:**
+
+- **Multi-protocol probing**: HTTP → HTTPS → fallback ports
+- **Graceful degradation**: Works even when validation fails during discovery
+- **Manual setup friendly**: Always allows IP-based configuration
+
+**Common Response Differences:**
+
+- **Status codes**: May return different HTTP status codes than WiiM devices
+- **Metadata format**: Some fields may be missing or in different format
+- **Error responses**: More likely to return plain text errors vs JSON
+- **Connection timing**: May require longer timeouts for some operations
+
+**Best Practices:**
+
+- **Always probe protocols**: Don't assume HTTP works (MkII+ devices)
+- **Accept validation failures**: They're often cosmetic for Audio Pro devices
+- **Enable fallback modes**: Use manual setup when auto-discovery warns
+- **Log protocol detection**: Helps users understand which protocol is being used
+
 ---
 
 ## 🧪 **Testing & Build Strategy**

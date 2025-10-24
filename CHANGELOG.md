@@ -76,8 +76,6 @@ All notable changes to the WiiM Audio integration will be documented in this fil
   - Ensures time normalization works regardless of field mapping order
   - Maintains backward compatibility with existing API responses
 
-## [Unreleased]
-
 ## [0.1.33] - 2025-10-24
 
 ### Fixed

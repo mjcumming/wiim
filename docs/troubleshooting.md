@@ -185,3 +185,53 @@ If you're still experiencing issues:
 - Older firmware may not support all API calls
 - Some features may be limited
 - Consider firmware updates if available
+
+### Audio Pro Devices
+
+Audio Pro devices span multiple generations with different API implementations:
+
+#### **Generation Overview**
+
+| Generation   | Models                            | Protocol    | Integration Support |
+| ------------ | --------------------------------- | ----------- | ------------------- |
+| **Original** | C3, C5, Drumfire                  | HTTP (80)   | ✅ Full support     |
+| **MkII**     | A10 MkII, A15 MkII, A28, C10 MkII | HTTPS (443) | ✅ Full support     |
+| **W-Series** | A15 W, A28 W, A38 W, A48 W        | HTTPS (443) | ✅ Full support     |
+
+#### **Common Issues & Solutions**
+
+**Problem: "Validation failed" during discovery**
+
+- **Cause**: MkII/W-Series devices use HTTPS instead of HTTP
+- **Solution**: Use manual IP configuration (works perfectly)
+- **Status**: This is expected behavior, not a bug
+
+**Problem: Device shows as "unavailable" after setup**
+
+- **Cause**: Firmware differences in status reporting
+- **Solution**: Check network connectivity and try restarting the device
+- **Workaround**: Manual setup often resolves availability issues
+
+**Problem: Metadata shows "Unknown Artist/Title"**
+
+- **Cause**: Audio Pro devices may not provide rich metadata via HTTP API
+- **Solution**: This is normal for streaming content - use display names instead
+- **Alternative**: Enable debug logging to see raw API responses
+
+#### **Multiroom Behavior**
+
+Audio Pro devices integrate seamlessly with WiiM devices in multiroom groups:
+
+- **Master/Slave roles** work identically to WiiM devices
+- **Group volume control** functions normally
+- **Source synchronization** works across generations
+- **EQ controls** available on supported models (Pro series)
+
+#### **Best Practices**
+
+1. **Use manual setup** if auto-discovery shows validation warnings
+2. **Enable debug logging** when troubleshooting API issues
+3. **Check firmware version** - newer firmware often improves compatibility
+4. **Test with simple operations** (play/pause/volume) before complex automations
+
+**Note**: All Audio Pro devices work fully with the integration once properly configured. The "validation failed" messages during discovery are cosmetic and don't affect functionality.
