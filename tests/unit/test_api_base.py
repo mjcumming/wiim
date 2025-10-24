@@ -753,17 +753,26 @@ class TestWiiMClientIPv6Handling:
 
         # Mock the session and response
         mock_session = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.raise_for_status = AsyncMock()
-        # Make text() return the JSON string when awaited
-        mock_response.text = AsyncMock()
-        mock_response.text.return_value = '{"status": "OK"}'
+        
+        # Create a proper mock response that behaves like aiohttp response
+        class MockResponse:
+            def __init__(self):
+                self.status = 200
+                
+            async def raise_for_status(self):
+                pass
+                
+            async def text(self):
+                return '{"status": "OK"}'
+                
+            async def __aenter__(self):
+                return self
+                
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
 
-        mock_context_manager = AsyncMock()
-        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
-
-        mock_session.request = AsyncMock(return_value=mock_context_manager)
+        mock_response = MockResponse()
+        mock_session.request = AsyncMock(return_value=mock_response)
 
         # Mock ClientSession creation
         with patch("custom_components.wiim.api_base.aiohttp.ClientSession", return_value=mock_session):
