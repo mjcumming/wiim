@@ -67,6 +67,22 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry = entry
         self._capabilities = capabilities or {}
 
+        # Enhanced Audio Pro logging on initialization
+        is_legacy_device = self._capabilities.get("is_legacy_device", False)
+        audio_pro_generation = self._capabilities.get("audio_pro_generation", "unknown")
+
+        if is_legacy_device:
+            if audio_pro_generation == "mkii":
+                _LOGGER.info("🔊 Audio Pro MkII device detected: %s - using enhanced compatibility mode", client.host)
+            elif audio_pro_generation == "w_generation":
+                _LOGGER.info("🔊 Audio Pro W-Generation device detected: %s - using advanced features", client.host)
+            else:
+                _LOGGER.info("🔊 Audio Pro legacy device detected: %s - using compatibility mode", client.host)
+        elif self._capabilities.get("is_wiim_device", False):
+            _LOGGER.info("✅ WiiM device detected: %s - using full feature set", client.host)
+        else:
+            _LOGGER.info("📻 LinkPlay device detected: %s - using standard compatibility", client.host)
+
         # API capability flags (None = untested, True/False = tested)
         self._statusex_supported: bool | None = None
         self._metadata_supported: bool | None = None
@@ -303,6 +319,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         # For legacy devices, use simplified approach
         if self._capabilities.get("is_legacy_device", False):
+            generation = self._capabilities.get("audio_pro_generation", "original")
+            _LOGGER.debug("Using legacy multiroom approach for %s (generation: %s)", self.client.host, generation)
             return await self._fetch_multiroom_info_legacy()
 
         # Enhanced approach for WiiM devices

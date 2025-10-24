@@ -2,81 +2,49 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
-## [0.1.36] - 2024-12-19
+## [0.1.35] - 2025.10.24
+
+### Added
+
+- **Enhanced Audio Pro Support**: Comprehensive compatibility for Audio Pro MkII and W-Generation devices
+  - Automatic protocol detection (HTTP/HTTPS) based on device generation
+  - Enhanced response validation for Audio Pro specific API variations
+  - Generation-aware optimizations (MkII, W-Generation, Original)
+  - Improved device naming and validation feedback
 
 ### Fixed
 
-- **Enhanced Impossible Position/Duration Validation**: Improved logic to handle duration firmware bugs more intelligently
-  - Root cause: WiiM device reporting duration too short (e.g., 0:49 instead of 6:08)
-  - Enhanced validation to detect when duration is suspiciously short (< 2 minutes) with reasonable position (> 30 seconds)
-  - When detected, hides duration instead of resetting position to preserve correct elapsed time
-  - Prevents impossible displays like "05:19 / 00:49" by showing "05:19 / --:--" instead
-  - This preserves the correct position while hiding the incorrect duration
+- **Media Position/Duration Issues**: Fixed impossible time displays and duration bugs
+  - Enhanced validation to detect when position exceeds duration (firmware bug)
+  - Smart duration validation hides incorrect short durations instead of resetting position
+  - Fixed group media player showing absurd elapsed times (488,752+ hours)
+  - Proper datetime handling for media position timestamps
 
 ### Technical
 
-- **Smart Duration Validation**: Enhanced `parse_player_status()` with intelligent impossible scenario detection
-  - Detects when position > duration AND duration < 120 seconds AND position > 30 seconds
-  - In this case, assumes duration is wrong (firmware bug) and hides it
-  - For other impossible scenarios, still resets position to 0 as before
-  - Logs detailed warning explaining the decision (duration too short vs position too high)
+- **Protocol Priority System**: Smart HTTPS/HTTP ordering based on device capabilities
+- **Audio Pro Response Handling**: Enhanced parsing for Audio Pro API variations
+- **Generation Detection**: Automatic Audio Pro generation detection for optimized settings
+- **Enhanced Logging**: Clear Audio Pro specific validation and error messages
 
-## [0.1.35] - 2024-12-19
-
-### Fixed
-
-- **Critical Impossible Position/Duration Validation**: Added validation to detect and handle impossible media position scenarios
-  - Root cause: WiiM device firmware bug reporting position > duration (e.g., 5:19 elapsed > 0:49 total)
-  - Added validation logic to detect when `position > duration` and `duration > 0`
-  - When detected, logs warning and resets position to 0 to prevent UI confusion
-  - Prevents impossible displays like "05:19 / 00:49" by showing "00:00 / 00:49" instead
-  - This is a workaround for device firmware bugs, not a parser issue
-
-### Technical
-
-- **API Parser Validation**: Enhanced `parse_player_status()` with impossible scenario detection
-  - Validates position vs duration after parsing both values
-  - Logs detailed warning with device name and source when impossible data detected
-  - Gracefully handles device firmware bugs by resetting position to 0
-  - Maintains duration as reported by device (may be incorrect but less confusing than impossible position)
-
-## [0.1.34] - 2024-12-19
+## [0.1.34] - 2025.10.23
 
 ### Fixed
 
 - **Critical Media Position Display Bug**: Fixed group media player showing absurd elapsed times (e.g., "488752:34:56" = 488,752 hours!)
-
-  - Root cause: `media_position_updated_at` was returning `float` (Unix timestamp) instead of `datetime.datetime` object
-  - Home Assistant's UI was interpreting the timestamp as seconds of elapsed time
-  - Both group player and master player were affected
-  - Fixed by matching Home Assistant's MediaPlayerEntity standard which requires datetime objects
-  - Updated return type from `float | None` to `datetime.datetime | None`
-  - Added proper datetime conversion using `utc_from_timestamp()`
-
-- **Critical Position/Duration Field Mapping Bug**: Fixed impossible time displays (e.g., "05:13" elapsed / "00:55" total duration)
-  - Root cause: API parser was looking for `curpos`/`totlen` fields AFTER generic field mapping renamed them to `position_ms`/`duration_ms`
-  - Time normalization never happened because fields were already renamed
-  - Fixed by checking both original field names (`curpos`/`totlen`) AND mapped field names (`position_ms`/`duration_ms`)
-  - Now properly converts milliseconds to seconds for all sources (AirPlay, Spotify, etc.)
-  - Resolves impossible scenarios where elapsed time exceeds total duration
+  - Root cause: `media_position_updated_at` returned Unix timestamp instead of datetime object
+  - Home Assistant interpreted timestamp as elapsed seconds
+  - Fixed by using proper datetime objects per MediaPlayerEntity standard
+  - Added `utc_from_timestamp()` conversion for timezone handling
 
 ### Technical
 
-- **Group Media Player API Compliance**: Aligned `media_position_updated_at` property with Home Assistant's MediaPlayerEntity standard
+- **Group Media Player API Compliance**: Aligned with Home Assistant MediaPlayerEntity standards
+  - Updated return type: `float | None` → `datetime.datetime | None`
+  - Proper timezone handling with `homeassistant.util.dt.utc_from_timestamp()`
+  - Updated unit tests for datetime object expectations
 
-  - Changed return type: `float | None` → `datetime.datetime | None`
-  - Returns None when unavailable (instead of current timestamp)
-  - Uses `homeassistant.util.dt.utc_from_timestamp()` for proper timezone handling
-  - Updated `elapsed_time_last_updated` to use module-level datetime import (no shadowing)
-  - Updated unit tests to expect datetime objects instead of float timestamps
-
-- **API Parser Field Resolution**: Enhanced field lookup to handle both original and mapped field names
-  - Added fallback logic: `raw.get("curpos") or data.get("position_ms")`
-  - Added fallback logic: `raw.get("totlen") or data.get("duration_ms")`
-  - Ensures time normalization works regardless of field mapping order
-  - Maintains backward compatibility with existing API responses
-
-## [0.1.33] - 2025-10-24
+## [0.1.33] - 2025-10-23
 
 ### Fixed
 

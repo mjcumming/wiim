@@ -272,6 +272,13 @@ class WiiMClient:
 
                 # Validate response for legacy firmware
                 if is_legacy_device:
+                    generation = self._capabilities.get("audio_pro_generation", "original")
+                    _LOGGER.debug(
+                        "Validating response for legacy device %s (generation: %s) on %s",
+                        self.host,
+                        generation,
+                        endpoint,
+                    )
                     result = self._validate_legacy_response(result, endpoint)
 
                 return result
@@ -434,20 +441,45 @@ class WiiMClient:
             _LOGGER.debug("Protocol probe still needed for %s (attempt %d)", self._host, self._protocol_probe_count)
 
         protocols: list[tuple[str, int, ssl.SSLContext | None]]
+
+        # Use protocol priority from capabilities if available
+        protocol_priority = self._capabilities.get("protocol_priority", ["https", "http"])
+        _LOGGER.debug("Using protocol priority for %s: %s", self._host, protocol_priority)
+
         if self._discovered_port:
-            protocols = [
-                ("https", self.port, self._get_ssl_context()),
-                ("http", self.port, None),
-            ]
+            # Build protocols based on discovered port and priority
+            protocols = []
+            for scheme in protocol_priority:
+                if scheme == "https":
+                    protocols.append((scheme, self.port, self._get_ssl_context()))
+                else:  # http
+                    protocols.append((scheme, self.port, None))
         else:
-            protocols = [
-                ("https", 443, self._get_ssl_context()),
-                ("https", 4443, self._get_ssl_context()),
-                ("http", 80, None),
-            ]
-            if self.port not in (80, 443):
-                protocols.insert(0, ("https", self.port, self._get_ssl_context()))
-                protocols.insert(1, ("http", self.port, None))
+            # Build protocols based on standard ports and priority
+            protocols = []
+            for scheme in protocol_priority:
+                if scheme == "https":
+                    protocols.extend(
+                        [
+                            (scheme, 443, self._get_ssl_context()),
+                            (scheme, 4443, self._get_ssl_context()),
+                        ]
+                    )
+                else:  # http
+                    protocols.extend(
+                        [
+                            (scheme, 80, None),
+                            (scheme, 8080, None),
+                        ]
+                    )
+
+            # Add custom port if not standard
+            if self.port not in (80, 443, 4443, 8080):
+                for scheme in protocol_priority:
+                    if scheme == "https":
+                        protocols.insert(0, (scheme, self.port, self._get_ssl_context()))
+                    else:  # http
+                        protocols.insert(0, (scheme, self.port, None))
 
         last_error: Exception | None = None
         tried: list[str] = []
@@ -557,26 +589,183 @@ class WiiMClient:
         Returns:
             Validated response with safe defaults if needed
         """
+        # Enhanced Audio Pro response validation
+        return self._validate_audio_pro_response(response, endpoint)
+
+    def _validate_audio_pro_response(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+        """Handle Audio Pro specific response variations and legacy firmware issues.
+
+        Args:
+            response: Raw API response
+            endpoint: API endpoint that was called
+
+        Returns:
+            Validated response with safe defaults if needed
+        """
         # Handle empty responses from Audio Pro units
         if not response or response == {}:
-            _LOGGER.debug("Empty response from legacy device for %s", endpoint)
+            generation = (
+                self._capabilities.get("audio_pro_generation", "unknown")
+                if hasattr(self, "_capabilities") and self._capabilities
+                else "unknown"
+            )
+            _LOGGER.debug(
+                "Empty response from Audio Pro/legacy device %s (generation: %s) for %s",
+                self.host,
+                generation,
+                endpoint,
+            )
+            return self._get_audio_pro_defaults(endpoint)
 
-            # Return safe defaults based on endpoint
-            if "getSlaveList" in endpoint:
-                return {"slaves": 0, "slave_list": []}
-            elif "getStatus" in endpoint:
-                return {"group": "0", "state": "stop"}
-            elif "getMetaInfo" in endpoint:
-                return {"title": "", "artist": "", "album": ""}
-            else:
-                return {"raw": "OK"}
+        # Handle Audio Pro MkII/W-Series string responses
+        if isinstance(response, str):
+            generation = (
+                self._capabilities.get("audio_pro_generation", "unknown")
+                if hasattr(self, "_capabilities") and self._capabilities
+                else "unknown"
+            )
+            _LOGGER.debug(
+                "String response from Audio Pro device %s (generation: %s) for %s: %s",
+                self.host,
+                generation,
+                endpoint,
+                response,
+            )
+            return self._normalize_audio_pro_string_response(response, endpoint)
 
-        # Handle malformed JSON responses
+        # Handle malformed JSON responses from legacy devices
         if not isinstance(response, dict):
-            _LOGGER.debug("Non-dict response from legacy device for %s: %s", endpoint, type(response))
+            _LOGGER.debug("Non-dict response from Audio Pro/legacy device for %s: %s", endpoint, type(response))
             return {"raw": str(response)}
 
-        return response
+        # Normalize Audio Pro specific field variations
+        normalized = self._normalize_audio_pro_fields(response, endpoint)
+
+        # Log field normalization if any mappings were applied
+        if normalized != response:
+            _LOGGER.debug("Normalized Audio Pro response fields for %s on %s", self.host, endpoint)
+
+        return normalized
+
+    def _normalize_audio_pro_string_response(self, response: str, endpoint: str) -> dict[str, Any]:
+        """Normalize Audio Pro string responses to standard dict format."""
+        response = response.strip()
+
+        # Common Audio Pro response patterns
+        if response == "OK" or response == "ok":
+            return {"raw": "OK"}
+        elif response.lower() == "error" or response.lower() == "failed":
+            return {"error": response}
+        elif "error" in response.lower():
+            return {"error": response}
+        elif "not supported" in response.lower() or "unknown command" in response.lower():
+            return {"error": "unsupported_command", "raw": response}
+        else:
+            # For status endpoints, try to parse as key:value pairs
+            if "getPlayerStatus" in endpoint or "getStatus" in endpoint:
+                return self._parse_audio_pro_status_string(response)
+            else:
+                return {"raw": response}
+
+    def _parse_audio_pro_status_string(self, response: str) -> dict[str, Any]:
+        """Parse Audio Pro status responses that come as strings instead of JSON."""
+        # Audio Pro devices sometimes return status as "key:value" pairs
+        result = {}
+
+        # Try to parse common patterns
+        if ":" in response:
+            parts = response.split(":")
+            if len(parts) >= 2:
+                key = parts[0].strip().lower()
+                value = ":".join(parts[1:]).strip()
+
+                # Map common Audio Pro status fields
+                if key in ["state", "status", "player_state"]:
+                    result["state"] = value.lower()
+                elif key in ["vol", "volume"]:
+                    try:
+                        result["volume"] = int(value)
+                        result["volume_level"] = int(value) / 100
+                    except ValueError:
+                        result["volume"] = value
+                elif key in ["mute", "muted"]:
+                    result["mute"] = value.lower() in ["1", "true", "on", "yes"]
+                elif key == "title":
+                    result["title"] = value
+                elif key == "artist":
+                    result["artist"] = value
+                elif key == "album":
+                    result["album"] = value
+                else:
+                    result[key] = value
+
+        if not result:
+            # Fallback: treat as generic status
+            result = {"state": "unknown", "raw": response}
+
+        return result
+
+    def _normalize_audio_pro_fields(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+        """Normalize Audio Pro specific field names and variations."""
+        normalized = response.copy()
+
+        # Audio Pro specific field mappings
+        field_mappings = {
+            "player_state": "state",
+            "play_status": "state",
+            "vol": "volume",
+            "volume_level": "volume_level",
+            "mute": "mute",
+            "muted": "mute",
+            "title": "title",
+            "artist": "artist",
+            "album": "album",
+            "device_name": "DeviceName",
+            "friendly_name": "DeviceName",
+        }
+
+        # Apply field mappings
+        for audio_pro_field, standard_field in field_mappings.items():
+            if audio_pro_field in normalized and standard_field not in normalized:
+                normalized[standard_field] = normalized.pop(audio_pro_field)
+
+        # Normalize volume to 0-1 range if it's 0-100
+        if "volume" in normalized and isinstance(normalized["volume"], int | float):
+            if normalized["volume"] > 1:
+                normalized["volume_level"] = normalized["volume"] / 100
+            else:
+                normalized["volume_level"] = normalized["volume"]
+
+        # Normalize mute to boolean
+        if "mute" in normalized:
+            mute_value = normalized["mute"]
+            if isinstance(mute_value, str):
+                normalized["mute"] = mute_value.lower() in ["1", "true", "on", "yes"]
+            elif isinstance(mute_value, int | float):
+                normalized["mute"] = bool(mute_value)
+
+        return normalized
+
+    def _get_audio_pro_defaults(self, endpoint: str) -> dict[str, Any]:
+        """Get Audio Pro specific safe defaults based on endpoint."""
+        if "getSlaveList" in endpoint:
+            return {"slaves": 0, "slave_list": []}
+        elif "getStatus" in endpoint or "getPlayerStatus" in endpoint:
+            return {
+                "group": "0",
+                "state": "stop",
+                "volume": 30,
+                "volume_level": 0.3,
+                "mute": False,
+                "title": "Unknown",
+                "artist": "Unknown Artist",
+            }
+        elif "getMetaInfo" in endpoint:
+            return {"title": "", "artist": "", "album": ""}
+        elif "getDeviceInfo" in endpoint or "getStatusEx" in endpoint:
+            return {"DeviceName": "Audio Pro Speaker", "uuid": "", "firmware": "unknown", "group": "0", "state": "stop"}
+        else:
+            return {"raw": "OK"}
 
     # ------------------------------------------------------------------
     # Public helpers ----------------------------------------------------

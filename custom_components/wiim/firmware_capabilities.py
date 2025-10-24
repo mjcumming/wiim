@@ -20,6 +20,7 @@ __all__ = [
     "detect_device_capabilities",
     "is_wiim_device",
     "is_legacy_device",
+    "detect_audio_pro_generation",
     "supports_standard_led_control",
     "get_led_command_format",
 ]
@@ -69,6 +70,10 @@ class WiiMFirmwareCapabilities:
         capabilities["is_wiim_device"] = is_wiim_device(device_info)
         capabilities["is_legacy_device"] = is_legacy_device(device_info)
 
+        # Detect Audio Pro generation for enhanced compatibility
+        audio_pro_generation = detect_audio_pro_generation(device_info)
+        capabilities["audio_pro_generation"] = audio_pro_generation
+
         # Detect LED support
         capabilities["supports_led_control"] = supports_standard_led_control(device_info)
         capabilities["led_command_format"] = get_led_command_format(device_info)
@@ -79,10 +84,26 @@ class WiiMFirmwareCapabilities:
             capabilities["response_timeout"] = 2.0  # Faster for WiiM
             capabilities["retry_count"] = 2
         elif capabilities["is_legacy_device"]:
-            capabilities["supports_enhanced_grouping"] = False
-            capabilities["response_timeout"] = 8.0  # Slower for legacy
-            capabilities["retry_count"] = 4
-            capabilities["supports_metadata"] = False
+            # Apply Audio Pro generation specific optimizations
+            if audio_pro_generation == "mkii":
+                capabilities["supports_enhanced_grouping"] = False
+                capabilities["response_timeout"] = 6.0  # Medium timeout for MkII
+                capabilities["retry_count"] = 3
+                capabilities["supports_metadata"] = False
+                capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first for MkII
+            elif audio_pro_generation == "w_generation":
+                capabilities["supports_enhanced_grouping"] = True  # W-gen supports enhanced features
+                capabilities["response_timeout"] = 4.0  # Faster for W-gen
+                capabilities["retry_count"] = 2
+                capabilities["supports_metadata"] = True
+                capabilities["protocol_priority"] = ["https", "http"]
+            else:
+                # Original Audio Pro devices
+                capabilities["supports_enhanced_grouping"] = False
+                capabilities["response_timeout"] = 8.0  # Slower for original
+                capabilities["retry_count"] = 4
+                capabilities["supports_metadata"] = False
+                capabilities["protocol_priority"] = ["http", "https"]  # HTTP first for legacy
 
         # Probe for getStatusEx support
         try:
@@ -164,10 +185,12 @@ def detect_device_capabilities(device_info: DeviceInfo) -> dict[str, Any]:
         "device_type": device_info.model,
         "is_wiim_device": is_wiim_device(device_info),
         "is_legacy_device": is_legacy_device(device_info),
+        "audio_pro_generation": detect_audio_pro_generation(device_info),
         "supports_enhanced_grouping": False,
         "supports_audio_output": False,  # Default to False, enable for WiiM devices
         "response_timeout": 5.0,
         "retry_count": 3,
+        "protocol_priority": ["https", "http"],  # Default: try HTTPS first
     }
 
     if capabilities["is_wiim_device"]:
@@ -175,9 +198,24 @@ def detect_device_capabilities(device_info: DeviceInfo) -> dict[str, Any]:
         capabilities["supports_audio_output"] = True  # All WiiM devices support audio output control
         capabilities["response_timeout"] = 2.0
         capabilities["retry_count"] = 2
+        capabilities["protocol_priority"] = ["https", "http"]
     elif capabilities["is_legacy_device"]:
-        capabilities["response_timeout"] = 8.0
-        capabilities["retry_count"] = 4
+        # Apply Audio Pro generation specific optimizations
+        generation = capabilities["audio_pro_generation"]
+        if generation == "mkii":
+            capabilities["response_timeout"] = 6.0
+            capabilities["retry_count"] = 3
+            capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first for MkII
+        elif generation == "w_generation":
+            capabilities["supports_enhanced_grouping"] = True
+            capabilities["response_timeout"] = 4.0
+            capabilities["retry_count"] = 2
+            capabilities["protocol_priority"] = ["https", "http"]
+        else:
+            # Original Audio Pro devices
+            capabilities["response_timeout"] = 8.0
+            capabilities["retry_count"] = 4
+            capabilities["protocol_priority"] = ["http", "https"]  # HTTP first for legacy
 
     return capabilities
 
@@ -206,6 +244,40 @@ def is_wiim_device(device_info: DeviceInfo) -> bool:
     ]
 
     return any(wiim_model in model_lower for wiim_model in wiim_models)
+
+
+def detect_audio_pro_generation(device_info: DeviceInfo) -> str:
+    """Detect Audio Pro device generation for optimized handling.
+
+    Args:
+        device_info: Device information
+
+    Returns:
+        Generation string: "original", "mkii", "w_generation", or "unknown"
+    """
+    if not device_info.model:
+        return "unknown"
+
+    model_lower = device_info.model.lower()
+
+    # Audio Pro generation patterns
+    if any(gen in model_lower for gen in ["mkii", "mk2", "mk ii", "mark ii"]):
+        return "mkii"
+    elif any(gen in model_lower for gen in ["w-", "w series", "w generation", "w gen"]):
+        return "w_generation"
+    elif any(model in model_lower for model in ["a10", "a15", "a28", "c10", "audio pro"]):
+        # Modern Audio Pro devices (assume MkII if not specified)
+        if device_info.firmware:
+            # Try to determine from firmware version if available
+            firmware_lower = device_info.firmware.lower()
+            if any(version in firmware_lower for version in ["1.56", "1.57", "1.58", "1.59", "1.60"]):
+                return "mkii"  # MkII firmware range
+            elif any(version in firmware_lower for version in ["2.0", "2.1", "2.2", "2.3"]):
+                return "w_generation"  # W-generation firmware range
+
+        return "mkii"  # Default to MkII for modern Audio Pro models
+    else:
+        return "original"
 
 
 def is_legacy_device(device_info: DeviceInfo) -> bool:

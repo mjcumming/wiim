@@ -38,6 +38,61 @@ except ImportError:
 _LOGGER = logging.getLogger(__name__)
 
 
+def _extract_device_name(status: dict[str, Any], fallback_host: str) -> str:
+    """Extract device name with Audio Pro specific fallbacks and improvements."""
+
+    # Priority 1: DeviceName from WiiM API (custom name set in app)
+    # Priority 2: Other name fields
+    # Priority 3: SSID/Network name (less reliable)
+    device_name = (
+        status.get("DeviceName")  # Custom name set in WiiM app
+        or status.get("device_name")  # Alternative field name
+        or status.get("friendlyName")  # Common API field
+        or status.get("name")  # Generic name field
+        or status.get("ssid", fallback_host)  # Device hotspot name (fallback)
+    )
+
+    # Audio Pro specific naming improvements
+    if not device_name or device_name == "Unknown":
+        # Check if this looks like an Audio Pro device from the host IP or status
+        status_str = str(status).lower()
+        if "a10" in fallback_host.lower() or "a10" in status_str:
+            device_name = "Audio Pro A10"
+        elif "a15" in fallback_host.lower() or "a15" in status_str:
+            device_name = "Audio Pro A15"
+        elif "a28" in fallback_host.lower() or "a28" in status_str:
+            device_name = "Audio Pro A28"
+        elif "c10" in fallback_host.lower() or "c10" in status_str:
+            device_name = "Audio Pro C10"
+        elif any(audio_pro_term in status_str for audio_pro_term in ["audio pro", "audio_pro"]):
+            device_name = "Audio Pro Speaker"
+        else:
+            device_name = f"WiiM Device ({fallback_host})"
+
+    return device_name.strip()
+
+
+def _is_audio_pro_device(device_name: str, status: dict[str, Any]) -> bool:
+    """Check if this appears to be an Audio Pro device."""
+    check_text = device_name.lower() + " " + str(status).lower()
+
+    audio_pro_indicators = [
+        "audio pro",
+        "audio_pro",
+        "a10",
+        "a15",
+        "a28",
+        "c10",
+        "mkii",
+        "mk2",
+        "w-",
+        "w series",
+        "w generation",
+    ]
+
+    return any(indicator in check_text for indicator in audio_pro_indicators)
+
+
 async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
     """Validate that a host is a WiiM/LinkPlay device and extract device info.
 
@@ -84,20 +139,11 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
                 _LOGGER.debug("No status response from %s:%s via %s", host, port, protocol)
                 continue
 
-            # Extract device name with priority order
-            # PRIORITY 1: DeviceName from WiiM API (custom name set in app)
-            # PRIORITY 2: Other name fields
-            # PRIORITY 3: SSID/Network name (less reliable)
-            device_name = (
-                status.get("DeviceName")  # Custom name set in WiiM app
-                or status.get("device_name")  # Alternative field name
-                or status.get("friendlyName")  # Common API field
-                or status.get("name")  # Generic name field
-                or status.get("ssid", host)  # Device hotspot name (fallback)
-            )
+            # Extract device name with enhanced Audio Pro support
+            device_name = _extract_device_name(status, host)
 
-            if not device_name or device_name == "Unknown":
-                device_name = f"WiiM Device ({host})"
+            # Check if this is an Audio Pro device for enhanced logging
+            is_audio_pro = _is_audio_pro_device(device_name, status)
 
             # Extract UUID - this is critical for device identification
             device_uuid = status.get("uuid")
@@ -106,14 +152,25 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
                 _LOGGER.debug("Device at %s:%s did not provide UUID, using host as fallback", host, port)
                 device_uuid = host
 
-            _LOGGER.info(
-                "Successfully validated device %s at %s:%s via %s (UUID: %s)",
-                device_name,
-                host,
-                port,
-                protocol,
-                device_uuid,
-            )
+            # Enhanced logging with Audio Pro specific messages
+            if is_audio_pro:
+                _LOGGER.info(
+                    "🔊 Audio Pro device detected: %s at %s:%s via %s (UUID: %s)",
+                    device_name,
+                    host,
+                    port,
+                    protocol,
+                    device_uuid,
+                )
+            else:
+                _LOGGER.info(
+                    "Successfully validated device %s at %s:%s via %s (UUID: %s)",
+                    device_name,
+                    host,
+                    port,
+                    protocol,
+                    device_uuid,
+                )
 
             # Success! Store the working connection details for later use
             # Note: We can't easily pass the working protocol/port back, but
@@ -122,41 +179,105 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
             return True, device_name, device_uuid
 
         except (OSError, TimeoutError, ValueError) as err:
+            # Check if this appears to be an Audio Pro device for enhanced error messages
+            is_audio_pro = any(
+                audio_pro_model in host.lower() or audio_pro_model in str(err).lower()
+                for audio_pro_model in ["a10", "a15", "a28", "c10", "audio pro", "audio_pro"]
+            )
+
             # Log the specific error for debugging but continue trying other protocols
             error_str = str(err).lower()
             last_error = err
-            if "404" in error_str:
-                _LOGGER.debug("Device at %s:%s returned 404 via %s - not a LinkPlay device", host, port, protocol)
-            elif "timeout" in error_str:
-                _LOGGER.debug("Timeout connecting to %s:%s via %s - device may be slow", host, port, protocol)
-            elif "connection refused" in error_str:
-                _LOGGER.debug("Connection refused by %s:%s via %s - wrong protocol/port", host, port, protocol)
-            elif "ssl" in error_str or "certificate" in error_str:
-                _LOGGER.debug("SSL error with %s:%s via %s - device may not support HTTPS", host, port, protocol)
+
+            if is_audio_pro:
+                # Audio Pro specific error logging
+                _LOGGER.debug("Audio Pro device %s:%s failed via %s: %s", host, port, protocol, err)
+                if "404" in error_str:
+                    _LOGGER.debug(
+                        "Audio Pro device %s:%s returned 404 via %s - may be HTTPS-only device", host, port, protocol
+                    )
+                elif "timeout" in error_str:
+                    _LOGGER.debug(
+                        "Audio Pro device %s:%s timeout via %s - device may be slow to respond", host, port, protocol
+                    )
+                elif "connection refused" in error_str:
+                    _LOGGER.debug(
+                        "Audio Pro device %s:%s connection refused via %s - may need different protocol",
+                        host,
+                        port,
+                        protocol,
+                    )
+                elif "ssl" in error_str or "certificate" in error_str:
+                    _LOGGER.debug(
+                        "Audio Pro device %s:%s SSL error via %s - may need HTTP instead", host, port, protocol
+                    )
             else:
-                _LOGGER.debug("Failed to validate device at %s:%s via %s: %s", host, port, protocol, err)
+                # Standard error logging for non-Audio Pro devices
+                if "404" in error_str:
+                    _LOGGER.debug("Device at %s:%s returned 404 via %s - not a LinkPlay device", host, port, protocol)
+                elif "timeout" in error_str:
+                    _LOGGER.debug("Timeout connecting to %s:%s via %s - device may be slow", host, port, protocol)
+                elif "connection refused" in error_str:
+                    _LOGGER.debug("Connection refused by %s:%s via %s - wrong protocol/port", host, port, protocol)
+                elif "ssl" in error_str or "certificate" in error_str:
+                    _LOGGER.debug("SSL error with %s:%s via %s - device may not support HTTPS", host, port, protocol)
+                else:
+                    _LOGGER.debug("Failed to validate device at %s:%s via %s: %s", host, port, protocol, err)
             continue
         finally:
             await client.close()
 
     # If we get here, all protocols failed
-    _LOGGER.warning("All validation attempts failed for %s. Last error: %s", host, last_error)
+    # Check if this appears to be an Audio Pro device for enhanced error messages
+    is_audio_pro = any(
+        audio_pro_model in host.lower() for audio_pro_model in ["a10", "a15", "a28", "c10", "audio pro", "audio_pro"]
+    )
+
+    if is_audio_pro:
+        _LOGGER.warning("🔊 Audio Pro device validation failed for %s. Last error: %s", host, last_error)
+        _LOGGER.info(
+            "Audio Pro device %s validation failed - this is common for MkII/W-Series devices. Manual setup is recommended.",
+            host,
+        )
+    else:
+        _LOGGER.warning("All validation attempts failed for %s. Last error: %s", host, last_error)
 
     # Instead of failing completely, provide a fallback that allows manual setup
     # This matches python-linkplay's approach of being permissive
     error_str = str(last_error).lower() if last_error else ""
-    if "404" in error_str:
-        _LOGGER.info("Device at %s returned 404 - likely not a WiiM/LinkPlay device", host)
-    elif "timeout" in error_str:
-        _LOGGER.info("Timeout connecting to %s - device may be offline or slow", host)
-    elif "connection refused" in error_str:
-        _LOGGER.info("Connection refused by %s - device may not support HTTP API", host)
+
+    if is_audio_pro:
+        # Audio Pro specific final error messages
+        if "404" in error_str:
+            _LOGGER.info(
+                "Audio Pro device %s returned 404 - likely MkII/W-Series device requiring HTTPS. Manual setup available.",
+                host,
+            )
+        elif "timeout" in error_str:
+            _LOGGER.info("Audio Pro device %s timeout - device may be slow or offline. Manual setup available.", host)
+        elif "connection refused" in error_str:
+            _LOGGER.info("Audio Pro device %s connection refused - may need manual IP configuration.", host)
+        elif "ssl" in error_str or "certificate" in error_str:
+            _LOGGER.info(
+                "Audio Pro device %s SSL error - device may require specific protocol. Manual setup available.", host
+            )
+        else:
+            _LOGGER.info("Audio Pro device %s failed validation - manual setup is recommended and will work.", host)
     else:
-        _LOGGER.info("Failed to validate device at %s - may need manual configuration", host)
+        # Standard final error messages for non-Audio Pro devices
+        if "404" in error_str:
+            _LOGGER.info("Device at %s returned 404 - likely not a WiiM/LinkPlay device", host)
+        elif "timeout" in error_str:
+            _LOGGER.info("Timeout connecting to %s - device may be offline or slow", host)
+        elif "connection refused" in error_str:
+            _LOGGER.info("Connection refused by %s - device may not support HTTP API", host)
+        else:
+            _LOGGER.info("Failed to validate device at %s - may need manual configuration", host)
 
     # Return a "soft failure" that still allows the device to be configured manually
     # The UI can show this as "Validation failed but manual setup available"
-    return False, f"WiiM Device ({host})", host
+    fallback_name = "Audio Pro Speaker" if is_audio_pro else f"WiiM Device ({host})"
+    return False, fallback_name, host
 
 
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
