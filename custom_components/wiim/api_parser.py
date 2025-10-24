@@ -145,6 +145,22 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid duration value: %s", duration_val)
 
+    # Validate position vs duration - detect impossible scenarios
+    if data.get("position") is not None and data.get("duration") is not None:
+        position = data["position"]
+        duration = data["duration"]
+        if position > duration and duration > 0:
+            _LOGGER.warning(
+                "🚨 Impossible media position detected: %d seconds elapsed > %d seconds duration "
+                "(device: %s, source: %s). This appears to be a device firmware bug. "
+                "Setting position to 0 to prevent UI confusion.",
+                position,
+                duration,
+                raw.get("device_name", "unknown"),
+                source_hint or "unknown",
+            )
+            data["position"] = 0
+
     # Mute → bool.
     if "mute" in data:
         try:

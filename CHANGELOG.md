@@ -2,6 +2,25 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.35] - 2024-12-19
+
+### Fixed
+
+- **Critical Impossible Position/Duration Validation**: Added validation to detect and handle impossible media position scenarios
+  - Root cause: WiiM device firmware bug reporting position > duration (e.g., 5:19 elapsed > 0:49 total)
+  - Added validation logic to detect when `position > duration` and `duration > 0`
+  - When detected, logs warning and resets position to 0 to prevent UI confusion
+  - Prevents impossible displays like "05:19 / 00:49" by showing "00:00 / 00:49" instead
+  - This is a workaround for device firmware bugs, not a parser issue
+
+### Technical
+
+- **API Parser Validation**: Enhanced `parse_player_status()` with impossible scenario detection
+  - Validates position vs duration after parsing both values
+  - Logs detailed warning with device name and source when impossible data detected
+  - Gracefully handles device firmware bugs by resetting position to 0
+  - Maintains duration as reported by device (may be incorrect but less confusing than impossible position)
+
 ## [0.1.34] - 2024-12-19
 
 ### Fixed
