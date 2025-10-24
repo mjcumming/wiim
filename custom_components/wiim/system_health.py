@@ -31,7 +31,7 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
     first_device_health = None
     if speakers:
         first_speaker = speakers[0]
-        first_device_health = _check_device_health(first_speaker)
+        first_device_health = await _check_device_health(first_speaker)
 
     return {
         "configured_devices": len(entries),

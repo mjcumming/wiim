@@ -14,8 +14,11 @@ from .models import DeviceInfo, PlayerStatus, PollingMetrics
 # Verbose debug toggle (mirrors coordinator.py)
 VERBOSE_DEBUG = False
 
-# Number of consecutive failures after which we escalate to ERROR level
-FAILURE_ERROR_THRESHOLD = 3  # keep behaviour identical to original implementation
+# Enhanced logging escalation thresholds (more balanced for production)
+# 1-2 failures: debug (likely transient network issues)
+# 3-4 failures: warning (device having connectivity problems)
+# 5+ failures: error (device likely offline/unavailable)
+FAILURE_ERROR_THRESHOLD = 5  # More balanced - escalate after ~25s with normal polling
 
 # Smart polling intervals - match POLLING_STRATEGY.md
 FAST_POLL_INTERVAL = 1  # seconds - during active playback
@@ -397,7 +400,28 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 # Reset failure counter on success
                 if hasattr(coordinator, "_core_comm_failures"):
                     if coordinator._core_comm_failures > 0:
-                        _LOGGER.info("Device communication restored after %d failures", coordinator._core_comm_failures)
+                        # Get device info for enhanced recovery logging
+                        device_info = getattr(coordinator, "_capabilities", {})
+                        firmware = device_info.get("firmware_version", "unknown") if device_info else "unknown"
+
+                        # Enhanced recovery logging with comprehensive device info
+                        device_type = (
+                            "WiiM"
+                            if device_info.get("is_wiim_device")
+                            else "Legacy"
+                            if device_info.get("is_legacy_device")
+                            else "Unknown"
+                        )
+                        device_model = device_info.get("device_type", "Unknown")
+
+                        _LOGGER.info(
+                            "%s: Core device communication restored after %d failures (%s %s fw:%s)",
+                            coordinator.client.host,
+                            coordinator._core_comm_failures,
+                            device_type,
+                            device_model,
+                            firmware,
+                        )
                     coordinator._core_comm_failures = 0
             result_idx += 1
 
@@ -632,7 +656,31 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         await coordinator._update_speaker_object(data)
 
         # Success handling
+        previous_failures = coordinator._backoff.consecutive_failures
         coordinator._backoff.record_success()
+
+        # Log recovery if we had failures
+        if previous_failures > 0:
+            # Enhanced recovery logging with device context
+            device_info = getattr(coordinator, "_capabilities", {})
+            device_type = (
+                "WiiM"
+                if device_info.get("is_wiim_device")
+                else "Legacy"
+                if device_info.get("is_legacy_device")
+                else "Unknown"
+            )
+            device_model = device_info.get("device_type", "Unknown")
+            firmware = device_info.get("firmware_version", "unknown") if device_info else "unknown"
+
+            _LOGGER.info(
+                "%s: Device communication restored after %d consecutive failures (%s %s fw:%s)",
+                coordinator.client.host,
+                previous_failures,
+                device_type,
+                device_model,
+                firmware,
+            )
 
         # Apply adaptive polling interval
         if interval_changed:
@@ -686,18 +734,47 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         coordinator._multiroom_working = False
         coordinator._backoff.record_failure()
 
-        if coordinator._backoff.consecutive_failures < 3:
-            log_fn = _LOGGER.debug
-        elif coordinator._backoff.consecutive_failures < FAILURE_ERROR_THRESHOLD:
-            log_fn = _LOGGER.warning
+        # Enhanced escalation: debug → debug → warning → warning → error
+        failures = coordinator._backoff.consecutive_failures
+        if failures <= 2:
+            log_fn = _LOGGER.debug  # Likely transient network issues
+        elif failures <= 4:
+            log_fn = _LOGGER.warning  # Device having connectivity problems
         else:
-            log_fn = _LOGGER.error
+            log_fn = _LOGGER.error  # Device likely offline/unavailable
+
+        # Enhanced error logging with context
+        context_parts = []
+
+        # Add error context from enhanced error classes
+        if hasattr(err, "endpoint"):
+            context_parts.append(f"endpoint={err.endpoint}")
+        if hasattr(err, "attempts"):
+            context_parts.append(f"attempts={err.attempts}")
+        if hasattr(err, "device_info") and err.device_info:
+            firmware = err.device_info.get("firmware_version", "unknown")
+            context_parts.append(f"firmware={firmware}")
+        if hasattr(err, "operation_context") and err.operation_context != "api_call":
+            context_parts.append(f"context={err.operation_context}")
+
+        context_str = f" ({', '.join(context_parts)})" if context_parts else ""
+
+        # Determine if this is user-initiated or automated polling
+        is_user_action = False
+        if hasattr(coordinator, "hass") and coordinator.hass:
+            # Check if there are any pending service calls or user interactions
+            # This is a simple heuristic - could be enhanced with more sophisticated tracking
+            is_user_action = getattr(coordinator, "_user_action_pending", False)
+
+        operation_type = "user action" if is_user_action else "automated polling"
 
         log_fn(
-            "%s: Smart coordinator update failed (attempt %d): %s",
+            "%s: Smart coordinator update failed (%s, attempt %d): %s%s",
             coordinator.client.host,
+            operation_type,
             coordinator._backoff.consecutive_failures,
             err,
+            context_str,
         )
 
         # On error, use backoff logic

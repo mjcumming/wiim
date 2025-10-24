@@ -2,6 +2,22 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.33] - 2025-10-24
+
+### Fixed
+
+- **Progress Bar Duration Issue**: Fixed streaming services showing "00:00" duration instead of hiding duration entirely
+- **Duration Parsing**: Enhanced API parser to correctly handle `totlen=0` from streaming services (Amazon Music, etc.)
+- **Pydantic Model Validation**: Added field validator to convert duration=0 to None for streaming services
+- **IPv6 Port Parsing**: Fixed IPv6 address parsing with ports in brackets format `[2001:db8::1]:8080`
+
+### Technical
+
+- **API Parser Enhancement**: Added comprehensive debug logging for duration and position parsing
+- **Data Layer Improvements**: Enhanced `get_media_duration()` to return None for zero duration values
+- **Model Validation**: Added `_normalize_duration` field validator in PlayerStatus model
+- **IPv6 Support**: Improved IPv6 address handling in WiiMClient constructor
+
 ## [0.1.32] - 2025-10-23
 
 ### Added

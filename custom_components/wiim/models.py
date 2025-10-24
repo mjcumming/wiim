@@ -127,6 +127,14 @@ class PlayerStatus(_WiimBase):
         # Convert WiiM's 'none' state to logical 'idle' state
         return "idle" if normalized == "none" else normalized
 
+    # Handle duration field - convert 0 to None for streaming services
+    @field_validator("duration", mode="before")
+    @classmethod
+    def _normalize_duration(cls, v: int | None) -> int | None:  # noqa: D401
+        if v == 0:
+            return None  # Streaming services report 0 duration - treat as unknown
+        return v
+
 
 class SlaveInfo(BaseModel):
     """Represents a slave device in a multiroom group."""

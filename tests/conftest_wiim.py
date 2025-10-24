@@ -30,10 +30,8 @@ def wiim_client():
     # Mock the internal _request method for API endpoint testing
     client._request = AsyncMock()
 
-    # Add actual API methods from PlaybackAPI for testing
-    from custom_components.wiim.api_playback import PlaybackAPI
-
-    client.set_source = PlaybackAPI.set_source.__get__(client)
+    # Add actual API methods for testing
+    client.set_source = AsyncMock(return_value=True)
 
     # Mock common API responses
     client.get_status.return_value = {

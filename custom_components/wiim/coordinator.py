@@ -22,8 +22,11 @@ _LOGGER = logging.getLogger(__name__)
 # which is usually enough for troubleshooting without spamming the log.
 VERBOSE_DEBUG = False
 
-# Number of consecutive failures after which we escalate to ERROR level
-FAILURE_ERROR_THRESHOLD = 3  # Reduced from 10 - mark offline after 15 seconds instead of 50
+# Enhanced logging escalation thresholds (more balanced for production)
+# 1-2 failures: debug (likely transient network issues)
+# 3-4 failures: warning (device having connectivity problems)
+# 5+ failures: error (device likely offline/unavailable)
+FAILURE_ERROR_THRESHOLD = 5  # More balanced - escalate after ~25s with normal polling
 
 # Command failure tracking - for immediate user feedback
 COMMAND_FAILURE_TIMEOUT = 30  # seconds - how long to remember command failures
@@ -270,10 +273,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 new_interval = self._backoff.next_interval(default_seconds=base_interval)
                 self.update_interval = new_interval
 
-                # Escalate logging from WARNING to ERROR after several consecutive failures
-                log_level = (
-                    logging.ERROR if self._backoff.consecutive_failures >= FAILURE_ERROR_THRESHOLD else logging.WARNING
-                )
+                # Enhanced escalation: debug → debug → warning → warning → error
+                failures = self._backoff.consecutive_failures
+                if failures <= 2:
+                    log_level = logging.DEBUG  # Likely transient network issues
+                elif failures <= 4:
+                    log_level = logging.WARNING  # Device having connectivity problems
+                else:
+                    log_level = logging.ERROR  # Device likely offline/unavailable
                 _LOGGER.log(
                     log_level,
                     "Update failed for %s (%d consecutive), backing off to %ss. Error: %s",

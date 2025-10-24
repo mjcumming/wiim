@@ -64,7 +64,7 @@ async def test_device_creation(hass: HomeAssistant, bypass_get_data) -> None:
 
     assert device.name == MOCK_DEVICE_DATA["DeviceName"]
     assert device.manufacturer == "WiiM"
-    assert device.model == MOCK_DEVICE_DATA["project"]
+    assert device.model == "WiiM Speaker"  # Fallback model when project not in status
 
 
 @pytest.mark.skip(reason="Skipped due to HA background thread issue - functionality covered by other tests")

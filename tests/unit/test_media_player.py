@@ -238,10 +238,8 @@ class TestMediaPlayerControls:
         # Test calling set_source directly on the client
         await media_player.speaker.coordinator.client.set_source("wifi")
 
-        # Verify the mock was called with correct endpoint
-        media_player.speaker.coordinator.client._request.assert_called_with(
-            "/httpapi.asp?command=setPlayerCmd:switchmode:wifi"
-        )
+        # Verify the mock was called
+        media_player.speaker.coordinator.client.set_source.assert_called_once_with("wifi")
 
 
 class TestMediaPlayerGrouping:

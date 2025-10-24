@@ -139,12 +139,6 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         try:
             duration_val = int(raw["totlen"])
             if duration_val > 0:  # Only set duration if it's actually provided
-                _LOGGER.debug(
-                    "🎵 Raw duration value: %d (source: %s, play_state: %s)",
-                    duration_val,
-                    source_hint or "unknown",
-                    raw.get("state") or raw.get("player_state") or raw.get("status") or "unknown",
-                )
                 data["duration"] = _normalize_time_value(duration_val, "duration", source_hint)
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid duration value: %s", raw.get("totlen"))

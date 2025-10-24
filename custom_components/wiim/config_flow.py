@@ -55,17 +55,26 @@ async def validate_wiim_device(host: str) -> tuple[bool, str, str | None]:
 
     # Also try the original host string in case it includes a custom port
     if ":" in host and not host.startswith("["):
+        # Check if this is an IPv6 address first
         try:
-            _, port_part = host.rsplit(":", 1)
-            port_int = int(port_part)
-            protocols_to_try.insert(0, ("https", port_int))
-            protocols_to_try.insert(1, ("http", port_int))
-        except (ValueError, TypeError):
-            pass  # Not a valid host:port format, use defaults
+            import ipaddress
+
+            ipaddress.IPv6Address(host)
+            # It's a valid IPv6 address, don't try to parse as host:port
+            pass
+        except ipaddress.AddressValueError:
+            # Not an IPv6 address, try parsing as host:port
+            try:
+                _, port_part = host.rsplit(":", 1)
+                port_int = int(port_part)
+                protocols_to_try.insert(0, ("https", port_int))
+                protocols_to_try.insert(1, ("http", port_int))
+            except (ValueError, TypeError):
+                pass  # Not a valid host:port format, use defaults
 
     last_error = None
     for protocol, port in protocols_to_try:
-        client = WiiMClient(f"{protocol}://{host}:{port}")
+        client = WiiMClient(host, port=port)
         try:
             _LOGGER.debug("Trying %s://%s:%s for validation", protocol, host, port)
 

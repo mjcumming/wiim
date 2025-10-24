@@ -733,7 +733,14 @@ class Speaker:
         duration = self._status_field("duration")
 
         try:
-            return int(float(duration)) if duration is not None else None
+            if duration is not None:
+                result = int(float(duration))
+                # Return None for zero duration (streaming services without duration info)
+                if result == 0:
+                    return None
+                return result
+            else:
+                return None
         except (TypeError, ValueError):
             return None
 

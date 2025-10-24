@@ -322,7 +322,7 @@ def _to_bool(val: Any) -> bool | None:  # noqa: D401
 def _to_int(val: Any) -> int | None:  # noqa: D401
     try:
         return int(val)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 

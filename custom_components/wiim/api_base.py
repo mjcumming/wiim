@@ -45,7 +45,64 @@ class WiiMError(Exception):
 
 
 class WiiMRequestError(WiiMError):
-    """Raised when there is an error communicating with the WiiM device."""
+    """Raised when there is an error communicating with the WiiM device.
+
+    Enhanced with context for better debugging and user feedback.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        endpoint: str | None = None,
+        attempts: int | None = None,
+        last_error: Exception | None = None,
+        device_info: dict[str, str] | None = None,
+        operation_context: str | None = None,
+    ) -> None:
+        """Initialize request error with enhanced context.
+
+        Args:
+            message: The error message
+            endpoint: API endpoint that failed
+            attempts: Number of retry attempts made
+            last_error: The underlying exception that caused this error
+            device_info: Device information (firmware, model, etc.)
+            operation_context: Context about what operation was being performed
+        """
+        self.endpoint = endpoint
+        self.attempts = attempts
+        self.last_error = last_error
+        self.device_info = device_info or {}
+        self.operation_context = operation_context or "api_call"
+        super().__init__(message)
+
+    def __str__(self) -> str:
+        """Enhanced string representation with context."""
+        context_parts = []
+
+        if self.endpoint:
+            context_parts.append(f"endpoint={self.endpoint}")
+        if self.attempts:
+            context_parts.append(f"attempts={self.attempts}")
+        if self.device_info:
+            firmware = self.device_info.get("firmware_version", "unknown")
+            device_model = self.device_info.get("device_model", "unknown")
+            device_type = (
+                "WiiM"
+                if self.device_info.get("is_wiim_device")
+                else "Legacy"
+                if self.device_info.get("is_legacy_device")
+                else "Unknown"
+            )
+
+            device_context = f"{device_type} {device_model} (fw:{firmware})"
+            context_parts.append(f"device={device_context}")
+        if self.operation_context != "api_call":
+            context_parts.append(f"context={self.operation_context}")
+
+        if context_parts:
+            return f"{super().__str__()} ({', '.join(context_parts)})"
+        return super().__str__()
 
 
 class WiiMResponseError(WiiMError):
@@ -53,11 +110,17 @@ class WiiMResponseError(WiiMError):
 
 
 class WiiMTimeoutError(WiiMRequestError):
-    """Raised when a request to the WiiM device times out."""
+    """Raised when a request to the WiiM device times out.
+
+    Enhanced with context for better debugging and user feedback.
+    """
 
 
 class WiiMConnectionError(WiiMRequestError):
-    """Raised on network-level connectivity problems (SSL, unreachable, …)."""
+    """Raised on network-level connectivity problems (SSL, unreachable, …).
+
+    Enhanced with context for better debugging and user feedback.
+    """
 
 
 class WiiMInvalidDataError(WiiMError):
@@ -98,12 +161,38 @@ class WiiMClient:
         self._discovered_port: bool = False
 
         if ":" in host and not host.startswith("["):
-            # Potential "host:port" **or** bare IPv6 literal – try the former.
+            # Check if this is an IPv6 address or "host:port" format
             try:
-                host_part, port_part = host.rsplit(":", 1)
-                self.port = int(port_part)
-                self._host = host_part
-                self._discovered_port = True
+                # Try to parse as IPv6 address
+                import ipaddress
+
+                ipaddress.IPv6Address(host)
+                # If successful, it's a pure IPv6 address
+                self._host = host
+                self.port = port
+            except ipaddress.AddressValueError:
+                # Not a valid IPv6 address, check if it's "host:port" format
+                try:
+                    host_part, port_part = host.rsplit(":", 1)
+                    self.port = int(port_part)
+                    self._host = host_part
+                    self._discovered_port = True
+                except (ValueError, TypeError):
+                    self._host = host
+                    self.port = port
+        elif host.startswith("[") and "]:" in host:
+            # Handle IPv6 address with port in brackets: [2001:db8::1]:8080
+            try:
+                bracket_end = host.find("]:")
+                if bracket_end > 0:
+                    ipv6_part = host[1:bracket_end]  # Remove brackets
+                    port_part = host[bracket_end + 2 :]  # Skip "]:"
+                    self._host = ipv6_part
+                    self.port = int(port_part)
+                    self._discovered_port = True
+                else:
+                    self._host = host
+                    self.port = port
             except (ValueError, TypeError):
                 self._host = host
                 self.port = port
@@ -189,7 +278,30 @@ class WiiMClient:
 
             except (aiohttp.ClientError, json.JSONDecodeError) as err:
                 if attempt == retry_count - 1:
-                    raise WiiMRequestError(f"Request failed after {retry_count} attempts: {err}") from err
+                    # Get comprehensive device info for enhanced error context
+                    device_info = {}
+                    try:
+                        if hasattr(self, "_capabilities") and self._capabilities:
+                            caps = self._capabilities
+                            device_info = {
+                                "firmware_version": caps.get("firmware_version", "unknown"),
+                                "device_model": caps.get("device_type", "unknown"),
+                                "device_name": caps.get("device_name", "unknown"),
+                                "is_wiim_device": caps.get("is_wiim_device", False),
+                                "is_legacy_device": caps.get("is_legacy_device", False),
+                                "supports_metadata": caps.get("supports_metadata", False),
+                                "supports_audio_output": caps.get("supports_audio_output", False),
+                            }
+                    except Exception:  # noqa: BLE001
+                        pass  # Device info not available, continue without it
+
+                    raise WiiMRequestError(
+                        f"Request failed after {retry_count} attempts: {err}",
+                        endpoint=endpoint,
+                        attempts=retry_count,
+                        last_error=err,
+                        device_info=device_info,
+                    ) from err
 
                 # Exponential backoff for retries (longer for legacy devices)
                 backoff_delay = 0.5 * (2**attempt)
@@ -219,7 +331,11 @@ class WiiMClient:
 
             try:
                 p = urlsplit(self._endpoint)
-                url = f"{p.scheme}://{p.hostname}:{p.port}{endpoint}"
+                # Handle IPv6 addresses properly by adding brackets if needed
+                hostname = p.hostname
+                if hostname and ":" in hostname and not hostname.startswith("["):
+                    hostname = f"[{hostname}]"
+                url = f"{p.scheme}://{hostname}:{p.port}{endpoint}"
                 if p.scheme == "https":
                     kwargs["ssl"] = self._get_ssl_context()
                 else:
@@ -279,7 +395,29 @@ class WiiMClient:
                 else:
                     # For other errors (timeouts, HTTP errors), keep the endpoint and fail fast
                     # This avoids expensive re-probing on temporary issues
-                    raise WiiMConnectionError(f"Request to {self._endpoint}{endpoint} failed: {err}") from err
+                    # Get comprehensive device info for enhanced error context
+                    device_info = {}
+                    try:
+                        if hasattr(self, "_capabilities") and self._capabilities:
+                            caps = self._capabilities
+                            device_info = {
+                                "firmware_version": caps.get("firmware_version", "unknown"),
+                                "device_model": caps.get("device_type", "unknown"),
+                                "device_name": caps.get("device_name", "unknown"),
+                                "is_wiim_device": caps.get("is_wiim_device", False),
+                                "is_legacy_device": caps.get("is_legacy_device", False),
+                                "supports_metadata": caps.get("supports_metadata", False),
+                                "supports_audio_output": caps.get("supports_audio_output", False),
+                            }
+                    except Exception:  # noqa: BLE001
+                        pass  # Device info not available, continue without it
+
+                    raise WiiMConnectionError(
+                        f"Request to {self._endpoint}{endpoint} failed: {err}",
+                        endpoint=f"{self._endpoint}{endpoint}",
+                        last_error=err,
+                        device_info=device_info,
+                    ) from err
 
         # -----------------------------
         # Initial probe or connection lost - try all protocols
@@ -362,14 +500,49 @@ class WiiMClient:
                                 return {"raw": "OK"}
                             else:
                                 # Re-raise for other commands
-                                raise WiiMConnectionError(f"Invalid JSON response from {url}: {json_err}") from json_err
+                                # Get device info for enhanced error context
+                                device_info = {}
+                                try:
+                                    if hasattr(self, "_capabilities") and self._capabilities:
+                                        device_info = {
+                                            "firmware_version": self._capabilities.get("firmware_version", "unknown"),
+                                            "device_model": self._capabilities.get("device_model", "unknown"),
+                                        }
+                                except Exception:  # noqa: BLE001
+                                    pass  # Device info not available, continue without it
+
+                                raise WiiMConnectionError(
+                                    f"Invalid JSON response from {url}: {json_err}",
+                                    endpoint=url,
+                                    last_error=json_err,
+                                    device_info=device_info,
+                                ) from json_err
 
             except (TimeoutError, aiohttp.ClientError, json.JSONDecodeError) as err:
                 last_error = err
                 continue
 
+        # Get device info for enhanced error context
+        device_info = {}
+        try:
+            if hasattr(self, "_capabilities") and self._capabilities:
+                device_info = {
+                    "firmware_version": self._capabilities.get("firmware_version", "unknown"),
+                    "device_model": self._capabilities.get("device_model", "unknown"),
+                }
+        except Exception:  # noqa: BLE001
+            pass  # Device info not available, continue without it
+
+        # Count total attempts (protocols tried)
+        total_attempts = len(tried)
+
         raise WiiMConnectionError(
-            f"Failed to communicate with {self._host} after trying: {', '.join(tried)}\nLast error: {last_error}"
+            f"Failed to communicate with {self._host} after trying: {', '.join(tried)}\nLast error: {last_error}",
+            endpoint=endpoint,
+            attempts=total_attempts,
+            last_error=last_error,
+            device_info=device_info,
+            operation_context="protocol_fallback",
         )
 
     def _validate_legacy_response(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
