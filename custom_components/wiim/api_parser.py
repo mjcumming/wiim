@@ -141,7 +141,26 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         try:
             duration_int = int(duration_val)
             if duration_int > 0:  # Only set duration if it's actually provided
-                data["duration"] = _normalize_time_value(duration_int, "duration", source_hint)
+                normalized_duration = _normalize_time_value(duration_int, "duration", source_hint)
+
+                # Check if this might be remaining time instead of total duration
+                # If we have a position and the "duration" is much smaller, it's likely remaining time
+                if (
+                    data.get("position") is not None
+                    and normalized_duration < data["position"]
+                    and normalized_duration < 300
+                ):  # Less than 5 minutes
+                    # Calculate total duration = position + remaining time
+                    total_duration = data["position"] + normalized_duration
+                    _LOGGER.debug(
+                        "🎵 Interpreting totlen as remaining time: %d seconds remaining + %d seconds elapsed = %d seconds total duration",
+                        normalized_duration,
+                        data["position"],
+                        total_duration,
+                    )
+                    data["duration"] = total_duration
+                else:
+                    data["duration"] = normalized_duration
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid duration value: %s", duration_val)
 
