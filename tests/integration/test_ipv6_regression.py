@@ -45,45 +45,24 @@ def test_ipv6_url_construction_logic():
         },
     ]
 
-    all_passed = True
-
     for test_case in test_cases:
-        try:
-            # Simulate the fixed URL construction logic from api_base.py
-            p = urlsplit(test_case["endpoint"])
-            hostname = p.hostname
+        # Simulate the fixed URL construction logic from api_base.py
+        p = urlsplit(test_case["endpoint"])
+        hostname = p.hostname
 
-            # This is the critical fix: add brackets for IPv6 if missing
-            if hostname and ":" in hostname and not hostname.startswith("["):
-                hostname = f"[{hostname}]"
+        # This is the critical fix: add brackets for IPv6 if missing
+        if hostname and ":" in hostname and not hostname.startswith("["):
+            hostname = f"[{hostname}]"
 
-            # Construct the URL
-            url = f"{p.scheme}://{hostname}:{p.port}/httpapi.asp?command=getStatusEx"
+        # Construct the URL
+        url = f"{p.scheme}://{hostname}:{p.port}/httpapi.asp?command=getStatusEx"
 
-            # This should NOT raise "Invalid IPv6 URL" error
-            urlsplit(url)
+        # This should NOT raise "Invalid IPv6 URL" error
+        urlsplit(url)
 
-            # Verify the URL is correctly formatted
-            if url == test_case["expected_url"]:
-                print(f"  ✅ {test_case['name']}: PASSED")
-            else:
-                print(f"  ❌ {test_case['name']}: URL mismatch")
-                print(f"     Expected: {test_case['expected_url']}")
-                print(f"     Got:      {url}")
-                all_passed = False
-
-        except ValueError as e:
-            if "Invalid IPv6 URL" in str(e):
-                print(f"  ❌ {test_case['name']}: FAILED with original bug - {e}")
-                all_passed = False
-            else:
-                print(f"  ❌ {test_case['name']}: FAILED with different error - {e}")
-                all_passed = False
-        except Exception as e:
-            print(f"  ❌ {test_case['name']}: FAILED with unexpected error - {e}")
-            all_passed = False
-
-    return all_passed
+        # Verify the URL is correctly formatted
+        assert url == test_case["expected_url"], f"URL mismatch for {test_case['name']}. Expected: {test_case['expected_url']}, Got: {url}"
+        print(f"  ✅ {test_case['name']}: PASSED")
 
 
 def test_ipv6_vs_ipv4_parsing():
@@ -94,6 +73,7 @@ def test_ipv6_vs_ipv4_parsing():
     test_host = "2001:db8::1"
 
     # Simulate the config flow logic
+    is_ipv6 = False
     if ":" in test_host and not test_host.startswith("["):
         try:
             import ipaddress
@@ -109,14 +89,12 @@ def test_ipv6_vs_ipv4_parsing():
             except (ValueError, TypeError):
                 is_ipv6 = False
 
-    if is_ipv6:
-        print("  ✅ IPv6 address correctly recognized as IPv6 (not host:port)")
-    else:
-        print("  ❌ IPv6 address incorrectly parsed as host:port")
-        return False
+    assert is_ipv6, "IPv6 address should be correctly recognized as IPv6 (not host:port)"
+    print("  ✅ IPv6 address correctly recognized as IPv6 (not host:port)")
 
     # Test IPv4 with port (should be parsed as host:port)
     test_host_ipv4 = "192.168.1.100:8080"
+    parsed_port = None
     if ":" in test_host_ipv4 and not test_host_ipv4.startswith("["):
         try:
             import ipaddress
@@ -133,12 +111,8 @@ def test_ipv6_vs_ipv4_parsing():
                 is_ipv4_ipv6 = False
                 parsed_port = None
 
-    if not is_ipv4_ipv6 and parsed_port == 8080:
-        print("  ✅ IPv4 with port correctly parsed as host:port")
-        return True
-    else:
-        print("  ❌ IPv4 with port incorrectly handled")
-        return False
+    assert not is_ipv4_ipv6 and parsed_port == 8080, "IPv4 with port should be correctly parsed as host:port"
+    print("  ✅ IPv4 with port correctly parsed as host:port")
 
 
 def test_original_bug_scenario():
@@ -173,16 +147,14 @@ def test_original_bug_scenario():
         urlsplit(old_url)
         print("  ✅ Old buggy logic works with bracketed endpoint (expected)")
     except ValueError as e:
-        print(f"  ❌ Old buggy logic fails with bracketed endpoint: {e}")
-        return False
+        assert False, f"Old buggy logic fails with bracketed endpoint: {e}"
 
     try:
         new_url = new_fixed_logic(endpoint_with_brackets)
         urlsplit(new_url)
         print("  ✅ New fixed logic works with bracketed endpoint")
     except ValueError as e:
-        print(f"  ❌ New fixed logic fails with bracketed endpoint: {e}")
-        return False
+        assert False, f"New fixed logic fails with bracketed endpoint: {e}"
 
     # Test with endpoint that does NOT have brackets (this is where the bug occurred)
     # This simulates what happens when urlsplit extracts hostname without brackets
@@ -193,14 +165,12 @@ def test_original_bug_scenario():
         p = urlsplit(endpoint_without_brackets)
         # The issue is that accessing p.port will fail
         port = p.port  # This line will raise ValueError
-        print("  ❌ Malformed IPv6 URL unexpectedly succeeded")
-        return False
+        assert False, "Malformed IPv6 URL unexpectedly succeeded"
     except ValueError as e:
         if "Invalid IPv6 URL" in str(e) or "Port could not be cast to integer value" in str(e):
             print("  ✅ Malformed IPv6 URL correctly fails with parsing error")
         else:
-            print(f"  ❌ Malformed IPv6 URL fails with different error: {e}")
-            return False
+            assert False, f"Malformed IPv6 URL fails with different error: {e}"
 
     # Test the scenario where urlsplit extracts hostname without brackets
     # and then we reconstruct the URL
@@ -213,14 +183,12 @@ def test_original_bug_scenario():
         p2 = urlsplit(old_reconstructed)
         # The issue is that accessing p2.port will fail
         port = p2.port  # This line will raise ValueError
-        print("  ❌ Old buggy reconstruction unexpectedly succeeded")
-        return False
+        assert False, "Old buggy reconstruction unexpectedly succeeded"
     except ValueError as e:
         if "Invalid IPv6 URL" in str(e) or "Port could not be cast to integer value" in str(e):
             print("  ✅ Old buggy reconstruction correctly fails with 'Invalid IPv6 URL'")
         else:
-            print(f"  ❌ Old buggy reconstruction fails with different error: {e}")
-            return False
+            assert False, f"Old buggy reconstruction fails with different error: {e}"
 
     # NEW fixed reconstruction:
     hostname_fixed = f"[{hostname_without_brackets}]" if ":" in hostname_without_brackets else hostname_without_brackets
@@ -229,14 +197,11 @@ def test_original_bug_scenario():
         urlsplit(new_reconstructed)
         print("  ✅ New fixed reconstruction correctly succeeds")
         print(f"     Fixed URL: {new_reconstructed}")
-        return True
     except ValueError as e:
         if "Invalid IPv6 URL" in str(e):
-            print(f"  ❌ New fixed reconstruction still fails with 'Invalid IPv6 URL': {e}")
-            return False
+            assert False, f"New fixed reconstruction still fails with 'Invalid IPv6 URL': {e}"
         else:
-            print(f"  ❌ New fixed reconstruction fails with different error: {e}")
-            return False
+            assert False, f"New fixed reconstruction fails with different error: {e}"
 
 
 def main():

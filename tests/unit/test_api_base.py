@@ -759,7 +759,7 @@ class TestWiiMClientIPv6Handling:
             def __init__(self):
                 self.status = 200
 
-            async def raise_for_status(self):
+            def raise_for_status(self):
                 pass
 
             async def text(self):
