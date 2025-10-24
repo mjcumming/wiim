@@ -753,21 +753,21 @@ class TestWiiMClientIPv6Handling:
 
         # Mock the session and response
         mock_session = AsyncMock()
-        
+
         # Create a proper mock response that behaves like aiohttp response
         class MockResponse:
             def __init__(self):
                 self.status = 200
-                
+
             async def raise_for_status(self):
                 pass
-                
+
             async def text(self):
                 return '{"status": "OK"}'
-                
+
             async def __aenter__(self):
                 return self
-                
+
             async def __aexit__(self, exc_type, exc_val, exc_tb):
                 pass
 
