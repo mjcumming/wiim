@@ -755,7 +755,9 @@ class TestWiiMClientIPv6Handling:
         mock_session = AsyncMock()
         mock_response = AsyncMock()
         mock_response.raise_for_status = AsyncMock()
-        mock_response.text = AsyncMock(return_value='{"status": "OK"}')
+        # Make text() return the JSON string when awaited
+        mock_response.text = AsyncMock()
+        mock_response.text.return_value = '{"status": "OK"}'
 
         mock_context_manager = AsyncMock()
         mock_context_manager.__aenter__ = AsyncMock(return_value=mock_response)

@@ -342,7 +342,8 @@ class WiiMClient:
                     kwargs.pop("ssl", None)
 
                 async with async_timeout.timeout(self.timeout):
-                    async with self._session.request(method, url, **kwargs) as resp:
+                    resp = await self._session.request(method, url, **kwargs)
+                    async with resp:
                         resp.raise_for_status()
                         text = await resp.text()
 
@@ -463,7 +464,8 @@ class WiiMClient:
 
             try:
                 async with async_timeout.timeout(self.timeout):
-                    async with self._session.request(method, url, **kwargs) as resp:
+                    resp = await self._session.request(method, url, **kwargs)
+                    async with resp:
                         resp.raise_for_status()
                         text = await resp.text()
 
