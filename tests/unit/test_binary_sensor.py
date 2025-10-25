@@ -1,7 +1,7 @@
 """Unit tests for WiiM binary sensor platform."""
 
+from unittest.mock import MagicMock, patch
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestBinarySensorConstants:
@@ -183,7 +183,11 @@ class TestBinarySensorPlatformSetup:
 
         with patch("custom_components.wiim.data_helpers.get_speaker_from_config_entry", return_value=speaker):
             # Mock entry data without network monitoring enabled
-            hass.data = {"wiim": {"test-entry": {"entry": MagicMock(options={"enable_network_monitoring": False}), "speaker": speaker}}}
+            hass.data = {
+                "wiim": {
+                    "test-entry": {"entry": MagicMock(options={"enable_network_monitoring": False}), "speaker": speaker}
+                }
+            }
 
             entities = []
             async_add_entities = MagicMock()

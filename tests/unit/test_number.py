@@ -1,7 +1,7 @@
 """Unit tests for WiiM number platform."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 
 class TestNumberPlatformSetup:
@@ -47,7 +47,6 @@ class TestNumberPlatformSetup:
         speaker.name = "Test WiiM"
 
         with patch("custom_components.wiim.number.get_speaker_from_config_entry", return_value=speaker):
-            entities = []
             async_add_entities = MagicMock()
 
             await async_setup_entry(hass, config_entry, async_add_entities)

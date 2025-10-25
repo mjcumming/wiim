@@ -99,7 +99,6 @@ class TestWiiMOutputModeSelect:
     def test_options_fallback_to_defaults(self):
         """Test options fallback to default modes."""
         from custom_components.wiim.select import WiiMOutputModeSelect
-        from custom_components.wiim.const import SELECTABLE_OUTPUT_MODES
 
         speaker = MagicMock()
         speaker.name = "Test WiiM"

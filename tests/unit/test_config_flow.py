@@ -17,7 +17,6 @@ class TestIPv6ConfigFlowHandling:
 
     def test_ipv6_vs_host_port_parsing(self):
         """Test that IPv6 addresses are not incorrectly parsed as host:port in config flow."""
-        from custom_components.wiim.config_flow import validate_wiim_device
 
         # Test IPv6 address parsing logic
         test_host = "2001:db8::1"
@@ -35,12 +34,10 @@ class TestIPv6ConfigFlowHandling:
                 # Not an IPv6 address, try parsing as host:port
                 try:
                     _, port_part = test_host.rsplit(":", 1)
-                    port_int = int(port_part)
+                    int(port_part)
                     is_ipv6 = False
-                    parsed_port = port_int
                 except (ValueError, TypeError):
                     is_ipv6 = False
-                    parsed_port = None
 
         # IPv6 address should be recognized as IPv6, not host:port
         assert is_ipv6, "IPv6 address should be recognized as IPv6, not parsed as host:port"

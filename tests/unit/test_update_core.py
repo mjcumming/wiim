@@ -234,7 +234,7 @@ class TestUpdateInstallationLogic:
         try:
             await speaker.coordinator.client.reboot()
             success = True
-        except Exception as err:
+        except Exception:
             # Reboot commands often don't return proper responses
             # Log the attempt but don't fail the installation
             success = True  # Still consider successful since command was sent

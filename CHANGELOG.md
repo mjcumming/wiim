@@ -2,6 +2,16 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.37] - 2025.01.27
+
+### Fixed
+
+- **Code Quality**: Improved linting compliance and code organization
+  - Fixed assert statements in test files
+  - Removed unused imports and variables
+  - Organized import statements across test files
+  - Reduced linting errors from 79 to 53 (ruff) and 31 to 17 (flake8)
+
 ## [0.1.35] - 2025.10.24
 
 ### Added

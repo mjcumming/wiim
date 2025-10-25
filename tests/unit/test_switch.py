@@ -1,7 +1,7 @@
 """Unit tests for WiiM switch platform."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 
 class TestSwitchConstants:

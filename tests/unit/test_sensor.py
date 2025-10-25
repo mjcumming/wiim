@@ -1,7 +1,6 @@
 """Unit tests for WiiM sensor platform."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestWiiMRoleSensor:

@@ -1,8 +1,8 @@
 """Unit tests for WiiM API base client."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 import ssl
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestWiiMExceptions:
@@ -184,7 +184,6 @@ class TestWiiMClientRequestHandling:
     async def test_request_session_creation(self):
         """Test request session creation."""
         from custom_components.wiim.api_base import WiiMClient
-        import aiohttp
 
         client = WiiMClient("192.168.1.100")
 

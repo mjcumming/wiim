@@ -9,9 +9,9 @@ Usage:
     python tests/integration/run_ipv6_tests.py
 """
 
-import sys
 import os
 import subprocess
+import sys
 
 
 def run_ipv6_regression_tests():

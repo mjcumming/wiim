@@ -9,8 +9,8 @@ Usage:
     python tests/integration/test_ipv6_regression.py
 """
 
-import sys
 import os
+import sys
 from urllib.parse import urlsplit
 
 # Add the project root to the Python path
@@ -97,6 +97,7 @@ def test_ipv6_vs_ipv4_parsing():
     # Test IPv4 with port (should be parsed as host:port)
     test_host_ipv4 = "192.168.1.100:8080"
     parsed_port = None
+    is_ipv4_ipv6 = False  # Initialize the variable
     if ":" in test_host_ipv4 and not test_host_ipv4.startswith("["):
         try:
             import ipaddress
@@ -149,14 +150,14 @@ def test_original_bug_scenario():
         urlsplit(old_url)
         print("  ✅ Old buggy logic works with bracketed endpoint (expected)")
     except ValueError as e:
-        assert False, f"Old buggy logic fails with bracketed endpoint: {e}"
+        raise AssertionError(f"Old buggy logic fails with bracketed endpoint: {e}")
 
     try:
         new_url = new_fixed_logic(endpoint_with_brackets)
         urlsplit(new_url)
         print("  ✅ New fixed logic works with bracketed endpoint")
     except ValueError as e:
-        assert False, f"New fixed logic fails with bracketed endpoint: {e}"
+        raise AssertionError(f"New fixed logic fails with bracketed endpoint: {e}")
 
     # Test with endpoint that does NOT have brackets (this is where the bug occurred)
     # This simulates what happens when urlsplit extracts hostname without brackets
@@ -166,13 +167,13 @@ def test_original_bug_scenario():
         # This should fail because the URL is malformed
         p = urlsplit(endpoint_without_brackets)
         # The issue is that accessing p.port will fail
-        port = p.port  # This line will raise ValueError
-        assert False, "Malformed IPv6 URL unexpectedly succeeded"
+        _ = p.port  # This line will raise ValueError
+        raise AssertionError("Malformed IPv6 URL unexpectedly succeeded")
     except ValueError as e:
         if "Invalid IPv6 URL" in str(e) or "Port could not be cast to integer value" in str(e):
             print("  ✅ Malformed IPv6 URL correctly fails with parsing error")
         else:
-            assert False, f"Malformed IPv6 URL fails with different error: {e}"
+            raise AssertionError(f"Malformed IPv6 URL fails with different error: {e}")
 
     # Test the scenario where urlsplit extracts hostname without brackets
     # and then we reconstruct the URL
@@ -184,13 +185,13 @@ def test_original_bug_scenario():
     try:
         p2 = urlsplit(old_reconstructed)
         # The issue is that accessing p2.port will fail
-        port = p2.port  # This line will raise ValueError
-        assert False, "Old buggy reconstruction unexpectedly succeeded"
+        _ = p2.port  # This line will raise ValueError
+        raise AssertionError("Old buggy reconstruction unexpectedly succeeded")
     except ValueError as e:
         if "Invalid IPv6 URL" in str(e) or "Port could not be cast to integer value" in str(e):
             print("  ✅ Old buggy reconstruction correctly fails with 'Invalid IPv6 URL'")
         else:
-            assert False, f"Old buggy reconstruction fails with different error: {e}"
+            raise AssertionError(f"Old buggy reconstruction fails with different error: {e}")
 
     # NEW fixed reconstruction:
     hostname_fixed = f"[{hostname_without_brackets}]" if ":" in hostname_without_brackets else hostname_without_brackets
@@ -201,9 +202,9 @@ def test_original_bug_scenario():
         print(f"     Fixed URL: {new_reconstructed}")
     except ValueError as e:
         if "Invalid IPv6 URL" in str(e):
-            assert False, f"New fixed reconstruction still fails with 'Invalid IPv6 URL': {e}"
+            raise AssertionError(f"New fixed reconstruction still fails with 'Invalid IPv6 URL': {e}")
         else:
-            assert False, f"New fixed reconstruction fails with different error: {e}"
+            raise AssertionError(f"New fixed reconstruction fails with different error: {e}")
 
 
 def main():
@@ -212,26 +213,22 @@ def main():
     print("🔍 IPv6 REGRESSION TESTS - GitHub Issue #81 Prevention")
     print("=" * 60)
 
-    test1_passed = test_ipv6_url_construction_logic()
-    test2_passed = test_ipv6_vs_ipv4_parsing()
-    test3_passed = test_original_bug_scenario()
+    # Run all tests (they don't return values, they just run and print results)
+    test_ipv6_url_construction_logic()
+    test_ipv6_vs_ipv4_parsing()
+    test_original_bug_scenario()
 
     print("\n" + "=" * 60)
     print("📊 TEST RESULTS SUMMARY")
     print("=" * 60)
 
-    if test1_passed and test2_passed and test3_passed:
-        print("🎉 ALL TESTS PASSED!")
-        print("✅ GitHub issue #81 has been successfully fixed")
-        print("✅ IPv6 addresses work correctly in WiiM integration")
-        print("✅ The 'Invalid IPv6 URL' error has been prevented")
-        print("✅ IPv6 vs IPv4 parsing logic works correctly")
-        return 0
-    else:
-        print("❌ SOME TESTS FAILED!")
-        print("🔧 IPv6 handling may still have issues")
-        print("🚨 GitHub issue #81 may not be fully resolved")
-        return 1
+    # All tests completed successfully (would have raised exceptions if failed)
+    print("🎉 ALL TESTS PASSED!")
+    print("✅ GitHub issue #81 has been successfully fixed")
+    print("✅ IPv6 addresses work correctly in WiiM integration")
+    print("✅ The 'Invalid IPv6 URL' error has been prevented")
+    print("✅ IPv6 vs IPv4 parsing logic works correctly")
+    return 0
 
 
 if __name__ == "__main__":

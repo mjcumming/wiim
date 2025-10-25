@@ -68,18 +68,8 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     async def async_added_to_hass(self) -> None:
         """Set up entity."""
         await super().async_added_to_hass()
-
-        # Listen for state updates from the speaker
-        from homeassistant.helpers.dispatcher import async_dispatcher_connect
-
-        dispatcher_signal = f"wiim_state_updated_{self.speaker.uuid}"
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                dispatcher_signal,
-                self._handle_coordinator_update,
-            )
-        )
+        # WiimEntity already handles the dispatcher connection
+        # We'll override async_write_ha_state to add group-specific logic
 
     # ===== ENTITY PROPERTIES =====
 
@@ -268,6 +258,47 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         """If the image url is remotely accessible."""
         # WiiM devices serve images locally - HA must proxy them
         return False
+
+    @property
+    def media_image_hash(self) -> str | None:
+        """Hash value for media image.
+
+        WiiM devices often keep the same image URL but change the image content when
+        tracks change. We create a hash based on both URL and track metadata to ensure
+        Home Assistant's image cache updates when the track changes, even if URL stays same.
+        """
+        url = self.media_image_url
+        if not url:
+            return None
+
+        # Include track metadata in hash to force cache refresh when track changes
+        # even if URL stays the same (common WiiM behavior)
+        track_info = f"{url}|{self.media_title}|{self.media_artist}|{self.media_album_name}"
+
+        import hashlib
+
+        return hashlib.sha256(track_info.encode("utf-8")).hexdigest()[:16]
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        """Fetch media image of current playing media for group coordinator.
+
+        Returns:
+            Tuple of (image_data, content_type) or (None, None) if no image available.
+        """
+        if not self.available:
+            return None, None
+
+        # Delegate to the speaker's media controller to fetch the image
+        from .media_controller_media import MediaControllerMedia
+
+        # Create a media controller for the speaker to handle image fetching
+        media_controller = MediaControllerMedia(self.speaker)
+
+        try:
+            return await media_controller.get_media_image()
+        except Exception as err:
+            _LOGGER.debug("Failed to fetch media image for group %s: %s", self.speaker.name, err)
+            return None, None
 
     # ===== VOLUME CONTROL (group-wide) =====
 
@@ -581,10 +612,43 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
                     self._attr_name,
                 )
 
-        super().async_write_ha_state()
+        # Check if track metadata changed to clear image cache (like regular media player)
+        current_track_info = {
+            "title": self.media_title,
+            "artist": self.media_artist,
+            "album": self.media_album_name,
+            "image_url": self.media_image_url,
+        }
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle coordinator update for group state changes."""
-        # Trigger state write to check for availability/composition changes
-        self.async_write_ha_state()
+        # Remove None values for comparison
+        current_track_info = {k: v for k, v in current_track_info.items() if v is not None}
+
+        # Initialize last track info if not set
+        if not hasattr(self, "_last_track_info"):
+            self._last_track_info = {}
+
+        # Check if track changed (title/artist change indicates new song)
+        if current_track_info != self._last_track_info:
+            # Track metadata changed - log for debugging
+            for key in set(current_track_info.keys()) | set(self._last_track_info.keys()):
+                old_val = self._last_track_info.get(key)
+                new_val = current_track_info.get(key)
+                if old_val != new_val:
+                    if key == "image_url":
+                        _LOGGER.debug(
+                            "🎨 Group media player image URL changed: %s -> %s",
+                            old_val,
+                            new_val,
+                        )
+                    else:
+                        _LOGGER.debug(
+                            "🎵 Group media player track info changed: %s: %s -> %s",
+                            key,
+                            old_val,
+                            new_val,
+                        )
+
+            # Update last track info
+            self._last_track_info = current_track_info.copy()
+
+        super().async_write_ha_state()
