@@ -2,6 +2,10 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+- **Enhanced Audio Pro Support**: Continue work on supporting Audio Pro devices
+  - Automatic protocol detection (HTTP/HTTPS) based on device generation now working
+  - HTTP API uncertain to date
+
 ## [0.1.37] - 2025.01.27
 
 ### Fixed
