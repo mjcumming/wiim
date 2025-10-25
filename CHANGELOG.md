@@ -6,6 +6,20 @@ All notable changes to the WiiM Audio integration will be documented in this fil
   - Automatic protocol detection (HTTP/HTTPS) based on device generation now working
   - HTTP API uncertain to date
 
+## [0.1.38] - 2025.01.27
+
+### Fixed
+
+- **Audio Pro Device Discovery**: Enhanced discovery and validation for Audio Pro devices
+
+  - Added graceful fallback for Audio Pro devices that fail auto-discovery validation
+  - Improved protocol prioritization (HTTPS first for MkII/W-Series devices)
+  - Enhanced error messages and user guidance for Audio Pro device setup
+
+- **Player Status Sync**: Fixed player status updates when controlled by external apps
+  - Improved detection of playback state changes from WiiM/Audio Pro mobile apps
+  - Enhanced polling to capture status changes from external control sources
+
 ## [0.1.37] - 2025.01.27
 
 ### Fixed

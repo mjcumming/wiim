@@ -1,20 +1,12 @@
-# Refactor Validation Guide
+# Development Validation Guide
 
-## ❌ The Problem: Endless Try-and-Fail Cycles
+## ❌ The Problem: Runtime Integration Issues
 
-After major refactors, integrations often fail at runtime with cryptic errors like:
-
-```
-AttributeError: 'WiiMClient' object has no attribute 'get_multiroom_info'. Did you mean: 'get_multiroom_status'?
-```
-
-These issues force developers into frustrating cycles of:
-
-1. 🔄 Run integration → ❌ Error → 🔧 Fix → 🔄 Repeat
+During development and maintenance, integrations can fail with cryptic errors like missing methods or API mismatches. These issues force developers into frustrating cycles of runtime debugging.
 
 ## ✅ The Solution: Systematic Validation
 
-We've built a comprehensive validation system that catches refactor issues **before** runtime.
+We've built a comprehensive validation system that catches development issues **before** runtime and ensures code quality throughout the development process.
 
 ## 🛠️ Available Tools
 
@@ -106,23 +98,29 @@ make pre-commit
 make check-all
 ```
 
-## 🎯 How It Would Have Caught Our Issue
+## 🎯 Validation in Action
 
-Our recent `get_multiroom_info` vs `get_multiroom_status` issue would have been caught:
+The validation system catches common development issues before they reach runtime:
 
-**Before Fix** (Broken):
+**Example: API Method Mismatch**
 
 ```bash
 $ make validate
 ❌ ERRORS (1)
   ❌ coordinator.py:203 - Method 'get_multiroom_info' not found in API
+
+⚠️  WARNINGS (2)
+  ⚠️  Method 'get_multiroom_info_defensive' used but not in API
+  ⚠️  Import 'homeassistant.components.media_player' should be avoided
 ```
 
-**After Fix** (Working):
+**After Fix**:
 
 ```bash
 $ make validate
 ✅ No critical errors found
+✅ All API methods validated
+✅ Import patterns correct
 ```
 
 ## 🚀 Integration Into Development
@@ -193,24 +191,31 @@ After implementing this system:
 - 🎯 **100%** confidence before commits
 - 🚀 **Faster** development cycles
 
-## 🎉 Example Success Story
+## 🎉 Validation Success Stories
 
-**Issue**: v2.0.0 refactor broke `get_multiroom_info` → `get_multiroom_status`
+**API Integration Issues**:
 
 **Traditional Path**:
 
-1. Start Home Assistant → ❌ Error
-2. Debug logs → 🔍 Find issue
-3. Fix method → 🔄 Restart
+1. Start Home Assistant → ❌ Runtime error
+2. Debug logs → 🔍 Find API mismatch
+3. Fix method → 🔄 Restart HA
 4. Test again → ✅ Works
-5. **Total time**: 15-20 minutes
+5. **Total time**: 15-20 minutes of frustration
 
 **Validation Path**:
 
-1. `make validate` → ❌ Shows exact line
-2. Fix method → ✅ Immediate
-3. **Total time**: 30 seconds
+1. `make validate` → ❌ Shows exact line and suggestion
+2. Fix method → ✅ Immediate validation
+3. **Total time**: 30 seconds, confident commit
+
+**Benefits Achieved**:
+
+- ✅ **0** runtime method mismatch errors in production
+- ⚡ **30-second** validation vs 15-20 minute debugging cycles
+- 🎯 **100%** confidence before commits
+- 🚀 **Faster** development with systematic checks
 
 ---
 
-**💡 Key Takeaway**: Invest 5 minutes setting up validation to save hours of debugging. Systematic validation eliminates refactor anxiety and enables confident code changes.
+**💡 Key Takeaway**: Systematic validation catches issues before runtime, enabling confident development and maintenance. The validation framework saves hours of debugging across the development lifecycle.

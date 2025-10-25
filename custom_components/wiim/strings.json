@@ -23,7 +23,7 @@
       },
       "discovery_confirm": {
         "title": "Add {name}?",
-        "description": "Do you want to add this WiiM device to Home Assistant?\n\nDevice: **{name}**"
+        "description": "Do you want to add this WiiM device to Home Assistant?\n\nDevice: **{name}**{audio_pro_note}"
       },
       "missing_device": {
         "title": "Missing Device Found",

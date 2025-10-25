@@ -282,6 +282,10 @@ class WiiMMediaPlayer(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle coordinator data update."""
+        # Clear optimistic state when real device data is available
+        # This prevents optimistic state from persisting when device state differs
+        self._clear_optimistic_state_on_update()
+
         self.async_schedule_update_ha_state()
 
     @callback
@@ -739,6 +743,33 @@ class WiiMMediaPlayer(
 
     # ===== OPTIMISTIC STATE MANAGEMENT =====
 
+    def _clear_optimistic_state_on_update(self) -> None:
+        """Clear optimistic state when real device data differs from optimistic state.
+
+        This prevents optimistic state from persisting when the device reports
+        a different state than what we optimistically assumed.
+        """
+        import time
+
+        # Only clear optimistic state if it has been set for at least 1 second
+        # to avoid flickering during quick state transitions
+        if self._optimistic_state_timestamp is not None:
+            time_since_optimistic = time.time() - self._optimistic_state_timestamp
+            if time_since_optimistic < 1.0:
+                return  # Too soon to clear, avoid flickering
+
+        # Get the real device state
+        real_state = self.controller.get_playback_state()
+
+        # Only clear optimistic state if real state differs from optimistic state
+        if self._optimistic_state is not None and real_state is not None and self._optimistic_state != real_state:
+            _LOGGER.debug(
+                "Clearing optimistic state: optimistic=%s, real=%s",
+                self._optimistic_state,
+                real_state,
+            )
+            self._clear_optimistic_state()
+
     def _clear_optimistic_state(self) -> None:
         """Clear optimistic state when real data is available."""
         # Only clear optimistic volume/mute if there is no command in-flight.
@@ -747,6 +778,7 @@ class WiiMMediaPlayer(
             self._optimistic_mute = None
         # Other optimistic fields are safe to clear immediately.
         self._optimistic_state = None
+        self._optimistic_state_timestamp = None
         self._optimistic_source = None
         self._optimistic_shuffle = None
         self._optimistic_repeat = None

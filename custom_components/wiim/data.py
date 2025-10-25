@@ -818,8 +818,12 @@ class Speaker:
 
         # Determine if we are actively playing (avoid advancing while paused/idle)
         try:
-            raw_state = self._status_field("state", "play_state", "status")
-            is_playing = str(raw_state).lower() in ("play", "playing")
+            # Use the same logic as get_playback_state() for consistency
+            if self.status_model is None:
+                is_playing = False
+            else:
+                play_status = str(self.status_model.play_state) if self.status_model.play_state is not None else ""
+                is_playing = play_status.lower() in ("play", "playing", "load")
         except Exception:
             is_playing = True  # fall back to permissive behavior
 

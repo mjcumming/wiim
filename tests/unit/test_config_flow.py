@@ -297,3 +297,84 @@ async def test_abort_already_configured(hass: HomeAssistant) -> None:
 
         assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "already_configured"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_detection_by_uuid(hass: HomeAssistant) -> None:
+    """Test that devices with same UUID but different IP are detected as duplicates."""
+    # Create first config entry with a specific UUID
+    MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.100"},
+        unique_id="test-device-uuid-123",
+        title="WiiM Device 1",
+    ).add_to_hass(hass)
+
+    # Mock the discovery to return a device with same UUID but different IP
+    with patch("custom_components.wiim.config_flow.async_search") as mock_search:
+        # Mock the device discovery callback
+        mock_device = AsyncMock()
+        mock_device.host = "192.168.1.101"  # Different IP
+        mock_device.location = None
+
+        async def mock_callback(async_callback, **kwargs):
+            # Simulate discovering a device with same UUID but different IP
+            await async_callback(mock_device)
+
+        mock_search.side_effect = mock_callback
+
+        # Mock validate_wiim_device to return the same UUID
+        with patch(
+            "custom_components.wiim.config_flow.validate_wiim_device",
+            new_callable=AsyncMock,
+            return_value=(True, "WiiM Device 2", "test-device-uuid-123"),  # Same UUID!
+        ):
+            # Start discovery flow
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_DISCOVERY}
+            )
+
+            # Should go to manual entry since no new devices were discovered (duplicate filtered out)
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "manual"
+
+
+@pytest.mark.asyncio
+async def test_discovery_filters_duplicate_by_uuid(hass: HomeAssistant) -> None:
+    """Test that _discover_devices method properly filters duplicates by UUID."""
+    from custom_components.wiim.config_flow import WiiMConfigFlow
+
+    # Create first config entry with a specific UUID
+    MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.100"},
+        unique_id="test-device-uuid-456",
+        title="WiiM Device 1",
+    ).add_to_hass(hass)
+
+    # Create config flow instance
+    flow = WiiMConfigFlow()
+    flow.hass = hass
+
+    # Mock async_search to return a device with same UUID but different IP
+    with patch("custom_components.wiim.config_flow.async_search") as mock_search:
+        mock_device = AsyncMock()
+        mock_device.host = "192.168.1.102"  # Different IP
+        mock_device.location = None
+
+        async def mock_callback(async_callback, **kwargs):
+            await async_callback(mock_device)
+
+        mock_search.side_effect = mock_callback
+
+        # Mock validate_wiim_device to return the same UUID
+        with patch(
+            "custom_components.wiim.config_flow.validate_wiim_device",
+            new_callable=AsyncMock,
+            return_value=(True, "WiiM Device 2", "test-device-uuid-456"),  # Same UUID!
+        ):
+            # Call _discover_devices
+            discovered = await flow._discover_devices()
+
+            # Should be empty because the device with same UUID is filtered out
+            assert discovered == {}, f"Expected empty discovery result, got: {discovered}"
