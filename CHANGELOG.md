@@ -6,6 +6,14 @@ All notable changes to the WiiM Audio integration will be documented in this fil
   - Automatic protocol detection (HTTP/HTTPS) based on device generation now working
   - HTTP API uncertain to date
 
+## [0.1.40] - 2025-10-26
+
+### Fixed
+
+- **Group Media Player Image Fetching**: Fixed ImportError when fetching media images for group coordinator entities
+  - Changed import from non-existent `MediaControllerMedia` to correct `MediaPlayerController` class
+  - Group media player now properly delegates to MediaPlayerController for image fetching
+
 ## [0.1.39] - 2025.10.26
 
 ### Added
