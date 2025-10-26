@@ -31,7 +31,8 @@ async def async_setup_entry(
 
     # Channel Balance Number Entity
     # WARNING: This uses unofficial API endpoints and may not work on all firmware versions
-    entities.append(WiiMChannelBalance(speaker))
+    # TODO: Enable when ready for production use
+    # entities.append(WiiMChannelBalance(speaker))
 
     async_add_entities(entities)
     _LOGGER.info("Created %d number entities for %s", len(entities), speaker.name)
