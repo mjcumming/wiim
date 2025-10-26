@@ -244,17 +244,15 @@ class WiiMClient:
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Failed loading WiiM CA cert: %s", exc)
 
-        # Audio Pro MkII: Load client certificate for mutual TLS authentication
-        # Required for devices on port 4443 that require client cert validation
-        if self._capabilities.get("requires_client_cert"):
-            try:
-                # Load client certificate and private key for mTLS
-                # This enables authentication to Audio Pro MkII devices on port 4443
-                ctx.load_cert_chain(cadata=AUDIO_PRO_CLIENT_CERT)
-                _LOGGER.debug("Loaded Audio Pro client certificate for Audio Pro MkII authentication")
-            except Exception as exc:  # noqa: BLE001
-                _LOGGER.warning("Failed loading Audio Pro client cert for Audio Pro MkII: %s", exc)
-                # Continue without client cert - connection may still work on other ports
+        # Attempt to load client certificate for mutual TLS authentication when supported.
+        # Many Audio Pro MkII/W devices accept client auth on 4443; servers that don't
+        # require a client certificate will simply ignore it.
+        try:
+            ctx.load_cert_chain(cadata=AUDIO_PRO_CLIENT_CERT)
+            _LOGGER.debug("Loaded client certificate for potential mTLS authentication")
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("Client certificate not loaded (non-fatal): %s", exc)
+            # Continue without client cert - connection may still work on other ports
 
         self.ssl_context = ctx
         return ctx
@@ -500,6 +498,7 @@ class WiiMClient:
                             [
                                 (scheme, 443, self._get_ssl_context()),
                                 (scheme, 4443, self._get_ssl_context()),
+                                (scheme, 8443, self._get_ssl_context()),
                             ]
                         )
                 else:  # http
@@ -917,7 +916,21 @@ class WiiMClient:
                 endpoint = self._capabilities.get("status_endpoint", "/httpapi.asp?command=getStatusEx")
                 _LOGGER.debug("Using Audio Pro MkII fallback endpoint: %s", endpoint)
 
-            raw = await self._request(endpoint)
+            try:
+                raw = await self._request(endpoint)
+            except WiiMRequestError as primary_err:
+                # If getPlayerStatusEx fails (unsupported on some Audio Pro devices), try getStatusEx
+                if endpoint.endswith("getPlayerStatusEx"):
+                    fallback_endpoint = "/httpapi.asp?command=getStatusEx"
+                    _LOGGER.debug(
+                        "Primary status endpoint failed (%s); retrying with fallback %s",
+                        endpoint,
+                        fallback_endpoint,
+                    )
+                    raw = await self._request(fallback_endpoint)
+                else:
+                    raise primary_err
+
             parsed, self._last_track = parse_player_status(raw, self._last_track)
             return parsed
         except Exception as err:

@@ -6,6 +6,21 @@ All notable changes to the WiiM Audio integration will be documented in this fil
   - Automatic protocol detection (HTTP/HTTPS) based on device generation now working
   - HTTP API uncertain to date
 
+## [0.1.41] - 2025-01-27
+
+### Added
+
+- Unofficial API services (Bluetooth scan, channel balance, SPDIF delay, LMS, touch buttons)
+- Channel balance number entity (`number.*_channel_balance`)
+
+### Fixed
+
+- Audio Pro connectivity: add HTTPS 8443 fallback, attempt client cert mTLS on 4443, and auto-fallback from `getPlayerStatusEx` to `getStatusEx`
+
+### Technical
+
+- Improved validation/logging and concise service schemas
+
 ## [0.1.40] - 2025-10-26
 
 ### Fixed

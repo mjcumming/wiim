@@ -173,6 +173,58 @@ async def async_setup_entry(
         "async_sync_time",
     )
 
+    # ===== UNOFFICIAL API SERVICES =====
+    # These services use reverse-engineered endpoints and may not work on all firmware versions
+
+    # Scan Bluetooth service
+    platform.async_register_entity_service(
+        "scan_bluetooth",
+        {vol.Optional("duration", default=3): vol.All(vol.Coerce(int), vol.Range(min=3, max=10))},
+        "async_scan_bluetooth",
+    )
+
+    # Set Channel Balance service
+    platform.async_register_entity_service(
+        "set_channel_balance",
+        {vol.Required("balance"): vol.All(vol.Coerce(float), vol.Range(min=-1.0, max=1.0))},
+        "async_set_channel_balance",
+    )
+
+    # Set SPDIF Delay service
+    platform.async_register_entity_service(
+        "set_spdif_delay",
+        {vol.Required("delay_ms"): vol.All(vol.Coerce(int), vol.Range(min=0, max=3000))},
+        "async_set_spdif_delay",
+    )
+
+    # Discover LMS Servers service
+    platform.async_register_entity_service(
+        "discover_lms_servers",
+        None,
+        "async_discover_lms_servers",
+    )
+
+    # Connect LMS Server service
+    platform.async_register_entity_service(
+        "connect_lms_server",
+        {vol.Required("server_address"): str},
+        "async_connect_lms_server",
+    )
+
+    # Set LMS Auto-Connect service
+    platform.async_register_entity_service(
+        "set_auto_connect_lms",
+        {vol.Required("enabled"): bool},
+        "async_set_auto_connect_lms",
+    )
+
+    # Set Touch Buttons service
+    platform.async_register_entity_service(
+        "set_touch_buttons",
+        {vol.Required("enabled"): bool},
+        "async_set_touch_buttons",
+    )
+
 
 class WiiMMediaPlayer(
     WiimEntity,
@@ -886,6 +938,102 @@ class WiiMMediaPlayer(
             await self.speaker.coordinator.client.sync_time()
         except Exception as err:
             _LOGGER.error("Failed to sync time for %s: %s", self.speaker.name, err)
+            raise
+
+    # ===== UNOFFICIAL API SERVICES =====
+
+    async def async_scan_bluetooth(self, duration: int = 3) -> None:
+        """Scan for nearby Bluetooth devices.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Starting Bluetooth scan for %s (duration: %s seconds)", self.speaker.name, duration)
+            await self.speaker.coordinator.client.start_bluetooth_discovery(duration)
+            _LOGGER.info("Bluetooth scan started successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to start Bluetooth scan for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_set_channel_balance(self, balance: float) -> None:
+        """Set left/right channel balance.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Setting channel balance to %s for %s", balance, self.speaker.name)
+            await self.speaker.coordinator.client.set_channel_balance(balance)
+            _LOGGER.info("Channel balance set successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to set channel balance for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_set_spdif_delay(self, delay_ms: int) -> None:
+        """Set SPDIF sample rate switch delay in milliseconds.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Setting SPDIF delay to %s ms for %s", delay_ms, self.speaker.name)
+            await self.speaker.coordinator.client.set_spdif_switch_delay(delay_ms)
+            _LOGGER.info("SPDIF delay set successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to set SPDIF delay for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_discover_lms_servers(self) -> None:
+        """Discover Lyrion Music Server (LMS) instances on the network.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Starting LMS server discovery for %s", self.speaker.name)
+            await self.speaker.coordinator.client.discover_lms_servers()
+            _LOGGER.info("LMS server discovery started successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to discover LMS servers for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_connect_lms_server(self, server_address: str) -> None:
+        """Connect to a specific Lyrion Music Server instance.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Connecting to LMS server %s for %s", server_address, self.speaker.name)
+            await self.speaker.coordinator.client.connect_to_lms_server(server_address)
+            _LOGGER.info("LMS server connection initiated successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to connect to LMS server for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_set_auto_connect_lms(self, enabled: bool) -> None:
+        """Enable or disable automatic connection to LMS servers.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Setting LMS auto-connect to %s for %s", enabled, self.speaker.name)
+            await self.speaker.coordinator.client.set_auto_connect_enabled(enabled)
+            _LOGGER.info("LMS auto-connect set successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to set LMS auto-connect for %s: %s", self.speaker.name, err)
+            raise
+
+    async def async_set_touch_buttons(self, enabled: bool) -> None:
+        """Enable or disable device touch buttons.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Setting touch buttons to %s for %s", enabled, self.speaker.name)
+            if enabled:
+                await self.speaker.coordinator.client.enable_touch_buttons()
+            else:
+                await self.speaker.coordinator.client.disable_touch_buttons()
+            _LOGGER.info("Touch buttons set successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to set touch buttons for %s: %s", self.speaker.name, err)
             raise
 
     # ===== APP NAME PROPERTY (delegate to mixin) =====
