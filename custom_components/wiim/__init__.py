@@ -272,11 +272,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .firmware_capabilities import detect_device_capabilities
 
     # Create temporary client for capability detection
+    # Use Audio Pro MkII-compatible settings speculatively to handle devices
+    # that require client cert + port 4443 before we can detect capabilities
+    temp_capabilities = {
+        "protocol_priority": ["https", "http"],
+        "preferred_ports": [4443, 8443, 443],  # Try Audio Pro MkII ports first
+    }
     temp_client = WiiMClient(
         host=entry.data["host"],
         port=entry.data.get("port", 443),
         timeout=entry.data.get("timeout", 10),
         session=session,
+        capabilities=temp_capabilities,
     )
 
     # Detect capabilities

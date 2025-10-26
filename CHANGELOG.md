@@ -2,9 +2,13 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
-- **Enhanced Audio Pro Support**: Continue work on supporting Audio Pro devices
-  - Automatic protocol detection (HTTP/HTTPS) based on device generation now working
-  - HTTP API uncertain to date
+## [0.1.42] - 2025-10-26
+
+### Fixed
+
+- **Audio Pro MkII Initial Connection**: Fixed discovery failing to connect to Audio Pro MkII devices
+  - Speculative port 4443 discovery with client certificate during initial setup
+  - Resolves "Failed to communicate" errors on first connection
 
 ## [0.1.41] - 2025-01-27
 
