@@ -289,10 +289,10 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return None, None
 
         # Delegate to the speaker's media controller to fetch the image
-        from .media_controller_media import MediaControllerMedia
+        from .media_controller import MediaPlayerController
 
         # Create a media controller for the speaker to handle image fetching
-        media_controller = MediaControllerMedia(self.speaker)
+        media_controller = MediaPlayerController(self.speaker)
 
         try:
             return await media_controller.get_media_image()
