@@ -131,6 +131,22 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 | `wiim.set_eq`        | Set equalizer presets or custom values  |
 | `wiim.reboot_device` | Reboot device                           |
 
+### Unofficial API Services
+
+⚠️ **Advanced users only** - These services use reverse-engineered API endpoints that may not work on all firmware versions:
+
+| Service                     | Description                         |
+| --------------------------- | ----------------------------------- |
+| `wiim.scan_bluetooth`       | Scan for nearby Bluetooth devices   |
+| `wiim.set_channel_balance`  | Adjust left/right channel balance   |
+| `wiim.set_spdif_delay`      | Set SPDIF sample rate switch delay  |
+| `wiim.discover_lms_servers` | Search for LMS servers on network   |
+| `wiim.connect_lms_server`   | Connect to Lyrion Music Server      |
+| `wiim.set_auto_connect_lms` | Enable/disable LMS auto-connect     |
+| `wiim.set_touch_buttons`    | Enable/disable device touch buttons |
+
+See the [Unofficial/Undocumented Endpoints](development/API_GUIDE.md#-unofficialundocumented-endpoints) section in the API Guide for complete documentation.
+
 ## Source Customization
 
 ### Why Source Renaming Isn't Supported

@@ -19,7 +19,7 @@ import aiohttp
 import async_timeout
 from aiohttp import ClientSession
 
-from .api_constants import WIIM_CA_CERT
+from .api_constants import AUDIO_PRO_CLIENT_CERT, WIIM_CA_CERT
 from .api_parser import parse_player_status
 
 # Core constants that are still required by the remaining methods.
@@ -225,7 +225,10 @@ class WiiMClient:
     # ------------------------------------------------------------------
 
     def _get_ssl_context(self) -> ssl.SSLContext:
-        """Return a permissive SSL context able to talk to WiiM devices."""
+        """Return a permissive SSL context able to talk to WiiM devices.
+
+        For Audio Pro MkII devices, also loads client certificate for mutual TLS authentication.
+        """
         if self.ssl_context is not None:
             return self.ssl_context
 
@@ -240,6 +243,18 @@ class WiiMClient:
             ctx.load_verify_locations(cadata=WIIM_CA_CERT)
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Failed loading WiiM CA cert: %s", exc)
+
+        # Audio Pro MkII: Load client certificate for mutual TLS authentication
+        # Required for devices on port 4443 that require client cert validation
+        if self._capabilities.get("requires_client_cert"):
+            try:
+                # Load client certificate and private key for mTLS
+                # This enables authentication to Audio Pro MkII devices on port 4443
+                ctx.load_cert_chain(cadata=AUDIO_PRO_CLIENT_CERT)
+                _LOGGER.debug("Loaded Audio Pro client certificate for Audio Pro MkII authentication")
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning("Failed loading Audio Pro client cert for Audio Pro MkII: %s", exc)
+                # Continue without client cert - connection may still work on other ports
 
         self.ssl_context = ctx
         return ctx
@@ -469,14 +484,24 @@ class WiiMClient:
         else:
             # Build protocols based on standard ports and priority
             protocols = []
+
+            # Use preferred ports from capabilities if specified (Audio Pro MkII uses 4443)
+            preferred_ports = self._capabilities.get("preferred_ports", [])
+
             for scheme in protocol_priority:
                 if scheme == "https":
-                    protocols.extend(
-                        [
-                            (scheme, 443, self._get_ssl_context()),
-                            (scheme, 4443, self._get_ssl_context()),
-                        ]
-                    )
+                    if preferred_ports:
+                        # Audio Pro MkII: Use preferred ports (4443, 8443, 443)
+                        for port in preferred_ports:
+                            protocols.append((scheme, port, self._get_ssl_context()))
+                    else:
+                        # Standard devices: Try common HTTPS ports
+                        protocols.extend(
+                            [
+                                (scheme, 443, self._get_ssl_context()),
+                                (scheme, 4443, self._get_ssl_context()),
+                            ]
+                        )
                 else:  # http
                     protocols.extend(
                         [
@@ -877,9 +902,22 @@ class WiiMClient:
             return {}
 
     async def get_player_status(self) -> dict[str, Any]:
-        """Return parsed output of *getPlayerStatusEx* with better error handling."""
+        """Return parsed output of getPlayerStatusEx with Audio Pro MkII fallback.
+
+        Audio Pro MkII devices don't support getPlayerStatusEx, so we use getStatusEx instead.
+        The capability system automatically selects the right endpoint.
+        """
         try:
-            raw = await self._request("/httpapi.asp?command=getPlayerStatusEx")
+            # Check if device supports getPlayerStatusEx (most devices do)
+            if self._capabilities.get("supports_player_status_ex", True):
+                # Standard devices use getPlayerStatusEx
+                endpoint = "/httpapi.asp?command=getPlayerStatusEx"
+            else:
+                # Audio Pro MkII uses getStatusEx instead (from capabilities)
+                endpoint = self._capabilities.get("status_endpoint", "/httpapi.asp?command=getStatusEx")
+                _LOGGER.debug("Using Audio Pro MkII fallback endpoint: %s", endpoint)
+
+            raw = await self._request(endpoint)
             parsed, self._last_track = parse_player_status(raw, self._last_track)
             return parsed
         except Exception as err:

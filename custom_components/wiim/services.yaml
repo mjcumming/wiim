@@ -131,3 +131,138 @@ sync_time:
         entity:
           domain: media_player
           integration: wiim
+
+# ===== UNOFFICIAL API SERVICES =====
+# These services use reverse-engineered endpoints and may not work on all firmware versions
+
+scan_bluetooth:
+  name: Scan for Bluetooth Devices
+  description: >
+    Scan for nearby Bluetooth devices.
+
+    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
+    The scan typically takes 3-10 seconds. Results are not returned by this service.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    duration:
+      name: Scan Duration
+      description: How long to scan in seconds (3-10 recommended)
+      required: false
+      selector:
+        number:
+          min: 3
+          max: 10
+      default: 3
+
+set_channel_balance:
+  name: Set Channel Balance
+  description: >
+    Adjust left/right channel balance.
+
+    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    balance:
+      name: Balance
+      description: Balance from -1.0 (full left) to 1.0 (full right), 0.0 is center
+      required: true
+      selector:
+        number:
+          min: -1.0
+          max: 1.0
+          step: 0.1
+
+set_spdif_delay:
+  name: Set SPDIF Switch Delay
+  description: >
+    Set SPDIF sample rate switch latency in milliseconds.
+
+    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
+    Only relevant when using SPDIF optical output.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    delay_ms:
+      name: Delay (ms)
+      description: Switch delay in milliseconds (0-3000)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 3000
+
+discover_lms_servers:
+  name: Discover LMS Servers
+  description: >
+    Search for Lyrion Music Server (Logitech Media Server) instances on the network.
+
+    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
+    This triggers Squeezelite to search for LMS servers.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+
+connect_lms_server:
+  name: Connect to LMS Server
+  description: >
+    Connect to a specific Lyrion Music Server instance.
+
+    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
+    This configures Squeezelite to connect to the specified LMS server.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    server_address:
+      name: Server Address
+      description: LMS server IP address (with optional port, e.g., "192.168.1.123:3483")
+      required: true
+      selector:
+        text:
+
+set_auto_connect_lms:
+  name: Set LMS Auto-Connect
+  description: >
+    Enable or disable automatic connection to LMS servers.
+
+    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    enabled:
+      name: Auto-Connect
+      description: Whether to automatically connect to previously connected LMS servers
+      required: true
+      selector:
+        boolean:
+
+set_touch_buttons:
+  name: Set Touch Button Controls
+  description: >
+    Enable or disable the physical touch buttons on the device.
+
+    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
+    This controls the hardware buttons, not Home Assistant button entities.
+  target:
+    entity:
+      domain: media_player
+      integration: wiim
+  fields:
+    enabled:
+      name: Enable Buttons
+      description: Whether to enable the touch buttons on the device
+      required: true
+      selector:
+        boolean:

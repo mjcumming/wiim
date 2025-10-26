@@ -150,14 +150,14 @@ def test_original_bug_scenario():
         urlsplit(old_url)
         print("  ✅ Old buggy logic works with bracketed endpoint (expected)")
     except ValueError as e:
-        raise AssertionError(f"Old buggy logic fails with bracketed endpoint: {e}")
+        raise AssertionError(f"Old buggy logic fails with bracketed endpoint: {e}") from e
 
     try:
         new_url = new_fixed_logic(endpoint_with_brackets)
         urlsplit(new_url)
         print("  ✅ New fixed logic works with bracketed endpoint")
     except ValueError as e:
-        raise AssertionError(f"New fixed logic fails with bracketed endpoint: {e}")
+        raise AssertionError(f"New fixed logic fails with bracketed endpoint: {e}") from e
 
     # Test with endpoint that does NOT have brackets (this is where the bug occurred)
     # This simulates what happens when urlsplit extracts hostname without brackets
@@ -173,7 +173,7 @@ def test_original_bug_scenario():
         if "Invalid IPv6 URL" in str(e) or "Port could not be cast to integer value" in str(e):
             print("  ✅ Malformed IPv6 URL correctly fails with parsing error")
         else:
-            raise AssertionError(f"Malformed IPv6 URL fails with different error: {e}")
+            raise AssertionError(f"Malformed IPv6 URL fails with different error: {e}") from e
 
     # Test the scenario where urlsplit extracts hostname without brackets
     # and then we reconstruct the URL
@@ -191,7 +191,7 @@ def test_original_bug_scenario():
         if "Invalid IPv6 URL" in str(e) or "Port could not be cast to integer value" in str(e):
             print("  ✅ Old buggy reconstruction correctly fails with 'Invalid IPv6 URL'")
         else:
-            raise AssertionError(f"Old buggy reconstruction fails with different error: {e}")
+            raise AssertionError(f"Old buggy reconstruction fails with different error: {e}") from e
 
     # NEW fixed reconstruction:
     hostname_fixed = f"[{hostname_without_brackets}]" if ":" in hostname_without_brackets else hostname_without_brackets
@@ -202,9 +202,9 @@ def test_original_bug_scenario():
         print(f"     Fixed URL: {new_reconstructed}")
     except ValueError as e:
         if "Invalid IPv6 URL" in str(e):
-            raise AssertionError(f"New fixed reconstruction still fails with 'Invalid IPv6 URL': {e}")
+            raise AssertionError(f"New fixed reconstruction still fails with 'Invalid IPv6 URL': {e}") from e
         else:
-            raise AssertionError(f"New fixed reconstruction fails with different error: {e}")
+            raise AssertionError(f"New fixed reconstruction fails with different error: {e}") from e
 
 
 def main():

@@ -365,7 +365,7 @@ class TestSensorConstants:
             "bit_rate": "mdi:transmission-tower",
         }
 
-        for sensor_type, expected_icon in expected_icons.items():
+        for _sensor_type, expected_icon in expected_icons.items():
             # Verify icon format is correct
             assert expected_icon.startswith("mdi:")
             assert len(expected_icon) > 4
@@ -379,7 +379,7 @@ class TestSensorConstants:
             "bit_rate": "kbps",
         }
 
-        for sensor_type, expected_unit in expected_units.items():
+        for _sensor_type, expected_unit in expected_units.items():
             assert isinstance(expected_unit, str)
             assert len(expected_unit) > 0
 
@@ -396,7 +396,7 @@ class TestSensorErrorHandling:
             (None, "should handle None data"),
         ]
 
-        for data, description in test_cases:
+        for data, _description in test_cases:
             # Simulate sensor handling missing data
             if data is None:
                 # Should return None or default values
@@ -416,7 +416,7 @@ class TestSensorErrorHandling:
             "http_500",
         ]
 
-        for error_type in error_scenarios:
+        for _error_type in error_scenarios:
             # Simulate error handling
             # Sensors should gracefully handle errors and return appropriate states
             assert True  # Placeholder - would depend on specific sensor logic
@@ -448,7 +448,7 @@ class TestSensorPlatformIntegration:
             ("Test WiiM", "test-speaker-uuid", "Test WiiM Bluetooth Output"),
         ]
 
-        for speaker_name, uuid, expected_name in test_cases:
+        for speaker_name, _uuid, expected_name in test_cases:
             # Simulate name generation logic
             if "Multiroom Role" in expected_name:
                 name = f"{speaker_name} Multiroom Role"

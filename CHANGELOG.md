@@ -6,7 +6,50 @@ All notable changes to the WiiM Audio integration will be documented in this fil
   - Automatic protocol detection (HTTP/HTTPS) based on device generation now working
   - HTTP API uncertain to date
 
-## [0.1.38] - 2025.01.27
+## [0.1.39] - 2025.10.26
+
+### Added
+
+- **Unofficial API Endpoints Support**: Added support for reverse-engineered WiiM HTTP API endpoints
+
+  - Bluetooth device scanning and discovery
+  - Audio settings (SPDIF sample rate, channel balance)
+  - Squeezelite/Lyrion Music Server (LMS) integration
+  - Touch button controls and alternative LED methods
+  - All endpoints clearly marked as unofficial and may not work on all firmware versions
+
+- **New Home Assistant Services**:
+  - `wiim.scan_bluetooth` - Scan for nearby Bluetooth devices
+  - `wiim.set_channel_balance` - Adjust left/right channel balance
+  - `wiim.set_spdif_delay` - Set SPDIF sample rate switch delay
+  - `wiim.discover_lms_servers` - Search for LMS servers on network
+  - `wiim.connect_lms_server` - Connect to Lyrion Music Server
+  - `wiim.set_auto_connect_lms` - Enable/disable LMS auto-connect
+  - `wiim.set_touch_buttons` - Enable/disable device touch buttons
+
+### Fixed
+
+- **Audio Pro MkII Support**: Added full support for Audio Pro MkII devices (A10 MkII, A15 MkII, A28, C10 MkII)
+  - Client certificate authentication (mTLS) on port 4443
+  - Automatic protocol/port detection (4443 → 8443 → 443)
+  - API endpoint fallbacks for limited command set
+  - Generation-specific capability profiles
+
+### Documentation
+
+- **Unofficial API Documentation**: Added comprehensive documentation for reverse-engineered endpoints
+- **Service Examples**: Added automation examples for new services in user guide
+- **Safety Warnings**: Clear warnings about firmware compatibility and testing requirements
+
+### Technical
+
+- **Modular API Architecture**: Extended the mixin-based API architecture with new modules (BluetoothAPI, AudioSettingsAPI, LMSAPI, MiscAPI)
+- **Audio Pro Response Handling**: Added generation-aware response validation and normalization
+- **Device Capability Detection**: Enhanced firmware capability detection for Audio Pro devices
+- **Error Handling**: Improved error handling with proper WiiM-specific exceptions
+- **Code Quality**: Enhanced linting compliance and consistent code style
+
+## [0.1.38] - 2025.10.25
 
 ### Fixed
 

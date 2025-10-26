@@ -89,8 +89,15 @@ class WiiMFirmwareCapabilities:
                 capabilities["supports_enhanced_grouping"] = False
                 capabilities["response_timeout"] = 6.0  # Medium timeout for MkII
                 capabilities["retry_count"] = 3
-                capabilities["supports_metadata"] = False
+                capabilities["supports_metadata"] = False  # getMetaInfo not supported
                 capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first for MkII
+                # Audio Pro MkII specific: requires client certificate for mTLS on port 4443
+                capabilities["requires_client_cert"] = True
+                capabilities["preferred_ports"] = [4443, 8443, 443]  # Port 4443 primary
+                capabilities["supports_player_status_ex"] = False  # Use getStatusEx instead
+                capabilities["supports_presets"] = False  # getPresetInfo not supported
+                capabilities["supports_eq"] = False  # EQ commands not supported
+                capabilities["status_endpoint"] = "/httpapi.asp?command=getStatusEx"
             elif audio_pro_generation == "w_generation":
                 capabilities["supports_enhanced_grouping"] = True  # W-gen supports enhanced features
                 capabilities["response_timeout"] = 4.0  # Faster for W-gen
@@ -206,6 +213,14 @@ def detect_device_capabilities(device_info: DeviceInfo) -> dict[str, Any]:
             capabilities["response_timeout"] = 6.0
             capabilities["retry_count"] = 3
             capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first for MkII
+            # Audio Pro MkII specific: requires client certificate for mTLS on port 4443
+            capabilities["requires_client_cert"] = True
+            capabilities["preferred_ports"] = [4443, 8443, 443]  # Port 4443 primary
+            capabilities["supports_player_status_ex"] = False  # Use getStatusEx instead
+            capabilities["supports_presets"] = False  # getPresetInfo not supported
+            capabilities["supports_eq"] = False  # EQ commands not supported
+            capabilities["supports_metadata"] = False  # getMetaInfo not supported
+            capabilities["status_endpoint"] = "/httpapi.asp?command=getStatusEx"
         elif generation == "w_generation":
             capabilities["supports_enhanced_grouping"] = True
             capabilities["response_timeout"] = 4.0

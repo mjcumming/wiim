@@ -1,7 +1,8 @@
 """Unit tests for WiiM number platform."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestNumberPlatformSetup:

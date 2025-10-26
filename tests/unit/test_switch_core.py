@@ -19,7 +19,7 @@ class TestSwitchConstants:
         assert "jazz" in EQ_PRESET_MAP
 
         # Test preset values are strings
-        for key, value in EQ_PRESET_MAP.items():
+        for _key, value in EQ_PRESET_MAP.items():
             assert isinstance(value, str)
             assert len(value) > 0
 
@@ -190,7 +190,7 @@ class TestSwitchPlatformIntegration:
             ("Test WiiM", "test-speaker-uuid", "Test WiiM Equalizer"),
         ]
 
-        for speaker_name, uuid, expected_name in test_cases:
+        for speaker_name, _uuid, expected_name in test_cases:
             # Simulate name generation logic
             name = f"{speaker_name} Equalizer"
             assert name == expected_name
@@ -214,7 +214,7 @@ class TestSwitchPlatformIntegration:
             "equalizer": "mdi:equalizer",
         }
 
-        for switch_type, expected_icon in expected_icons.items():
+        for _switch_type, expected_icon in expected_icons.items():
             # Verify icon format is correct
             assert expected_icon.startswith("mdi:")
             assert len(expected_icon) > 4
@@ -246,7 +246,7 @@ class TestSwitchErrorHandling:
             (None, "should handle None data"),
         ]
 
-        for data, description in test_cases:
+        for data, _description in test_cases:
             # Simulate switch handling missing data
             if data is None:
                 # Should return None or default values
@@ -266,7 +266,7 @@ class TestSwitchErrorHandling:
             "http_500",
         ]
 
-        for error_type in error_scenarios:
+        for _error_type in error_scenarios:
             # Simulate error handling
             # Switches should gracefully handle errors
             assert True  # Placeholder - would depend on specific switch logic

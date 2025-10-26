@@ -1,8 +1,9 @@
 """Unit tests for WiiM media image cache."""
 
-import pytest
-import aiohttp
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import aiohttp
+import pytest
 
 
 class TestMediaImageCache:

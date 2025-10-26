@@ -305,3 +305,27 @@ LATEST_VERSION_KEY = "latest_version"
 PROJECT_KEY = "project"
 
 API_ENDPOINT_PRESET_INFO = "/httpapi.asp?command=getPresetInfo"
+
+# ===== UNOFFICIAL API ENDPOINTS =====
+# These endpoints are not officially documented and may change in future firmware updates
+
+
+# Bluetooth Operations (Unofficial)
+API_ENDPOINT_START_BT_DISCOVERY = "/httpapi.asp?command=startbtdiscovery:"
+API_ENDPOINT_GET_BT_DISCOVERY_RESULT = "/httpapi.asp?command=getbtdiscoveryresult"
+
+# Audio Settings (Unofficial)
+API_ENDPOINT_GET_SPDIF_SAMPLE_RATE = "/httpapi.asp?command=getSpdifOutSampleRate"
+API_ENDPOINT_SET_SPDIF_SWITCH_DELAY = "/httpapi.asp?command=setSpdifOutSwitchDelayMs:"
+API_ENDPOINT_GET_CHANNEL_BALANCE = "/httpapi.asp?command=getChannelBalance"
+API_ENDPOINT_SET_CHANNEL_BALANCE = "/httpapi.asp?command=setChannelBalance:"
+
+# Squeezelite/LMS Integration (Unofficial)
+API_ENDPOINT_SQUEEZELITE_STATE = "/httpapi.asp?command=Squeezelite:getState"
+API_ENDPOINT_SQUEEZELITE_DISCOVER = "/httpapi.asp?command=Squeezelite:discover"
+API_ENDPOINT_SQUEEZELITE_AUTO_CONNECT = "/httpapi.asp?command=Squeezelite:autoConnectEnable:"
+API_ENDPOINT_SQUEEZELITE_CONNECT_SERVER = "/httpapi.asp?command=Squeezelite:connectServer:"
+
+# Miscellaneous Operations (Unofficial)
+API_ENDPOINT_SET_LED = "/httpapi.asp?command=LED_SWITCH_SET:"
+API_ENDPOINT_SET_BUTTONS = "/httpapi.asp?command=Button_Enable_SET:"

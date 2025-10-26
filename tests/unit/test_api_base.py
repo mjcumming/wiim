@@ -1,8 +1,9 @@
 """Unit tests for WiiM API base client."""
 
-import pytest
 import ssl
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestWiiMExceptions:
@@ -18,7 +19,7 @@ class TestWiiMExceptions:
 
     def test_wiim_request_error(self):
         """Test WiiMRequestError exception."""
-        from custom_components.wiim.api_base import WiiMRequestError, WiiMError
+        from custom_components.wiim.api_base import WiiMError, WiiMRequestError
 
         error = WiiMRequestError("Request failed")
         assert str(error) == "Request failed"
@@ -26,7 +27,7 @@ class TestWiiMExceptions:
 
     def test_wiim_timeout_error(self):
         """Test WiiMTimeoutError exception."""
-        from custom_components.wiim.api_base import WiiMTimeoutError, WiiMRequestError
+        from custom_components.wiim.api_base import WiiMRequestError, WiiMTimeoutError
 
         error = WiiMTimeoutError("Request timed out")
         assert str(error) == "Request timed out"
@@ -42,7 +43,7 @@ class TestWiiMExceptions:
 
     def test_wiim_invalid_data_error(self):
         """Test WiiMInvalidDataError exception."""
-        from custom_components.wiim.api_base import WiiMInvalidDataError, WiiMError
+        from custom_components.wiim.api_base import WiiMError, WiiMInvalidDataError
 
         error = WiiMInvalidDataError("Invalid data")
         assert str(error) == "Invalid data"
@@ -130,8 +131,9 @@ class TestWiiMClientInitialization:
 
     async def test_client_init_with_session(self):
         """Test client initialization with aiohttp session."""
-        from custom_components.wiim.api_base import WiiMClient
         import aiohttp
+
+        from custom_components.wiim.api_base import WiiMClient
 
         async with aiohttp.ClientSession() as session:
             client = WiiMClient("192.168.1.100", session=session)
@@ -276,8 +278,9 @@ class TestWiiMClientRequestHandling:
     @pytest.mark.asyncio
     async def test_request_retry_logic(self):
         """Test request retry logic with failures."""
-        from custom_components.wiim.api_base import WiiMClient
         import aiohttp
+
+        from custom_components.wiim.api_base import WiiMClient
 
         client = WiiMClient("192.168.1.100")
 
@@ -308,8 +311,9 @@ class TestWiiMClientRequestHandling:
     @pytest.mark.asyncio
     async def test_request_max_retries_exceeded(self):
         """Test request when max retries exceeded."""
-        from custom_components.wiim.api_base import WiiMClient, WiiMRequestError
         import aiohttp
+
+        from custom_components.wiim.api_base import WiiMClient, WiiMRequestError
 
         client = WiiMClient("192.168.1.100")
 
@@ -608,8 +612,9 @@ class TestWiiMClientIPv6Handling:
 
     def test_ipv6_url_construction_fast_path(self):
         """Test IPv6 URL construction in fast-path (established endpoint)."""
-        from custom_components.wiim.api_base import WiiMClient
         from urllib.parse import urlsplit
+
+        from custom_components.wiim.api_base import WiiMClient
 
         # Test IPv6 client
         client = WiiMClient("2001:db8::1")
@@ -636,8 +641,9 @@ class TestWiiMClientIPv6Handling:
 
     def test_ipv6_url_construction_protocol_fallback(self):
         """Test IPv6 URL construction in protocol fallback path."""
-        from custom_components.wiim.api_base import WiiMClient
         from urllib.parse import urlsplit
+
+        from custom_components.wiim.api_base import WiiMClient
 
         # Test IPv6 client
         client = WiiMClient("2001:db8::1")
@@ -661,8 +667,9 @@ class TestWiiMClientIPv6Handling:
 
     def test_ipv6_bracketed_url_construction(self):
         """Test IPv6 URL construction with already bracketed IPv6."""
-        from custom_components.wiim.api_base import WiiMClient
         from urllib.parse import urlsplit
+
+        from custom_components.wiim.api_base import WiiMClient
 
         # Test IPv6 client with brackets
         client = WiiMClient("[2001:db8::1]")
@@ -712,8 +719,9 @@ class TestWiiMClientIPv6Handling:
 
     def test_ipv6_edge_cases(self):
         """Test various IPv6 edge cases."""
-        from custom_components.wiim.api_base import WiiMClient
         from urllib.parse import urlsplit
+
+        from custom_components.wiim.api_base import WiiMClient
 
         test_cases = [
             "::1",  # Localhost IPv6
@@ -745,8 +753,9 @@ class TestWiiMClientIPv6Handling:
     @pytest.mark.asyncio
     async def test_ipv6_request_simulation(self):
         """Test simulated IPv6 request to catch URL construction bugs."""
+        from unittest.mock import AsyncMock, patch
+
         from custom_components.wiim.api_base import WiiMClient
-        from unittest.mock import patch, AsyncMock
 
         client = WiiMClient("2001:db8::1")
 

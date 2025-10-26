@@ -1,6 +1,7 @@
 """Unit tests for WiiM binary sensor platform."""
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 

@@ -1,7 +1,8 @@
 """Unit tests for WiiM select platform."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestWiiMOutputModeSelect:

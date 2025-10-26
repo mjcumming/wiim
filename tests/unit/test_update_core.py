@@ -1,7 +1,8 @@
 """Unit tests for WiiM update platform core logic."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestUpdatePlatformSetup:
@@ -192,7 +193,7 @@ class TestUpdateEntityConfiguration:
             ("Test WiiM", "Firmware Update"),
         ]
 
-        for speaker_name, expected_name in test_cases:
+        for _speaker_name, expected_name in test_cases:
             # Simulate name generation
             name = "Firmware Update"
             assert name == expected_name
@@ -313,7 +314,7 @@ class TestUpdateErrorHandling:
             (MagicMock(), "should handle mock device model"),
         ]
 
-        for device_model, description in test_cases:
+        for device_model, _description in test_cases:
             # Simulate update entity handling missing device model
             if device_model is None:
                 # Should return None for version properties
@@ -331,7 +332,7 @@ class TestUpdateErrorHandling:
             "ssl_handshake_failure",
         ]
 
-        for error_type in error_scenarios:
+        for _error_type in error_scenarios:
             # Simulate error handling
             # Update entity should gracefully handle errors
             assert True  # Placeholder - would depend on specific logic

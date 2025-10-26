@@ -1,8 +1,8 @@
 """Unit tests for WiiM integration core functions."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from homeassistant.const import Platform
 
 
@@ -46,7 +46,7 @@ class TestPlatformConstants:
         for platform in CORE_PLATFORMS:
             assert hasattr(Platform, platform.name)
 
-        for config_key, platform in OPTIONAL_PLATFORMS.items():
+        for _config_key, platform in OPTIONAL_PLATFORMS.items():
             assert hasattr(Platform, platform.name)
 
 
@@ -589,10 +589,10 @@ class TestServiceRegistration:
 
     def test_service_function_signatures(self):
         """Test service function signatures."""
-        from custom_components.wiim import _reboot_device_service, _sync_time_service
-
         # Check function signatures
         import inspect
+
+        from custom_components.wiim import _reboot_device_service, _sync_time_service
 
         reboot_sig = inspect.signature(_reboot_device_service)
         sync_sig = inspect.signature(_sync_time_service)
@@ -625,10 +625,10 @@ class TestCoreIntegration:
         from custom_components.wiim import (
             CORE_PLATFORMS,
             OPTIONAL_PLATFORMS,
-            get_enabled_platforms,
-            _update_listener,
             _reboot_device_service,
             _sync_time_service,
+            _update_listener,
+            get_enabled_platforms,
         )
 
         # All core functions should be importable

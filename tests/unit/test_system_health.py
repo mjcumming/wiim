@@ -1,7 +1,8 @@
 """Unit tests for WiiM system health."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestSystemHealthRegistration:
@@ -239,10 +240,10 @@ class TestSystemHealthIntegration:
 
     def test_system_health_info_function_signature(self):
         """Test system health info function signature."""
-        from custom_components.wiim.system_health import system_health_info
-
         # Check that the function is async and has correct signature
         import inspect
+
+        from custom_components.wiim.system_health import system_health_info
 
         sig = inspect.signature(system_health_info)
         params = list(sig.parameters.keys())

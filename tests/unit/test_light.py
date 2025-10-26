@@ -1,6 +1,7 @@
 """Unit tests for WiiM light platform."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 

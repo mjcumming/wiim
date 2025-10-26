@@ -1,6 +1,6 @@
 """Test WiiM group media player entity."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -187,7 +187,7 @@ def test_media_properties_available(group_media_player, mock_speaker):
     assert group_media_player.media_duration == 180
     assert group_media_player.media_position == 30
     # media_position_updated_at now returns datetime object, not float
-    expected_dt = datetime.fromtimestamp(1234567890.0, tz=timezone.utc)
+    expected_dt = datetime.fromtimestamp(1234567890.0, tz=UTC)
     assert group_media_player.media_position_updated_at == expected_dt
     assert group_media_player.media_image_url == "http://example.com/image.jpg"
     assert group_media_player.media_image_remotely_accessible is False

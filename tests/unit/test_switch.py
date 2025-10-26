@@ -1,7 +1,8 @@
 """Unit tests for WiiM switch platform."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestSwitchConstants:
@@ -21,7 +22,7 @@ class TestSwitchConstants:
         assert "pop" in EQ_PRESET_MAP
 
         # Test preset values are strings
-        for key, value in EQ_PRESET_MAP.items():
+        for _key, value in EQ_PRESET_MAP.items():
             assert isinstance(value, str)
             assert len(value) > 0
 
