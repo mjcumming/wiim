@@ -15,6 +15,12 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Successfully resolves GitHub issue: "most stubborn speaker in the world"
   - Addresses repeated "Failed to communicate with [IP]" error messages during setup
 
+### Testing
+
+- **Setup Retry Testing**: Added test to verify logging escalation works correctly
+  - Ensures logging levels adjust properly for multiple consecutive retry attempts
+  - Prevents regression of log spam issue in the future
+
 ## [0.1.44] - 2025-10-27
 
 ### Fixed

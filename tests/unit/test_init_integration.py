@@ -1,6 +1,7 @@
 """Integration tests for WiiM integration setup and teardown."""
 
-from unittest.mock import patch
+import logging
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -9,6 +10,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.wiim.api import WiiMConnectionError
 from custom_components.wiim.const import DOMAIN
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
@@ -35,6 +37,60 @@ class TestIntegrationSetup:
             await hass.async_block_till_done()
 
             assert entry.state is ConfigEntryState.SETUP_RETRY
+
+    @pytest.mark.asyncio
+    async def test_setup_logging_escalation(self, hass: HomeAssistant) -> None:
+        """Test that logging escalates properly for persistent connection failures."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        # Track log calls
+        warning_calls = []
+        debug_calls = []
+        error_calls = []
+
+        # Mock the logger to track calls
+        with patch("custom_components.wiim.__init__._LOGGER.warning") as mock_warning:
+            with patch("custom_components.wiim.__init__._LOGGER.debug") as mock_debug:
+                with patch("custom_components.wiim.__init__._LOGGER.error") as mock_error:
+                    with patch(
+                        "custom_components.wiim.coordinator.WiiMCoordinator.async_config_entry_first_refresh",
+                        side_effect=WiiMConnectionError("Connection failed"),
+                    ):
+                        # Simulate multiple retry attempts
+                        for attempt in range(1, 6):
+                            entry._setup_retry_count = attempt - 1
+                            try:
+                                await hass.config_entries.async_setup(entry.entry_id)
+                                await hass.async_block_till_done()
+                            except Exception:
+                                pass  # Expected to fail
+
+                            # Check which log level was used based on attempt count
+                            if attempt <= 2:
+                                # First 2 attempts should use warning
+                                warning_calls.extend(mock_warning.call_args_list)
+                            elif attempt <= 4:
+                                # Attempts 3-4 should use debug
+                                debug_calls.extend(mock_debug.call_args_list)
+                            else:
+                                # Attempts 5+ should use error
+                                error_calls.extend(mock_error.call_args_list)
+
+                            # Reset for next iteration
+                            mock_warning.reset_mock()
+                            mock_debug.reset_mock()
+                            mock_error.reset_mock()
+
+        # Verify logging escalation
+        assert len(warning_calls) == 2, "First 2 attempts should log at WARNING level"
+        assert len(debug_calls) == 2, "Attempts 3-4 should log at DEBUG level"
+        assert len(error_calls) == 1, "Attempt 5+ should log at ERROR level"
 
     @pytest.mark.asyncio
     async def test_device_creation(self, hass: HomeAssistant, bypass_get_data) -> None:
