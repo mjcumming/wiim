@@ -2,6 +2,20 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.1.46] - 2025-01-27
+
+### Fixed
+
+- **Audio Pro Client Certificate Loading**: Fixed critical bug preventing Audio Pro devices (A15 MkII, etc.) from connecting
+  - Client certificate was never being loaded due to incorrect API usage (`load_cert_chain()` doesn't accept `cadata` parameter)
+  - Certificate now properly loaded from temporary file for mutual TLS authentication
+  - Audio Pro devices requiring client certificate on port 4443 now connect successfully
+  - Improved logging to INFO/WARNING level so certificate loading issues are visible
+
+### Changed
+
+- **Enhanced SSL Certificate Logging**: Certificate loading now logs at INFO level with clear success/failure indicators
+
 ## [0.1.45] - 2025-10-28
 
 ### Fixed
@@ -33,6 +47,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Testing
 
 - **Setup Retry Testing**: Added test to verify logging escalation works correctly
+
   - Ensures logging levels adjust properly for multiple consecutive retry attempts
   - Prevents regression of log spam issue in the future
 

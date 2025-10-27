@@ -12,7 +12,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import ssl
+import tempfile
 from typing import Any
 
 import aiohttp
@@ -248,10 +250,23 @@ class WiiMClient:
         # Many Audio Pro MkII/W devices accept client auth on 4443; servers that don't
         # require a client certificate will simply ignore it.
         try:
-            ctx.load_cert_chain(cadata=AUDIO_PRO_CLIENT_CERT)
-            _LOGGER.debug("Loaded client certificate for potential mTLS authentication")
+            # Create temporary files from the embedded PEM string since load_cert_chain() requires file paths
+            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pem") as cert_file:
+                cert_file.write(AUDIO_PRO_CLIENT_CERT)
+                cert_temp_path = cert_file.name
+
+            # Load certificate from temporary file
+            ctx.load_cert_chain(cert_temp_path)
+            _LOGGER.info("✓ Client certificate loaded for mutual TLS authentication (Audio Pro devices)")
+
+            # Clean up temporary file
+            try:
+                os.unlink(cert_temp_path)
+            except Exception:
+                pass  # Ignore cleanup errors
+
         except Exception as exc:  # noqa: BLE001
-            _LOGGER.debug("Client certificate not loaded (non-fatal): %s", exc)
+            _LOGGER.warning("✗ Failed to load client certificate for mTLS: %s", exc)
             # Continue without client cert - connection may still work on other ports
 
         self.ssl_context = ctx
