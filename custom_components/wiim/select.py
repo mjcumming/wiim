@@ -32,7 +32,11 @@ async def async_setup_entry(
     capabilities = getattr(speaker.coordinator, "_capabilities", {})
 
     # Fallback: check client capabilities for backward compatibility
-    if not capabilities and hasattr(speaker.coordinator, "client") and hasattr(speaker.coordinator.client, "capabilities"):
+    if (
+        not capabilities
+        and hasattr(speaker.coordinator, "client")
+        and hasattr(speaker.coordinator.client, "capabilities")
+    ):
         capabilities = speaker.coordinator.client.capabilities
 
     if capabilities:
