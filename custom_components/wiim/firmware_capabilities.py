@@ -81,6 +81,7 @@ class WiiMFirmwareCapabilities:
         # Set capabilities based on device type
         if capabilities["is_wiim_device"]:
             capabilities["supports_enhanced_grouping"] = True
+            capabilities["supports_audio_output"] = True  # All WiiM devices support audio output control
             capabilities["response_timeout"] = 2.0  # Faster for WiiM
             capabilities["retry_count"] = 2
         elif capabilities["is_legacy_device"]:
@@ -142,13 +143,19 @@ class WiiMFirmwareCapabilities:
                 "[AUDIO OUTPUT DEBUG] Device %s supports getNewAudioOutputHardwareMode, result: %s", client.host, result
             )
         except WiiMError as e:
-            # Log the failure with details to help diagnose issues
-            capabilities["supports_audio_output"] = False
-            _LOGGER.warning(
-                "[AUDIO OUTPUT DEBUG] Device %s getNewAudioOutputHardwareMode probe failed: %s - audio output entities will not be created",
-                client.host,
-                e,
-            )
+            # Only disable if not already determined to be supported (e.g., WiiM devices)
+            if not capabilities.get("supports_audio_output", False):
+                capabilities["supports_audio_output"] = False
+                _LOGGER.warning(
+                    "[AUDIO OUTPUT DEBUG] Device %s getNewAudioOutputHardwareMode probe failed: %s - audio output entities will not be created",
+                    client.host,
+                    e,
+                )
+            else:
+                _LOGGER.debug(
+                    "[AUDIO OUTPUT DEBUG] Device %s getNewAudioOutputHardwareMode probe failed but audio output already determined to be supported",
+                    client.host,
+                )
 
         self._capabilities[device_id] = capabilities
         _LOGGER.info(

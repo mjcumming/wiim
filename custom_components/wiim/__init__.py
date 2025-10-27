@@ -105,6 +105,10 @@ def get_enabled_platforms(
                 # Capabilities are stored in coordinator but not in client
                 capabilities = getattr(coordinator, "_capabilities", {})
 
+                # Fallback: check client capabilities for backward compatibility
+                if not capabilities and hasattr(coordinator, "client") and hasattr(coordinator.client, "capabilities"):
+                    capabilities = coordinator.client.capabilities
+
     if capabilities:
         supports_audio_output = capabilities.get("supports_audio_output", False)
         _LOGGER.debug(
@@ -295,6 +299,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry.data["host"],
             capabilities.get("device_type", "Unknown"),
         )
+        # Log audio output capability specifically for debugging
+        if capabilities.get("supports_audio_output"):
+            _LOGGER.info("[AUDIO OUTPUT] Device %s supports audio output control", entry.data["host"])
+        else:
+            _LOGGER.info(
+                "[AUDIO OUTPUT] Device %s does not support audio output control (is_wiim=%s, is_legacy=%s)",
+                entry.data["host"],
+                capabilities.get("is_wiim_device", False),
+                capabilities.get("is_legacy_device", False),
+            )
     except Exception as err:
         _LOGGER.warning("Failed to detect device capabilities for %s: %s", entry.data["host"], err)
         capabilities = {}
