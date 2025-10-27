@@ -28,17 +28,24 @@ async def async_setup_entry(
     entities = []
 
     # Check if device supports audio output before creating select entity
-    if hasattr(speaker.coordinator.client, "capabilities"):
-        capabilities = speaker.coordinator.client.capabilities
-        supports_audio_output = capabilities.get("supports_audio_output", True)
+    # Access capabilities from coordinator where they're properly stored
+    capabilities = getattr(speaker.coordinator, "_capabilities", {})
+    if capabilities:
+        supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
         if supports_audio_output:
             # Audio Output Mode Select
             entities.append(WiiMOutputModeSelect(speaker))
+            _LOGGER.debug("Creating audio output select entity - device supports audio output")
         else:
-            _LOGGER.debug("Skipping audio output select entity - device does not support audio output")
+            _LOGGER.debug(
+                "Skipping audio output select entity - device does not support audio output (capability=%s)",
+                supports_audio_output,
+            )
     else:
-        # Fallback: create entity if capabilities not available (assume supported)
-        _LOGGER.debug("Capabilities not available, creating audio output select entity as fallback")
+        # Fallback: create entity if capabilities not available (assume supported for backwards compatibility)
+        _LOGGER.warning(
+            "Capabilities not available for %s - creating audio output select entity as fallback", speaker.name
+        )
         entities.append(WiiMOutputModeSelect(speaker))
 
     async_add_entities(entities)
