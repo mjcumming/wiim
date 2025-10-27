@@ -525,10 +525,10 @@ class WiiMClient:
                     [
                         # Re-add common ports with higher priority for Audio Pro
                         ("https", 443, self._get_ssl_context()),
+                        ("https", 4443, self._get_ssl_context()),
+                        ("https", 8443, self._get_ssl_context()),
                         ("http", 80, None),
-                        # Try common alternative ports for Audio Pro devices
-                        ("https", 8080, self._get_ssl_context()),
-                        ("http", 443, None),
+                        ("http", 8080, None),
                         # Some Audio Pro devices may use port 8888
                         ("http", 8888, None),
                         ("https", 8888, self._get_ssl_context()),

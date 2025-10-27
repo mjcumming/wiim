@@ -2,6 +2,15 @@
 
 All notable changes to the WiiM Audio integration will be documented in this file.
 
+## [0.1.43] - 2025-10-27
+
+### Fixed
+
+- **Audio Pro Connectivity Regression**: Fixed protocol/port mismatch in fallback logic
+  - Corrected HTTPS/HTTP port assignments (HTTPS on 443/4443/8443, HTTP on 80/8080)
+  - Resolves "Cannot connect to host" errors after primary connection attempts fail
+  - Addresses GitHub issue #80
+
 ## [0.1.42] - 2025-10-26
 
 ### Fixed
