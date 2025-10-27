@@ -364,22 +364,66 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Complete speaker setup now that we have fresh coordinator data
         await speaker.async_setup(entry)
+        
+        # Reset retry count on successful setup
+        if hasattr(entry, "_setup_retry_count") and entry._setup_retry_count > 0:
+            _LOGGER.info("Setup succeeded for %s after %d retries", entry.data["host"], entry._setup_retry_count)
+            entry._setup_retry_count = 0
 
     except (WiiMTimeoutError, WiiMConnectionError, WiiMError) as err:
         # Cleanup partial registration before signaling retry
         hass.data[DOMAIN].pop(entry.entry_id, None)
+
+        # Smart logging escalation to reduce noise for persistent failures
+        # Track retry count across attempts (stored in config entry runtime data)
+        retry_count = getattr(entry, "_setup_retry_count", 0)
+        retry_count += 1
+        entry._setup_retry_count = retry_count
+
+        # Escalate logging based on retry count to reduce noise
+        if retry_count <= 2:
+            log_fn = _LOGGER.warning  # First couple attempts - normal to see
+        elif retry_count <= 4:
+            log_fn = _LOGGER.debug  # Middle attempts - reduce noise
+        else:
+            log_fn = _LOGGER.error  # Many attempts - device likely offline
+
         if isinstance(err, WiiMTimeoutError):
-            _LOGGER.warning("Timeout fetching initial data from %s, will retry: %s", entry.data["host"], err)
+            log_fn(
+                "Timeout fetching initial data from %s (attempt %d), will retry: %s",
+                entry.data["host"],
+                retry_count,
+                err,
+            )
             raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
         if isinstance(err, WiiMConnectionError):
-            _LOGGER.warning("Connection error fetching initial data from %s, will retry: %s", entry.data["host"], err)
+            log_fn(
+                "Connection error fetching initial data from %s (attempt %d), will retry: %s",
+                entry.data["host"],
+                retry_count,
+                err,
+            )
             raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
         _LOGGER.error("API error fetching initial data from %s: %s", entry.data["host"], err)
         raise ConfigEntryNotReady(f"API error with WiiM device at {entry.data['host']}") from err
     except Exception as err:
         # Cleanup on unexpected error and re-raise
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        _LOGGER.error("Unexpected error fetching initial data from %s: %s", entry.data["host"], err, exc_info=True)
+        
+        # Smart logging escalation for unexpected errors too
+        retry_count = getattr(entry, "_setup_retry_count", 0)
+        retry_count += 1
+        entry._setup_retry_count = retry_count
+        
+        # Escalate logging based on retry count
+        if retry_count <= 2:
+            log_fn = _LOGGER.warning
+        elif retry_count <= 4:
+            log_fn = _LOGGER.debug
+        else:
+            log_fn = _LOGGER.error
+        
+        log_fn("Unexpected error fetching initial data from %s (attempt %d): %s", entry.data["host"], retry_count, err, exc_info=True)
         raise
 
     # Get enabled platforms based on user options and device capabilities

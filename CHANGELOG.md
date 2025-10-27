@@ -1,6 +1,19 @@
 # Changelog
 
-All notable changes to the WiiM Audio integration will be documented in this file.
+All notable changes to unified WiiM Audio integration will be documented in this file.
+
+## [Unreleased]
+
+### Fixed
+
+- **Setup Retry Log Noise**: Reduced excessive error logging for persistent connection failures during initial setup
+  - Added smart logging escalation that reduces log levels for repeated setup retries
+  - First 2 attempts log at WARNING level (normal to see)
+  - Next 2 attempts (3-4) log at DEBUG level (reduce noise)
+  - After 4+ attempts log at ERROR level (device likely offline)
+  - Tracks retry count across Home Assistant's automatic retry mechanism
+  - Successfully resolves GitHub issue: "most stubborn speaker in the world"
+  - Addresses repeated "Failed to communicate with [IP]" error messages during setup
 
 ## [0.1.44] - 2025-10-27
 
