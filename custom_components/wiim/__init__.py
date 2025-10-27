@@ -310,7 +310,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 capabilities.get("is_legacy_device", False),
             )
     except Exception as err:
-        _LOGGER.warning("Failed to detect device capabilities for %s: %s", entry.data["host"], err)
+        # Smart logging escalation for capability detection failures too
+        retry_count = getattr(entry, "_capability_detection_retry_count", 0)
+        retry_count += 1
+        entry._capability_detection_retry_count = retry_count
+        
+        # Escalate logging based on retry count
+        if retry_count <= 2:
+            log_fn = _LOGGER.warning
+        elif retry_count <= 4:
+            log_fn = _LOGGER.debug
+        else:
+            log_fn = _LOGGER.error
+        
+        log_fn("Failed to detect device capabilities for %s (attempt %d): %s", entry.data["host"], retry_count, err)
         capabilities = {}
 
     # Create client with capabilities

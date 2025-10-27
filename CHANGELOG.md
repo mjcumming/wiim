@@ -36,6 +36,10 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Ensures logging levels adjust properly for multiple consecutive retry attempts
   - Prevents regression of log spam issue in the future
 
+- **Capability Detection Retry**: Reduced logging noise during capability detection failures
+  - Same smart escalation applies to device capability detection phase
+  - Prevents repeated WARNING messages for devices that fail to connect during discovery
+
 ## [0.1.44] - 2025-10-27
 
 ### Fixed
