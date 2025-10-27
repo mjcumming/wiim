@@ -221,6 +221,8 @@ class TestSelectPlatformSetup:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
+        # Set _capabilities on coordinator (preferred location)
+        speaker.coordinator._capabilities = {"supports_audio_output": False}
         speaker.coordinator.client = MagicMock()
         speaker.coordinator.client.capabilities = {"supports_audio_output": False}
 
