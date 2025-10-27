@@ -27,20 +27,22 @@ async def async_setup_entry(
 
     entities = []
 
-    # Check if device supports audio output before creating select entity
-    # Access capabilities from coordinator where they're properly stored
-    capabilities = getattr(speaker.coordinator, "_capabilities", {})
+    # Determine capabilities safely. Prefer client.capabilities if it is a dict,
+    # otherwise use coordinator._capabilities if it is a dict. Avoid treating
+    # MagicMock attributes as truthy capability containers.
+    capabilities = None
 
-    # Fallback: check client capabilities for backward compatibility
-    if (
-        not capabilities
-        and hasattr(speaker.coordinator, "client")
-        and hasattr(speaker.coordinator.client, "capabilities")
-    ):
-        capabilities = speaker.coordinator.client.capabilities
+    client = getattr(speaker.coordinator, "client", None)
+    client_capabilities = getattr(client, "capabilities", None)
+    if isinstance(client_capabilities, dict):
+        capabilities = client_capabilities
+    else:
+        coordinator_capabilities = getattr(speaker.coordinator, "_capabilities", None)
+        if isinstance(coordinator_capabilities, dict):
+            capabilities = coordinator_capabilities
 
-    if capabilities:
-        supports_audio_output = capabilities.get("supports_audio_output", False)
+    if isinstance(capabilities, dict):
+        supports_audio_output = bool(capabilities.get("supports_audio_output", False))
         if supports_audio_output:
             # Audio Output Mode Select
             entities.append(WiiMOutputModeSelect(speaker))
