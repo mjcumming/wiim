@@ -110,7 +110,7 @@ def get_enabled_platforms(
                     capabilities = coordinator.client.capabilities
 
     if capabilities:
-        supports_audio_output = capabilities.get("supports_audio_output", False)
+        supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
         _LOGGER.debug(
             "Audio output capability check for %s: supports_audio_output=%s",
             entry.data.get("host"),

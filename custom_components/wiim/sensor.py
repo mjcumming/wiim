@@ -46,17 +46,8 @@ async def async_setup_entry(
     # Only create if device supports audio output modes
     # Access capabilities from coordinator where they're properly stored
     capabilities = getattr(speaker.coordinator, "_capabilities", {})
-
-    # Fallback: check client capabilities for backward compatibility
-    if (
-        not capabilities
-        and hasattr(speaker.coordinator, "client")
-        and hasattr(speaker.coordinator.client, "capabilities")
-    ):
-        capabilities = speaker.coordinator.client.capabilities
-
     if capabilities:
-        supports_audio_output = capabilities.get("supports_audio_output", False)
+        supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
         if supports_audio_output:
             entities.append(WiiMBluetoothOutputSensor(speaker))
             _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")

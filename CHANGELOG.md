@@ -9,7 +9,6 @@ All notable changes to the WiiM Audio integration will be documented in this fil
 - **Audio Output Entity Access**: Fixed capability detection for audio output entities
   - Corrected access to device capabilities (coordinator vs client)
   - WiiM devices now properly maintain audio output support even when API probes fail
-  - Added backward compatibility with existing tests and capability access patterns
   - Prevents greyed-out audio output entities on unsupported devices
   - Ensures proper audio output control on supported devices
 
