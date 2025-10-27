@@ -4,6 +4,23 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+## [0.1.45] - 2025-01-28
+
+### Fixed
+
+- **Audio Pro Discovery Bug**: Fixed critical bug preventing Audio Pro devices from being discovered
+  - Fixed conditional logic where Audio Pro devices with failed validation were rejected instead of offering manual setup
+  - Corrected recognition of a real UUID versus host IP address fallback
+  - Devices that fail validation now properly detected and handled per device type
+  - Resolves GitHub issue #80
+
+### Testing
+
+- **Discovery Flow Coverage**: Added comprehensive test suite for zeroconf/SSDP discovery (15 new tests)
+  - Tests cover successful discovery, failed validation, Audio Pro handling, and edge cases
+  - Config flow coverage improved from 10% to 31%
+  - Tests prevent regression of Audio Pro discovery issues
+
 ### Fixed
 
 - **Setup Retry Log Noise**: Reduced excessive error logging for persistent connection failures during initial setup

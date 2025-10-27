@@ -1,7 +1,6 @@
 """Integration tests for WiiM integration setup and teardown."""
 
-import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState

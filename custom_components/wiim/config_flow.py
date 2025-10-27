@@ -594,6 +594,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
 
+        # Check if device_uuid is actually a UUID or just the host fallback
+        # A real UUID is different from the host IP address
+        is_real_uuid = device_uuid and device_uuid != host
+
         # Enhanced logic: handle both successful validation and soft failures
         if is_valid and device_uuid:
             # Full success - auto-configure
@@ -613,7 +617,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.data = {CONF_HOST: host, "name": device_name}
             return await self.async_step_discovery_confirm()
 
-        elif device_uuid:
+        elif is_real_uuid:
             # Soft failure - validation failed but we got a fallback UUID
             # This means the device might still work but needs manual confirmation
             _LOGGER.warning("🔍 ZEROCONF DISCOVERY got fallback UUID for %s: %s", host, device_uuid)
@@ -692,6 +696,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         is_valid, device_name, device_uuid = await validate_wiim_device(host)
 
+        # Check if device_uuid is actually a UUID or just the host fallback
+        # A real UUID is different from the host IP address
+        is_real_uuid = device_uuid and device_uuid != host
+
         # Enhanced logic: handle both successful validation and soft failures
         if is_valid and device_uuid:
             # Full success - auto-configure
@@ -706,7 +714,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.data = {CONF_HOST: host, "name": device_name}
             return await self.async_step_discovery_confirm()
 
-        elif device_uuid:
+        elif is_real_uuid:
             # Soft failure - validation failed but we got a fallback UUID
             _LOGGER.debug("SSDP discovery got fallback UUID for %s: %s", host, device_uuid)
 

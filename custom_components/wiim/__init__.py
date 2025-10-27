@@ -364,7 +364,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Complete speaker setup now that we have fresh coordinator data
         await speaker.async_setup(entry)
-        
+
         # Reset retry count on successful setup
         if hasattr(entry, "_setup_retry_count") and entry._setup_retry_count > 0:
             _LOGGER.info("Setup succeeded for %s after %d retries", entry.data["host"], entry._setup_retry_count)
@@ -409,12 +409,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as err:
         # Cleanup on unexpected error and re-raise
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        
+
         # Smart logging escalation for unexpected errors too
         retry_count = getattr(entry, "_setup_retry_count", 0)
         retry_count += 1
         entry._setup_retry_count = retry_count
-        
+
         # Escalate logging based on retry count
         if retry_count <= 2:
             log_fn = _LOGGER.warning
@@ -422,8 +422,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             log_fn = _LOGGER.debug
         else:
             log_fn = _LOGGER.error
-        
-        log_fn("Unexpected error fetching initial data from %s (attempt %d): %s", entry.data["host"], retry_count, err, exc_info=True)
+
+        log_fn(
+            "Unexpected error fetching initial data from %s (attempt %d): %s",
+            entry.data["host"],
+            retry_count,
+            err,
+            exc_info=True,
+        )
         raise
 
     # Get enabled platforms based on user options and device capabilities
