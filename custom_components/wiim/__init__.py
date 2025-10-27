@@ -314,7 +314,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         retry_count = getattr(entry, "_capability_detection_retry_count", 0)
         retry_count += 1
         entry._capability_detection_retry_count = retry_count
-        
+
         # Escalate logging based on retry count
         if retry_count <= 2:
             log_fn = _LOGGER.warning
@@ -322,7 +322,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             log_fn = _LOGGER.debug
         else:
             log_fn = _LOGGER.error
-        
+
         log_fn("Failed to detect device capabilities for %s (attempt %d): %s", entry.data["host"], retry_count, err)
         capabilities = {}
 
@@ -423,6 +423,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Cleanup on unexpected error and re-raise
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
+        # Check if this is a wrapped WiiM exception (e.g., UpdateFailed from coordinator)
+        underlying_err = err.__cause__ if hasattr(err, "__cause__") and err.__cause__ else None
+        is_wiim_error = isinstance(err, (WiiMTimeoutError, WiiMConnectionError, WiiMError)) or isinstance(
+            underlying_err, (WiiMTimeoutError, WiiMConnectionError, WiiMError)
+        )
+
         # Smart logging escalation for unexpected errors too
         retry_count = getattr(entry, "_setup_retry_count", 0)
         retry_count += 1
@@ -435,6 +441,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             log_fn = _LOGGER.debug
         else:
             log_fn = _LOGGER.error
+
+        # Use appropriate message based on error type
+        if is_wiim_error:
+            err_to_log = underlying_err if underlying_err else err
+            if isinstance(err_to_log, WiiMConnectionError):
+                log_fn(
+                    "Connection error fetching initial data from %s (attempt %d), will retry: %s",
+                    entry.data["host"],
+                    retry_count,
+                    err,
+                )
+                raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
+            elif isinstance(err_to_log, WiiMTimeoutError):
+                log_fn(
+                    "Timeout fetching initial data from %s (attempt %d), will retry: %s",
+                    entry.data["host"],
+                    retry_count,
+                    err,
+                )
+                raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
 
         log_fn(
             "Unexpected error fetching initial data from %s (attempt %d): %s",
