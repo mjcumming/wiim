@@ -220,11 +220,12 @@ class TestSelectPlatformSetup:
         # Mock speaker without capabilities
         speaker = MagicMock()
         speaker.name = "Test WiiM"
-        speaker.coordinator = MagicMock()
-        # Set _capabilities on coordinator (preferred location)
-        speaker.coordinator._capabilities = {"supports_audio_output": False}
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.capabilities = {"supports_audio_output": False}
+        # Create coordinator mock with _capabilities attribute
+        coordinator = MagicMock()
+        coordinator._capabilities = {"supports_audio_output": False}
+        coordinator.client = MagicMock()
+        coordinator.client.capabilities = {"supports_audio_output": False}
+        speaker.coordinator = coordinator
 
         with patch("custom_components.wiim.select.get_speaker_from_config_entry", return_value=speaker):
             entities = []
