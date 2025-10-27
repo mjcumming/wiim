@@ -2,9 +2,7 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
-## [Unreleased]
-
-## [0.1.45] - 2025-01-28
+## [0.1.45] - 2025-10-28
 
 ### Fixed
 
