@@ -12,6 +12,7 @@ from async_upnp_client.aiohttp import AiohttpNotifyServer, AiohttpSessionRequest
 from async_upnp_client.client_factory import UpnpFactory
 from async_upnp_client.exceptions import UpnpError, UpnpResponseError
 from async_upnp_client.profiles.dlna import DmrDevice
+from async_upnp_client.utils import async_get_local_ip
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,7 +144,34 @@ class UpnpClient:
         connector = TCPConnector(ssl=ssl_context)
         session = ClientSession(connector=connector)
         requester = AiohttpSessionRequester(session, with_sleep=True, timeout=10)
-        source_ip = "0.0.0.0" if callback_port == 0 else callback_host or "0.0.0.0"
+
+        # DLNA pattern: Get the correct local IP for callback URL (handles Docker/WSL networking)
+        # In WSL2, async_get_local_ip returns the WSL NAT IP which devices can't reach.
+        # We need to allow the caller to pass in the correct host IP via callback_host parameter.
+        import asyncio
+
+        if callback_host:
+            # Use explicit host if provided (allows workaround for Docker/WSL)
+            event_ip = callback_host
+            _LOGGER.info("Using explicit host IP for UPnP callback: %s", event_ip)
+        else:
+            # Try to auto-detect
+            try:
+                _, event_ip = await async_get_local_ip(f"http://{self.host}:49152", asyncio.get_event_loop())
+                _LOGGER.info("Detected local IP for UPnP callback: %s", event_ip)
+                # Warn if we're in a container network that might not be reachable
+                if event_ip.startswith("172.") or event_ip.startswith("192.168.65"):
+                    _LOGGER.warning(
+                        "⚠️  Detected container/WSL IP %s - devices on your LAN may not be able to reach this for UPnP events. "
+                        "Solutions: 1) Use 'network_mode: host' in Docker, 2) Add '--network=host' to devcontainer.json runArgs, "
+                        "or 3) Pass the host's LAN IP via callback_host parameter.",
+                        event_ip,
+                    )
+            except Exception as err:
+                _LOGGER.warning("Could not detect local IP for UPnP callback: %s", err)
+                event_ip = "0.0.0.0"
+
+        source_ip = event_ip if callback_port == 0 else callback_host or event_ip
 
         self._notify_server = AiohttpNotifyServer(
             requester=requester,
@@ -156,12 +184,20 @@ class UpnpClient:
         # Get server info from the notify server instance
         server_host = getattr(self._notify_server, "host", "unknown")
         server_port = getattr(self._notify_server, "port", "unknown")
+        callback_url = getattr(self._notify_server, "callback_url", None)
 
         _LOGGER.info(
-            "Notify server started on %s:%s",
+            "Notify server started on %s:%s (callback_url=%s)",
             server_host,
             server_port,
+            callback_url,
         )
+
+        if callback_url is None:
+            _LOGGER.warning("⚠️  No callback_url from notify server - UPnP events may not work!")
+            _LOGGER.warning(
+                "   This is likely a Docker networking issue - devices cannot send Norwich events to the container"
+            )
 
         # Create DmrDevice wrapper (DLNA pattern from Samsung/DLNA integrations)
         # This provides async_subscribe_services() method

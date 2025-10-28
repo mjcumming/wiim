@@ -80,12 +80,17 @@ class UpnpEventer:
             """Handle UPnP events from DmrDevice - calls our handle_notify method."""
             # Convert to our expected format
             variables_dict = {var.name: var.value for var in state_variables}
-            _LOGGER.info("🔔 UPnP EVENT CALLBACK FIRED from %s: service=%s, %d variables", 
-                        self.upnp_client.host, service.service_id if hasattr(service, 'service_id') else 'unknown', 
-                        len(variables_dict))
+            _LOGGER.info(
+                "🔔 UPnP EVENT CALLBACK FIRED from %s: service=%s, %d variables",
+                self.upnp_client.host,
+                service.service_id if hasattr(service, "service_id") else "unknown",
+                len(variables_dict),
+            )
             _LOGGER.debug("Variables: %s", list(variables_dict.keys()))
             # Call our handler
-            self.handle_notify(service.service_id if hasattr(service, 'service_id') else 'unknown', None, None, variables_dict)
+            self.handle_notify(
+                service.service_id if hasattr(service, "service_id") else "unknown", None, None, variables_dict
+            )
 
         _LOGGER.info("Subscribing to UPnP services for %s (DLNA pattern)", self.upnp_client.host)
         await self.upnp_client.async_subscribe_services(event_callback=handle_upnp_event)
