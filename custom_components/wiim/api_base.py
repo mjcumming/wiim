@@ -255,7 +255,7 @@ class WiiMClient:
                 cert_file.write(AUDIO_PRO_CLIENT_CERT)
                 cert_temp_path = cert_file.name
 
-            # Load certificate from temporary file
+            # Load certificate from temporary file (blocking call but cached after first call)
             ctx.load_cert_chain(cert_temp_path)
             _LOGGER.info("✓ Client certificate loaded for mutual TLS authentication (Audio Pro devices)")
 
@@ -266,7 +266,7 @@ class WiiMClient:
                 pass  # Ignore cleanup errors
 
         except Exception as exc:  # noqa: BLE001
-            _LOGGER.warning("✗ Failed to load client certificate for mTLS: %s", exc)
+            _LOGGER.warning("Failed to load client certificate for mTLS: %s", exc)
             # Continue without client cert - connection may still work on other ports
 
         self.ssl_context = ctx

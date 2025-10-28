@@ -140,7 +140,7 @@ class Speaker:
         # In bridge network mode, devices cannot reach the container's IP for event notifications
         # To enable UPnP in Docker: use network_mode: host in docker-compose.yml or --network=host
         # To enable UPnP in VS Code DevContainer: add "runArgs": ["--network=host"] to devcontainer.json
-        upnp_mode = entry.options.get("upnp_mode", "disabled")
+        upnp_mode = entry.options.get("upnp_mode", "auto")
         if upnp_mode in ("auto", "upnp"):
             try:
                 await self._setup_upnp_subscriptions(entry)

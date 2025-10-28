@@ -1,136 +1,105 @@
-# Docker Networking for UPnP Development
+# Docker Networking for łiiM Integration Development
 
 ## Overview
 
-This document explains the critical networking requirements for developing the WiiM integration, particularly when working with UPnP event subscriptions in a Docker container environment.
+The łiiM integration uses UPnP for real-time event notifications from devices. This requires specific Docker networking configuration for proper operation.
 
-## The Problem
+## The UPnP Networking Requirement
 
-The WiiM integration uses **UPnP** for real-time event notifications from speakers. UPnP relies on SSDP (Simple Service Discovery Protocol), which uses multicast UDP packets to communicate with devices on the local network.
+UPnP uses SSDP (Simple Service Discovery Protocol) which relies on UDP multicast packets. These packets must be able to travel between the container and the physical network to allow:
 
-**Default Docker bridge networking blocks multicast traffic**, which means UPnP subscriptions fail in a standard devcontainer environment.
+- Device discovery
+- Event subscription callbacks
 
-## Dev/Prod Parity Requirement
+## Native Linux / macOS Docker Desktop
 
-Home Assistant production instances typically run with `network_mode: host` to ensure UPnP and other discovery protocols work correctly. To avoid "it works on my machine" syndrome, **development must mirror production** by using host networking.
+For native Linux or macOS Docker Desktop, use host networking mode as documented in the architectural guide.
 
-## Solution: Configure Host Networking
+### Devcontainer Configuration
 
-### For VS Code DevContainers
-
-Edit `.devcontainer/devcontainer.json` and add `--network=host` to the `runArgs`:
+Add to `.devcontainer/devcontainer.json`:
 
 ```json
 {
-  "runArgs": [
-    "-e",
-    "GIT_EDITOR=code --wait",
-    "--security-opt",
-    "label=disable",
-    "--network=host" // Add this line
-  ]
+  "runArgs": ["--network=host"]
 }
 ```
 
-**Important**: After making this change, rebuild your devcontainer:
+This allows the container to:
 
-1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
-2. Select "Dev Containers: Rebuild Container"
+- Bind directly to host network interfaces
+- Send/receive multicast packets
+- Be reachable by devices on your LAN
 
-### For Docker Compose
+## WSL2 Limitation
 
-If using `docker-compose.yml` directly:
+**Important**: When developing on Windows using WSL2, UPnP will NOT work even with `--network=host` specified.
 
-```yaml
-version: "3"
-services:
-  homeassistant-dev:
-    image: ghcr.io/home-assistant/home-assistant:stable
-    network_mode: host # Use host networking
-    volumes:
-      - ./config:/config
-      - ./custom_components:/config/custom_components
+### Why WSL2 UPnP Fails
+
+WSL2 creates its own virtualized network stack:
+
+- The container sees WSL2's network (`192.168.65.x`) not Windows LAN IP
+- Devices on your physical network cannot reach WSL2 container IPs
+- UPnP event callbacks from devices fail
+
+### Example in Logs
+
+```
+2025-10-28 20:49:01.566 WARNING [custom_components.wiim.upnp_client]
+⚠️  Detected container/WSL IP 192.168.65.3 - devices on your LAN may not be able to reach this for UPnP events
 ```
 
-## What This Changes
+### What Happens
 
-### Before (Bridge Mode)
+1. UPnP code initializes correctly ✅
+2. Subscriptions are attempted ✅
+3. Callback URL is unreachable from device network ❌
+4. Integration gracefully falls back to HTTP polling ✅
 
-- Container gets isolated IP: `192.168.65.3` (WSL NAT network)
-- Devices on `192.168.1.x` cannot reach container
-- UPnP subscriptions fail silently
-- System falls back to HTTP polling
+**Result**: Integration works using HTTP polling (no UPnP events) on WSL2
 
-### After (Host Mode)
+## Solutions for WSL2
 
-- Container shares host's network stack
-- Devices can send UPnP events to container
-- UPnP subscriptions work as designed
-- Real-time updates without excessive polling
+### Option 1: Accept HTTP Polling Fallback (Recommended for WSL2)
 
-## Technical Details
+The integration will work perfectly using HTTP polling. You lose real-time events but functionality is maintained. This is sufficient for development.
 
-### Why Bridge Mode Fails
+### Option 2: Use Native Linux or WSL1
 
-UPnP/SSDP sends UDP multicast packets to `239.255.255.250:1900`. Bridge networks:
+- Native Linux: UPnP works with host networking
+- WSL1: Uses Windows networking directly (may work with port mapping)
 
-1. **Isolate multicast traffic** - Only reachable within the virtual bridge
-2. **Use NAT** - Traffic must be explicitly mapped with `-p` flag
-3. **Can't map multicast** - Multicast protocols don't work with port mapping
+### Option 3: Use Docker Desktop for Windows (Hyper-V)
 
-### Why Host Mode Works
+Docker Desktop on Windows uses Hyper-V virtualization which may support proper network bridging (requires testing).
 
-Host mode eliminates the network isolation:
+### Option 4: Remote Linux Development
 
-1. **Direct network access** - Container uses host's IP addresses
-2. **No NAT overhead** - Reduced latency for network calls
-3. **Multicast support** - Can receive broadcast/multicast packets natively
+Develop on a remote Linux server or VM with host networking enabled.
 
-### Security Considerations
+## Production Deployment
 
-Host networking reduces container isolation:
-
-- ✅ **Acceptable for local development** - Firewalled local network
-- ❌ **Not recommended for production internet-facing servers** - If you need strong isolation
-
-For Home Assistant development on a local network, this is standard practice.
+In production, the integration will work correctly with UPnP when running on native Linux with host networking or in a properly configured Kubernetes/Docker environment.
 
 ## Verification
 
-After configuring host networking, start Home Assistant and check the logs:
+To check if UPnP is working:
 
-**✅ Success (Host Network):**
+1. Check logs for subscription success:
 
-```
-Detected local IP for UPnP callback: 192.168.1.123  # Your LAN IP
-Successfully subscribed to UPnP services for 192.168.1.68
-✅ UPnP event subscriptions started successfully
-```
+   ```
+   ✅ UPnP event subscriptions started successfully
+   ```
 
-**❌ Failure (Bridge Network):**
+2. Check diagnostics for UPnP status:
+   Settings → Devices & Services → łiiM → Diagnostics
+   Look for: `"upnp": { "status": "Active" }`
 
-```
-⚠️  Detected container/WSL IP 192.168.65.3 - devices on your LAN may not be able to reach this
-```
-
-## Fallback Behavior
-
-The integration is designed to gracefully handle UPnP failures:
-
-- **Default**: UPnP disabled (relies on HTTP polling)
-- **Interval**: 1 second when playing, 5 seconds when idle
-- **Status**: Visible in diagnostics under `upnp_status`
-
-This ensures the integration works even without host networking, but at the cost of higher API usage.
+3. Watch for real-time event notifications (vs polling)
 
 ## References
 
-- [Home Assistant Container Networking](https://www.home-assistant.io/installation/linux#networking)
-- [Docker Network Modes](https://docs.docker.com/network/drivers/)
-- [UPnP Discovery Protocol](https://openconnectivity.org/specs/OCF_UPnP_Discovery_Specification_v1.1.pdf)
-
-## Code References
-
-- `upnp_client.py` - Handles network IP detection and warnings
-- `data.py` - UPnP initialization with Docker networking notes
-- `.devcontainer/devcontainer.json` - Development container configuration
+- [Docker Network Drivers](https://docs.docker.com/network/drivers/)
+- [WSL2 Networking](https://learn.microsoft.com/en-us/windows/wsl/networking)
+- UPnP Specification: [SOAP-over-UDP](http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v2.0.pdf)
