@@ -358,7 +358,10 @@ class WiiMMediaPlayer(
         # Mark subscriptions as failed to trigger HTTP-only polling
         if not self.speaker._subscriptions_failed:
             self.speaker._subscriptions_failed = True
-            _LOGGER.info("UPnP subscriptions unavailable for %s (likely container networking), using HTTP polling", self.speaker.name)
+            _LOGGER.info(
+                "UPnP subscriptions unavailable for %s (likely container networking), using HTTP polling",
+                self.speaker.name,
+            )
             # Clean up failed UPnP subscriptions
             await self.speaker._cleanup_upnp_subscriptions()
 
