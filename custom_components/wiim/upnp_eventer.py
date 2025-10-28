@@ -69,34 +69,37 @@ class UpnpEventer:
             callback_host: Host IP for callback URL (auto-detect if None)
             callback_port: Port for callback (0 = ephemeral)
         """
-        # Toby: Notify server setup
+        # DLNA pattern: Notify server setup
         await self.upnp_client.start_notify_server(
             callback_host=callback_host,
             callback_port=callback_port,
         )
 
-        # Subscribe to AVTransport with callback
-        self._sid_avt = await self.upnp_client.async_subscribe(
-            "AVTransport",
-            timeout=1800,
-            sub_callback=self.handle_notify,
-        )
+        # DLNA pattern: Subscribe to all services using DmrDevice
+        def handle_upnp_event(service, state_variables):
+            """Handle UPnP events from DmrDevice - calls our handle_notify method."""
+            # Convert to our expected format
+            variables_dict = {var.name: var.value for var in state_variables}
+            _LOGGER.info("🔔 UPnP EVENT CALLBACK FIRED from %s: service=%s, %d variables", 
+                        self.upnp_client.host, service.service_id if hasattr(service, 'service_id') else 'unknown', 
+                        len(variables_dict))
+            _LOGGER.debug("Variables: %s", list(variables_dict.keys()))
+            # Call our handler
+            self.handle_notify(service.service_id if hasattr(service, 'service_id') else 'unknown', None, None, variables_dict)
+
+        _LOGGER.info("Subscribing to UPnP services for %s (DLNA pattern)", self.upnp_client.host)
+        await self.upnp_client.async_subscribe_services(event_callback=handle_upnp_event)
+
         self._sid_avt_expires = time.time() + 1800
-
-        # Subscribe to RenderingControl with callback
-        self._sid_rcs = await self.upnp_client.async_subscribe(
-            "RenderingControl",
-            timeout=1800,
-            sub_callback=self.handle_notify,
-        )
         self._sid_rcs_expires = time.time() + 1800
-
-        # Schedule auto-renewal
-        self._schedule_auto_renew()
+        _LOGGER.info("UPnP subscriptions established for %s", self.upnp_client.host)
 
         # Mark push as healthy
         self._push_healthy = True
-        _LOGGER.info("UPnP event subscriptions started for %s", self.upnp_client.host)
+        _LOGGER.info(
+            "✅ UPnP event subscriptions started successfully for %s (AVTransport & RenderingControl)",
+            self.upnp_client.host,
+        )
 
     async def async_unsubscribe(self) -> None:
         """Unsubscribe from all services and stop notify server."""
@@ -204,12 +207,20 @@ class UpnpEventer:
         self._last_notify_ts = time.time()
         self._event_count += 1
 
+        _LOGGER.info(
+            "📡 Received UPnP NOTIFY #%d from %s: service=%s, keys=%s",
+            self._event_count,
+            self.upnp_client.host,
+            service_type,
+            list(variables.keys()),
+        )
+
         _LOGGER.debug(
-            "Received NOTIFY from %s: service=%s, seq=%d, vars=%s",
+            "Full UPnP NOTIFY details from %s: service=%s, seq=%d, vars=%s",
             self.upnp_client.host,
             service_type,
             seq,
-            list(variables.keys()),
+            variables,
         )
 
         # Parse LastChange XML

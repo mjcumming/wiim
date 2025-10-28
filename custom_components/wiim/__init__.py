@@ -106,11 +106,17 @@ def get_enabled_platforms(
                 capabilities = getattr(coordinator, "_capabilities", {})
 
                 # Fallback: check client capabilities for backward compatibility
-                if not capabilities and hasattr(coordinator, "client") and hasattr(coordinator.client, "capabilities"):
+                if (
+                    not capabilities
+                    and hasattr(coordinator, "client")
+                    and hasattr(coordinator.client, "capabilities")
+                ):
                     capabilities = coordinator.client.capabilities
 
     if capabilities:
-        supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
+        supports_audio_output = capabilities.get(
+            "supports_audio_output", True
+        )  # Keep original default
         _LOGGER.debug(
             "Audio output capability check for %s: supports_audio_output=%s",
             entry.data.get("host"),
@@ -118,11 +124,18 @@ def get_enabled_platforms(
         )
         if supports_audio_output:
             platforms.append(Platform.SELECT)
-            _LOGGER.info("Enabling SELECT platform - device supports audio output control")
+            _LOGGER.info(
+                "Enabling SELECT platform - device supports audio output control"
+            )
         else:
-            _LOGGER.info("Skipping SELECT platform - device does not support audio output control")
+            _LOGGER.info(
+                "Skipping SELECT platform - device does not support audio output control"
+            )
     else:
-        _LOGGER.warning("Capabilities not available for %s - skipping SELECT platform", entry.data.get("host"))
+        _LOGGER.warning(
+            "Capabilities not available for %s - skipping SELECT platform",
+            entry.data.get("host"),
+        )
 
     # Add optional platforms based on user preferences
     for config_key, platform in OPTIONAL_PLATFORMS.items():
@@ -130,7 +143,9 @@ def get_enabled_platforms(
         default_enabled = False
         if entry.options.get(config_key, default_enabled):
             platforms.append(platform)
-            _LOGGER.debug("Enabling platform %s based on option %s", platform, config_key)
+            _LOGGER.debug(
+                "Enabling platform %s based on option %s", platform, config_key
+            )
 
     _LOGGER.info(
         "Enabled platforms for %s: %s",
@@ -235,7 +250,9 @@ async def _sync_time_service(hass: HomeAssistant, call):
             if speaker:
                 try:
                     await speaker.coordinator.client.sync_time()
-                    _LOGGER.info("Time sync command sent successfully to %s", speaker.name)
+                    _LOGGER.info(
+                        "Time sync command sent successfully to %s", speaker.name
+                    )
                 except Exception as err:
                     _LOGGER.error("Failed to sync time for %s: %s", speaker.name, err)
                     raise
@@ -244,57 +261,8 @@ async def _sync_time_service(hass: HomeAssistant, call):
     _LOGGER.error("No WiiM device found for entity %s", entity_id)
 
 
-async def async_discover_ssdp_for_existing_devices(hass: HomeAssistant) -> None:
-    """Discover SSDP info for existing config entries that don't have it.
-    
-    This allows us to enable UPnP for devices that were added manually.
-    """
-    from homeassistant.components import ssdp
-    
-    # Get all WiiM config entries
-    entries = hass.config_entries.async_entries(DOMAIN)
-    
-    # Find entries without SSDP info
-    for entry in entries:
-        if entry.data.get("ssdp_info"):
-            continue  # Already has SSDP info
-        
-        ip_address = entry.data.get(CONF_HOST)
-        if not ip_address:
-            continue
-        
-        _LOGGER.debug("Searching for SSDP info for %s (%s)", entry.title, ip_address)
-        
-        # Run SSDP search
-        try:
-            from async_upnp_client.search import async_search
-            results = await async_search(max_results=10)
-            
-            # Look for matching device by IP
-            for result in results:
-                if result.usn and ip_address in result.location:
-                    _LOGGER.info("Found SSDP info for %s: %s", entry.title, result.location)
-                    # Update config entry with SSDP info
-                    hass.config_entries.async_update_entry(
-                        entry,
-                        data={
-                            **entry.data,
-                            "ssdp_info": {
-                                "location": result.location,
-                                "usn": result.usn,
-                            }
-                        }
-                    )
-                    break
-        except Exception as err:
-            _LOGGER.debug("SSDP search failed for %s: %s", entry.title, err)
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
-    
-    # Try to discover SSDP info if missing
-    if not entry.data.get("ssdp_info"):
-        await async_discover_ssdp_for_existing_devices(hass)
 
     # Register global services if this is the first entry
     if DOMAIN not in hass.data:
@@ -350,7 +318,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         # Log audio output capability specifically for debugging
         if capabilities.get("supports_audio_output"):
-            _LOGGER.info("[AUDIO OUTPUT] Device %s supports audio output control", entry.data["host"])
+            _LOGGER.info(
+                "[AUDIO OUTPUT] Device %s supports audio output control",
+                entry.data["host"],
+            )
         else:
             _LOGGER.info(
                 "[AUDIO OUTPUT] Device %s does not support audio output control (is_wiim=%s, is_legacy=%s)",
@@ -372,7 +343,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             log_fn = _LOGGER.error
 
-        log_fn("Failed to detect device capabilities for %s (attempt %d): %s", entry.data["host"], retry_count, err)
+        log_fn(
+            "Failed to detect device capabilities for %s (attempt %d): %s",
+            entry.data["host"],
+            retry_count,
+            err,
+        )
         capabilities = {}
 
     # Create client with capabilities
@@ -429,7 +405,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Reset retry count on successful setup
         if hasattr(entry, "_setup_retry_count") and entry._setup_retry_count > 0:
-            _LOGGER.info("Setup succeeded for %s after %d retries", entry.data["host"], entry._setup_retry_count)
+            _LOGGER.info(
+                "Setup succeeded for %s after %d retries",
+                entry.data["host"],
+                entry._setup_retry_count,
+            )
             entry._setup_retry_count = 0
 
     except (WiiMTimeoutError, WiiMConnectionError, WiiMError) as err:
@@ -457,7 +437,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 retry_count,
                 err,
             )
-            raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
+            raise ConfigEntryNotReady(
+                f"Timeout connecting to WiiM device at {entry.data['host']}"
+            ) from err
         if isinstance(err, WiiMConnectionError):
             log_fn(
                 "Connection error fetching initial data from %s (attempt %d), will retry: %s",
@@ -465,16 +447,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 retry_count,
                 err,
             )
-            raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
-        _LOGGER.error("API error fetching initial data from %s: %s", entry.data["host"], err)
-        raise ConfigEntryNotReady(f"API error with WiiM device at {entry.data['host']}") from err
+            raise ConfigEntryNotReady(
+                f"Connection error with WiiM device at {entry.data['host']}"
+            ) from err
+        _LOGGER.error(
+            "API error fetching initial data from %s: %s", entry.data["host"], err
+        )
+        raise ConfigEntryNotReady(
+            f"API error with WiiM device at {entry.data['host']}"
+        ) from err
     except Exception as err:
         # Cleanup on unexpected error and re-raise
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
         # Check if this is a wrapped WiiM exception (e.g., UpdateFailed from coordinator)
-        underlying_err = err.__cause__ if hasattr(err, "__cause__") and err.__cause__ else None
-        is_wiim_error = isinstance(err, (WiiMTimeoutError, WiiMConnectionError, WiiMError)) or isinstance(
+        underlying_err = (
+            err.__cause__ if hasattr(err, "__cause__") and err.__cause__ else None
+        )
+        is_wiim_error = isinstance(
+            err, (WiiMTimeoutError, WiiMConnectionError, WiiMError)
+        ) or isinstance(
             underlying_err, (WiiMTimeoutError, WiiMConnectionError, WiiMError)
         )
 
@@ -501,7 +493,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     retry_count,
                     err,
                 )
-                raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
+                raise ConfigEntryNotReady(
+                    f"Connection error with WiiM device at {entry.data['host']}"
+                ) from err
             elif isinstance(err_to_log, WiiMTimeoutError):
                 log_fn(
                     "Timeout fetching initial data from %s (attempt %d), will retry: %s",
@@ -509,7 +503,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     retry_count,
                     err,
                 )
-                raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
+                raise ConfigEntryNotReady(
+                    f"Timeout connecting to WiiM device at {entry.data['host']}"
+                ) from err
 
         log_fn(
             "Unexpected error fetching initial data from %s (attempt %d): %s",
@@ -540,7 +536,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get the platforms that were actually set up
     enabled_platforms = get_enabled_platforms(hass, entry)
 
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, enabled_platforms):
+    if unload_ok := await hass.config_entries.async_unload_platforms(
+        entry, enabled_platforms
+    ):
         entry_data = hass.data[DOMAIN].pop(entry.entry_id, {})
         speaker = entry_data.get("speaker")
         if speaker:

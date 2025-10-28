@@ -10,7 +10,8 @@ from typing import Any
 
 from async_upnp_client.aiohttp import AiohttpNotifyServer, AiohttpSessionRequester
 from async_upnp_client.client_factory import UpnpFactory
-from async_upnp_client.exceptions import UpnpError
+from async_upnp_client.exceptions import UpnpError, UpnpResponseError
+from async_upnp_client.profiles.dlna import DmrDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class UpnpClient:
         self.description_url = description_url
         self.session = session
         self._device = None
+        self._dmr_device = None  # DmrDevice wrapper for subscriptions (DLNA pattern)
         self._av_transport_service = None
         self._rendering_control_service = None
         self._notify_server = None
@@ -67,12 +69,35 @@ class UpnpClient:
     async def _initialize(self) -> None:
         """Initialize UPnP device and services."""
         try:
-            # Session requester with SSL disabled for self-signed certs (DLNA/DMR pattern)
-            requester = AiohttpSessionRequester(self.session, with_sleep=True, timeout=10)
+            # Create requester with SSL disabled for self-signed certs (DLNA/DMR pattern)
+            from aiohttp import ClientSession, TCPConnector
+            import ssl
+
+            # Handle both HTTP and HTTPS description URLs
+            if self.description_url.startswith("https://"):
+                _LOGGER.info("Using HTTPS for UPnP description (self-signed cert support enabled)")
+                # HTTPS with self-signed cert support
+                ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                ssl_context.set_ciphers("ALL:@SECLEVEL=0")
+                connector = TCPConnector(ssl=ssl_context)
+            else:
+                _LOGGER.info("Using HTTP for UPnP description (no SSL needed)")
+                # HTTP - no SSL needed
+                connector = TCPConnector(ssl=False)
+
+            session = ClientSession(connector=connector)
+            requester = AiohttpSessionRequester(session, with_sleep=True, timeout=10)
 
             # Create UPnP device from description.xml using factory (DLNA/DMR pattern)
+            _LOGGER.info("Fetching UPnP device description from: %s", self.description_url)
             factory = UpnpFactory(requester, non_strict=True)
             self._device = await factory.async_create_device(self.description_url)
+            _LOGGER.info(
+                "Successfully fetched and parsed UPnP device description for %s",
+                self.host,
+            )
 
             # Get AVTransport service
             self._av_transport_service = self._device.service("urn:schemas-upnp-org:service:AVTransport:1")
@@ -105,8 +130,19 @@ class UpnpClient:
         Returns:
             Started AiohttpNotifyServer instance
         """
-        # Create notify server (DLNA/DMR pattern)
-        requester = AiohttpSessionRequester(self.session, with_sleep=True, timeout=10)
+        # Create notify server (DLNA/DMR pattern) with SSL disabled for self-signed certs
+        import ssl
+
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_context.set_ciphers("ALL:@SECLEVEL=0")
+
+        from aiohttp import ClientSession, TCPConnector
+
+        connector = TCPConnector(ssl=ssl_context)
+        session = ClientSession(connector=connector)
+        requester = AiohttpSessionRequester(session, with_sleep=True, timeout=10)
         source_ip = "0.0.0.0" if callback_port == 0 else callback_host or "0.0.0.0"
 
         self._notify_server = AiohttpNotifyServer(
@@ -117,11 +153,20 @@ class UpnpClient:
 
         await self._notify_server.async_start_server()
 
+        # Get server info from the notify server instance
+        server_host = getattr(self._notify_server, "host", "unknown")
+        server_port = getattr(self._notify_server, "port", "unknown")
+
         _LOGGER.info(
-            "Notify server started on %s:%d",
-            self._notify_server.host,
-            self._notify_server.port,
+            "Notify server started on %s:%s",
+            server_host,
+            server_port,
         )
+
+        # Create DmrDevice wrapper (DLNA pattern from Samsung/DLNA integrations)
+        # This provides async_subscribe_services() method
+        self._dmr_device = DmrDevice(self._device, self._notify_server.event_handler)
+        _LOGGER.info("DmrDevice wrapper created for %s", self.host)
 
         return self._notify_server
 
@@ -169,20 +214,33 @@ class UpnpClient:
         Returns:
             Subscription object (for storing and managing callback)
         """
-        service = getattr(self, f"_{service_name.lower().replace(' ', '_')}_service")
-        if not service:
+        # Map service name to attribute name
+        service_attr_map = {
+            "avtransport": "_av_transport_service",
+            "renderingcontrol": "_rendering_control_service",
+        }
+        service_attr = service_attr_map.get(service_name.lower())
+        if not service_attr:
             raise UpnpError(f"Service {service_name} not available")
+
+        service = getattr(self, service_attr)
+        if not service:
+            raise UpnpError(f"Service {service_name} not initialized")
 
         if not self._notify_server:
             raise UpnpError("Notify server not started")
 
-        callback_url = f"http://{self._notify_server.host}:{self._notify_server.port}/notify"
+        # Get notify server host/port using getattr to handle attribute access
+        server_host = getattr(self._notify_server, "host", "localhost")
+        server_port = getattr(self._notify_server, "port", 8000)
 
-        # Sonos pattern: use auto_renew=True and manage callbacks
-        subscription = await service.subscribe(
-            auto_renew=True,
+        callback_url = f"http://{server_host}:{server_port}/notify"
+
+        # Use the service's async_subscribe method (UPnP pattern)
+        # This is the correct method on UpnpService
+        subscription = await service.async_subscribe(
+            event_url=callback_url,
             requested_timeout=timeout,
-            event_callback_url=callback_url,
         )
 
         # Set callbacks (Sonos pattern from lines 423-424)
@@ -201,6 +259,37 @@ class UpnpClient:
 
         return subscription
 
+    async def async_subscribe_services(
+        self,
+        event_callback: Any = None,
+    ) -> None:
+        """Subscribe to UPnP services (DLNA pattern).
+
+        This follows the Samsung/DLNA pattern using DmrDevice.async_subscribe_services().
+
+        Args:
+            event_callback: Callback function for events (called with service and state_variables)
+        """
+        if not self._dmr_device:
+            raise UpnpError("DmrDevice not initialized - call start_notify_server() first")
+
+        try:
+            # Set event callback
+            if event_callback:
+                self._dmr_device.on_event = event_callback
+
+            # Subscribe to all services (DLNA pattern)
+            await self._dmr_device.async_subscribe_services(auto_resubscribe=True)
+            _LOGGER.info("Successfully subscribed to UPnP services for %s", self.host)
+
+        except UpnpResponseError as err:
+            # Device rejected subscription - this is OK, we'll poll instead
+            _LOGGER.debug("Device rejected subscription for %s: %r", self.host, err)
+            raise
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Error subscribing to services for %s: %s", self.host, err)
+            raise UpnpError(f"Failed to subscribe to services: {err}") from err
+
     async def async_renew(
         self,
         service_name: str,
@@ -217,9 +306,19 @@ class UpnpClient:
         Returns:
             True if renewal successful, False otherwise
         """
-        service = getattr(self, f"_{service_name.lower().replace(' ', '_')}_service")
-        if not service:
+        # Map service name to attribute name
+        service_attr_map = {
+            "avtransport": "_av_transport_service",
+            "renderingcontrol": "_rendering_control_service",
+        }
+        service_attr = service_attr_map.get(service_name.lower())
+        if not service_attr:
             _LOGGER.warning("Service %s not available for renewal", service_name)
+            return False
+
+        service = getattr(self, service_attr)
+        if not service:
+            _LOGGER.warning("Service %s not initialized for renewal", service_name)
             return False
 
         try:

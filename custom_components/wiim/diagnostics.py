@@ -170,6 +170,43 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 "presets_supported": getattr(speaker.coordinator, "_presets_supported", None),
             }
 
+        # UPnP status diagnostics
+        upnp_info = {}
+        if hasattr(speaker, "_upnp_eventer") and speaker._upnp_eventer:
+            is_healthy = getattr(speaker._upnp_eventer, "_push_healthy", False)
+            eventer = speaker._upnp_eventer
+
+            upnp_info = {
+                "status": "Active" if is_healthy else "Not Active",
+                "enabled": True,
+                "subscription_failed": getattr(speaker, "_subscriptions_failed", False),
+                "event_count": getattr(eventer, "_event_count", 0),
+                "last_notify": getattr(eventer, "_last_notify_ts", None),
+                "subscription_expires_avt": getattr(eventer, "_sid_avt_expires", None),
+                "subscription_expires_rcs": getattr(eventer, "_sid_rcs_expires", None),
+                "has_sid_avt": getattr(eventer, "_sid_avt", None) is not None,
+                "has_sid_rcs": getattr(eventer, "_sid_rcs", None) is not None,
+                "retry_count": getattr(eventer, "_retry_count", 0),
+            }
+
+            # Add UPnP client info if available
+            if hasattr(speaker, "_upnp_client") and speaker._upnp_client:
+                upnp_info["upnp_client"] = {
+                    "has_dmr_device": hasattr(speaker._upnp_client, "_dmr_device")
+                    and speaker._upnp_client._dmr_device is not None,
+                    "has_notify_server": hasattr(speaker._upnp_client, "_notify_server")
+                    and speaker._upnp_client._notify_server is not None,
+                    "description_url": speaker._upnp_client.description_url,
+                }
+        else:
+            upnp_info = {
+                "status": "Not Active",
+                "enabled": False,
+                "subscription_failed": getattr(speaker, "_subscriptions_failed", False),
+                "event_count": 0,
+                "last_notify": None,
+            }
+
         # Model data (Pydantic models)
         model_data = {}
         if speaker.status_model:
@@ -186,6 +223,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "group_info": group_info,
             "media_info": media_info,
             "api_capabilities": api_capabilities,
+            "upnp_status": upnp_info,
             "api_status": async_redact_data(api_status, TO_REDACT),
             "model_data": model_data,
             "raw_coordinator_data": async_redact_data(raw_data, TO_REDACT),

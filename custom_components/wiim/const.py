@@ -36,6 +36,10 @@ NAME = "WiiM"
 VERSION = "0.1.44"
 ATTRIBUTION = "Integration created by Michael Cumming @mjcumming"
 
+# Dispatcher signals
+WIIM_STATE_UPDATED = "wiim_state_updated"
+WIIM_FALLBACK_POLL = "wiim_fallback_poll"
+
 # Config keys
 CONF_HOST = "host"
 CONF_VOLUME_STEP = "volume_step"
@@ -166,7 +170,9 @@ API_ENDPOINT_LED_BRIGHTNESS = "/httpapi.asp?command=setLEDBrightness:"
 # TCP API commands below are experimental and may need adjustment
 # Documentation: https://github.com/mjcumming/wiim/issues/55
 API_ENDPOINT_ARYLIC_LED = "/httpapi.asp?command=MCU+PAS+RAKOIT:LED:"
-API_ENDPOINT_ARYLIC_LED_BRIGHTNESS = "/httpapi.asp?command=MCU+PAS+RAKOIT:LEDBRIGHTNESS:"
+API_ENDPOINT_ARYLIC_LED_BRIGHTNESS = (
+    "/httpapi.asp?command=MCU+PAS+RAKOIT:LEDBRIGHTNESS:"
+)
 
 # Play Modes
 PLAY_MODE_NORMAL = "normal"
@@ -323,8 +329,12 @@ API_ENDPOINT_SET_CHANNEL_BALANCE = "/httpapi.asp?command=setChannelBalance:"
 # Squeezelite/LMS Integration (Unofficial)
 API_ENDPOINT_SQUEEZELITE_STATE = "/httpapi.asp?command=Squeezelite:getState"
 API_ENDPOINT_SQUEEZELITE_DISCOVER = "/httpapi.asp?command=Squeezelite:discover"
-API_ENDPOINT_SQUEEZELITE_AUTO_CONNECT = "/httpapi.asp?command=Squeezelite:autoConnectEnable:"
-API_ENDPOINT_SQUEEZELITE_CONNECT_SERVER = "/httpapi.asp?command=Squeezelite:connectServer:"
+API_ENDPOINT_SQUEEZELITE_AUTO_CONNECT = (
+    "/httpapi.asp?command=Squeezelite:autoConnectEnable:"
+)
+API_ENDPOINT_SQUEEZELITE_CONNECT_SERVER = (
+    "/httpapi.asp?command=Squeezelite:connectServer:"
+)
 
 # Miscellaneous Operations (Unofficial)
 API_ENDPOINT_SET_LED = "/httpapi.asp?command=LED_SWITCH_SET:"
