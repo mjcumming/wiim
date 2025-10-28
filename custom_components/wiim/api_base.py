@@ -255,7 +255,10 @@ class WiiMClient:
                 cert_file.write(AUDIO_PRO_CLIENT_CERT)
                 cert_temp_path = cert_file.name
 
-            # Load certificate from temporary file (blocking call but cached after first call)
+            # Load certificate from temporary file
+            # NOTE: This is a blocking I/O call, but SSL context is cached after first load
+            # so it only happens once per session. Home Assistant will warn about this but
+            # it's acceptable since subsequent calls use the cached context.
             ctx.load_cert_chain(cert_temp_path)
             _LOGGER.info("✓ Client certificate loaded for mutual TLS authentication (Audio Pro devices)")
 
