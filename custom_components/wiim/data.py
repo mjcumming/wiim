@@ -21,11 +21,12 @@ This follows cursor rules: simple, composable, < 200 LOC modules.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player.const import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo as HADeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -98,6 +99,13 @@ class Speaker:
         self.group_members: list[Speaker] = []
         self.coordinator_speaker: Speaker | None = None
 
+        # UPnP components (Sonos pattern)
+        self._upnp_client: Any | None = None
+        self._upnp_eventer: Any | None = None
+        self._upnp_state: Any | None = None
+        self._subscriptions_failed: bool = False
+        self._poll_timer: Any | None = None  # Fallback polling timer
+
         # HA integration
         self.device_info: HADeviceInfo | None = None
         self._available: bool = True
@@ -126,6 +134,16 @@ class Speaker:
         # _populate_device_info is a synchronous helper; no need to await.
         self._populate_device_info()
         await self._register_ha_device(entry)
+
+        # Initialize UPnP if enabled (Sonos pattern)
+        upnp_mode = entry.options.get("upnp_mode", "auto")
+        if upnp_mode in ("auto", "upnp"):
+            try:
+                await self._setup_upnp_subscriptions(entry)
+            except Exception as err:
+                _LOGGER.warning("Failed to setup UPnP for %s: %s", self.name, err)
+                self._subscriptions_failed = True
+
         _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
     @property
@@ -1080,6 +1098,132 @@ class Speaker:
             if isinstance(raw, PlayerStatus):
                 return raw
         return None
+
+    # ==========================================================
+    # UPnP Integration Methods (Sonos Pattern)
+    # ==========================================================
+
+    async def _setup_upnp_subscriptions(self, entry: ConfigEntry) -> None:
+        """Create UPnP subscriptions (Sonos pattern).
+
+        This follows the Sonos _async_subscribe pattern:
+        1. Create UpnpClient from SSDP discovery info
+        2. Create UpnpEventer with state manager
+        3. Start subscriptions with callbacks
+        4. Set up fallback polling if needed
+        """
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+        from .state import WiiMState
+        from .upnp_client import UpnpClient
+        from .upnp_eventer import UpnpEventer
+
+        # Get SSDP discovery info from config entry (stored during SSDP/zeroconf discovery)
+        ssdp_info = entry.data.get("ssdp_info")
+        if not ssdp_info or not ssdp_info.get("location"):
+            # Fallback: construct description URL from device IP
+            # WiiM devices use HTTPS (port 443) by default
+            _LOGGER.info("No SSDP info available for %s, constructing description URL from IP", self.name)
+            description_url = f"https://{self.ip_address}/description.xml"
+        else:
+            description_url = ssdp_info.get("location")
+
+        # Create UPnP client (Sonos pattern)
+        session = async_get_clientsession(self.hass)
+        self._upnp_client = await UpnpClient.create(
+            host=self.ip_address,
+            description_url=description_url,
+            session=session,
+        )
+
+        # Create state manager
+        self._upnp_state = WiiMState()
+
+        # Create eventer with callback (Sonos pattern)
+        self._upnp_eventer = UpnpEventer(
+            hass=self.hass,
+            upnp_client=self._upnp_client,
+            state_manager=self._upnp_state,
+            device_uuid=self.uuid,
+        )
+
+        # Start subscriptions with callbacks (Sonos pattern)
+        await self._upnp_eventer.start(
+            callback_host=entry.options.get("upnp_callback_host"),
+            callback_port=entry.options.get("upnp_callback_port", 0),
+        )
+
+        # Create fallback polling timer (Sonos pattern)
+        # This ensures entities continue to update even if UPnP events stop arriving
+        from functools import partial
+
+        from homeassistant.helpers.event import async_track_time_interval
+
+        from .const import WIIM_FALLBACK_POLL
+
+        if not self._poll_timer:
+            poll_interval_seconds = entry.options.get("fallback_poll_interval", 45)
+            poll_interval = timedelta(seconds=poll_interval_seconds)
+
+            self._poll_timer = async_track_time_interval(
+                self.hass,
+                partial(
+                    async_dispatcher_send,
+                    self.hass,
+                    f"{WIIM_FALLBACK_POLL}-{self.uuid}",
+                ),
+                poll_interval,
+            )
+            _LOGGER.debug(
+                "Fallback polling timer created for %s (interval: %ds)",
+                self.name,
+                poll_interval_seconds,
+            )
+
+        # Register lifecycle cleanup (Sonos pattern)
+        entry.async_on_unload(self._cleanup_upnp_subscriptions)
+
+        _LOGGER.info("UPnP subscriptions established for %s", self.name)
+
+    async def _cleanup_upnp_subscriptions(self) -> None:
+        """Clean up UPnP subscriptions (Sonos pattern)."""
+        # Cancel fallback polling timer
+        if self._poll_timer:
+            self._poll_timer()
+            self._poll_timer = None
+            _LOGGER.debug("Fallback polling timer cancelled for %s", self.name)
+
+        if self._upnp_eventer:
+            await self._upnp_eventer.async_unsubscribe()
+            self._upnp_eventer = None
+
+        if self._upnp_client:
+            await self._upnp_client.unwind_notify_server()
+            self._upnp_client = None
+
+        self._upnp_state = None
+        _LOGGER.debug("UPnP subscriptions cleaned up for %s", self.name)
+
+    @callback
+    def _on_upnp_event(self, variables: dict[str, Any]) -> None:
+        """Handle UPnP event notifications (Sonos async_dispatch_event pattern).
+
+        This callback is called by UpnpEventer when events arrive.
+        It updates the speaker state and triggers entity updates.
+        """
+        if not self._upnp_state:
+            return
+
+        # Apply state changes from UPnP event
+        changed = self._upnp_state.apply_diff(variables)
+
+        if changed:
+            # Trigger coordinator update (Sonos dispatcher pattern)
+            # Use UUID consistently for signal names
+            async_dispatcher_send(
+                self.hass,
+                f"wiim_state_updated_{self.uuid}",
+            )
 
     @property
     def device_model(self) -> WiiMDeviceInfo | None:  # noqa: D401

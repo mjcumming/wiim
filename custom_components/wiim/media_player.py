@@ -320,12 +320,25 @@ class WiiMMediaPlayer(
         # Listen for state updates from the speaker
         from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-        dispatcher_signal = f"wiim_state_updated_{self.speaker.uuid}"
+        from .const import WIIM_FALLBACK_POLL, WIIM_STATE_UPDATED
+
+        # Listen for UPnP state updates
+        dispatcher_signal = f"{WIIM_STATE_UPDATED}_{self.speaker.uuid}"
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 dispatcher_signal,
                 self._handle_coordinator_update,
+            )
+        )
+
+        # Listen for fallback poll signals (when UPnP fails)
+        fallback_signal = f"{WIIM_FALLBACK_POLL}-{self.speaker.uuid}"
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                fallback_signal,
+                self._async_fallback_poll,
             )
         )
 
@@ -339,6 +352,18 @@ class WiiMMediaPlayer(
         self._clear_optimistic_state_on_update()
 
         self.async_schedule_update_ha_state()
+
+    async def _async_fallback_poll(self, now: datetime.datetime | None = None) -> None:
+        """Poll the entity if UPnP subscriptions fail."""
+        # Mark subscriptions as failed to trigger HTTP-only polling
+        if not self.speaker._subscriptions_failed:
+            self.speaker._subscriptions_failed = True
+            _LOGGER.warning("UPnP subscriptions failed for %s, switching to HTTP polling", self.speaker.name)
+            # Clean up failed UPnP subscriptions
+            await self.speaker._cleanup_upnp_subscriptions()
+
+        # Trigger coordinator refresh
+        await self.coordinator.async_request_refresh()
 
     @callback
     def async_write_ha_state(self) -> None:

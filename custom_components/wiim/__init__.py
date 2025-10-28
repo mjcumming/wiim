@@ -244,8 +244,57 @@ async def _sync_time_service(hass: HomeAssistant, call):
     _LOGGER.error("No WiiM device found for entity %s", entity_id)
 
 
+async def async_discover_ssdp_for_existing_devices(hass: HomeAssistant) -> None:
+    """Discover SSDP info for existing config entries that don't have it.
+    
+    This allows us to enable UPnP for devices that were added manually.
+    """
+    from homeassistant.components import ssdp
+    
+    # Get all WiiM config entries
+    entries = hass.config_entries.async_entries(DOMAIN)
+    
+    # Find entries without SSDP info
+    for entry in entries:
+        if entry.data.get("ssdp_info"):
+            continue  # Already has SSDP info
+        
+        ip_address = entry.data.get(CONF_HOST)
+        if not ip_address:
+            continue
+        
+        _LOGGER.debug("Searching for SSDP info for %s (%s)", entry.title, ip_address)
+        
+        # Run SSDP search
+        try:
+            from async_upnp_client.search import async_search
+            results = await async_search(max_results=10)
+            
+            # Look for matching device by IP
+            for result in results:
+                if result.usn and ip_address in result.location:
+                    _LOGGER.info("Found SSDP info for %s: %s", entry.title, result.location)
+                    # Update config entry with SSDP info
+                    hass.config_entries.async_update_entry(
+                        entry,
+                        data={
+                            **entry.data,
+                            "ssdp_info": {
+                                "location": result.location,
+                                "usn": result.usn,
+                            }
+                        }
+                    )
+                    break
+        except Exception as err:
+            _LOGGER.debug("SSDP search failed for %s: %s", entry.title, err)
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
+    
+    # Try to discover SSDP info if missing
+    if not entry.data.get("ssdp_info"):
+        await async_discover_ssdp_for_existing_devices(hass)
 
     # Register global services if this is the first entry
     if DOMAIN not in hass.data:
