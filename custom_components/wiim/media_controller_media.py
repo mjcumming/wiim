@@ -140,7 +140,7 @@ class MediaControllerMediaMixin:
 
             # Use the existing SSL context from the WiiM client
             # instead of creating a new one to avoid blocking calls
-            ssl_context = speaker.coordinator.client._get_ssl_context()
+            ssl_context = await speaker.coordinator.client._get_ssl_context()
 
             # Set reasonable timeout for image fetching (match LinkPlay's 5s)
             timeout = aiohttp.ClientTimeout(total=5.0)

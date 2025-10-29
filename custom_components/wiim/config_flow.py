@@ -872,7 +872,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Confirm discovery."""
         if user_input is not None:
-            # Preserve SSDP info for UPnP subscriptions (Sonos pattern)
+            # Preserve SSDP info for UPnP subscriptions (Samsung/DLNA pattern)
             entry_data = {CONF_HOST: self.data[CONF_HOST]}
             if "ssdp_info" in self.data:
                 entry_data["ssdp_info"] = self.data["ssdp_info"]
@@ -932,8 +932,7 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                 options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[CONF_ENABLE_MAINTENANCE_BUTTONS]
             if CONF_DEBUG_LOGGING in user_input:
                 options_data[CONF_DEBUG_LOGGING] = user_input[CONF_DEBUG_LOGGING]
-            if "upnp_mode" in user_input:
-                options_data["upnp_mode"] = user_input["upnp_mode"]
+            # UPnP mode option removed - always try UPnP (Samsung/DLNA pattern), gracefully fallback to polling
 
             return self.async_create_entry(title="", data=options_data)
 
@@ -944,9 +943,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
         current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, False)
         current_debug_logging = self.entry.options.get(CONF_DEBUG_LOGGING, False)
 
-        # Get current UPnP mode
-        current_upnp_mode = self.entry.options.get("upnp_mode", "disabled")
-
         schema = vol.Schema(
             {
                 vol.Optional(CONF_VOLUME_STEP_PERCENT, default=volume_step_percent): vol.All(
@@ -954,7 +950,6 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(CONF_ENABLE_MAINTENANCE_BUTTONS, default=current_maintenance_buttons): bool,
                 vol.Optional(CONF_DEBUG_LOGGING, default=current_debug_logging): bool,
-                vol.Optional("upnp_mode", default=current_upnp_mode): vol.In(["disabled", "auto", "upnp"]),
             }
         )
 

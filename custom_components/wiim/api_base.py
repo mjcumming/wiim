@@ -226,10 +226,11 @@ class WiiMClient:
     # SSL helpers -------------------------------------------------------
     # ------------------------------------------------------------------
 
-    def _get_ssl_context(self) -> ssl.SSLContext:
+    async def _get_ssl_context(self) -> ssl.SSLContext:
         """Return a permissive SSL context able to talk to WiiM devices.
 
         For Audio Pro MkII devices, also loads client certificate for mutual TLS authentication.
+        Uses executor for blocking SSL operations to avoid blocking the event loop.
         """
         if self.ssl_context is not None:
             return self.ssl_context
@@ -255,11 +256,9 @@ class WiiMClient:
                 cert_file.write(AUDIO_PRO_CLIENT_CERT)
                 cert_temp_path = cert_file.name
 
-            # Load certificate from temporary file
-            # NOTE: This is a blocking I/O call, but SSL context is cached after first load
-            # so it only happens once per session. Home Assistant will warn about this but
-            # it's acceptable since subsequent calls use the cached context.
-            ctx.load_cert_chain(cert_temp_path)
+            # Load certificate from temporary file using executor to avoid blocking event loop
+            # See: https://developers.home-assistant.io/docs/asyncio_blocking_operations/#load_cert_chain
+            await asyncio.to_thread(ctx.load_cert_chain, cert_temp_path)
             _LOGGER.info("✓ Client certificate loaded for mutual TLS authentication (Audio Pro devices)")
 
             # Clean up temporary file
@@ -375,7 +374,7 @@ class WiiMClient:
                     hostname = f"[{hostname}]"
                 url = f"{p.scheme}://{hostname}:{p.port}{endpoint}"
                 if p.scheme == "https":
-                    kwargs["ssl"] = self._get_ssl_context()
+                    kwargs["ssl"] = await self._get_ssl_context()
                 else:
                     kwargs.pop("ssl", None)
 
@@ -489,12 +488,15 @@ class WiiMClient:
         protocol_priority = self._capabilities.get("protocol_priority", ["https", "http"])
         _LOGGER.debug("Using protocol priority for %s: %s", self._host, protocol_priority)
 
+        # Get SSL context once (cached after first call) and reuse for all HTTPS protocols
+        ssl_ctx = await self._get_ssl_context()
+
         if self._discovered_port:
             # Build protocols based on discovered port and priority
             protocols = []
             for scheme in protocol_priority:
                 if scheme == "https":
-                    protocols.append((scheme, self.port, self._get_ssl_context()))
+                    protocols.append((scheme, self.port, ssl_ctx))
                 else:  # http
                     protocols.append((scheme, self.port, None))
         else:
@@ -509,14 +511,14 @@ class WiiMClient:
                     if preferred_ports:
                         # Audio Pro MkII: Use preferred ports (4443, 8443, 443)
                         for port in preferred_ports:
-                            protocols.append((scheme, port, self._get_ssl_context()))
+                            protocols.append((scheme, port, ssl_ctx))
                     else:
                         # Standard devices: Try common HTTPS ports
                         protocols.extend(
                             [
-                                (scheme, 443, self._get_ssl_context()),
-                                (scheme, 4443, self._get_ssl_context()),
-                                (scheme, 8443, self._get_ssl_context()),
+                                (scheme, 443, ssl_ctx),
+                                (scheme, 4443, ssl_ctx),
+                                (scheme, 8443, ssl_ctx),
                             ]
                         )
                 else:  # http
@@ -531,7 +533,7 @@ class WiiMClient:
             if self.port not in (80, 443, 4443, 8080):
                 for scheme in protocol_priority:
                     if scheme == "https":
-                        protocols.insert(0, (scheme, self.port, self._get_ssl_context()))
+                        protocols.insert(0, (scheme, self.port, ssl_ctx))
                     else:  # http
                         protocols.insert(0, (scheme, self.port, None))
 
@@ -542,14 +544,14 @@ class WiiMClient:
                 protocols.extend(
                     [
                         # Re-add common ports with higher priority for Audio Pro
-                        ("https", 443, self._get_ssl_context()),
-                        ("https", 4443, self._get_ssl_context()),
-                        ("https", 8443, self._get_ssl_context()),
+                        ("https", 443, ssl_ctx),
+                        ("https", 4443, ssl_ctx),
+                        ("https", 8443, ssl_ctx),
                         ("http", 80, None),
                         ("http", 8080, None),
                         # Some Audio Pro devices may use port 8888
                         ("http", 8888, None),
-                        ("https", 8888, self._get_ssl_context()),
+                        ("https", 8888, ssl_ctx),
                     ]
                 )
 

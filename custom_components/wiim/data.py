@@ -21,6 +21,7 @@ This follows cursor rules: simple, composable, < 200 LOC modules.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -99,7 +100,7 @@ class Speaker:
         self.group_members: list[Speaker] = []
         self.coordinator_speaker: Speaker | None = None
 
-        # UPnP components (Sonos pattern)
+        # UPnP components (Samsung/DLNA pattern)
         self._upnp_client: Any | None = None
         self._upnp_eventer: Any | None = None
         self._upnp_state: Any | None = None
@@ -131,22 +132,29 @@ class Speaker:
 
     async def async_setup(self, entry: ConfigEntry) -> None:
         """Complete async setup of the speaker."""
+        _LOGGER.info("🔧 Speaker.async_setup() called for %s (UUID: %s)", self.name, self.uuid)
+
         # _populate_device_info is a synchronous helper; no need to await.
         self._populate_device_info()
         await self._register_ha_device(entry)
 
-        # Initialize UPnP if enabled (Sonos pattern)
-        # NOTE: UPnP disabled by default due to Docker/WSL networking issues
-        # In bridge network mode, devices cannot reach the container's IP for event notifications
-        # To enable UPnP in Docker: use network_mode: host in docker-compose.yml or --network=host
-        # To enable UPnP in VS Code DevContainer: add "runArgs": ["--network=host"] to devcontainer.json
-        upnp_mode = entry.options.get("upnp_mode", "auto")
-        if upnp_mode in ("auto", "upnp"):
-            try:
-                await self._setup_upnp_subscriptions(entry)
-            except Exception as err:
-                _LOGGER.warning("Failed to setup UPnP for %s: %s", self.name, err)
-                self._subscriptions_failed = True
+        # Initialize UPnP (Samsung/DLNA pattern - always try, gracefully fallback to polling)
+        # Follows DLNA DMR/SamsungTV pattern: always attempt UPnP subscriptions, fallback to HTTP polling on failure
+        # In Docker/WSL bridge mode, callbacks may not be reachable, but code handles this gracefully
+        # To enable UPnP callbacks in Docker: use network_mode: host in docker-compose.yml or --network=host
+        # To enable UPnP callbacks in VS Code DevContainer: add "runArgs": ["--network=host"] to devcontainer.json
+        _LOGGER.info("📡 Initializing UPnP event subscriptions for %s (Samsung/DLNA pattern)...", self.name)
+        try:
+            await self._setup_upnp_subscriptions(entry)
+            _LOGGER.info("✅ UPnP setup completed for %s", self.name)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "⚠️  Failed to setup UPnP for %s: %s - will use HTTP polling fallback",
+                self.name,
+                err,
+            )
+            _LOGGER.debug("UPnP setup error details:", exc_info=True)
+            self._subscriptions_failed = True
 
         _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
@@ -1104,17 +1112,18 @@ class Speaker:
         return None
 
     # ==========================================================
-    # UPnP Integration Methods (Sonos Pattern)
+    # UPnP Integration Methods (Samsung/DLNA Pattern)
     # ==========================================================
 
     async def _setup_upnp_subscriptions(self, entry: ConfigEntry) -> None:
-        """Create UPnP subscriptions (Sonos pattern).
+        """Create UPnP subscriptions (Samsung/DLNA pattern).
 
-        This follows the Sonos _async_subscribe pattern:
+        This follows the Samsung/DLNA DmrDevice pattern using async_upnp_client:
         1. Create UpnpClient from SSDP discovery info
         2. Create UpnpEventer with state manager
         3. Start subscriptions with callbacks
         4. Set up fallback polling if needed
+        See: /workspaces/core/homeassistant/components/dlna_dmr/media_player.py
         """
         from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -1140,24 +1149,40 @@ class Speaker:
                 description_url,
             )
 
-        # Create UPnP client (Sonos pattern)
+        # Create UPnP client (Samsung/DLNA pattern)
         _LOGGER.info(
-            "Creating UPnP client for %s from description URL: %s",
+            "🔧 Creating UPnP client for %s from description URL: %s",
             self.name,
             description_url,
         )
         session = async_get_clientsession(self.hass)
-        self._upnp_client = await UpnpClient.create(
-            host=self.ip_address,
-            description_url=description_url,
-            session=session,
-        )
-        _LOGGER.info("UPnP client created successfully for %s", self.name)
+        client_start_time = time.time()
+        try:
+            self._upnp_client = await UpnpClient.create(
+                host=self.ip_address,
+                description_url=description_url,
+                session=session,
+            )
+            client_duration = time.time() - client_start_time
+            _LOGGER.info(
+                "✅ UPnP client created successfully for %s (completed in %.2fs)",
+                self.name,
+                client_duration,
+            )
+        except Exception as err:  # noqa: BLE001
+            client_duration = time.time() - client_start_time
+            _LOGGER.error(
+                "❌ Failed to create UPnP client for %s (after %.2fs): %s",
+                self.name,
+                client_duration,
+                err,
+            )
+            raise
 
         # Create state manager
         self._upnp_state = WiiMState()
 
-        # Create eventer with callback (Sonos pattern)
+        # Create eventer with callback (Samsung/DLNA pattern)
         self._upnp_eventer = UpnpEventer(
             hass=self.hass,
             upnp_client=self._upnp_client,
@@ -1165,13 +1190,16 @@ class Speaker:
             device_uuid=self.uuid,
         )
 
-        # Start subscriptions with callbacks (Sonos pattern)
+        # Start subscriptions with callbacks (Samsung/DLNA pattern)
         await self._upnp_eventer.start(
             callback_host=entry.options.get("upnp_callback_host"),
             callback_port=entry.options.get("upnp_callback_port", 0),
         )
 
-        # Create fallback polling timer (Sonos pattern)
+        # Reset subscription failure flag on successful setup
+        self._subscriptions_failed = False
+
+        # Create fallback polling timer (for resilience)
         # This ensures entities continue to update even if UPnP events stop arriving
         from functools import partial
 
@@ -1198,13 +1226,13 @@ class Speaker:
                 poll_interval_seconds,
             )
 
-        # Register lifecycle cleanup (Sonos pattern)
+        # Register lifecycle cleanup (Samsung/DLNA pattern)
         entry.async_on_unload(self._cleanup_upnp_subscriptions)
 
         _LOGGER.info("UPnP subscriptions established for %s", self.name)
 
     async def _cleanup_upnp_subscriptions(self) -> None:
-        """Clean up UPnP subscriptions (Sonos pattern)."""
+        """Clean up UPnP subscriptions (Samsung/DLNA pattern)."""
         # Cancel fallback polling timer
         if self._poll_timer:
             self._poll_timer()
@@ -1224,7 +1252,7 @@ class Speaker:
 
     @callback
     def _on_upnp_event(self, variables: dict[str, Any]) -> None:
-        """Handle UPnP event notifications (Sonos async_dispatch_event pattern).
+        """Handle UPnP event notifications (Samsung/DLNA pattern).
 
         This callback is called by UpnpEventer when events arrive.
         It updates the speaker state and triggers entity updates.
@@ -1236,7 +1264,7 @@ class Speaker:
         changed = self._upnp_state.apply_diff(variables)
 
         if changed:
-            # Trigger coordinator update (Sonos dispatcher pattern)
+            # Trigger coordinator update (Home Assistant dispatcher pattern)
             # Use UUID consistently for signal names
             async_dispatcher_send(
                 self.hass,

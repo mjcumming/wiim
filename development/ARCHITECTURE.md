@@ -23,13 +23,61 @@ Each class has ONE clear purpose and handles ONE aspect of the system.
 
 ### 4. Event-Driven Architecture
 
-State changes flow through the system via events, avoiding tight coupling.
+State changes flow through the system via events, avoiding tight coupling. The integration uses UPnP eventing (following the Samsung/DLNA pattern) for real-time state synchronization with HTTP polling fallback.
 
-### 5. Defensive Programming
+### 5. UPnP Eventing Architecture (Samsung/DLNA Pattern)
+
+The integration follows the **Samsung/DLNA UPnP eventing pattern** using `async_upnp_client` for real-time state synchronization:
+
+**Design Pattern Reference:**
+
+- **Primary Pattern**: Samsung/DLNA DMR integration (`homeassistant/components/dlna_dmr/media_player.py`)
+- **Library**: `async_upnp_client` with `DmrDevice` wrapper
+- **NOT Sonos pattern**: We use `async_upnp_client`, not the Sonos-specific `soco` library
+
+**Architecture:**
+
+1. **UPnP Client** (`upnp_client.py`): Wraps `async_upnp_client` for device communication
+
+   - Creates `DmrDevice` wrapper using SSDP discovery info
+   - Manages `AiohttpNotifyServer` for receiving event callbacks
+   - Uses `event_handler.async_subscribe()` for individual service subscriptions
+
+2. **UPnP Eventer** (`upnp_eventer.py`): Manages subscription lifecycle
+
+   - Subscribes to AVTransport and RenderingControl services individually
+   - Handles subscription renewals (renews at 80% of timeout)
+   - Processes NOTIFY events and updates speaker state
+   - Gracefully falls back to HTTP polling on failure
+
+3. **State Management**: Centralized state via `WiiMState` dataclass
+   - Tracks all UPnP state variables
+   - Provides unified interface for entity updates
+
+**Subscription Flow:**
+
+```
+Device Discovery (SSDP) → Create UpnpClient → Start NotifyServer →
+Subscribe to Services (AVTransport, RenderingControl) →
+Receive NOTIFY Events → Update Speaker State → Update HA Entities
+```
+
+**Fallback Behavior:**
+
+- If subscription fails → HTTP polling continues (no functionality loss)
+- If callbacks unreachable (Docker/WSL) → HTTP polling with clear warnings
+- Auto-recovery: Periodically attempts to re-establish subscriptions
+
+**Configuration:**
+
+- Default: `"auto"` (try UPnP, fallback to polling like DLNA DMR/SamsungTV)
+- Options: `"upnp"` (force UPnP), `"disabled"` / `"polling_only"` (HTTP polling only)
+
+### 6. Defensive Programming
 
 All operations have graceful fallbacks and error handling.
 
-### 6. File Size Policy (Soft-/Hard-Limit)
+### 7. File Size Policy (Soft-/Hard-Limit)
 
 To keep modules focused and reviews short we aim for **≤ 300 LOC** per file (excluding comments, blank lines and imports).
 

@@ -41,6 +41,77 @@ async def test_role_detection_solo(mock_coordinator, base_status, base_device_in
     assert mock_coordinator.client._group_slaves == []
 
 
+async def test_role_detection_with_none_device_info_legacy(mock_coordinator, base_status):
+    """Test role detection when device_info is None (API call failed) - legacy firmware path.
+
+    This tests the bug fix where AttributeError was raised when device_info was None.
+    Simulates the error path where fetch_device_info raises an exception and device_model
+    becomes None in coordinator_polling.py.
+    """
+    device_info = None
+    multiroom = {"slave_count": 0, "slaves": []}
+
+    # Set capabilities for legacy firmware detection
+    mock_coordinator._capabilities = {"is_legacy_device": True}
+
+    # Should not raise AttributeError, should fallback to status attributes
+    result = await detect_role_from_status_and_slaves(mock_coordinator, base_status, multiroom, device_info)
+
+    # Should gracefully handle None and fallback to solo
+    assert result == "solo"
+    assert mock_coordinator.client._group_master is None
+    assert mock_coordinator.client._group_slaves == []
+
+
+async def test_role_detection_with_none_device_info_enhanced(mock_coordinator, base_status):
+    """Test role detection when device_info is None (API call failed) - enhanced firmware path.
+
+    This tests the bug fix where AttributeError was raised when device_info was None.
+    Simulates the error path where fetch_device_info raises an exception and device_model
+    becomes None in coordinator_polling.py.
+    """
+    device_info = None
+    multiroom = {"slave_count": 0, "slaves": []}
+
+    # Set capabilities for enhanced firmware detection (or default)
+    mock_coordinator._capabilities = {"is_wiim_device": True, "is_legacy_device": False}
+
+    # Should not raise AttributeError, should fallback to status attributes
+    result = await detect_role_from_status_and_slaves(mock_coordinator, base_status, multiroom, device_info)
+
+    # Should gracefully handle None and fallback to solo
+    assert result == "solo"
+    assert mock_coordinator.client._group_master is None
+    assert mock_coordinator.client._group_slaves == []
+
+
+async def test_role_detection_with_none_device_info_status_fallback(mock_coordinator):
+    """Test role detection with None device_info falls back to status attributes."""
+    device_info = None
+    multiroom = {"slave_count": 0, "slaves": []}
+
+    # Create status with group info to test fallback logic
+    status = PlayerStatus.model_validate(
+        {
+            "status": "stop",
+            "vol": 50,
+            "mode": "0",
+            "group": "1",  # Should be used when device_info is None
+            "master_uuid": "status-master-uuid",
+        }
+    )
+
+    # Set capabilities for legacy firmware detection
+    mock_coordinator._capabilities = {"is_legacy_device": True}
+
+    # Should use status.group and status attributes when device_info is None
+    result = await detect_role_from_status_and_slaves(mock_coordinator, status, multiroom, device_info)
+
+    # Should detect as slave based on status.group = "1" and status.master_uuid
+    assert result == "slave"
+    assert mock_coordinator.client._group_master is None  # No master_ip in status, so None
+
+
 @pytest.mark.skip(reason="Test environment issue - core logic works correctly")
 async def test_role_detection_master_with_slaves(mock_coordinator, base_status, base_device_info):
     """Test master role detection when device has slaves."""

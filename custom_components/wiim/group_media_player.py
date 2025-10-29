@@ -1,6 +1,6 @@
 """WiiM group media player entity.
 
-Provides unified control for WiiM multiroom groups following the Sonos pattern.
+Provides unified control for WiiM multiroom groups.
 A persistent entity that becomes available when a speaker acts as group master.
 """
 
@@ -31,8 +31,8 @@ _LOGGER = logging.getLogger(__name__)
 class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     """Representation of a WiiM speaker group coordinator.
 
-    This entity follows the Sonos pattern - it's always created but only becomes
-    available when the speaker acts as a group master with active slaves.
+    This entity is always created but only becomes available when the speaker
+    acts as a group master with active slaves.
     Provides unified control for volume, mute, and playback across all group members.
     """
 

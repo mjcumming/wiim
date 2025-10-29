@@ -50,9 +50,15 @@ def _detect_role_legacy_firmware(coordinator, status: PlayerStatus, device_info:
     Returns:
         Detected role for legacy device
     """
-    group_field = device_info.group or status.group or "0"
-    master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
-    device_name = device_info.name or "Unknown"
+    # Handle case where device_info may be None (e.g., API call failed)
+    if device_info is None:
+        group_field = getattr(status, "group", "0") or "0"
+        master_uuid = getattr(status, "master_uuid", None)
+        device_name = getattr(status, "name", "Unknown") or "Unknown"
+    else:
+        group_field = device_info.group or getattr(status, "group", "0") or "0"
+        master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
+        device_name = device_info.name or "Unknown"
 
     # Legacy devices often have unreliable group state
     # Use conservative detection to avoid false positives
@@ -107,11 +113,19 @@ def _detect_role_enhanced_firmware(
     Returns:
         Detected role for enhanced device
     """
-    group_field = device_info.group or status.group or "0"
-    master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
-    master_ip = device_info.master_ip or getattr(status, "master_ip", None)
-    device_uuid = device_info.uuid or getattr(status, "uuid", None)
-    device_name = device_info.name or "Unknown"
+    # Handle case where device_info may be None (e.g., API call failed)
+    if device_info is None:
+        group_field = getattr(status, "group", "0") or "0"
+        master_uuid = getattr(status, "master_uuid", None)
+        master_ip = getattr(status, "master_ip", None)
+        device_uuid = getattr(status, "uuid", None)
+        device_name = getattr(status, "name", "Unknown") or "Unknown"
+    else:
+        group_field = device_info.group or getattr(status, "group", "0") or "0"
+        master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
+        master_ip = device_info.master_ip or getattr(status, "master_ip", None)
+        device_uuid = device_info.uuid or getattr(status, "uuid", None)
+        device_name = device_info.name or "Unknown"
 
     # Get slave count from API (field is "slaves", not "slave_count")
     slaves_data = multiroom.get("slaves", 0)

@@ -1,10 +1,13 @@
 """UPnP client for WiiM/Linkplay devices.
 
-Follows DLNA/DMR and Sonos integration patterns from core Home Assistant.
+Follows Samsung/DLNA pattern using async_upnp_client (DmrDevice pattern).
+See: /workspaces/core/homeassistant/components/dlna_dmr/media_player.py
+and /workspaces/core/homeassistant/components/samsungtv/media_player.py
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 from typing import Any
 
@@ -71,8 +74,9 @@ class UpnpClient:
         """Initialize UPnP device and services."""
         try:
             # Create requester with SSL disabled for self-signed certs (DLNA/DMR pattern)
-            from aiohttp import ClientSession, TCPConnector
             import ssl
+
+            from aiohttp import ClientSession, TCPConnector
 
             # Handle both HTTP and HTTPS description URLs
             if self.description_url.startswith("https://"):
@@ -186,17 +190,66 @@ class UpnpClient:
         server_port = getattr(self._notify_server, "port", "unknown")
         callback_url = getattr(self._notify_server, "callback_url", None)
 
-        _LOGGER.info(
-            "Notify server started on %s:%s (callback_url=%s)",
-            server_host,
-            server_port,
-            callback_url,
-        )
+        # Enhanced callback URL logging with validation
+        if callback_url:
+            _LOGGER.info(
+                "✅ Notify server started on %s:%s",
+                server_host,
+                server_port,
+            )
+            _LOGGER.info(
+                "📡 UPnP callback URL: %s (this URL will be sent to devices in SUBSCRIBE requests)",
+                callback_url,
+            )
 
-        if callback_url is None:
-            _LOGGER.warning("⚠️  No callback_url from notify server - UPnP events may not work!")
-            _LOGGER.warning(
-                "   This is likely a Docker networking issue - devices cannot send Norwich events to the container"
+            # Detect and warn about unreachable container/WSL IPs
+            is_unreachable = False
+            unreachable_reason = None
+
+            if server_host.startswith("172."):
+                is_unreachable = True
+                unreachable_reason = "Docker bridge network IP (172.x.x.x)"
+            elif server_host.startswith("192.168.65"):
+                is_unreachable = True
+                unreachable_reason = "WSL2 NAT network IP (192.168.65.x)"
+            elif server_host == "0.0.0.0":
+                is_unreachable = True
+                unreachable_reason = "wildcard binding (0.0.0.0) - devices cannot reach this"
+
+            if is_unreachable:
+                _LOGGER.error(
+                    "⚠️  CRITICAL: Callback URL is using %s - devices on your LAN CANNOT reach this for UPnP events!",
+                    unreachable_reason,
+                )
+                _LOGGER.error(
+                    "   ➤ Solutions:",
+                )
+                _LOGGER.error(
+                    "      1. Use 'network_mode: host' in docker-compose.yml",
+                )
+                _LOGGER.error(
+                    "      2. Add '--network=host' to devcontainer.json runArgs",
+                )
+                _LOGGER.error(
+                    "      3. Configure callback_host in integration options with your host's LAN IP",
+                )
+                _LOGGER.error(
+                    "      4. Use port forwarding to map callback port to host",
+                )
+                _LOGGER.error(
+                    "   Integration will fall back to HTTP polling, but real-time events will not work.",
+                )
+            else:
+                _LOGGER.info(
+                    "✓ Callback URL appears reachable (not a container/WSL IP)",
+                )
+        else:
+            _LOGGER.error("⚠️  CRITICAL: No callback_url from notify server - UPnP events will NOT work!")
+            _LOGGER.error(
+                "   This is likely a networking issue - devices cannot send NOTIFY events to the container",
+            )
+            _LOGGER.error(
+                "   Check Docker networking configuration (use --network=host or configure port forwarding)",
             )
 
         # Create DmrDevice wrapper (DLNA pattern from Samsung/DLNA integrations)
@@ -239,13 +292,16 @@ class UpnpClient:
         sub_callback: Any = None,
         renew_fail_callback: Any = None,
     ) -> Any:
-        """Subscribe to UPnP service events (Sonos pattern).
+        """Subscribe to UPnP service events (Samsung/DLNA pattern).
+
+        Uses event_handler.async_subscribe() like DmrDevice does.
+        See: async_upnp_client/profiles/dlna.py async_subscribe_services()
 
         Args:
             service_name: Name of service ("AVTransport" or "RenderingControl")
             timeout: Subscription timeout in seconds
-            sub_callback: Callback function for events (Sonos pattern)
-            renew_fail_callback: Callback function when renewal fails (Sonos pattern)
+            sub_callback: Callback function for events (signature: (service, state_variables))
+            renew_fail_callback: Unused (renewal handled separately)
 
         Returns:
             Subscription object (for storing and managing callback)
@@ -272,25 +328,78 @@ class UpnpClient:
 
         callback_url = f"http://{server_host}:{server_port}/notify"
 
-        # Use the service's async_subscribe method (UPnP pattern)
-        # This is the correct method on UpnpService
-        subscription = await service.async_subscribe(
-            event_url=callback_url,
-            requested_timeout=timeout,
-        )
-
-        # Set callbacks (Sonos pattern from lines 423-424)
-        if sub_callback:
-            subscription.callback = sub_callback
-        if renew_fail_callback:
-            subscription.auto_renew_fail = renew_fail_callback
-
+        # Log the subscription request with callback URL
         _LOGGER.info(
-            "Subscribed to %s on %s: SID=%s, expires=%d seconds (auto_renew=True)",
+            "📨 Subscribing to %s service on %s",
             service_name,
             self.host,
-            subscription.sid,
+        )
+        _LOGGER.debug(
+            "   → Using callback URL: %s (devices will send NOTIFY events to this URL)",
+            callback_url,
+        )
+        _LOGGER.debug("   → Requested timeout: %d seconds", timeout)
+
+        # Following DmrDevice pattern from dlna_dmr/samsungtv integrations:
+        # 1. Set service.on_event callback BEFORE subscribing
+        # 2. Call event_handler.async_subscribe(service, timeout=...) which returns (sid, timeout_timedelta)
+        # See: /workspaces/core/homeassistant/components/dlna_dmr/media_player.py:391
+        # and async_upnp_client/profiles/dlna.py async_subscribe_services()
+        event_handler = self._notify_server.event_handler
+
+        # Set callback on service (DmrDevice pattern: service.on_event is called by event_handler)
+        if sub_callback:
+            service.on_event = sub_callback
+
+        # Subscribe - returns (sid, timeout_timedelta) tuple
+        # event_handler.async_subscribe() expects timeout as timedelta, not int
+        timeout_delta = timedelta(seconds=timeout)
+        sid, timeout_timedelta = await event_handler.async_subscribe(
+            service,
+            timeout=timeout_delta,
+        )
+
+        # Convert timedelta to seconds
+        granted_timeout = int(timeout_timedelta.total_seconds())
+
+        # Create subscription wrapper for tracking SID and timeout
+        class SubscriptionWrapper:
+            """Wrapper for subscription info (Samsung/DLNA pattern compatibility)."""
+
+            def __init__(self, sid: str, timeout: int, service_obj: Any):
+                self.sid = sid
+                self.timeout = timeout
+                self.service = service_obj
+
+            @property
+            def callback(self):
+                return getattr(self.service, "on_event", None)
+
+            @callback.setter
+            def callback(self, value):
+                # Update service.on_event (DmrDevice pattern)
+                self.service.on_event = value
+
+        subscription = SubscriptionWrapper(sid, granted_timeout, service)
+
+        _LOGGER.info(
+            "✅ Successfully subscribed to %s on %s",
+            service_name,
+            self.host,
+        )
+        _LOGGER.info(
+            "   → SID: %s",
+            sid,
+        )
+        _LOGGER.info(
+            "   → Timeout: %d seconds (requested %d, granted %d)",
+            granted_timeout,
             timeout,
+            granted_timeout,
+        )
+        _LOGGER.info(
+            "   → Callback URL: %s",
+            callback_url,
         )
 
         return subscription
@@ -315,8 +424,16 @@ class UpnpClient:
                 self._dmr_device.on_event = event_callback
 
             # Subscribe to all services (DLNA pattern)
+            _LOGGER.info("📨 Subscribing to all UPnP services using DmrDevice pattern for %s", self.host)
+            callback_url = getattr(self._notify_server, "callback_url", "unknown")
+            _LOGGER.debug("   → Using callback URL: %s", callback_url)
+
             await self._dmr_device.async_subscribe_services(auto_resubscribe=True)
-            _LOGGER.info("Successfully subscribed to UPnP services for %s", self.host)
+            _LOGGER.info("✅ Successfully subscribed to UPnP services for %s (DLNA/DmrDevice pattern)", self.host)
+            _LOGGER.debug(
+                "   → Devices will send NOTIFY events to: %s",
+                callback_url,
+            )
 
         except UpnpResponseError as err:
             # Device rejected subscription - this is OK, we'll poll instead
@@ -331,8 +448,11 @@ class UpnpClient:
         service_name: str,
         sid: str,
         timeout: int = 1800,
-    ) -> bool:
-        """Renew UPnP service subscription.
+    ) -> tuple[str, int] | None:
+        """Renew UPnP service subscription (Samsung/DLNA pattern).
+
+        Uses event_handler.async_resubscribe() like DmrDevice does.
+        See: async_upnp_client/profiles/dlna.py _async_resubscribe_services()
 
         Args:
             service_name: Name of service ("AVTransport" or "RenderingControl")
@@ -340,64 +460,76 @@ class UpnpClient:
             timeout: New subscription timeout in seconds
 
         Returns:
-            True if renewal successful, False otherwise
+            Tuple of (new_sid, timeout_timedelta) if successful, None otherwise
         """
-        # Map service name to attribute name
-        service_attr_map = {
-            "avtransport": "_av_transport_service",
-            "renderingcontrol": "_rendering_control_service",
-        }
-        service_attr = service_attr_map.get(service_name.lower())
-        if not service_attr:
-            _LOGGER.warning("Service %s not available for renewal", service_name)
+        if not self._notify_server:
+            _LOGGER.warning("Notify server not available for renewal")
             return False
 
-        service = getattr(self, service_attr)
-        if not service:
-            _LOGGER.warning("Service %s not initialized for renewal", service_name)
-            return False
+        event_handler = self._notify_server.event_handler
 
         try:
-            await service.async_resubscribe(sid=sid, timeout=timeout)
             _LOGGER.debug(
-                "Renewed subscription to %s on %s: SID=%s, expires=%d seconds",
+                "🔄 Renewing subscription to %s on %s: SID=%s, timeout=%d seconds",
                 service_name,
                 self.host,
                 sid,
                 timeout,
             )
-            return True
+            # DmrDevice pattern: event_handler.async_resubscribe() returns (new_sid, timeout_timedelta)
+            # event_handler.async_resubscribe() expects timeout as timedelta, not int
+            timeout_delta = timedelta(seconds=timeout)
+            new_sid, timeout_timedelta = await event_handler.async_resubscribe(
+                sid,
+                timeout=timeout_delta,
+            )
+            granted_timeout = int(timeout_timedelta.total_seconds())
+            _LOGGER.info(
+                "✅ Successfully renewed subscription to %s on %s: SID=%s->%s, expires=%d seconds",
+                service_name,
+                self.host,
+                sid,
+                new_sid,
+                granted_timeout,
+            )
+            return (new_sid, granted_timeout)
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
-                "Failed to renew subscription to %s on %s (SID=%s): %s",
+                "❌ Failed to renew subscription to %s on %s (SID=%s): %s",
                 service_name,
                 self.host,
                 sid,
                 err,
             )
-            return False
+            return None
 
     async def async_unsubscribe(
         self,
         service_name: str,
         sid: str,
     ) -> None:
-        """Unsubscribe from UPnP service.
+        """Unsubscribe from UPnP service (Samsung/DLNA pattern).
+
+        Uses event_handler.async_unsubscribe() like DmrDevice does.
+        See: async_upnp_client/profiles/dlna.py async_unsubscribe_services()
 
         Args:
             service_name: Name of service ("AVTransport" or "RenderingControl")
             sid: Subscription SID to unsubscribe
         """
-        service = getattr(self, f"_{service_name.lower().replace(' ', '_')}_service")
-        if not service:
-            _LOGGER.warning("Service %s not available for unsubscribe", service_name)
+        if not self._notify_server:
+            _LOGGER.warning("Notify server not available for unsubscribe")
             return
 
+        event_handler = self._notify_server.event_handler
+
         try:
-            await service.async_unsubscribe(sid=sid)
-            _LOGGER.debug("Unsubscribed from %s on %s: SID=%s", service_name, self.host, sid)
+            _LOGGER.debug("Unsubscribing from %s on %s: SID=%s", service_name, self.host, sid)
+            # DmrDevice pattern: event_handler.async_unsubscribe()
+            await event_handler.async_unsubscribe(sid)
+            _LOGGER.info("✅ Unsubscribed from %s on %s: SID=%s", service_name, self.host, sid)
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Error unsubscribing from %s on %s: %s", service_name, self.host, err)
+            _LOGGER.warning("⚠️  Error unsubscribing from %s on %s (SID=%s): %s", service_name, self.host, sid, err)
 
     async def async_call_action(
         self,

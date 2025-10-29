@@ -674,7 +674,7 @@ class MediaCommandsMixin:
             raise
 
     async def _async_handle_tts_announcement(self, media_id: str, **kwargs: Any) -> None:
-        """Handle TTS announcements with role-aware behavior following Sonos pattern."""
+        """Handle TTS announcements with role-aware behavior for group coordination."""
         speaker: Speaker = self.speaker  # type: ignore[attr-defined]
         _LOGGER.debug("Handling TTS announcement for %s (role=%s)", speaker.name, speaker.role)
 

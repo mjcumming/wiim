@@ -1,8 +1,8 @@
-# Docker Networking for łiiM Integration Development
+# Docker Networking for WiiM Integration Development
 
 ## Overview
 
-The łiiM integration uses UPnP for real-time event notifications from devices. This requires specific Docker networking configuration for proper operation.
+The WiiM integration uses UPnP (following the Samsung/DLNA pattern with `async_upnp_client`) for real-time event notifications from devices. This requires specific Docker networking configuration for proper operation.
 
 ## The UPnP Networking Requirement
 

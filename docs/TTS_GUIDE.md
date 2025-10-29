@@ -1,6 +1,6 @@
 # WiiM TTS (Text-to-Speech) Guide
 
-The WiiM integration now supports TTS announcements following the Sonos pattern, allowing you to send text-to-speech messages to your WiiM speakers.
+The WiiM integration now supports TTS announcements with role-aware group coordination, allowing you to send text-to-speech messages to your WiiM speakers.
 
 ## Basic Usage
 
