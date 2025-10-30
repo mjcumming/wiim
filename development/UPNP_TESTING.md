@@ -245,32 +245,50 @@ Does device respond to description.xml on port 49152?
 - The integration will work perfectly with 1-second state updates
 - Only concern yourself with UPnP if you need sub-second real-time updates
 
-## UPnP Health Watchdog
+## UPnP Eventing Approach (DLNA DMR Pattern)
 
-The integration includes a **watchdog timer** (default: checks every 45 seconds) that monitors UPnP health:
+The integration follows the **standard DLNA DMR pattern** from Home Assistant core - no fallback timer, just trust `auto_resubscribe=True`:
 
 ### How It Works
 
-1. **Timer checks**: Every 45 seconds, the integration checks when the last UPnP event was received
-2. **Healthy UPnP**: If events arrived within the last 2 minutes, UPnP is considered healthy and continues
-3. **Dead UPnP**: If no events for 2+ minutes, the integration automatically switches to HTTP polling
-4. **Non-destructive**: The watchdog does NOT shut down working UPnP subscriptions
+```python
+try:
+    self._device.on_event = self._on_event
+    await self._device.async_subscribe_services(auto_resubscribe=True)
+except UpnpResponseError as err:
+    # Device rejected subscription - this is OK, will poll instead
+    _LOGGER.debug("Device rejected subscription: %r", err)
+except UpnpError as err:
+    # Other error - clean up
+    _LOGGER.debug("Error while subscribing: %r", err)
+    raise
+```
+
+### Why No Fallback Timer?
+
+**Problem**: How can you detect "callback URL unreachable" (Docker/WSL) without a timer?
+
+**Answer**: You can't reliably:
+
+- UPnP only generates events on state changes (play/pause, volume, track change)
+- Idle device = no state changes = no events (this is **normal, not an error**)
+- Any timer would have false positives if device is idle when integration starts
+
+### For Docker/WSL Users
+
+If callback URL is unreachable, you'll see in diagnostics:
+
+- `event_count: 0` (no events arriving)
+- `callback_url: http://172.x.x.x:xxxxx` (unreachable internal IP)
+
+**Fix**: Configure `upnp_callback_host` in integration options with your LAN IP, or use `network_mode: host`.
 
 ### Benefits
 
-- **Automatic recovery**: If UPnP stops working, the integration seamlessly switches to polling
-- **No manual intervention**: Users don't need to reload the integration
-- **Resilient**: Handles network issues, device firmware bugs, or temporary UPnP failures
-
-### Configuration
-
-The watchdog interval can be configured in the integration options:
-
-- **Default**: 45 seconds
-- **Minimum**: 30 seconds (recommended)
-- **Maximum**: 300 seconds (5 minutes)
-
-**Note**: The watchdog is only active when UPnP subscriptions are established. If UPnP setup fails initially, the integration uses HTTP polling from the start.
+- ✅ **Standard pattern**: Matches DLNA DMR and Samsung TV integrations exactly
+- ✅ **No false positives**: Idle devices won't be flagged as broken
+- ✅ **Simpler code**: Trust `async_upnp_client` to handle subscriptions and renewals
+- ✅ **Clear diagnostics**: Easy to verify if UPnP is working
 
 ## Future Improvements
 

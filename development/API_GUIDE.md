@@ -492,24 +492,74 @@ field_mappings = {
 - **Enable fallback modes**: Use manual setup when auto-discovery shows warnings
 - **Check device generation**: Logging shows which generation optimizations are active
 
-### **Firmware Version Reference**
+### **Firmware Detection & Updates**
 
-Critical firmware version milestones that affect capabilities:
+#### **What the API Provides**
+
+The LinkPlay/WiiM API provides firmware **detection and update status**, but **NOT** firmware installation control:
+
+**✅ Available via API:**
+
+- Current firmware version (`firmware` field)
+- Update availability flag (`VersionUpdate` - "0" or "1")
+- Latest available version (`NewVer` field when update available)
+- Multiroom protocol version (`wmrm_version`)
+- Security version (`security_version`)
+
+**❌ NOT Available via API:**
+
+- Firmware download/installation via HTTP API
+- Check for updates on demand
+- Update progress monitoring
+- Rollback to previous versions
+
+**How Firmware Updates Actually Work:**
+
+1. **Download**: WiiM servers push firmware to device automatically
+2. **Installation**: User triggers via WiiM Home app OR device reboots when update staged
+3. **API Role**: Can only detect current version and if update is ready, can trigger reboot
+
+#### **API Detection**
+
+```python
+# Get firmware information from getStatusEx endpoint
+device_info = await client.get_device_info()
+
+# Current firmware version
+firmware = device_info.get("firmware")         # e.g., "4.6.328252"
+
+# Update availability (device downloaded update, ready to install)
+version_update = device_info.get("VersionUpdate")  # "0" = no update, "1" = update ready
+latest_version = device_info.get("NewVer")         # e.g., "4.6.329100" (when update ready)
+
+# Protocol versions
+wmrm_version = device_info.get("wmrm_version")         # e.g., "4.2"
+security_version = device_info.get("security_version") # e.g., "2.0"
+```
+
+#### **Integration Implementation**
+
+Our integration provides:
+
+1. **Firmware Sensor**: Always-visible diagnostic sensor showing current firmware
+
+   - Entity: `sensor.<device>_firmware`
+   - Shows: "4.6.328252" (current version)
+   - Attributes: MCU version, DSP version, BLE version, update availability
+
+2. **Update Entity**: Shows update status and allows installation
+   - Entity: `update.<device>_firmware_update`
+   - Shows: Current version vs latest available
+   - Action: "Install" button triggers reboot (if update staged)
+   - Disabled by default (enable in entity settings if desired)
+
+#### **Critical Firmware Version Milestones**
 
 | Version       | Introduced             | Key Features/Changes                                          |
 | ------------- | ---------------------- | ------------------------------------------------------------- |
 | **v4.2.8020** | Router-based multiroom | Default mode (no WiFi Direct needed), wmrm_version 4.2        |
 | **v4.6+**     | Enhanced features      | Slow stream handling, notification sounds, improved stability |
 | **v4.8+**     | Security updates       | Enhanced HTTPS security (security_version 2.0)                |
-
-**Version Detection:**
-
-```python
-status = await client.get_device_info()
-firmware = status.get("firmware")         # e.g., "4.6.328252"
-wmrm_version = status.get("wmrm_version") # e.g., "4.2"
-security_version = status.get("security_version") # e.g., "2.0"
-```
 
 **Impact on Integration:**
 

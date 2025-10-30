@@ -66,6 +66,9 @@ async def async_setup_entry(
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))
 
+    # Always add firmware version sensor (useful for support/troubleshooting)
+    entities.append(WiiMFirmwareSensor(speaker))
+
     # Audio quality sensors (only if metadata is supported)
     # Check if metadata support has been determined and is not False
     metadata_supported = getattr(speaker.coordinator, "_metadata_supported", None)
@@ -303,6 +306,70 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             )
 
         # Prune None values for cleanliness
+        return {k: v for k, v in attrs.items() if v is not None}
+
+
+class WiiMFirmwareSensor(WiimEntity, SensorEntity):
+    """Firmware version sensor - always visible for support and troubleshooting."""
+
+    _attr_icon = "mdi:chip"
+    _attr_device_class = None
+    _attr_state_class = None
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+
+    def __init__(self, speaker: Speaker) -> None:
+        """Initialize firmware sensor."""
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_firmware"
+        self._attr_name = "Firmware"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> str | None:
+        """Return current firmware version."""
+        # Primary source: device_model firmware field
+        if self.speaker.device_model:
+            firmware = getattr(self.speaker.device_model, "firmware", None)
+            if firmware and str(firmware).strip() not in {"", "0", "-", "unknown"}:
+                return str(firmware)
+
+        # Fallback: speaker.firmware property
+        if self.speaker.firmware and str(self.speaker.firmware).strip() not in {"", "0", "-", "unknown"}:
+            return str(self.speaker.firmware)
+
+        return "Unknown"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Additional firmware-related information."""
+        attrs: dict[str, Any] = {}
+
+        if self.speaker.device_model:
+            # MCU version (microcontroller firmware)
+            if mcu_ver := getattr(self.speaker.device_model, "mcu_ver", None):
+                attrs["mcu_version"] = str(mcu_ver)
+
+            # DSP version (digital signal processor firmware)
+            if dsp_ver := getattr(self.speaker.device_model, "dsp_ver", None):
+                attrs["dsp_version"] = str(dsp_ver)
+
+            # Bluetooth firmware version
+            if ble_ver := getattr(self.speaker.device_model, "ble_fw_ver", None):
+                attrs["bluetooth_version"] = str(ble_ver)
+
+            # Release/build info
+            if release := getattr(self.speaker.device_model, "release", None):
+                attrs["release"] = str(release)
+
+            # Update availability info (if present)
+            if version_update := getattr(self.speaker.device_model, "version_update", None):
+                # VersionUpdate can be "0" (no update) or "1" (update available)
+                if str(version_update) == "1":
+                    attrs["update_available"] = True
+                    if latest := getattr(self.speaker.device_model, "latest_version", None):
+                        attrs["latest_version"] = str(latest)
+
+        # Prune None values
         return {k: v for k, v in attrs.items() if v is not None}
 
 

@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from async_upnp_client.exceptions import UpnpResponseError
@@ -247,9 +246,10 @@ class Speaker:
         )
 
     def update_from_coordinator_data(self, data: dict[str, Any]) -> None:
-        """Update speaker state from coordinator data."""
+        """Update speaker state from coordinator HTTP polling."""
         _LOGGER.debug(
-            "🎵 update_from_coordinator_data called with data keys: %s",
+            "🔄 HTTP POLL update for %s with data keys: %s",
+            self.name,
             list(data.keys()) if data else "None",
         )
 
@@ -661,42 +661,38 @@ class Speaker:
         if self.status_model is None:
             return MediaPlayerState.IDLE
 
-        # Debug: Show ALL fields in the status model to see what the device provides
         if self.status_model.play_state is None:
-            status_dict = self.status_model.model_dump(exclude_none=True)
-            _LOGGER.debug(
-                "🎵 DEVICE STATE: play_state=None, available_fields=%s",
-                list(status_dict.keys()),
-            )
-
-            # Check if status field exists under a different name
-            getattr(self.status_model, "status", None)
+            # Only log if we've never seen this before (diagnostic aid)
+            if not hasattr(self, "_logged_missing_play_state"):
+                status_dict = self.status_model.model_dump(exclude_none=True)
+                _LOGGER.info(
+                    "Device %s has no play_state field, available_fields=%s",
+                    self.name,
+                    list(status_dict.keys()),
+                )
+                self._logged_missing_play_state = True
             return MediaPlayerState.IDLE
 
         play_status = str(self.status_model.play_state)
 
-        # Debug: Log the raw device state to see what we're actually getting
-        _LOGGER.debug(
-            "🎵 DEVICE STATE: raw_play_state='%s' (type=%s)",
-            play_status,
-            type(self.status_model.play_state),
-        )
-
         if play_status in ["play", "playing", "load"]:
-            mapped_state = MediaPlayerState.PLAYING
+            return MediaPlayerState.PLAYING
         elif play_status in ["pause", "paused"]:
-            mapped_state = MediaPlayerState.PAUSED
+            return MediaPlayerState.PAUSED
         elif play_status in ["stop", "stopped", "idle", ""]:
-            mapped_state = MediaPlayerState.IDLE
+            return MediaPlayerState.IDLE
         else:
-            # Unknown state - log it for debugging
-            _LOGGER.debug(
-                "🎵 DEVICE STATE: Unknown play_state='%s', falling back to IDLE",
-                play_status,
-            )
-            mapped_state = MediaPlayerState.IDLE
-
-        return mapped_state
+            # Unknown state - log once for diagnostics
+            if not hasattr(self, "_logged_unknown_states"):
+                self._logged_unknown_states = set()
+            if play_status not in self._logged_unknown_states:
+                _LOGGER.warning(
+                    "Device %s reported unknown play_state='%s', treating as IDLE",
+                    self.name,
+                    play_status,
+                )
+                self._logged_unknown_states.add(play_status)
+            return MediaPlayerState.IDLE
 
     def is_volume_muted(self) -> bool | None:
         """Return *current* mute state derived from :class:`PlayerStatus`.
@@ -765,12 +761,6 @@ class Speaker:
 
     def get_media_duration(self) -> int | None:
         duration = self._status_field("duration")
-        _LOGGER.debug(
-            "🎵 get_media_duration: raw duration=%s (type: %s)",
-            duration,
-            type(duration),
-        )
-
         try:
             if duration is not None:
                 result = int(float(duration))
@@ -785,14 +775,6 @@ class Speaker:
 
     def get_media_position(self) -> int | None:
         position = self._status_field("position", "seek")
-        _LOGGER.debug(
-            "🎵 get_media_position: raw position=%s (type: %s)",
-            position,
-            type(position),
-        )
-
-        # Position may vary by source type and streaming service
-
         try:
             if position is not None:
                 pos_value = int(float(position))
@@ -866,22 +848,10 @@ class Speaker:
             current_position is not None and previous_position is not None and current_position + 2 < previous_position
         )
 
-        _LOGGER.debug(
-            "🎵 get_media_position_updated_at: current_pos=%s, prev_pos=%s, is_playing=%s, track_changed=%s, pos_decreased=%s",
-            current_position,
-            previous_position,
-            is_playing,
-            track_changed,
-            position_decreased,
-        )
-
         if (track_changed or position_decreased) and current_position is not None:
             self._last_position_update = time.time()
             self._last_position = current_position
             self._last_track_signature = current_signature
-            _LOGGER.debug(
-                "🎵 get_media_position_updated_at: Updated timestamp due to track change or position decrease"
-            )
         elif (
             is_playing
             and current_position is not None
@@ -1186,12 +1156,6 @@ class Speaker:
                 data_copy = self.coordinator.data.copy()
                 data_copy["status_model"] = updated_status
                 self.coordinator.async_set_updated_data(data_copy)
-
-                _LOGGER.debug(
-                    "Merged UPnP state into coordinator.data for %s: %s",
-                    self.name,
-                    list(updates.keys()),
-                )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning(
                     "Failed to merge UPnP state into coordinator for %s: %s",
@@ -1328,36 +1292,7 @@ class Speaker:
             self._upnp_eventer = None
             return
 
-        # Create fallback polling timer (watchdog for UPnP health)
-        # This timer checks if UPnP events are still arriving.
-        # If events stop for 2+ minutes, it automatically switches to HTTP polling.
-        # Does NOT shut down working UPnP subscriptions.
-        from functools import partial
-
-        from homeassistant.helpers.event import async_track_time_interval
-
-        from .const import WIIM_FALLBACK_POLL
-
-        if not self._poll_timer:
-            poll_interval_seconds = entry.options.get("fallback_poll_interval", 45)
-            poll_interval = timedelta(seconds=poll_interval_seconds)
-
-            self._poll_timer = async_track_time_interval(
-                self.hass,
-                partial(
-                    async_dispatcher_send,
-                    self.hass,
-                    f"{WIIM_FALLBACK_POLL}-{self.uuid}",
-                ),
-                poll_interval,
-            )
-            _LOGGER.debug(
-                "UPnP watchdog timer created for %s (checks health every %ds, switches to polling if no events for 2+ minutes)",
-                self.name,
-                poll_interval_seconds,
-            )
-
-        # Register lifecycle cleanup (Samsung/DLNA pattern)
+        # Register lifecycle cleanup (DLNA DMR pattern)
         entry.async_on_unload(self._cleanup_upnp_subscriptions)
 
         _LOGGER.info("UPnP subscriptions established for %s", self.name)
@@ -1395,6 +1330,12 @@ class Speaker:
         changed = self._upnp_state.apply_diff(variables)
 
         if changed:
+            _LOGGER.debug(
+                "📡 UPnP EVENT received for %s: %s",
+                self.name,
+                list(variables.keys()),
+            )
+
             # Merge UPnP state into coordinator.data so entities can read it
             self._merge_upnp_state_to_coordinator()
 

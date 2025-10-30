@@ -9,6 +9,7 @@ a new release, issuing a normal `reboot` starts the update process. Therefore
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.update import (
     UpdateDeviceClass,
@@ -68,9 +69,42 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
 
     @property
     def available(self) -> bool:  # type: ignore[override]
+        """Entity is available whenever we have device model info.
+
+        Changed from only showing when update available to always showing
+        when we have firmware info, providing better user visibility.
+        """
+        return self.speaker.device_model is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Additional update-related information."""
+        attrs: dict[str, Any] = {}
+
         if self.speaker.device_model is None:
-            return False
-        return bool(getattr(self.speaker.device_model, "version_update", False))
+            return attrs
+
+        # Show current firmware clearly
+        if firmware := getattr(self.speaker.device_model, "firmware", None):
+            attrs["current_firmware"] = str(firmware)
+
+        # Show update status
+        version_update = getattr(self.speaker.device_model, "version_update", None)
+        if version_update:
+            attrs["update_flag"] = str(version_update)
+            # "0" or None = no update, "1" = update available
+            attrs["update_ready"] = str(version_update) == "1"
+
+        # Show latest version info
+        if latest := getattr(self.speaker.device_model, "latest_version", None):
+            if str(latest).strip() not in {"0", "-", ""}:
+                attrs["latest_firmware"] = str(latest)
+
+        # Additional version components
+        if release := getattr(self.speaker.device_model, "release", None):
+            attrs["release_info"] = str(release)
+
+        return {k: v for k, v in attrs.items() if v is not None}
 
     # ------------- Optional actions -------------
 

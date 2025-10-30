@@ -104,7 +104,11 @@ class TestWiiMFirmwareUpdateEntity:
         assert update_entity.available is True
 
     def test_available_with_no_update(self):
-        """Test available property when no update is available."""
+        """Test available property when no update is available.
+
+        Entity should be available whenever we have device model info,
+        regardless of update availability (provides better user visibility).
+        """
         from custom_components.wiim.update import WiiMFirmwareUpdateEntity
 
         speaker = MagicMock()
@@ -114,7 +118,7 @@ class TestWiiMFirmwareUpdateEntity:
         speaker.device_model.version_update = False
 
         update_entity = WiiMFirmwareUpdateEntity(speaker)
-        assert update_entity.available is False
+        assert update_entity.available is True
 
     def test_available_no_device_model(self):
         """Test available property when device model is None."""

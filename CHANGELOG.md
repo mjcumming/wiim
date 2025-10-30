@@ -2,6 +2,80 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.0] - 2025-10-30
+
+### Added
+
+- **UPnP Event System**: Real-time device state updates via UPnP DLNA DMR eventing
+  - Automatic subscription to AVTransport and RenderingControl UPnP services
+  - Instant state updates when device state changes (play/pause/volume/mute)
+  - Follows Home Assistant patterns (Samsung TV, DLNA DMR) using `async_upnp_client`
+  - Automatic resubscription with health monitoring and diagnostics
+  - Reduces polling frequency while improving responsiveness
+  - Works with WiiM Pro, Mini, Amp, and compatible LinkPlay devices
+  
+- **UPnP Health Monitoring**: New diagnostic sensor for UPnP event health
+  - Shows UPnP push health status (healthy/degraded/unavailable)
+  - Tracks event counts and last notification timestamps
+  - Helps diagnose UPnP connectivity issues
+  - Available in device diagnostics
+
+- **UPnP Testing Tools**: Comprehensive diagnostic script for UPnP support verification
+  - Test UPnP description.xml accessibility
+  - Verify AVTransport and RenderingControl service availability
+  - Validate UPnP eventing capability before enabling feature
+  - Located at `scripts/test_upnp_description.py`
+
+### Changed
+
+- **Polling Strategy**: Optimized polling intervals with UPnP event system
+  - Basic device status: 30 seconds (down from 15) when UPnP is healthy
+  - Device info: 120 seconds (unchanged)
+  - Multiroom status: 30 seconds (unchanged)
+  - Falls back to aggressive polling if UPnP becomes unhealthy
+  - Reduces network traffic while maintaining responsiveness
+
+- **Sensor Platform**: Enhanced sensor filtering and capability detection
+  - Role sensor always created (essential for multiroom understanding)
+  - Input sensor always created (commonly used)
+  - Bluetooth output sensor only created when device supports it
+  - Audio quality sensors only created when metadata endpoint is available
+  - Diagnostic sensor always available for troubleshooting
+  - Firmware sensor always created for support purposes
+
+### Technical
+
+- **UPnP Architecture**: Modular implementation following HA core patterns
+  - `upnp_client.py` - UPnP client wrapper for `async_upnp_client`
+  - `upnp_eventer.py` - Event subscription manager with health tracking
+  - `state.py` - State management with UPnP event integration
+  - Clean separation of concerns with proper error handling
+
+- **Event Processing**: Efficient LastChange XML parsing
+  - Parses AVTransport and RenderingControl XML notifications
+  - Extracts play state, volume, mute, track info from events
+  - Dispatcher-based state updates to media player entities
+  - Handles subscription renewals and resubscription failures gracefully
+
+- **Capability Detection**: Smart sensor creation based on device capabilities
+  - Checks coordinator capabilities for audio output support
+  - Validates metadata endpoint availability before creating quality sensors
+  - Graceful fallback when capability detection fails
+  - Reduces entity clutter for devices without features
+
+### Documentation
+
+- **UPnP Testing Guide**: Added comprehensive UPnP testing documentation
+  - Step-by-step verification process
+  - Diagnostic script usage examples
+  - Troubleshooting common UPnP issues
+  - Located at `development/UPNP_TESTING.md`
+
+- **Polling Strategy**: Updated polling documentation with UPnP integration
+  - Documented adaptive polling based on UPnP health
+  - Explained fallback behavior when UPnP unavailable
+  - Located at `development/POLLING_STRATEGY.md`
+
 ## [0.1.46] - 2025-01-27
 
 ### Fixed

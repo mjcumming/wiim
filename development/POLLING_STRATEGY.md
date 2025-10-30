@@ -28,21 +28,49 @@ The WiiM integration implements a sophisticated **smart polling strategy** that 
 
 ## Polling Frequency Matrix
 
-| Data Type          | Base Frequency       | Additional Triggers     | Rationale                  |
-| ------------------ | -------------------- | ----------------------- | -------------------------- |
-| **Player Status**  | 1s playing / 5s idle | Adaptive based on state | Core UI responsiveness     |
-| **Multiroom Info** | 15s                  | Track/source changes    | Role detection, grouping   |
-| **Device Info**    | 60s                  | None                    | Health check only          |
-| **Metadata**       | Never                | Track changes only      | Many devices don't support |
-| **EQ Status**      | 60s                  | None                    | Settings rarely change     |
-| **EQ Presets**     | Once                 | Startup only            | Firmware-defined           |
-| **Radio Presets**  | Once                 | Startup only            | User rarely modifies       |
+| Data Type          | Base Frequency                 | Additional Triggers     | Rationale                  |
+| ------------------ | ------------------------------ | ----------------------- | -------------------------- |
+| **Player Status**  | 1s playing / 5s idle (no UPnP) | Adaptive based on state | Core UI responsiveness     |
+|                    | 5s always (UPnP working) 📡    | UPnP provides real-time | UPnP optimization          |
+| **Multiroom Info** | 15s                            | Track/source changes    | Role detection, grouping   |
+| **Device Info**    | 60s                            | None                    | Health check only          |
+| **Metadata**       | Never                          | Track changes only      | Many devices don't support |
+| **EQ Status**      | 60s                            | None                    | Settings rarely change     |
+| **EQ Presets**     | Once                           | Startup only            | Firmware-defined           |
+| **Radio Presets**  | Once                           | Startup only            | User rarely modifies       |
+
+## UPnP Eventing Optimization 📡
+
+When UPnP eventing is working, the integration automatically reduces HTTP polling frequency:
+
+### Why This Works
+
+- **UPnP provides:** Play/pause/stop, position, volume, track changes (real-time via events)
+- **HTTP still needed for:** EQ settings, audio output mode, grouping state, shuffle/repeat
+- **Result:** HTTP polling becomes backup + non-UPnP data only
+
+### Automatic Detection
+
+The integration checks if UPnP is working:
+
+- ✅ Subscriptions are healthy (`_push_healthy = True`)
+- ✅ Events have been received (`_event_count > 0`)
+- ✅ Automatically reduces polling to 5s (from 1s when playing)
+
+### Graceful Fallback
+
+If UPnP stops working (network issues, device firmware bugs):
+
+- ❌ UPnP health check fails
+- ⚡ Automatically increases polling back to 1s
+- 📡 User experience remains smooth
 
 ## Performance Benefits
 
 ### Quantified Improvements
 
 - **80% reduction** in API calls during idle periods
+- **80% reduction** when playing with UPnP (1s → 5s)
 - **3-5x faster** initial device setup (parallel calls)
 - **10-minute timeout** prevents endless fast polling
 - **Real-time updates** during active listening

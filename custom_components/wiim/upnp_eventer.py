@@ -9,9 +9,9 @@ Reference implementation: dlna_dmr/media_player.py:388-391
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import logging
 import time
-from collections.abc import Sequence
 from typing import Any
 
 from async_upnp_client.client import UpnpService, UpnpStateVariable
@@ -171,7 +171,7 @@ class UpnpEventer:
         # Convert state_variables to dict (like original handle_notify received)
         variables_dict = {var.name: var.value for var in state_variables}
 
-        # Rest of logic from original handle_notify() - this part WORKED:
+        # Track event statistics
         self._last_notify_ts = time.time()
         self._event_count += 1
 
@@ -209,7 +209,7 @@ class UpnpEventer:
             # Parse Event XML structure
             for event in root.findall(".//Event"):
                 for instance in event.findall("./InstanceID"):
-                    _instance_id = instance.get("val", "0")
+                    _ = instance.get("val", "0")  # Instance ID not currently used
 
                     # Parse AVTransport service variables
                     if service_type == "AVTransport":

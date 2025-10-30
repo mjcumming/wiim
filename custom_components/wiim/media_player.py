@@ -320,7 +320,7 @@ class WiiMMediaPlayer(
         # Listen for state updates from the speaker
         from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-        from .const import WIIM_FALLBACK_POLL, WIIM_STATE_UPDATED
+        from .const import WIIM_STATE_UPDATED
 
         # Listen for UPnP state updates
         dispatcher_signal = f"{WIIM_STATE_UPDATED}_{self.speaker.uuid}"
@@ -329,16 +329,6 @@ class WiiMMediaPlayer(
                 self.hass,
                 dispatcher_signal,
                 self._handle_coordinator_update,
-            )
-        )
-
-        # Listen for fallback poll signals (when UPnP fails)
-        fallback_signal = f"{WIIM_FALLBACK_POLL}-{self.speaker.uuid}"
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                fallback_signal,
-                self._async_fallback_poll,
             )
         )
 
@@ -352,51 +342,6 @@ class WiiMMediaPlayer(
         self._clear_optimistic_state_on_update()
 
         self.async_schedule_update_ha_state()
-
-    async def _async_fallback_poll(self, now: datetime.datetime | None = None) -> None:
-        """Check UPnP health and fallback to polling if subscriptions are dead."""
-        # Check if UPnP is actually failing (watchdog pattern)
-        # Only switch to polling if UPnP events have stopped arriving
-
-        # If already marked as failed, just refresh
-        if self.speaker._subscriptions_failed:
-            await self.coordinator.async_request_refresh()
-            return
-
-        # Check if UPnP eventer exists and is healthy
-        if self.speaker._upnp_eventer:
-            import time
-
-            last_event_time = self.speaker._upnp_eventer._last_notify_ts
-            if last_event_time:
-                time_since_last_event = time.time() - last_event_time
-                # If events arrived recently (within last 2 minutes), UPnP is healthy
-                if time_since_last_event < 120:
-                    _LOGGER.debug(
-                        "UPnP healthy for %s (last event %.1fs ago), fallback timer continuing",
-                        self.speaker.name,
-                        time_since_last_event,
-                    )
-                    # Just refresh, don't shut down UPnP
-                    await self.coordinator.async_request_refresh()
-                    return
-
-            # UPnP appears dead (no events for 2+ minutes)
-            _LOGGER.warning(
-                "UPnP events stopped arriving for %s (no events for 2+ minutes), switching to HTTP polling",
-                self.speaker.name,
-            )
-            self.speaker._subscriptions_failed = True
-            await self.speaker._cleanup_upnp_subscriptions()
-        else:
-            # No UPnP eventer - already using polling
-            _LOGGER.debug(
-                "No UPnP eventer for %s, using HTTP polling",
-                self.speaker.name,
-            )
-
-        # Trigger coordinator refresh
-        await self.coordinator.async_request_refresh()
 
     @callback
     def async_write_ha_state(self) -> None:
