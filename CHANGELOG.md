@@ -7,14 +7,16 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Added
 
 - **UPnP Event System**: Real-time device state updates via UPnP DLNA DMR eventing
+
   - Automatic subscription to AVTransport and RenderingControl UPnP services
   - Instant state updates when device state changes (play/pause/volume/mute)
   - Follows Home Assistant patterns (Samsung TV, DLNA DMR) using `async_upnp_client`
   - Automatic resubscription with health monitoring and diagnostics
   - Reduces polling frequency while improving responsiveness
   - Works with WiiM Pro, Mini, Amp, and compatible LinkPlay devices
-  
+
 - **UPnP Health Monitoring**: New diagnostic sensor for UPnP event health
+
   - Shows UPnP push health status (healthy/degraded/unavailable)
   - Tracks event counts and last notification timestamps
   - Helps diagnose UPnP connectivity issues
@@ -29,6 +31,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Changed
 
 - **Polling Strategy**: Optimized polling intervals with UPnP event system
+
   - Basic device status: 30 seconds (down from 15) when UPnP is healthy
   - Device info: 120 seconds (unchanged)
   - Multiroom status: 30 seconds (unchanged)
@@ -46,12 +49,14 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Technical
 
 - **UPnP Architecture**: Modular implementation following HA core patterns
+
   - `upnp_client.py` - UPnP client wrapper for `async_upnp_client`
   - `upnp_eventer.py` - Event subscription manager with health tracking
   - `state.py` - State management with UPnP event integration
   - Clean separation of concerns with proper error handling
 
 - **Event Processing**: Efficient LastChange XML parsing
+
   - Parses AVTransport and RenderingControl XML notifications
   - Extracts play state, volume, mute, track info from events
   - Dispatcher-based state updates to media player entities
@@ -66,6 +71,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Documentation
 
 - **UPnP Testing Guide**: Added comprehensive UPnP testing documentation
+
   - Step-by-step verification process
   - Diagnostic script usage examples
   - Troubleshooting common UPnP issues

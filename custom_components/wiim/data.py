@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from async_upnp_client.exceptions import UpnpResponseError
@@ -632,19 +633,54 @@ class Speaker:
             for slave in slaves:
                 await slave.coordinator.client.join_slave(self.ip_address)
 
+            # 3. Trigger immediate refresh on all slaves for faster UI updates
+            _LOGGER.debug("Triggering immediate refresh on %d slave devices for faster role detection", len(slaves))
+            for slave in slaves:
+                try:
+                    await slave.coordinator.async_request_refresh()
+                except Exception as refresh_err:
+                    _LOGGER.warning("Failed to trigger refresh on slave %s: %s", slave.name, refresh_err)
+
+            # 4. Also refresh master to update its group member list
+            await self.coordinator.async_request_refresh()
+
         except Exception as err:  # pragma: no cover – safety net
             _LOGGER.error("Failed to join group: %s", err)
 
     async def async_leave_group(self) -> None:
         """Leave or dissolve the current group depending on our role."""
         try:
+            # Remember group members and master before dissolving
+            former_slaves = list(self.group_members) if self.role == "master" else []
+            former_master = self.coordinator_speaker if self.role == "slave" else None
+
             if self.role == "master":
                 # Master dissolves group for everyone.
                 await self.coordinator.client.leave_group()
+
+                # Trigger refresh on all former slaves for faster UI updates
+                _LOGGER.debug("Triggering immediate refresh on %d former slave devices", len(former_slaves))
+                for slave in former_slaves:
+                    try:
+                        await slave.coordinator.async_request_refresh()
+                    except Exception as refresh_err:
+                        _LOGGER.warning("Failed to trigger refresh on former slave %s: %s", slave.name, refresh_err)
+
             elif self.role == "slave" and self.coordinator_speaker:
                 # Ask master to kick us out.
                 await self.coordinator_speaker.coordinator.client.kick_slave(self.ip_address)
+
+                # Trigger refresh on former master to update its group member list
+                if former_master:
+                    try:
+                        await former_master.coordinator.async_request_refresh()
+                    except Exception as refresh_err:
+                        _LOGGER.warning("Failed to trigger refresh on former master %s: %s", former_master.name, refresh_err)
             # Solo => nothing to do.
+
+            # Always refresh self to detect new solo role immediately
+            await self.coordinator.async_request_refresh()
+
         except Exception as err:  # pragma: no cover
             _LOGGER.error("Failed to leave group: %s", err)
 
