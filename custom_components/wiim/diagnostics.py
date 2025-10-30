@@ -189,6 +189,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
 
             upnp_info = {
                 "status": "Active" if (is_healthy and has_active_subscriptions) else "Not Active",
+                "status_detail": "Receiving Events" if (is_healthy and has_active_subscriptions) else "Eventer Running but No Events",
                 "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
                 "subscription_failed": actual_subscription_failed,
                 "event_count": getattr(eventer, "_event_count", 0),
@@ -198,6 +199,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 "has_sid_avt": has_sid_avt,
                 "has_sid_rcs": has_sid_rcs,
                 "retry_count": getattr(eventer, "_retry_count", 0),
+                "push_healthy": is_healthy,
             }
 
             # Add UPnP client info if available
@@ -208,6 +210,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                     "has_notify_server": hasattr(speaker._upnp_client, "_notify_server")
                     and speaker._upnp_client._notify_server is not None,
                     "description_url": speaker._upnp_client.description_url,
+                    "callback_url": getattr(speaker._upnp_client._notify_server, "callback_url", None) if hasattr(speaker._upnp_client, "_notify_server") and speaker._upnp_client._notify_server else None,
                 }
         else:
             # No UPnP eventer - either setup never ran or failed completely
@@ -216,12 +219,14 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
 
             # Determine status: if subscription_failed is True, setup was attempted but failed
             # If False and no client, setup likely never ran (coordinator error, etc.)
-            if subscription_failed_flag:
-                status_detail = "Setup Failed"
+            if subscription_failed_flag and has_upnp_client:
+                status_detail = "Subscription Failed (Falling back to HTTP polling)"
+            elif subscription_failed_flag and not has_upnp_client:
+                status_detail = "Client Creation Failed (Using HTTP polling)"
             elif has_upnp_client:
-                status_detail = "Eventer Not Created"  # Client exists but eventer missing
+                status_detail = "Eventer Not Created (Unexpected state)"
             else:
-                status_detail = "Not Initialized"  # Setup never reached UPnP
+                status_detail = "Not Initialized (Likely disabled)"
 
             upnp_info = {
                 "status": "Not Active",
@@ -231,7 +236,19 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 "event_count": 0,
                 "last_notify": None,
                 "has_upnp_client": has_upnp_client,
+                "has_upnp_eventer": False,
+                "fallback_mode": "HTTP Polling",
             }
+
+            # Add client info even if eventer failed
+            if has_upnp_client:
+                upnp_info["upnp_client"] = {
+                    "has_dmr_device": hasattr(speaker._upnp_client, "_dmr_device")
+                    and speaker._upnp_client._dmr_device is not None,
+                    "has_notify_server": hasattr(speaker._upnp_client, "_notify_server")
+                    and speaker._upnp_client._notify_server is not None,
+                    "description_url": speaker._upnp_client.description_url,
+                }
 
         # Model data (Pydantic models)
         model_data = {}
