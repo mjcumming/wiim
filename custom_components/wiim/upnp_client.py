@@ -8,9 +8,9 @@ and /workspaces/core/homeassistant/components/samsungtv/media_player.py
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 import logging
 import ssl
+from datetime import timedelta
 from typing import Any
 
 from aiohttp import ClientError, ClientSession, TCPConnector

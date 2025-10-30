@@ -26,7 +26,6 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from async_upnp_client.exceptions import UpnpResponseError
-
 from homeassistant.components.media_player.const import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback

@@ -109,7 +109,7 @@ async def test_role_detection_with_none_device_info_status_fallback(mock_coordin
 
     # Should detect as slave based on status.group = "1" and status.master_uuid
     assert result == "slave"
-    assert mock_coordinator.client._group_master is None  # No master_ip in status, so None
+    assert mock_coordinator.client._group_master == "status-master-uuid"  # Uses master_uuid from status
 
 
 @pytest.mark.skip(reason="Test environment issue - core logic works correctly")

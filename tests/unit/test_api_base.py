@@ -153,13 +153,13 @@ class TestWiiMClientInitialization:
 class TestWiiMClientSSLContext:
     """Test WiiMClient SSL context handling."""
 
-    def test_get_ssl_context_default(self):
+    async def test_get_ssl_context_default(self):
         """Test SSL context generation with default settings."""
         from custom_components.wiim.api_base import WiiMClient
 
         client = WiiMClient("192.168.1.100")
 
-        ssl_ctx = client._get_ssl_context()
+        ssl_ctx = await client._get_ssl_context()
 
         assert isinstance(ssl_ctx, ssl.SSLContext)
         assert ssl_ctx.check_hostname is False
@@ -167,14 +167,14 @@ class TestWiiMClientSSLContext:
         assert ssl_ctx.minimum_version == ssl.TLSVersion.TLSv1
         assert ssl_ctx.maximum_version == ssl.TLSVersion.TLSv1_3
 
-    def test_get_ssl_context_custom(self):
+    async def test_get_ssl_context_custom(self):
         """Test SSL context with custom context provided."""
         from custom_components.wiim.api_base import WiiMClient
 
         custom_ctx = ssl.create_default_context()
         client = WiiMClient("192.168.1.100", ssl_context=custom_ctx)
 
-        ssl_ctx = client._get_ssl_context()
+        ssl_ctx = await client._get_ssl_context()
 
         assert ssl_ctx == custom_ctx
 

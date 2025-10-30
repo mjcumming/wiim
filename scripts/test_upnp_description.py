@@ -66,10 +66,10 @@ async def test_upnp_description(device_ip: str) -> dict[str, Any]:
                         results["error"] = f"HTTP {response.status}"
                         print(f"    ❌ Failed: HTTP {response.status}")
                         return results
-    except asyncio.TimeoutError:
+    except TimeoutError:
         results["error"] = "Timeout after 5 seconds"
-        print(f"    ❌ Failed: Timeout after 5 seconds")
-        print(f"    → Device may not support UPnP on port 49152")
+        print("    ❌ Failed: Timeout after 5 seconds")
+        print("    → Device may not support UPnP on port 49152")
         return results
     except Exception as err:
         results["error"] = str(err)
@@ -77,7 +77,7 @@ async def test_upnp_description(device_ip: str) -> dict[str, Any]:
         return results
 
     # Test 2: Parse UPnP device using async_upnp_client
-    print(f"\n[2] Parsing UPnP device description...")
+    print("\n[2] Parsing UPnP device description...")
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -91,13 +91,13 @@ async def test_upnp_description(device_ip: str) -> dict[str, Any]:
                 results["manufacturer"] = upnp_device.manufacturer
                 results["model"] = upnp_device.model_name
 
-                print(f"    ✅ Successfully created UPnP device")
+                print("    ✅ Successfully created UPnP device")
                 print(f"       Device Type: {results['device_type']}")
                 print(f"       Manufacturer: {results['manufacturer']}")
                 print(f"       Model: {results['model']}")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         results["error"] = "Timeout parsing device description"
-        print(f"    ❌ Failed: Timeout parsing device description")
+        print("    ❌ Failed: Timeout parsing device description")
         return results
     except UpnpError as err:
         results["error"] = f"UPnP error: {err}"
@@ -109,7 +109,7 @@ async def test_upnp_description(device_ip: str) -> dict[str, Any]:
         return results
 
     # Test 3: Check for required services
-    print(f"\n[3] Checking for DLNA DMR services...")
+    print("\n[3] Checking for DLNA DMR services...")
 
     try:
         # List all services
@@ -126,39 +126,39 @@ async def test_upnp_description(device_ip: str) -> dict[str, Any]:
         avtransport = upnp_device.service("urn:schemas-upnp-org:service:AVTransport:1")
         if avtransport:
             results["has_avtransport"] = True
-            print(f"\n    ✅ AVTransport service found")
-            print(f"       → Required for play/pause/stop events")
+            print("\n    ✅ AVTransport service found")
+            print("       → Required for play/pause/stop events")
         else:
-            print(f"\n    ❌ AVTransport service NOT found")
-            print(f"       → Device cannot send playback state events")
+            print("\n    ❌ AVTransport service NOT found")
+            print("       → Device cannot send playback state events")
 
         # Check for RenderingControl
         rendering = upnp_device.service("urn:schemas-upnp-org:service:RenderingControl:1")
         if rendering:
             results["has_rendering_control"] = True
-            print(f"    ✅ RenderingControl service found")
-            print(f"       → Required for volume/mute events")
+            print("    ✅ RenderingControl service found")
+            print("       → Required for volume/mute events")
         else:
-            print(f"    ❌ RenderingControl service NOT found")
-            print(f"       → Device cannot send volume events")
+            print("    ❌ RenderingControl service NOT found")
+            print("       → Device cannot send volume events")
 
         # Overall assessment
         if results["has_avtransport"] and results["has_rendering_control"]:
             results["supports_upnp_eventing"] = True
             print(f"\n{'=' * 60}")
-            print(f"✅ RESULT: Device SUPPORTS UPnP DLNA DMR eventing")
+            print("✅ RESULT: Device SUPPORTS UPnP DLNA DMR eventing")
             print(f"{'=' * 60}")
-            print(f"\nThis device advertises proper DLNA services and should support:")
-            print(f"  • Real-time playback state events (play/pause/stop)")
-            print(f"  • Volume and mute change events")
-            print(f"  • Track metadata updates")
-            print(f"\nThe WiiM integration's UPnP implementation should work.")
+            print("\nThis device advertises proper DLNA services and should support:")
+            print("  • Real-time playback state events (play/pause/stop)")
+            print("  • Volume and mute change events")
+            print("  • Track metadata updates")
+            print("\nThe WiiM integration's UPnP implementation should work.")
         else:
             print(f"\n{'=' * 60}")
-            print(f"⚠️  RESULT: Device has INCOMPLETE UPnP support")
+            print("⚠️  RESULT: Device has INCOMPLETE UPnP support")
             print(f"{'=' * 60}")
-            print(f"\nMissing required services - UPnP eventing may not work properly.")
-            print(f"The integration should fall back to HTTP polling.")
+            print("\nMissing required services - UPnP eventing may not work properly.")
+            print("The integration should fall back to HTTP polling.")
 
     except Exception as err:
         results["error"] = f"Service check error: {err}"
@@ -179,7 +179,7 @@ async def main():
 
     # Print summary
     print(f"\n{'=' * 60}")
-    print(f"TEST SUMMARY")
+    print("TEST SUMMARY")
     print(f"{'=' * 60}")
     print(f"Device IP: {results['device_ip']}")
     print(f"Description accessible: {results['description_accessible']}")
