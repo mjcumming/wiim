@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from async_upnp_client.exceptions import UpnpResponseError
@@ -675,7 +674,9 @@ class Speaker:
                     try:
                         await former_master.coordinator.async_request_refresh()
                     except Exception as refresh_err:
-                        _LOGGER.warning("Failed to trigger refresh on former master %s: %s", former_master.name, refresh_err)
+                        _LOGGER.warning(
+                            "Failed to trigger refresh on former master %s: %s", former_master.name, refresh_err
+                        )
             # Solo => nothing to do.
 
             # Always refresh self to detect new solo role immediately

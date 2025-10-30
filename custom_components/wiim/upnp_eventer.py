@@ -9,9 +9,9 @@ Reference implementation: dlna_dmr/media_player.py:388-391
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 import logging
 import time
+from collections.abc import Sequence
 from typing import Any
 
 from async_upnp_client.client import UpnpService, UpnpStateVariable
