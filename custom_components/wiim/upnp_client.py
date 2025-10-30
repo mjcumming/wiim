@@ -7,10 +7,13 @@ and /workspaces/core/homeassistant/components/samsungtv/media_player.py
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
+import ssl
 from typing import Any
 
+from aiohttp import ClientError, ClientSession, TCPConnector
 from async_upnp_client.aiohttp import AiohttpNotifyServer, AiohttpSessionRequester
 from async_upnp_client.client_factory import UpnpFactory
 from async_upnp_client.exceptions import UpnpError, UpnpResponseError
@@ -73,11 +76,6 @@ class UpnpClient:
     async def _initialize(self) -> None:
         """Initialize UPnP device and services."""
         try:
-            # Create requester with SSL disabled for self-signed certs (DLNA/DMR pattern)
-            import ssl
-
-            from aiohttp import ClientSession, TCPConnector
-
             # Handle both HTTP and HTTPS description URLs
             if self.description_url.startswith("https://"):
                 _LOGGER.info("Using HTTPS for UPnP description (self-signed cert support enabled)")
@@ -93,14 +91,26 @@ class UpnpClient:
                 connector = TCPConnector(ssl=False)
 
             session = ClientSession(connector=connector)
+            # DLNA pattern: with_sleep=True adds retry logic, timeout ensures we don't hang
             requester = AiohttpSessionRequester(session, with_sleep=True, timeout=10)
 
             # Create UPnP device from description.xml using factory (DLNA/DMR pattern)
             _LOGGER.info("Fetching UPnP device description from: %s", self.description_url)
             factory = UpnpFactory(requester, non_strict=True)
-            self._device = await factory.async_create_device(self.description_url)
+
+            # Add explicit timeout wrapper (5 seconds for description.xml fetch)
+            try:
+                async with asyncio.timeout(5):
+                    self._device = await factory.async_create_device(self.description_url)
+            except TimeoutError as timeout_err:
+                _LOGGER.error(
+                    "❌ Timeout fetching UPnP description from %s after 5 seconds - device may not support UPnP properly",
+                    self.description_url,
+                )
+                raise UpnpError(f"Timeout fetching UPnP description: {timeout_err}") from timeout_err
+
             _LOGGER.info(
-                "Successfully fetched and parsed UPnP device description for %s",
+                "✅ Successfully fetched and parsed UPnP device description for %s",
                 self.host,
             )
 
@@ -110,15 +120,44 @@ class UpnpClient:
             # Get RenderingControl service
             self._rendering_control_service = self._device.service("urn:schemas-upnp-org:service:RenderingControl:1")
 
+            if not self._av_transport_service:
+                _LOGGER.warning(
+                    "⚠️  Device %s does not advertise AVTransport service - UPnP eventing may not work",
+                    self.host,
+                )
+            if not self._rendering_control_service:
+                _LOGGER.warning(
+                    "⚠️  Device %s does not advertise RenderingControl service - UPnP volume events may not work",
+                    self.host,
+                )
+
             _LOGGER.info(
-                "UPnP client initialized for %s: AVTransport=%s, RenderingControl=%s",
+                "✅ UPnP client initialized for %s: AVTransport=%s, RenderingControl=%s",
                 self.host,
                 self._av_transport_service is not None,
                 self._rendering_control_service is not None,
             )
 
+        except TimeoutError as err:
+            _LOGGER.error(
+                "❌ Timeout initializing UPnP client for %s after 5 seconds",
+                self.host,
+            )
+            raise UpnpError(f"Timeout creating UPnP device: {err}") from err
+        except ClientError as err:
+            _LOGGER.error(
+                "❌ Network error initializing UPnP client for %s: %s",
+                self.host,
+                err,
+            )
+            raise UpnpError(f"Network error creating UPnP device: {err}") from err
         except Exception as err:
-            _LOGGER.warning("Failed to initialize UPnP client for %s: %s", self.host, err)
+            _LOGGER.error(
+                "❌ Failed to initialize UPnP client for %s: %s (type: %s)",
+                self.host,
+                err,
+                type(err).__name__,
+            )
             raise UpnpError(f"Failed to create UPnP device: {err}") from err
 
     async def start_notify_server(
@@ -136,14 +175,10 @@ class UpnpClient:
             Started AiohttpNotifyServer instance
         """
         # Create notify server (DLNA/DMR pattern) with SSL disabled for self-signed certs
-        import ssl
-
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         ssl_context.set_ciphers("ALL:@SECLEVEL=0")
-
-        from aiohttp import ClientSession, TCPConnector
 
         connector = TCPConnector(ssl=ssl_context)
         session = ClientSession(connector=connector)
@@ -152,7 +187,6 @@ class UpnpClient:
         # DLNA pattern: Get the correct local IP for callback URL (handles Docker/WSL networking)
         # In WSL2, async_get_local_ip returns the WSL NAT IP which devices can't reach.
         # We need to allow the caller to pass in the correct host IP via callback_host parameter.
-        import asyncio
 
         if callback_host:
             # Use explicit host if provided (allows workaround for Docker/WSL)

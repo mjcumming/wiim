@@ -25,6 +25,8 @@ import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from async_upnp_client.exceptions import UpnpResponseError
+
 from homeassistant.components.media_player.const import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -1258,13 +1260,17 @@ class Speaker:
             )
         except Exception as err:  # noqa: BLE001
             client_duration = time.time() - client_start_time
-            _LOGGER.error(
-                "❌ Failed to create UPnP client for %s (after %.2fs): %s",
+            _LOGGER.warning(
+                "⚠️  Failed to create UPnP client for %s (after %.2fs): %s - continuing with HTTP polling only",
                 self.name,
                 client_duration,
                 err,
             )
-            raise
+            _LOGGER.debug(
+                "UPnP client creation failed, integration will use HTTP polling (1s when playing, 5s idle)",
+            )
+            # Don't raise - UPnP is optional, HTTP polling works fine
+            return
 
         # Create state manager
         self._upnp_state = WiiMState()
@@ -1278,13 +1284,50 @@ class Speaker:
         )
 
         # Start subscriptions with callbacks (Samsung/DLNA pattern)
-        await self._upnp_eventer.start(
-            callback_host=entry.options.get("upnp_callback_host"),
-            callback_port=entry.options.get("upnp_callback_port", 0),
-        )
-
-        # Reset subscription failure flag on successful setup
-        self._subscriptions_failed = False
+        # Following dlna_dmr pattern: subscription failure is NOT fatal
+        subscription_start_time = time.time()
+        try:
+            await self._upnp_eventer.start(
+                callback_host=entry.options.get("upnp_callback_host"),
+                callback_port=entry.options.get("upnp_callback_port", 0),
+            )
+            subscription_duration = time.time() - subscription_start_time
+            _LOGGER.info(
+                "✅ UPnP event subscriptions established for %s (%.2fs) - will receive real-time events",
+                self.name,
+                subscription_duration,
+            )
+            # Reset subscription failure flag on successful setup
+            self._subscriptions_failed = False
+        except UpnpResponseError as err:
+            # Device rejected subscription - this is OK (DLNA pattern)
+            subscription_duration = time.time() - subscription_start_time
+            _LOGGER.info(
+                "Device %s rejected UPnP subscription (%.2fs): %s - will use HTTP polling instead",
+                self.name,
+                subscription_duration,
+                err,
+            )
+            self._subscriptions_failed = True
+            self._upnp_eventer = None
+            return
+        except Exception as err:  # noqa: BLE001
+            # Any subscription failure is non-fatal
+            subscription_duration = time.time() - subscription_start_time
+            _LOGGER.warning(
+                "⚠️  UPnP subscription failed for %s (%.2fs): %s - will use HTTP polling instead",
+                self.name,
+                subscription_duration,
+                err,
+            )
+            _LOGGER.debug(
+                "UPnP subscription error details: %s",
+                err,
+                exc_info=True,
+            )
+            self._subscriptions_failed = True
+            self._upnp_eventer = None
+            return
 
         # Create fallback polling timer (for resilience)
         # This ensures entities continue to update even if UPnP events stop arriving
