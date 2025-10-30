@@ -28,6 +28,8 @@ def test_adaptive_polling_playing_device():
     mock_coordinator = MagicMock()
     # Set up the coordinator's time tracking attributes properly
     mock_coordinator._last_playing_time = None
+    # Mock capabilities for WiiM device (1 second when playing)
+    mock_coordinator._capabilities = {"is_wiim_device": True, "is_legacy_device": False}
     status_model = PlayerStatus.model_validate({"status": "play", "play_state": "play", "vol": 50})
     role = "solo"
 
@@ -41,6 +43,8 @@ def test_adaptive_polling_idle_device():
     mock_coordinator = MagicMock()
     # Set up the coordinator's time tracking attributes properly
     mock_coordinator._last_playing_time = None
+    # Mock capabilities for WiiM device (5 seconds when idle)
+    mock_coordinator._capabilities = {"is_wiim_device": True, "is_legacy_device": False}
     status_model = PlayerStatus.model_validate({"status": "stop", "play_state": "stop", "vol": 50})
     role = "solo"
 

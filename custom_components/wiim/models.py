@@ -29,7 +29,7 @@ class _WiimBase(BaseModel):
     Allows unknown fields (extra="allow") and supports population by field name or alias.
     """
 
-    model_config = ConfigDict(extra="allow", populate_by_name=True, underscore_attrs_are_private=True)
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
 
 class DeviceInfo(_WiimBase):
@@ -127,6 +127,23 @@ class PlayerStatus(_WiimBase):
         # Convert WiiM's 'none' state to logical 'idle' state
         return "idle" if normalized == "none" else normalized
 
+    # Handle duration field - convert 0 to None for streaming services
+    @field_validator("duration", mode="before")
+    @classmethod
+    def _normalize_duration(cls, v: int | None) -> int | None:  # noqa: D401
+        if v == 0:
+            return None  # Streaming services report 0 duration - treat as unknown
+        return v
+
+    # Handle eq field - convert dictionary to string or None
+    @field_validator("eq_preset", mode="before")
+    @classmethod
+    def _normalize_eq_preset(cls, v: str | dict | None) -> str | None:  # noqa: D401
+        if isinstance(v, dict):
+            # If it's a dictionary like {'eq_enabled': False}, return None
+            return None
+        return v
+
 
 class SlaveInfo(BaseModel):
     """Represents a slave device in a multiroom group."""
@@ -156,6 +173,11 @@ class TrackMetadata(_WiimBase):
     album: str | None = None
     entity_picture: str | None = None
     cover_url: str | None = None
+
+    # Audio quality fields from getMetaInfo response
+    sample_rate: int | None = None
+    bit_depth: int | None = None
+    bit_rate: int | None = None
 
 
 class EQInfo(_WiimBase):

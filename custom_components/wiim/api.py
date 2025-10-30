@@ -8,6 +8,7 @@ in `api_base.py`) so nothing breaks during the transition.
 
 from __future__ import annotations
 
+from .api_audio_settings import AudioSettingsAPI
 from .api_base import (
     WiiMClient as _LegacyClient,
 )
@@ -20,14 +21,19 @@ from .api_base import (
     WiiMTimeoutError,
 )
 
+# Unofficial API mixins (reverse-engineered endpoints)
+from .api_bluetooth import BluetoothAPI
+
 # Order is important: mixins first, legacy client last so their `__init__` is called
 # exactly once via Python's MRO.
-# Phase-1 refactor: only DeviceAPI mixin extracted so far.
-# mixins included so far
+# Phase-1 refactor: core mixins extracted.
+# mixins included - official and unofficial endpoints
 from .api_device import DeviceAPI
 from .api_diag import DiagnosticsAPI
 from .api_eq import EQAPI
 from .api_group import GroupAPI
+from .api_lms import LMSAPI
+from .api_misc import MiscAPI
 from .api_playback import PlaybackAPI
 from .api_preset import PresetAPI
 
@@ -38,14 +44,33 @@ from .api_preset import PresetAPI
 # from .api_diag import DiagnosticsAPI   # noqa: ERA001
 
 
-# TODO: add the remaining mixins once extracted.
+class WiiMClient(
+    BluetoothAPI,
+    AudioSettingsAPI,
+    LMSAPI,
+    MiscAPI,
+    DeviceAPI,
+    PlaybackAPI,
+    EQAPI,
+    GroupAPI,
+    PresetAPI,
+    DiagnosticsAPI,
+    _LegacyClient,
+):
+    """Aggregated WiiM HTTP API client – modular with official and unofficial endpoints.
 
+    This client includes both official WiiM HTTP API endpoints and unofficial
+    reverse-engineered endpoints. The unofficial endpoints may not be available
+    on all firmware versions or device models.
 
-class WiiMClient(DeviceAPI, PlaybackAPI, EQAPI, GroupAPI, PresetAPI, DiagnosticsAPI, _LegacyClient):
-    """Aggregated WiiM HTTP API client – modular in the future, legacy compatible today."""
+    Unofficial API modules:
+    - BluetoothAPI: Device discovery and scanning
+    - AudioSettingsAPI: SPDIF settings, channel balance
+    - LMSAPI: Squeezelite/Lyrion Music Server integration
+    - MiscAPI: Button controls, alternative LED methods
+    """
 
     # No additional code – all behaviour lives in the mixins or the legacy client.
-    pass
 
 
 # after class definition, export exceptions for `from .api import` compatibility

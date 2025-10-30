@@ -261,8 +261,21 @@ multiroom:Ungroup
 - **Purpose**: Disbands the entire group or leaves current group
 - **Target**: Send to any device in the group
 
-**NOTE**: The group join command for slaves is not currently known/implemented.
-The ConnectMasterAp commands are for WiFi access point connections, not multiroom grouping.
+#### **Join Group Command**
+
+```
+ConnectMasterAp:JoinGroupMaster:eth<master_ip>:wifi0.0.0.0
+```
+
+- **Purpose**: Join this device as slave to a master's multiroom group
+- **Target**: Send to the **slave device's IP** (using slave's protocol!)
+- **Parameters**: `<master_ip>` - IP address of the master device
+- **Example**: To join 192.168.1.101 to master 192.168.1.100:
+  ```
+  https://192.168.1.101/httpapi.asp?command=ConnectMasterAp:JoinGroupMaster:eth192.168.1.100:wifi0.0.0.0
+  ```
+
+**🚨 CRITICAL**: Command must be sent **TO the slave device** using **the slave's protocol** (HTTP or HTTPS). Using the master's protocol will cause SSL/connection failures with mixed-protocol devices.
 
 ### **Group Status Detection**
 
@@ -273,9 +286,17 @@ The ConnectMasterAp commands are for WiFi access point connections, not multiroo
   "group": "0", // Solo or Master
   "group": "1", // Slave
   "master_uuid": "...", // Present when slave
-  "uuid": "..." // Device UUID
+  "uuid": "...", // Device UUID
+  "wmrm_version": "4.2" // WiiM MultiRoom protocol version
 }
 ```
+
+**wmrm_version** indicates the multiroom protocol version:
+
+- **2.0**: Legacy LinkPlay protocol (older devices, Audio Pro Gen 1)
+- **4.2**: Current router-based multiroom protocol (WiiM, Audio Pro Gen 2+/W-Gen)
+
+**⚠️ Compatibility**: Devices can only group with matching `wmrm_version` - this is a protocol-level requirement. Devices with version 2.0 cannot join groups with version 4.2 devices.
 
 #### **Master's Slaves from getSlaveList**
 
@@ -335,14 +356,16 @@ async def async_join_group(self, speakers: list[Speaker]) -> None:
     master = self  # This speaker becomes master
     slaves = speakers
 
-    # Create group on master first
-    await master.coordinator.client.create_group()
+    # 1. Create group on master first (if not already master)
+    if master.role != "master":
+        await master.coordinator.client.create_group()
 
-    # NOTE: Slave join commands are not implemented yet
-    # The ConnectMasterAp command is for WiFi, not multiroom grouping
-    raise NotImplementedError("Multiroom join commands not implemented yet")
+    # 2. Send join command TO each slave using slave's client/protocol
+    for slave in slaves:
+        # CRITICAL: Use slave's coordinator/client, not master's
+        await slave.coordinator.client.join_slave(master.ip_address)
 
-    # Update local state
+    # 3. Update local state
     master.role = "master"
     master.group_members = [master] + slaves
 
@@ -351,7 +374,7 @@ async def async_join_group(self, speakers: list[Speaker]) -> None:
         slave.coordinator_speaker = master
         slave.group_members = [master] + slaves
 
-    # Notify all entities
+    # 4. Notify all entities
     for speaker in [master] + slaves:
         speaker.async_write_entity_states()
 ```
@@ -379,6 +402,121 @@ async def async_join_group(self, speakers: list[Speaker]) -> None:
 - ⚠️ **Unpredictable** - Each manufacturer may customize differently
 - ✅ **Basic playback** - Core functions usually work
 - ❌ **Advanced features** - Often missing or non-standard
+
+#### **Audio Pro Specific Considerations**
+
+Audio Pro devices have unique characteristics due to their generational evolution and require special handling in our integration:
+
+**⚠️ Generation 1 Audio Pro NOT SUPPORTED:**
+
+Generation 1 devices (A10, A26, A36, C3, C5, C10 without MkII designation) are **not supported** by this integration due to:
+
+- HTTP-only protocol (no HTTPS support)
+- Limited/inconsistent HTTP API implementation
+- Multiroom protocol version 2.0 (incompatible with modern wmrm_version 4.2)
+- No firmware update path to modern features
+
+**✅ Supported Models**: MkII generation (firmware v4.2.8020+) and W-generation devices with HTTPS and wmrm_version 4.2.
+
+**API Protocol Evolution:**
+
+- **Original Generation**: HTTP (port 80) - standard LinkPlay API
+- **MkII Generation**: HTTPS (port 443) - enhanced security, same commands
+- **W-Generation**: HTTPS (port 443) - latest features, backward compatible
+
+**Enhanced Integration Features:**
+
+**🔍 Generation Detection:**
+Our integration automatically detects Audio Pro generations for optimized handling:
+
+```python
+# Automatic detection based on model name and firmware
+generation = detect_audio_pro_generation(device_info)
+# Returns: "original", "mkii", "w_generation", or "unknown"
+```
+
+**⚡ Protocol Priority System:**
+Smart protocol ordering based on device generation:
+
+```python
+# Generation-specific protocol priorities
+if generation == "mkii":
+    capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first
+elif generation == "w_generation":
+    capabilities["protocol_priority"] = ["https", "http"]  # HTTPS first
+else:  # original
+    capabilities["protocol_priority"] = ["http", "https"]  # HTTP first
+```
+
+**🛡️ Enhanced Response Validation:**
+Comprehensive Audio Pro response handling system:
+
+```python
+def _validate_audio_pro_response(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+    """Handle Audio Pro specific response variations."""
+    # Handles empty responses, string responses, and field normalization
+    # Audio Pro devices may return different formats than WiiM devices
+```
+
+**Common Response Differences:**
+
+- **Empty responses**: Audio Pro devices may return empty responses that need safe defaults
+- **String responses**: Some endpoints return plain text instead of JSON
+- **Field variations**: Different field names (`player_state` vs `state`, `vol` vs `volume`)
+- **Error formats**: More likely to return plain text errors vs structured JSON
+
+**Field Normalization:**
+Our integration automatically maps Audio Pro field variations:
+
+```python
+# Audio Pro → Standard field mappings
+field_mappings = {
+    "player_state": "state",    # Audio Pro specific → standard
+    "play_status": "state",     # Alternative Audio Pro field
+    "vol": "volume",            # Volume field variations
+    "muted": "mute",            # Mute state variations
+}
+```
+
+**Integration Strategy:**
+
+- **Multi-protocol probing**: HTTP → HTTPS → fallback ports with generation-aware ordering
+- **Graceful degradation**: Works even when validation fails during discovery
+- **Manual setup friendly**: Always allows IP-based configuration with clear guidance
+- **Generation-aware timeouts**: Optimized retry counts and timeouts per generation
+
+**Best Practices:**
+
+- **Always probe protocols**: Don't assume HTTP works (MkII+ devices use HTTPS)
+- **Accept validation failures**: They're often cosmetic for Audio Pro devices
+- **Enable fallback modes**: Use manual setup when auto-discovery shows warnings
+- **Check device generation**: Logging shows which generation optimizations are active
+
+### **Firmware Version Reference**
+
+Critical firmware version milestones that affect capabilities:
+
+| Version       | Introduced             | Key Features/Changes                                          |
+| ------------- | ---------------------- | ------------------------------------------------------------- |
+| **v4.2.8020** | Router-based multiroom | Default mode (no WiFi Direct needed), wmrm_version 4.2        |
+| **v4.6+**     | Enhanced features      | Slow stream handling, notification sounds, improved stability |
+| **v4.8+**     | Security updates       | Enhanced HTTPS security (security_version 2.0)                |
+
+**Version Detection:**
+
+```python
+status = await client.get_device_info()
+firmware = status.get("firmware")         # e.g., "4.6.328252"
+wmrm_version = status.get("wmrm_version") # e.g., "4.2"
+security_version = status.get("security_version") # e.g., "2.0"
+```
+
+**Impact on Integration:**
+
+- Pre-v4.2.8020: May use WiFi Direct mode, less stable multiroom
+- v4.2.8020+: Router-based multiroom, better network integration
+- v4.6+: Better compatibility with various audio sources
+- v4.8+: Improved HTTPS handling
 
 ---
 
@@ -604,6 +742,10 @@ class MediaPlayerController:
 - ❌ **Require EQ endpoints** - often missing entirely
 - ❌ **Use only WiiM API docs** - covers enhanced features only
 - ❌ **Fail hard on missing features** - always have fallbacks
+- ❌ **Assume HTTP protocol** - Audio Pro MkII+ devices use HTTPS
+- ❌ **Expect consistent field names** - Audio Pro uses different field variations
+- ❌ **Use master's protocol for slave commands** - each device has its own protocol
+- ❌ **Group devices with different wmrm_version** - protocol incompatibility will cause failures
 
 ### **DO**
 
@@ -611,6 +753,42 @@ class MediaPlayerController:
 - ✅ **Use getPlayerStatus as foundation** - universally supported
 - ✅ **Implement graceful fallbacks** - for all enhanced features
 - ✅ **Log missing capabilities** - for user troubleshooting
+- ✅ **Test multiple protocols** - HTTP and HTTPS with fallback ports
+- ✅ **Normalize field names** - handle Audio Pro field variations automatically
+- ✅ **Send commands to target device** - multiroom join goes TO slave, using slave's protocol
+
+### **Audio Pro Specific Warnings**
+
+**Protocol Assumptions:**
+
+```python
+# ❌ WRONG: Assume HTTP always works
+await client.get_status()  # Fails on Audio Pro MkII devices
+
+# ✅ CORRECT: Let integration handle protocol detection
+# Integration automatically tries HTTPS first for Audio Pro devices
+```
+
+**Response Format Assumptions:**
+
+```python
+# ❌ WRONG: Assume always JSON
+response = await client._request("/httpapi.asp?command=getPlayerStatus")
+# Audio Pro may return string responses that need parsing
+
+# ✅ CORRECT: Use our response validation
+# Integration automatically handles Audio Pro response variations
+```
+
+**Field Name Assumptions:**
+
+```python
+# ❌ WRONG: Assume standard field names
+state = response.get("state")  # May be "player_state" on Audio Pro
+
+# ✅ CORRECT: Use normalized fields
+# Integration maps Audio Pro fields to standard names automatically
+```
 
 ---
 
@@ -655,6 +833,84 @@ make release
 
 # Show project statistics
 make stats
+```
+
+---
+
+## 🔊 **Audio Output Mode Control**
+
+### **Hardware Output Management**
+
+WiiM devices with multiple output options (like the WiiM Amp) support hardware output mode switching through dedicated API endpoints. This allows users to control which physical output the audio is routed to.
+
+#### **API Endpoints**
+
+**Get Current Output Status:**
+
+```
+GET https://<device_ip>/httpapi.asp?command=getNewAudioOutputHardwareMode
+```
+
+**Response:**
+
+```json
+{
+  "hardware": "2", // Current hardware output mode (1-4)
+  "source": "0", // Bluetooth output status (0=disabled, 1=active)
+  "audiocast": "0" // Audio cast status (0=disabled, 1=active)
+}
+```
+
+**Set Output Mode:**
+
+```
+GET https://<device_ip>/httpapi.asp?command=setAudioOutputHardwareMode:<mode>
+```
+
+#### **Output Mode Mapping**
+
+| API Mode | Output Type   | Description                  | Device Support     |
+| -------- | ------------- | ---------------------------- | ------------------ |
+| **1**    | Optical Out   | SPDIF/Optical digital output | WiiM Amp, Pro Plus |
+| **2**    | Line Out      | AUX/Analog line output       | WiiM Amp, Pro Plus |
+| **3**    | Coax Out      | Coaxial digital output       | WiiM Amp, Pro Plus |
+| **4**    | Bluetooth Out | Bluetooth audio output       | WiiM Amp, Pro Plus |
+
+#### **Implementation Strategy**
+
+Our integration provides:
+
+1. **Select Entity**: `select.<device>_audio_output_mode` for easy mode switching
+2. **Status Sensors**: Individual sensors for Bluetooth and audio cast status
+3. **Automation Support**: Full automation integration for output switching
+4. **Real-time Updates**: 15-second polling for status changes
+
+#### **Bluetooth Output Behavior**
+
+The `source` field indicates when Bluetooth output is active:
+
+- **`"source": "0"`**: Bluetooth output disabled (using hardware outputs)
+- **`"source": "1"`**: Bluetooth output active (audio routed to paired Bluetooth device)
+
+**Important**: Bluetooth output is controlled by firmware auto-connection behavior, not direct API commands. When a previously paired Bluetooth device becomes available, the WiiM automatically switches to Bluetooth output.
+
+#### **User Experience**
+
+**Before**: Users had to manually switch output modes using the WiiM app
+**After**: Complete output control through Home Assistant automations and UI
+
+```yaml
+# Example automation: Switch to Bluetooth when headphones connect
+- alias: "Switch to Bluetooth Output"
+  trigger:
+    platform: device_tracker
+    entity_id: device_tracker.headphones
+    to: "home"
+  action:
+    - service: select.select_option
+      target: select.living_room_audio_output_mode
+      data:
+        option: "Bluetooth Out"
 ```
 
 ---
@@ -742,12 +998,37 @@ async def async_set_native_value(self, value: float) -> None:
 
 ### **Status Queries**
 
-| Command       | Endpoint                 | Response Type | Notes                         |
-| ------------- | ------------------------ | ------------- | ----------------------------- |
-| Player Status | `getPlayerStatus`        | JSON          | Universal - always works      |
-| Device Info   | `getStatusEx`            | JSON          | WiiM enhanced - probe first   |
-| Metadata      | `getMetaInfo`            | JSON          | Often missing - have fallback |
-| Multiroom     | `multiroom:getSlaveList` | JSON          | Only works on masters         |
+| Command       | Endpoint                        | Response Type | Notes                         |
+| ------------- | ------------------------------- | ------------- | ----------------------------- |
+| Player Status | `getPlayerStatus`               | JSON          | Universal - always works      |
+| Device Info   | `getStatusEx`                   | JSON          | WiiM enhanced - probe first   |
+| Metadata      | `getMetaInfo`                   | JSON          | Often missing - have fallback |
+| Audio Output  | `getNewAudioOutputHardwareMode` | JSON          | Hardware output status        |
+| Multiroom     | `multiroom:getSlaveList`        | JSON          | Only works on masters         |
+
+### **Audio Output Controls**
+
+| Command    | Endpoint                            | Parameters | Notes                    |
+| ---------- | ----------------------------------- | ---------- | ------------------------ |
+| Get Output | `getNewAudioOutputHardwareMode`     | None       | Hardware output status   |
+| Set Output | `setAudioOutputHardwareMode:<mode>` | mode: 1-4  | Set hardware output mode |
+
+**Audio Output Modes:**
+
+- **Mode 1**: Optical Out (SPDIF)
+- **Mode 2**: Line Out (AUX/Analog)
+- **Mode 3**: Coax Out (Coaxial)
+- **Mode 4**: Bluetooth Out
+
+**Response Format:**
+
+```json
+{
+  "hardware": "2", // Current hardware output mode
+  "source": "0", // Bluetooth output status (0=disabled, 1=active)
+  "audiocast": "0" // Audio cast status (0=disabled, 1=active)
+}
+```
 
 ### **EQ Controls**
 
@@ -758,6 +1039,191 @@ async def async_set_native_value(self, value: float) -> None:
 | EQ Disable  | `EQOff`           | None                         | Disable EQ processing          |
 | Load Preset | `EQLoad:<preset>` | preset: "Flat", "Rock", etc. | Device-specific presets        |
 | Get EQ      | `getEQ`           | None                         | Current EQ settings            |
+
+---
+
+## ⚠️ **Unofficial/Undocumented Endpoints**
+
+These endpoints are **not officially documented** by WiiM and have been discovered through reverse engineering and community research. They may change or be removed in future firmware updates. **Use at your own risk.**
+
+### **Bluetooth Operations**
+
+#### **Bluetooth Device Discovery**
+
+Start Bluetooth Discovery:
+
+```
+GET /httpapi.asp?command=startbtdiscovery:3
+```
+
+- **Parameters**: Discovery duration in seconds (typically 3-10 seconds)
+- **Response**: `OK` when discovery starts
+
+Get Discovery Results:
+
+```
+GET /httpapi.asp?command=getbtdiscoveryresult
+```
+
+**Response:**
+
+```json
+{
+  "num": 3,
+  "scan_status": 0,
+  "bt_device": [
+    {
+      "name": "iPhone",
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "rssi": -45
+    }
+  ]
+}
+```
+
+**Notes:**
+
+- `scan_status`: 0=Not started, 1=Initializing, 2=Scanning, 3=Complete
+- Results include device names, MAC addresses, and RSSI values
+
+### **Audio Settings**
+
+#### **SPDIF Sample Rate Configuration**
+
+Get SPDIF Sample Rate:
+
+```
+GET /httpapi.asp?command=getSpdifOutSampleRate
+```
+
+- **Response**: Sample rate in Hz (e.g., "48000")
+
+Set SPDIF Switch Delay:
+
+```
+GET /httpapi.asp?command=setSpdifOutSwitchDelayMs:800
+```
+
+- **Parameters**: Delay in milliseconds (0-3000ms)
+- **Response**: `OK` on success
+- **Notes**: Only relevant when output interface is SPDIF (optical)
+
+#### **Channel Balance Control**
+
+Get Left/Right Channel Balance:
+
+```
+GET /httpapi.asp?command=getChannelBalance
+```
+
+- **Response**: Balance value from -1.0 (fully left) to 1.0 (fully right)
+
+Set Channel Balance:
+
+```
+GET /httpapi.asp?command=setChannelBalance:0.5
+```
+
+- **Parameters**: Balance value from -1.0 to 1.0
+- **Response**: `OK` on success, `Failed` on error
+
+### **Squeezelite (LMS) Integration**
+
+#### **LMS Server Discovery and Connection**
+
+Get Squeezelite State:
+
+```
+GET /httpapi.asp?command=Squeezelite:getState
+```
+
+**Response:**
+
+```json
+{
+  "default_server": "192.168.1.4:3483",
+  "state": "connected",
+  "discover_list": ["192.168.1.4:3483"],
+  "connected_server": "192.168.1.4:3483",
+  "auto_connect": 1
+}
+```
+
+**State values:**
+
+- `discovering`: Searching for LMS instances
+- `connected`: Connected to LMS server
+
+Trigger LMS Discovery:
+
+```
+GET /httpapi.asp?command=Squeezelite:discover
+```
+
+Enable/Disable Auto-Connect:
+
+```
+GET /httpapi.asp?command=Squeezelite:autoConnectEnable:1
+```
+
+- **Parameters**: `1` to enable, `0` to disable
+- **Response**: `OK`
+
+Connect to LMS Server:
+
+```
+GET /httpapi.asp?command=Squeezelite:connectServer:192.168.1.123
+```
+
+- **Parameters**: LMS server IP address (with optional port)
+- **Response**: `OK`
+
+### **LED and Button Controls**
+
+Set Status LED (Alternative Command):
+
+```
+GET /httpapi.asp?command=LED_SWITCH_SET:0
+```
+
+- **Parameters**: `1` to enable, `0` to disable status LED
+- **Response**: `OK` on success
+- **Note**: Alternative to standard `setLED` command
+
+Set Touch Button Controls:
+
+```
+GET /httpapi.asp?command=Button_Enable_SET:1
+```
+
+- **Parameters**: `1` to enable, `0` to disable touch controls
+- **Response**: `OK` on success
+
+### **Unofficial Endpoint Considerations**
+
+**Error Handling:**
+
+- All endpoints use GET method regardless of operation type
+- Error responses vary but typically include "Failed" or error status
+- Success responses are typically "OK" or structured JSON
+
+**Parameter Encoding:**
+
+- URL encode parameters when they contain spaces or special characters
+- Boolean values use `1` for true, `0` for false
+- Array parameters are typically colon-separated
+
+**Firmware Compatibility:**
+
+- These endpoints may not be available on all firmware versions
+- Behavior may vary between WiiM device models
+- Test thoroughly before using in production automations
+
+**Rate Limiting:**
+
+- Avoid rapid successive calls to the same endpoint
+- Some endpoints may have internal cooldown periods
+- Discovery operations should not be run continuously
 
 ---
 

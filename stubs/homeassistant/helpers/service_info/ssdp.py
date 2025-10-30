@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -12,3 +13,7 @@ class SsdpServiceInfo:
     ip_address: str | None = None
     port: int | None = None
     ssdp_usn: str | None = None
+    ssdp_location: str | None = None
+    ssdp_st: str | None = None
+    ssdp_server: str | None = None
+    upnp: dict[str, Any] | None = None

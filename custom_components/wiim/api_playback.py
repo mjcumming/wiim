@@ -13,6 +13,8 @@ from typing import Any
 from urllib.parse import quote
 
 from .const import (
+    API_ENDPOINT_AUDIO_OUTPUT_SET,
+    API_ENDPOINT_AUDIO_OUTPUT_STATUS,
     API_ENDPOINT_CLEAR_PLAYLIST,
     API_ENDPOINT_LOOPMODE,
     API_ENDPOINT_MUTE,
@@ -24,6 +26,7 @@ from .const import (
     API_ENDPOINT_PLAY_URL,
     API_ENDPOINT_PREV,
     API_ENDPOINT_SEEK,
+    API_ENDPOINT_SOURCE,
     API_ENDPOINT_STOP,
     API_ENDPOINT_VOLUME,
 )
@@ -33,6 +36,8 @@ _LOGGER = logging.getLogger(__name__)
 
 class PlaybackAPI:  # mix-in – must be left of base client in MRO
     """Transport-level playback controls (play, volume, seek, …)."""
+
+    # pylint: disable=no-member
 
     # ------------------------------------------------------------------
     # Core transport helpers
@@ -81,6 +86,69 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
         if mode not in (0, 1, 2, 4, 5, 6):
             raise ValueError(f"Invalid loop mode: {mode}. Valid values: 0,1,2,4,5,6")
         await self._request(f"{API_ENDPOINT_LOOPMODE}{mode}")  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------
+    # Source selection
+    # ------------------------------------------------------------------
+
+    async def set_source(self, source: str) -> None:  # type: ignore[override]
+        """Set audio source using WiiM's switchmode command.
+
+        Args:
+            source: Source to switch to (e.g., "wifi", "bluetooth", "line_in", "optical")
+        """
+        await self._request(f"{API_ENDPOINT_SOURCE}{source}")  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------
+    # Audio Output Control
+    # ------------------------------------------------------------------
+
+    async def get_audio_output_status(self) -> dict[str, Any] | None:  # type: ignore[override]
+        """Get current audio output status including Bluetooth output mode.
+
+        Returns:
+            dict with keys: hardware, source, audiocast if supported, None if not supported
+            - hardware: Hardware output mode (0=Line Out, 1=Optical Out, 2=Line Out, 3=Coax Out, 4=Bluetooth Out)
+            - source: Bluetooth output mode (0=disabled, 1=active)
+            - audiocast: Audio cast mode (0=disabled, 1=active)
+        """
+        try:
+            _LOGGER.debug(
+                "[AUDIO OUTPUT DEBUG] %s: Calling API endpoint: %s", self.host, API_ENDPOINT_AUDIO_OUTPUT_STATUS
+            )
+            result = await self._request(API_ENDPOINT_AUDIO_OUTPUT_STATUS)  # type: ignore[attr-defined]
+            _LOGGER.debug("[AUDIO OUTPUT DEBUG] %s: Audio output API result: %s", self.host, result)
+            return result if result else None
+        except Exception as e:
+            # Log with more details for first few failures
+            if not hasattr(self, "_audio_output_error_count"):
+                self._audio_output_error_count = 0
+            self._audio_output_error_count += 1
+
+            # Log first 5 failures with full details, then throttle
+            if self._audio_output_error_count <= 5:
+                _LOGGER.warning(
+                    "[AUDIO OUTPUT DEBUG] %s: Audio output API call failed (attempt %d), error type: %s, error: %s",
+                    self.host,
+                    self._audio_output_error_count,
+                    type(e).__name__,
+                    str(e),
+                )
+            elif self._audio_output_error_count % 10 == 1:
+                _LOGGER.debug(
+                    "[AUDIO OUTPUT DEBUG] %s: Audio output API still failing (%d consecutive failures)",
+                    self.host,
+                    self._audio_output_error_count,
+                )
+            return None
+
+    async def set_audio_output_hardware_mode(self, mode: int) -> None:  # type: ignore[override]
+        """Set hardware audio output mode.
+
+        Args:
+            mode: Hardware output mode (1=SPDIF, 2=AUX, 3=COAX)
+        """
+        await self._request(f"{API_ENDPOINT_AUDIO_OUTPUT_SET}{mode}")  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Playlist helpers
@@ -134,6 +202,6 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
         try:
             await asyncio.sleep(0.5)
             status = await self.get_player_status()  # type: ignore[attr-defined]
-            _LOGGER.debug("Status after mode change: %%s", status.get("loop_mode"))
+            _LOGGER.debug("Status after mode change: %s", status.get("loop_mode"))
         except Exception:  # noqa: BLE001 – best-effort only
             pass

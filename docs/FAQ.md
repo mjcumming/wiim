@@ -76,6 +76,9 @@ media_player.living_room_group_coordinator
 - Only exists when actively coordinating a group
 - Provides unified control for entire group
 - Automatically appears/disappears with group changes
+- **Dynamic naming**: Changes based on speaker role
+  - Solo: `"Living Room"`
+  - Group Master: `"Living Room Group Master"`
 
 ## Volume Questions
 
@@ -137,6 +140,17 @@ media_content_id: "http://tunein.com/station"
 
 Use [Radio Browser](https://www.radio-browser.info) to find stream URLs.
 
+### Why does the stop button behave differently with Bluetooth?
+
+**Bluetooth sources** have limited playback control compared to network sources:
+
+- **Network sources** (WiFi, AirPlay, streaming): Support both pause and stop
+- **Bluetooth sources**: Only support pause (not stop)
+
+The integration automatically handles this by using pause instead of stop when Bluetooth is the active source. This ensures the stop button always works, regardless of the input source.
+
+**Note**: This is a device limitation, not an integration issue. The behavior is consistent across all WiiM devices.
+
 ## Control Questions
 
 ### Why do some buttons not work?
@@ -167,6 +181,38 @@ data:
 ```
 
 ## Troubleshooting Questions
+
+### Why do some Audio Pro devices fail validation?
+
+Audio Pro devices use different API protocols depending on generation:
+
+| Audio Pro Generation | Models                            | Protocol    | Integration Behavior     |
+| -------------------- | --------------------------------- | ----------- | ------------------------ |
+| **Original**         | C3, C5, Drumfire                  | HTTP (80)   | ✅ Auto-discovery works  |
+| **MkII**             | A10 MkII, A15 MkII, A28, C10 MkII | HTTPS (443) | ⚠️ May need manual setup |
+| **W-Series**         | A15 W, A28 W, A38 W, A48 W        | HTTPS (443) | ⚠️ May need manual setup |
+
+**What's happening:**
+
+- MkII and newer devices moved from HTTP to HTTPS for enhanced security
+- Integration tries multiple protocols automatically (HTTP/HTTPS on various ports)
+- Auto-discovery may show "validation failed" but devices still work
+
+**Solution:**
+
+1. **Try auto-discovery first** - it often works despite the warning messages
+2. **If auto-discovery fails**: Use manual setup
+   - **Settings → Devices & Services → Add Integration → WiiM Audio**
+   - Select **"Enter IP manually"** and enter device IP
+   - Integration automatically detects and uses correct protocol
+
+**Result:**
+
+- All features work normally (play, volume, multiroom, EQ, etc.)
+- Enhanced security with HTTPS communication
+- Same user experience regardless of generation
+
+**Note:** These validation failures are cosmetic - the integration is designed to handle Audio Pro's different API implementations gracefully.
 
 ### What do error messages mean?
 

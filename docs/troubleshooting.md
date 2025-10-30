@@ -1,300 +1,237 @@
-# WiiM Integration - Troubleshooting
+# WiiM Integration Troubleshooting Guide
 
-Quick solutions for common issues with the WiiM Audio integration.
+## Connection Issues
 
-## 🚨 Common Issues & Quick Fixes
+### Common Error Messages
 
-### HACS Download Issues
+#### 1. "Connection lost to [IP], will retry with protocol probe"
 
-**Error**: "Got status code 404" when downloading from HACS
+**Cause**: The integration is trying to connect to devices that may not be WiiM/LinkPlay devices or are offline.
 
-**Solutions**:
+**Solution**:
 
-1. **Force Latest Version**: HACS → Integrations → WiiM Audio → ⋮ → **Redownload** → Select latest version
-2. **Clear HACS Cache**: Restart Home Assistant, then try HACS install again
-3. **Manual Installation**: Download from [GitHub Releases](https://github.com/mjcumming/wiim/releases/latest), extract to `/config/custom_components/wiim/`
+- This is normal behavior during discovery
+- The integration will automatically retry with different protocols
+- If persistent, check if the IP addresses are actually WiiM devices
 
-### Integration Not Found
+#### 2. "get_player_status failed: Request to [IP] failed: 404"
 
-**Problem**: Can't find "WiiM Audio" when adding integration
+**Cause**: Some devices don't support the `getPlayerStatusEx` API call (older firmware or non-WiiM devices).
 
-**Solutions**:
+**Solution**:
 
-- Clear browser cache (Ctrl+F5) and refresh
-- Restart Home Assistant: **Settings** → **System** → **Restart**
-- Verify files are in `/config/custom_components/wiim/`
-- Check integration loaded: **Settings** → **System** → **Logs** (look for "wiim" entries)
+- This is expected for non-WiiM devices discovered via SSDP
+- The integration will automatically skip these devices
+- No action required - this is handled gracefully
 
-### No Devices Discovered
+#### 3. "SSDP DISCOVERY validation failed for host: [IP]"
 
-**Problem**: Auto-discovery finds no speakers
+**Cause**: SSDP discovery found devices that aren't WiiM/LinkPlay compatible.
 
-**Quick Checks**:
+**Solution**:
 
-- Ensure Home Assistant and speakers on same network/VLAN
-- Check firewall allows UPnP/SSDP traffic (port 1900)
-- Verify speakers have network connectivity (can you ping them?)
+- This is normal - SSDP discovers many UPnP devices on your network
+- The integration validates each device and only connects to compatible ones
+- No action required
 
-**Solutions**:
+### Debug Logging
 
-1. **Use Manual Setup**: Settings → Add Integration → Enter speaker IP directly
-2. **Find Speaker IPs**: Check router DHCP table or use WiiM app → Settings → About
-3. **Network Test**: `ping 192.168.1.100` (replace with speaker IP)
-
-### Speakers Show as Unavailable
-
-**Problem**: Devices discovered but show unavailable
-
-**Common Causes & Fixes**:
-
-- **IP Changed**: Speaker got new DHCP address → Use DHCP reservations
-- **Network Issues**: Check switch/router → Power cycle network equipment
-- **SSL Problems**: Integration handles certificates automatically → No action needed
-
-**Quick Fix**: Remove and re-add device with current IP address
-
-## 🔧 Multiroom Issues
-
-### Groups Not Working
-
-**Problem**: Speakers won't group or keep disconnecting
-
-**Essential Checks**:
-
-```yaml
-# Check role sensors to understand group state
-sensor.living_room_multiroom_role: "Master"
-sensor.kitchen_multiroom_role: "Slave"
-sensor.bedroom_multiroom_role: "Solo"
-```
-
-**Solutions**:
-
-1. **Firmware**: Update all speakers to same firmware version
-2. **Network**: Ensure multicast traffic allowed between devices
-3. **IP Stability**: Use DHCP reservations for all speakers
-4. **Signal**: Improve WiFi signal strength/quality
-
-### Group Volume Jumps
-
-**Problem**: Volume changes unexpectedly in groups
-
-**Understanding**: Group volume = maximum member volume, changes apply relatively
-
-**Example**:
-
-```yaml
-# Before: Master 80%, Slave 40% → Group shows 80%
-# Set group to 50% → Master 50%, Slave 25% (scaled proportionally)
-```
-
-**Solution**: Use individual speaker controls for fine-tuning
-
-### Role Sensor Issues
-
-**Problem**: Speakers show wrong roles or "unknown"
-
-**Debug Steps**:
-
-```yaml
-# Check entity states
-Developer Tools → States → Search "multiroom_role"
-
-# Force refresh
-service: homeassistant.reload_config_entry
-target:
-  entity_id: media_player.speaker_name
-```
-
-## 🌐 Network Troubleshooting
-
-### Connection Errors
-
-**Quick Network Tests**:
-
-```bash
-# Test basic connectivity
-ping 192.168.1.100
-
-# Test HTTP port
-curl -k "https://192.168.1.100/httpapi.asp?command=getStatusEx"
-
-# Check UPnP/SSDP traffic
-# Ensure port 1900 is open and multicast allowed
-```
-
-**Common Fixes**:
-
-- **Firewall**: Temporarily disable to test
-- **VLANs**: Ensure HA and speakers on same VLAN
-- **WiFi**: Move closer to access point or add WiFi extender
-
-### SSL Certificate Errors
-
-**Problem**: SSL/TLS connection failures
-
-**Good News**: Integration automatically handles WiiM's self-signed certificates
-
-**If Issues Persist**:
-
-- Integration falls back to HTTP automatically
-- Check logs for specific SSL errors
-- Verify speaker firmware is updated
-
-## 📱 Control Issues
-
-### Media Controls Not Working
-
-**Basic Checks**:
-
-1. **Speaker State**: Is device powered on and responsive?
-2. **Network**: Can you control via WiiM app?
-3. **Integration**: Check for errors in HA logs
-
-**Test Commands**:
-
-```yaml
-# Test basic controls in Developer Tools → Services
-service: media_player.volume_set
-target:
-  entity_id: media_player.living_room
-data:
-  volume_level: 0.5
-```
-
-### Audio But No Control
-
-**Problem**: Music plays but HA controls don't work
-
-**Solutions**:
-
-1. **WiiM App Test**: If WiiM app works, issue is integration
-2. **API Test**: Try manual API call (see above)
-3. **Restart Integration**: Settings → Integrations → WiiM → Restart
-
-### EQ/Source Issues
-
-**Problem**: Equalizer or source selection not working
-
-**Check Support**:
-
-```yaml
-# View available options in entity attributes
-Developer Tools → States → media_player.speaker_name
-# Look for: sound_mode_list, source_list
-```
-
-**Note**: Not all speakers support all features
-
-## 🐛 Debug Information
-
-### Enable Debug Logging
-
-Add to `configuration.yaml`:
+To see detailed connection information, enable debug logging:
 
 ```yaml
 logger:
+  default: info
   logs:
     custom_components.wiim: debug
-    custom_components.wiim.api: debug
-    custom_components.wiim.coordinator: debug
+    custom_components.wiim.api_base: debug
+    custom_components.wiim.config_flow: debug
 ```
 
-### View Logs
+### Expected Behavior
 
-- **UI**: Settings → System → Logs
-- **File**: `/config/home-assistant.log`
-- **Docker**: `docker logs homeassistant`
+The integration will:
 
-### Key Log Patterns
+1. **Discover devices** via SSDP/Zeroconf
+2. **Validate each device** to ensure it's WiiM/LinkPlay compatible
+3. **Skip incompatible devices** with debug-level logging
+4. **Connect only to valid devices** and create entities
 
-Look for these in logs:
+### Device Compatibility
 
-```
-ERROR custom_components.wiim.api: Connection failed
-WARNING custom_components.wiim.coordinator: Device offline
-INFO custom_components.wiim: Group state changed
-```
+The integration supports:
 
-## 🔄 Reset & Recovery
+- **WiiM devices**: Mini, Pro, Pro Plus, Amp, Ultra
+- **Arylic devices**: Up2Stream Amp 2.0, 2.1, S10+
+- **Audio Pro devices**: Including newer MkII models (A10 MkII, A15 MkII, A28, C10 MkII)
+- **Other LinkPlay devices**: DOSS, Dayton Audio, iEast, and many more
 
-### Integration Reset
+### Enhanced Device Compatibility
 
-1. **Remove Integration**: Settings → Integrations → WiiM → Delete
-2. **Clear Cache**: Restart Home Assistant
-3. **Reinstall**: Add integration fresh
-4. **Reconfigure**: Set up devices again
+The integration includes enhanced validation with automatic protocol fallback:
 
-### Network Reset
+- **Multi-Protocol Support**: Automatically tries HTTPS (443, 4443) and HTTP (80, 8080)
+- **Graceful Fallback**: Devices that can't be auto-configured are still offered for manual setup
+- **Legacy Device Support**: Special handling for older LinkPlay-based devices
 
-1. **Power Cycle**: Restart speakers, router, HA
-2. **WiFi Reset**: Reconnect speakers to WiFi
-3. **IP Reset**: Clear DHCP leases, assign new IPs
-4. **Test**: Verify basic connectivity before HA setup
+If a device is discovered but shows "Validation failed" in the logs, it may still work with manual IP configuration.
 
-### Factory Reset Speaker
+## Discovery and Validation Issues
 
-**Last Resort**: If speaker completely unresponsive
+### Understanding Validation Failures
 
-1. Use WiiM app or hardware reset procedure
-2. Reconfigure speaker network settings
-3. Re-add to Home Assistant
+The integration tries multiple protocols and ports when validating devices:
 
-## 📞 Getting Help
+1. **HTTPS on port 443** (standard)
+2. **HTTPS on port 4443** (alternative)
+3. **HTTP on port 80** (standard)
+4. **HTTP on port 8080** (alternative)
 
-### Before Reporting Issues
+**Common validation failure reasons:**
 
-1. **Enable Debug Logging** (see above)
-2. **Reproduce Issue** with logging enabled
-3. **Check Network**: Test basic connectivity
-4. **Try WiiM App**: Verify issue isn't speaker-related
+- **SSL Certificate Issues**: Some devices don't have proper SSL certificates
+- **Port Differences**: Devices may use non-standard ports
+- **Protocol Restrictions**: Some devices only support HTTP, not HTTPS
+- **Slow Response**: Older devices may be slow to respond to API calls
 
-### Information to Include
+### Manual Configuration Workaround
 
-- Home Assistant version
-- Integration version
-- Speaker model(s)
-- Network setup details
-- Relevant log entries
-- Steps to reproduce
+If auto-discovery fails, you can still manually configure the device:
 
-### Community Resources
+1. Note the IP address from the discovery logs
+2. Use **Settings → Devices & Services → Add Integration → WiiM Audio**
+3. Select **"Enter IP manually"** when prompted
+4. Enter the device's IP address
 
-- **GitHub Issues**: [Report bugs](https://github.com/mjcumming/wiim/issues)
-- **HA Community**: [Get help](https://community.home-assistant.io/)
-- **Discussions**: [Feature requests](https://github.com/mjcumming/wiim/discussions)
+The device should work normally after manual configuration, even if auto-validation failed.
 
-## 🎯 Prevention Tips
+## LED Control Issues
 
-### Network Best Practices
+### Arylic Device LED Commands
 
-- Use DHCP reservations for stable IPs
-- Ensure strong WiFi coverage for all speakers
-- Keep HA and speakers on same subnet
-- Allow multicast/UPnP traffic
+Arylic devices use different LED commands than standard WiiM devices:
 
-### Integration Maintenance
+**Experimental Commands** (based on user research):
 
-- Update integration regularly via HACS
-- Monitor logs for warnings
-- Test multiroom after HA updates
-- Keep speaker firmware current
+- LED On/Off: `MCU+PAS+RAKOIT:LED:1` / `MCU+PAS+RAKOIT:LED:0`
+- Brightness: `MCU+PAS+RAKOIT:LEDBRIGHTNESS:50` (0-100%)
 
-### Quick Health Check
+**Fallback**: If Arylic commands fail, the integration will try standard WiiM commands.
 
-```yaml
-# Test basic functionality monthly
-service: media_player.volume_set
-target:
-  entity_id: media_player.living_room
-data:
-  volume_level: 0.3
+**Note**: These commands are experimental. If they don't work, please report the issue with your specific Arylic model.
 
-# Check role sensors
-Developer Tools → States → Search "multiroom_role"
+### Standard WiiM LED Commands
 
-# Verify network connectivity
-ping [speaker_ip]
-```
+Standard WiiM devices use:
 
-Most issues resolve with network improvements or integration restart. For complex problems, enable debug logging and check the logs for specific error messages.
+- LED On/Off: `setLED:1` / `setLED:0`
+- Brightness: `setLEDBrightness:50` (0-100%)
+
+## Music Assistant Integration
+
+### Entity Types
+
+The integration creates two types of entities per speaker:
+
+1. **Individual Speaker** (`media_player.speaker_name`)
+
+   - Controls individual speaker
+   - Compatible with Music Assistant
+   - Use these for Music Assistant integration
+
+2. **Group Coordinator** (`media_player.speaker_name_group_coordinator`)
+   - Controls multiroom groups
+   - **Dynamic naming**: Changes based on speaker role
+     - Solo: `"Speaker Name"` (e.g., "Living Room")
+     - Group Master: `"Speaker Name Group Master"` (e.g., "Living Room Group Master")
+   - For Home Assistant multiroom control only
+   - **Do not use with Music Assistant**
+
+### Music Assistant Configuration
+
+1. In Music Assistant, select **Home Assistant Player Provider**
+2. Choose only the **individual speaker entities** (not group coordinators)
+3. Group coordinators are marked with `music_assistant_excluded: true` attribute
+
+### Troubleshooting Music Assistant
+
+**Problem**: Only one player shows in Music Assistant
+**Solution**:
+
+- Check that you selected individual speakers, not group coordinators
+- Group coordinators have names ending with "Group" or "group coordinator"
+- Individual speakers have clean names like "Living Room" or "Kitchen"
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. **Enable debug logging** (see above)
+2. **Check the logs** for specific error messages
+3. **Report issues** on GitHub with:
+   - Device model and firmware version
+   - Debug logs
+   - Steps to reproduce the problem
+
+## Device-Specific Notes
+
+### Arylic Devices
+
+- LED commands are experimental
+- Some models may not support all features
+- Report specific model issues on GitHub
+
+### Legacy Devices
+
+- Older firmware may not support all API calls
+- Some features may be limited
+- Consider firmware updates if available
+
+### Audio Pro Devices
+
+Audio Pro devices span multiple generations with different API implementations:
+
+#### **Generation Overview**
+
+| Generation   | Models                            | Protocol    | Integration Support |
+| ------------ | --------------------------------- | ----------- | ------------------- |
+| **Original** | C3, C5, Drumfire                  | HTTP (80)   | ✅ Full support     |
+| **MkII**     | A10 MkII, A15 MkII, A28, C10 MkII | HTTPS (443) | ✅ Full support     |
+| **W-Series** | A15 W, A28 W, A38 W, A48 W        | HTTPS (443) | ✅ Full support     |
+
+#### **Common Issues & Solutions**
+
+**Problem: "Validation failed" during discovery**
+
+- **Cause**: MkII/W-Series devices use HTTPS instead of HTTP
+- **Solution**: Use manual IP configuration (works perfectly)
+- **Status**: This is expected behavior, not a bug
+
+**Problem: Device shows as "unavailable" after setup**
+
+- **Cause**: Firmware differences in status reporting
+- **Solution**: Check network connectivity and try restarting the device
+- **Workaround**: Manual setup often resolves availability issues
+
+**Problem: Metadata shows "Unknown Artist/Title"**
+
+- **Cause**: Audio Pro devices may not provide rich metadata via HTTP API
+- **Solution**: This is normal for streaming content - use display names instead
+- **Alternative**: Enable debug logging to see raw API responses
+
+#### **Multiroom Behavior**
+
+Audio Pro devices integrate seamlessly with WiiM devices in multiroom groups:
+
+- **Master/Slave roles** work identically to WiiM devices
+- **Group volume control** functions normally
+- **Source synchronization** works across generations
+- **EQ controls** available on supported models (Pro series)
+
+#### **Best Practices**
+
+1. **Use manual setup** if auto-discovery shows validation warnings
+2. **Enable debug logging** when troubleshooting API issues
+3. **Check firmware version** - newer firmware often improves compatibility
+4. **Test with simple operations** (play/pause/volume) before complex automations
+
+**Note**: All Audio Pro devices work fully with the integration once properly configured. The "validation failed" messages during discovery are cosmetic and don't affect functionality.

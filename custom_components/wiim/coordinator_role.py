@@ -25,16 +25,107 @@ async def detect_role_from_status_and_slaves(
     multiroom: dict[str, Any],
     device_info: DeviceInfo,
 ) -> str:
-    """Return the detected role ("master", "slave", "solo")."""
+    """Return the detected role ("master", "slave", "solo") with firmware compatibility."""
 
     current_role = coordinator.get_current_role()
+    capabilities = getattr(coordinator, "_capabilities", {})
 
-    group_field = device_info.group or status.group or "0"
-    master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
-    master_ip = device_info.master_ip or getattr(status, "master_ip", None)
-    device_uuid = device_info.uuid or getattr(status, "uuid", None)
+    # For legacy devices, use simplified detection
+    if capabilities and capabilities.get("is_legacy_device", False):
+        return _detect_role_legacy_firmware(coordinator, status, device_info, current_role)
 
-    device_name = device_info.name or "Unknown"
+    # Enhanced detection for WiiM devices
+    return _detect_role_enhanced_firmware(coordinator, status, multiroom, device_info, current_role)
+
+
+def _detect_role_legacy_firmware(coordinator, status: PlayerStatus, device_info: DeviceInfo, current_role: str) -> str:
+    """Simplified role detection for older Audio Pro units.
+
+    Args:
+        coordinator: WiiM coordinator instance
+        status: Player status
+        device_info: Device information
+        current_role: Current detected role
+
+    Returns:
+        Detected role for legacy device
+    """
+    # Handle case where device_info may be None (e.g., API call failed)
+    if device_info is None:
+        group_field = getattr(status, "group", "0") or "0"
+        master_uuid = getattr(status, "master_uuid", None)
+        device_name = getattr(status, "name", "Unknown") or "Unknown"
+    else:
+        group_field = device_info.group or getattr(status, "group", "0") or "0"
+        master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
+        device_name = device_info.name or "Unknown"
+
+    # Legacy devices often have unreliable group state
+    # Use conservative detection to avoid false positives
+
+    if group_field == "1" and master_uuid:
+        if current_role != "slave":
+            _LOGGER.info(
+                "LEGACY ROLE DETECTION: %s (%s) detected as SLAVE",
+                coordinator.client.host,
+                device_name,
+            )
+        role = "slave"
+        coordinator.client._group_master = master_uuid  # type: ignore[attr-defined]
+        coordinator.client._group_slaves = []  # type: ignore[attr-defined]
+    elif group_field == "0":
+        # For legacy devices, assume solo unless we have clear evidence of slaves
+        if current_role != "solo":
+            _LOGGER.info(
+                "LEGACY ROLE DETECTION: %s (%s) detected as SOLO",
+                coordinator.client.host,
+                device_name,
+            )
+        role = "solo"
+        coordinator.client._group_master = None  # type: ignore[attr-defined]
+        coordinator.client._group_slaves = []  # type: ignore[attr-defined]
+    else:
+        # Ambiguous state - treat as solo to avoid breaking controls
+        _LOGGER.warning(
+            "LEGACY ROLE DETECTION: %s (%s) has ambiguous group state, treating as SOLO",
+            coordinator.client.host,
+            device_name,
+        )
+        role = "solo"
+        coordinator.client._group_master = None  # type: ignore[attr-defined]
+        coordinator.client._group_slaves = []  # type: ignore[attr-defined]
+
+    return role
+
+
+def _detect_role_enhanced_firmware(
+    coordinator, status: PlayerStatus, multiroom: dict[str, Any], device_info: DeviceInfo, current_role: str
+) -> str:
+    """Enhanced role detection for WiiM devices (original logic).
+
+    Args:
+        coordinator: WiiM coordinator instance
+        status: Player status
+        multiroom: Multiroom information
+        device_info: Device information
+        current_role: Current detected role
+
+    Returns:
+        Detected role for enhanced device
+    """
+    # Handle case where device_info may be None (e.g., API call failed)
+    if device_info is None:
+        group_field = getattr(status, "group", "0") or "0"
+        master_uuid = getattr(status, "master_uuid", None)
+        master_ip = getattr(status, "master_ip", None)
+        device_uuid = getattr(status, "uuid", None)
+        device_name = getattr(status, "name", "Unknown") or "Unknown"
+    else:
+        group_field = device_info.group or getattr(status, "group", "0") or "0"
+        master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
+        master_ip = device_info.master_ip or getattr(status, "master_ip", None)
+        device_uuid = device_info.uuid or getattr(status, "uuid", None)
+        device_name = device_info.name or "Unknown"
 
     # Get slave count from API (field is "slaves", not "slave_count")
     slaves_data = multiroom.get("slaves", 0)
@@ -60,7 +151,7 @@ async def detect_role_from_status_and_slaves(
         slave_count = len(slaves_list)
 
     _log = _LOGGER.debug
-    _log("Role detection inputs for %s:", coordinator.client.host)
+    _log("Enhanced role detection inputs for %s:", coordinator.client.host)
     _log("  - device_name: '%s'", device_name)
     _log("  - device_uuid: '%s'", device_uuid)
     _log("  - group_field: '%s'", group_field)
@@ -80,7 +171,7 @@ async def detect_role_from_status_and_slaves(
     if slave_count > 0:
         if current_role != "master":
             _LOGGER.info(
-                "ROLE DETECTION: %s (%s) is MASTER because slave_count=%s > 0",
+                "ENHANCED ROLE DETECTION: %s (%s) is MASTER because slave_count=%s > 0",
                 coordinator.client.host,
                 device_name,
                 slave_count,
@@ -100,7 +191,7 @@ async def detect_role_from_status_and_slaves(
         if master_uuid or master_ip:
             if current_role != "slave":
                 _LOGGER.info(
-                    "ROLE DETECTION: %s (%s) is SLAVE – group='%s', master uuid/ip present",
+                    "ENHANCED ROLE DETECTION: %s (%s) is SLAVE – group='%s', master uuid/ip present",
                     coordinator.client.host,
                     device_name,
                     group_field,
@@ -111,7 +202,7 @@ async def detect_role_from_status_and_slaves(
         else:
             # Missing master info – treat as solo to avoid breaking controls.
             _LOGGER.warning(
-                "ROLE DETECTION: %s (%s) group='%s' but NO master info – treating as SOLO",
+                "ENHANCED ROLE DETECTION: %s (%s) group='%s' but NO master info – treating as SOLO",
                 coordinator.client.host,
                 device_name,
                 group_field,
@@ -128,7 +219,7 @@ async def detect_role_from_status_and_slaves(
         if play_state == "play":
             if current_role != "slave":
                 _LOGGER.info(
-                    "ROLE DETECTION: %s (%s) acting as FOLLOWER (mode=99) – SLAVE",
+                    "ENHANCED ROLE DETECTION: %s (%s) acting as FOLLOWER (mode=99) – SLAVE",
                     coordinator.client.host,
                     device_name,
                 )
@@ -146,7 +237,7 @@ async def detect_role_from_status_and_slaves(
     else:
         if current_role != "solo":
             _LOGGER.info(
-                "ROLE DETECTION: %s (%s) is SOLO (group='%s', slave_count=%s)",
+                "ENHANCED ROLE DETECTION: %s (%s) is SOLO (group='%s', slave_count=%s)",
                 coordinator.client.host,
                 device_name,
                 group_field,
@@ -156,6 +247,6 @@ async def detect_role_from_status_and_slaves(
         coordinator.client._group_master = None  # type: ignore[attr-defined]
         coordinator.client._group_slaves = []  # type: ignore[attr-defined]
 
-    _LOGGER.debug("FINAL ROLE for %s (%s): %s", coordinator.client.host, device_name, role.upper())
+    _LOGGER.debug("FINAL ENHANCED ROLE for %s (%s): %s", coordinator.client.host, device_name, role.upper())
 
     return role

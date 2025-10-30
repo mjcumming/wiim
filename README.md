@@ -1,8 +1,14 @@
 # WiiM Audio Integration for Home Assistant
 
+<p align="center">
+  <img src="images/logo.png" alt="WiiM Integration Logo" width="200"/>
+</p>
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
 [![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
+
+> ⭐ **Love this integration?** Please star us on GitHub if you use this integration! It helps others discover the project and shows your support for the development effort.
 
 Transform your WiiM and LinkPlay speakers into powerful Home Assistant media players with full multiroom support. No additional dependencies required.
 
@@ -18,7 +24,8 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 ## Supported Devices
 
 - **WiiM**: Mini, Pro, Pro Plus, Amp, Ultra
-- **LinkPlay Compatible**: Arylic, Audio Pro, Dayton Audio, DOSS, and many more
+- **LinkPlay Compatible**: Arylic, Audio Pro (including MkII models), Dayton Audio, DOSS, and many more
+- **Enhanced Compatibility**: Automatic protocol fallback for devices with non-standard configurations
 - **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
 
 ## Quick Start
@@ -37,16 +44,17 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ## Key Features
 
-| Feature              | Description                                              |
-| -------------------- | -------------------------------------------------------- |
-| **Media Control**    | Play, pause, stop, next/previous, seek                   |
-| **Volume Control**   | Individual and synchronized group volume                 |
-| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, etc.) |
-| **Multiroom Groups** | Synchronized playback across speaker groups              |
-| **Quick Stations**   | Custom radio station list in Browse Media                |
-| **EQ Control**       | 10-band equalizer with presets                           |
-| **Presets**          | Hardware preset buttons (1-6)                            |
-| **Auto-Discovery**   | Finds speakers automatically via UPnP/Zeroconf           |
+| Feature              | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| **Media Control**    | Play, pause, stop, next/previous, seek                             |
+| **Volume Control**   | Individual and synchronized group volume                           |
+| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, etc.)           |
+| **Audio Output**     | Control hardware output modes (Line Out, Optical, Coax, Bluetooth) |
+| **Multiroom Groups** | Synchronized playback across speaker groups                        |
+| **Quick Stations**   | Custom radio station list in Browse Media                          |
+| **EQ Control**       | 10-band equalizer with presets                                     |
+| **Presets**          | Hardware preset buttons (device dependent, up to 20)               |
+| **Auto-Discovery**   | Finds speakers automatically via UPnP/Zeroconf                     |
 
 ## Usage Examples
 
@@ -81,6 +89,22 @@ Create `wiim_stations.yaml` in your config folder:
 
 Access via **Browse Media → Quick Stations** on any WiiM device.
 
+### Audio Output Control
+
+```yaml
+# Switch to Bluetooth output
+- service: select.select_option
+  target: select.living_room_audio_output_mode
+  data:
+    option: "Bluetooth Out"
+
+# Switch to Line Out
+- service: select.select_option
+  target: select.living_room_audio_output_mode
+  data:
+    option: "Line Out"
+```
+
 ### Automation Examples
 
 ```yaml
@@ -100,12 +124,95 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 ## Advanced Services
 
-| Service              | Description                            |
-| -------------------- | -------------------------------------- |
-| `wiim.play_preset`   | Play hardware preset (1-6)             |
-| `wiim.play_url`      | Play audio from URL                    |
-| `wiim.set_eq`        | Set equalizer presets or custom values |
-| `wiim.reboot_device` | Reboot device                          |
+| Service              | Description                             |
+| -------------------- | --------------------------------------- |
+| `wiim.play_preset`   | Play hardware preset (device dependent) |
+| `wiim.play_url`      | Play audio from URL                     |
+| `wiim.set_eq`        | Set equalizer presets or custom values  |
+| `wiim.reboot_device` | Reboot device                           |
+
+### Unofficial API Services
+
+⚠️ **Advanced users only** - These services use reverse-engineered API endpoints that may not work on all firmware versions:
+
+| Service                     | Description                         |
+| --------------------------- | ----------------------------------- |
+| `wiim.scan_bluetooth`       | Scan for nearby Bluetooth devices   |
+| `wiim.set_channel_balance`  | Adjust left/right channel balance   |
+| `wiim.set_spdif_delay`      | Set SPDIF sample rate switch delay  |
+| `wiim.discover_lms_servers` | Search for LMS servers on network   |
+| `wiim.connect_lms_server`   | Connect to Lyrion Music Server      |
+| `wiim.set_auto_connect_lms` | Enable/disable LMS auto-connect     |
+| `wiim.set_touch_buttons`    | Enable/disable device touch buttons |
+
+See the [Unofficial/Undocumented Endpoints](development/API_GUIDE.md#-unofficialundocumented-endpoints) section in the API Guide for complete documentation.
+
+## Source Customization
+
+### Why Source Renaming Isn't Supported
+
+The WiiM integration doesn't support custom source names for several reasons:
+
+- **Device Limitation**: Source names come directly from the device's firmware and API
+- **Consistency**: Other major integrations (Sonos, Denon, Yamaha) also don't support source renaming
+- **API Compatibility**: The device expects specific source names for proper functionality
+- **Automation Reliability**: Custom names could break existing automations and scripts
+
+### How to Work Around This
+
+Instead of renaming sources, you can customize the display in several ways:
+
+#### 1. Rename the Media Player Entity
+
+```yaml
+# In customize.yaml
+media_player.living_room_speaker:
+  friendly_name: "Living Room TV Audio"
+```
+
+#### 2. Use Templates in Automations
+
+```yaml
+# In automations.yaml
+- alias: "When HDMI is selected"
+  trigger:
+    platform: state
+    entity_id: media_player.living_room_speaker
+    attribute: source
+    to: "HDMI"
+  action:
+    - service: notify.persistent_notification
+      data:
+        message: "TV audio is now active"
+```
+
+#### 3. Create Custom Dashboard Cards
+
+```yaml
+# In Lovelace dashboard
+type: entities
+entities:
+  - entity: media_player.living_room_speaker
+    name: "TV Audio"
+    secondary_info: "{{ states('media_player.living_room_speaker').attributes.source }}"
+```
+
+## Diagnostics & Troubleshooting
+
+When experiencing issues, you can download comprehensive diagnostic information to help with troubleshooting:
+
+1. **Device Diagnostics**: Go to Settings → Devices & Services → WiiM Audio → (Select device) → Download Diagnostics
+2. **Integration Diagnostics**: Go to Settings → Devices & Services → WiiM Audio → (⋮ Menu) → Download Diagnostics
+
+The diagnostics include:
+
+- Device information (model, firmware, network status)
+- Multiroom group configuration and roles
+- Media playback state and current sources
+- API polling status and error tracking
+- EQ settings and sound modes
+
+**All sensitive data (IP addresses, MAC addresses, network names) is automatically redacted.**
 
 ## Documentation
 

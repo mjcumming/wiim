@@ -22,6 +22,55 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _normalize_time_value(value: int, field_name: str, source: str | None = None) -> int:
+    """Normalize time values that may be in milliseconds or microseconds.
+
+    The LinkPlay API returns time in different units depending on the streaming source:
+    - Most sources: milliseconds (1,000 ms = 1 second)
+    - Streaming services (Spotify, etc.): microseconds (1,000,000 μs = 1 second)
+
+    This function uses a sanity check approach: if a value would represent > 10 hours
+    when interpreted as milliseconds, it's likely in microseconds instead.
+
+    Args:
+        value: Raw time value from API
+        field_name: Name of field for logging ("position" or "duration")
+        source: Optional source name for enhanced logging
+
+    Returns:
+        Time in seconds
+
+    See: https://github.com/mjcumming/wiim/issues/75
+    """
+    # Sanity threshold: 10 hours in milliseconds
+    # Most music tracks are < 10 minutes; if > 10 hours in "ms", likely microseconds
+    MS_THRESHOLD = 36_000_000  # 10 hours * 3600 seconds * 1000 ms
+
+    if value > MS_THRESHOLD:
+        # Value appears to be in microseconds
+        result = value // 1_000_000
+        _LOGGER.debug(
+            "🎵 %s value %d appears to be in microseconds (> 10 hours if ms), "
+            "converting from μs to seconds: %d seconds (source: %s)",
+            field_name.capitalize(),
+            value,
+            result,
+            source or "unknown",
+        )
+        return result
+    else:
+        # Standard millisecond conversion
+        result = value // 1_000
+        _LOGGER.debug(
+            "🎵 %s value %d appears to be in milliseconds, converting to seconds: %d seconds (source: %s)",
+            field_name.capitalize(),
+            value,
+            result,
+            source or "unknown",
+        )
+        return result
+
+
 def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> tuple[dict[str, Any], str | None]:
     """Normalise *getPlayerStatusEx* / *getStatusEx* responses.
 
@@ -67,22 +116,94 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         except ValueError:
             _LOGGER.debug("Invalid volume value: %s", vol)
 
-    # Playback position & duration (ms → s).
-    # Parse position and duration (convert ms to seconds)
-    if (pos := raw.get("curpos") or raw.get("offset_pts")) is not None:
+    # Playback position & duration (auto-detect ms vs μs).
+    # The API returns time in milliseconds for most sources but microseconds for streaming services.
+    # Use intelligent normalization to handle both cases.
+    # See: https://github.com/mjcumming/wiim/issues/75
+    source_hint = raw.get("mode")  # Will be used for enhanced logging
+
+    # Debug: Log raw API response for AirPlay troubleshooting
+    if source_hint and "airplay" in source_hint.lower():
+        _LOGGER.debug(
+            "🔍 AirPlay raw API response: %s",
+            {k: v for k, v in raw.items() if k in ["curpos", "totlen", "position_ms", "duration_ms", "mode"]},
+        )
+
+    # Check both original field names and mapped field names (since generic mapping happens first)
+    if (pos := raw.get("curpos") or raw.get("offset_pts") or data.get("position_ms")) is not None:
         try:
-            data["position"] = int(pos) // 1_000
-            data["position_updated_at"] = asyncio.get_running_loop().time()
+            pos_int = int(pos)
+            normalized_position = _normalize_time_value(pos_int, "position", source_hint)
+            data["position"] = normalized_position
+            _LOGGER.debug("🎵 API PARSER: Setting data['position'] = %s", normalized_position)
+
+            # Enhanced logging for position parsing
+            source_type = "AirPlay" if source_hint and "airplay" in source_hint.lower() else source_hint or "unknown"
+            _LOGGER.debug(
+                "🎵 Position from API: %d seconds (source: %s, raw_value: %d)",
+                normalized_position,
+                source_type,
+                pos_int,
+            )
+
+            # Try to use event loop time if available (async context), otherwise use time.time()
+            try:
+                data["position_updated_at"] = asyncio.get_running_loop().time()
+            except RuntimeError:
+                import time
+
+                data["position_updated_at"] = time.time()
         except (ValueError, TypeError):
             _LOGGER.debug("Invalid position value: %s", pos)
 
-    if raw.get("totlen") is not None:
+    if (duration_val := raw.get("totlen") or data.get("duration_ms")) is not None:
         try:
-            duration_ms = int(raw["totlen"])
-            if duration_ms > 0:  # Only set duration if it's actually provided
-                data["duration"] = duration_ms // 1_000
+            duration_int = int(duration_val)
+            if duration_int > 0:  # Only set duration if it's actually provided
+                normalized_duration = _normalize_time_value(duration_int, "duration", source_hint)
+
+                # For AirPlay and other streaming sources, totlen is the actual total duration
+                # The previous logic incorrectly interpreted it as remaining time
+                # AirPlay provides both position (elapsed) and totlen (total duration) correctly
+                data["duration"] = normalized_duration
+
+                # Enhanced logging to help identify AirPlay and other sources
+                source_type = (
+                    "AirPlay" if source_hint and "airplay" in source_hint.lower() else source_hint or "unknown"
+                )
         except (ValueError, TypeError):
-            _LOGGER.debug("Invalid duration value: %s", raw.get("totlen"))
+            _LOGGER.debug("Invalid duration value: %s", duration_val)
+
+    # Validate position vs duration - detect impossible scenarios
+    if data.get("position") is not None and data.get("duration") is not None:
+        position = data["position"]
+        duration = data["duration"]
+        if position > duration and duration > 0:
+            # Check if duration seems too short (likely firmware bug)
+            # If position is reasonable (> 30 seconds) but duration is very short (< 2 minutes),
+            # the duration is likely wrong, not the position
+            if position > 30 and duration < 120:
+                _LOGGER.warning(
+                    "🚨 Impossible media position detected: %d seconds elapsed > %d seconds duration "
+                    "(device: %s, source: %s). Duration appears too short - likely firmware bug "
+                    "Hiding duration to prevent UI confusion",
+                    position,
+                    duration,
+                    raw.get("device_name", "unknown"),
+                    source_hint or "unknown",
+                )
+                data["duration"] = None  # Hide duration instead of resetting position
+            else:
+                _LOGGER.warning(
+                    "🚨 Impossible media position detected: %d seconds elapsed > %d seconds duration "
+                    "(device: %s, source: %s). This appears to be a device firmware bug "
+                    "Setting position to 0 to prevent UI confusion",
+                    position,
+                    duration,
+                    raw.get("device_name", "unknown"),
+                    source_hint or "unknown",
+                )
+                data["position"] = 0
 
     # Mute → bool.
     if "mute" in data:
@@ -130,13 +251,28 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
         or raw.get("artwork_url")
         or raw.get("pic_url")
     )
-    if cover:
-        cache_key = f"{data.get('title', '')}-{data.get('artist', '')}-{data.get('album', '')}"
-        if cache_key:
-            encoded = quote(cache_key)
-            sep = "&" if "?" in cover else "?"
-            cover = f"{cover}{sep}cache={encoded}"
-        data["entity_picture"] = cover
+
+    # Validate artwork URL - filter out invalid values like "unknow", "unknown", etc.
+    if cover and str(cover).strip() not in (
+        "unknow",
+        "unknown",
+        "un_known",
+        "",
+        "none",
+    ):
+        try:
+            # Basic URL validation - must contain http or start with /
+            if "http" in str(cover).lower() or str(cover).startswith("/"):
+                cache_key = f"{data.get('title', '')}-{data.get('artist', '')}-{data.get('album', '')}"
+                if cache_key:
+                    encoded = quote(cache_key)
+                    sep = "&" if "?" in cover else "?"
+                    cover = f"{cover}{sep}cache={encoded}"
+                data["entity_picture"] = cover
+            else:
+                _LOGGER.debug("Invalid artwork URL format: %s", cover)
+        except Exception as e:
+            _LOGGER.debug("Error processing artwork URL %s: %s", cover, e)
 
     # Source mapping from *mode* field.
     if (mode_val := raw.get("mode")) is not None and "source" not in data:
@@ -215,7 +351,14 @@ def _handle_qobuz_connect_state_quirks(data: dict[str, Any], raw: dict[str, Any]
 
     # Count the number of positive indicators
     playback_indicators = sum(
-        [has_track_info, has_position_info, has_duration_info, has_artwork, has_artist, has_album]
+        [
+            has_track_info,
+            has_position_info,
+            has_duration_info,
+            has_artwork,
+            has_artist,
+            has_album,
+        ]
     )
 
     # Qobuz Connect specific: If we have rich metadata but status is stopped,
@@ -232,7 +375,9 @@ def _handle_qobuz_connect_state_quirks(data: dict[str, Any], raw: dict[str, Any]
     else:
         # Not enough indicators - probably genuinely stopped/idle
         _LOGGER.debug(
-            "🎵 Qobuz Connect: status='%s' with %d indicators - leaving unchanged", current_status, playback_indicators
+            "🎵 Qobuz Connect: status='%s' with %d indicators - leaving unchanged",
+            current_status,
+            playback_indicators,
         )
 
 

@@ -46,9 +46,27 @@ class MediaControllerCoreMixin:
         self._logger = logging.getLogger(f"{__name__}.{speaker.name}")
 
         # Get volume step from integration config or use default
-        self._volume_step = (
-            speaker.coordinator.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP) / 100.0
-        )  # Convert percentage to 0.0-1.0
+
+        config_volume_step = speaker.coordinator.config_entry.options.get(
+            CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
+        )
+
+        # If the user provided a percentage (e.g. 5 → 5 %), convert to 0-1 range.
+        # If the value already looks like a fraction (≤ 1.0) keep it as-is.
+        if config_volume_step is None:
+            self._volume_step = DEFAULT_VOLUME_STEP
+        elif isinstance(config_volume_step, int | float) and config_volume_step > 1:
+            self._volume_step = float(config_volume_step) / 100.0
+        else:
+            # Already in 0-1 range
+            self._volume_step = float(config_volume_step)
+
+        self._logger.debug(
+            "Volume step calculation: config_value=%s, default=%s, final_step=%.4f",
+            config_volume_step,
+            DEFAULT_VOLUME_STEP,
+            self._volume_step,
+        )
 
         # Internal trackers to avoid noisy duplicate logs on every property poll
         self._last_sound_mode: str | None = None
@@ -73,7 +91,9 @@ class MediaControllerCoreMixin:
             HomeAssistantError: If volume setting fails
         """
         try:
-            self._logger.debug("Setting volume to %.2f for %s", volume, self.speaker.name)
+            self._logger.debug(
+                "Setting volume to %.2f for %s", volume, self.speaker.name
+            )
 
             # Send volume directly to *this* device regardless of role.
             # Group-level aggregation is handled by the group-volume entity.
@@ -117,9 +137,16 @@ class MediaControllerCoreMixin:
             return
 
         step = step or self._volume_step
+        # Fallback to 5% if volume step is 0.00 (configuration issue)
+        if step == 0.0:
+            step = 0.05
+            self._logger.warning("Volume step was 0.00, using fallback of 5%%")
+
         new_volume = min(1.0, current_volume + step)
 
-        self._logger.debug("Volume up: %.2f -> %.2f (step=%.2f)", current_volume, new_volume, step)
+        self._logger.debug(
+            "Volume up: %.2f -> %.2f (step=%.2f)", current_volume, new_volume, step
+        )
         await self.set_volume(new_volume)
 
     async def volume_down(self, step: float | None = None) -> None:
@@ -134,9 +161,16 @@ class MediaControllerCoreMixin:
             return
 
         step = step or self._volume_step
+        # Fallback to 5% if volume step is 0.00 (configuration issue)
+        if step == 0.0:
+            step = 0.05
+            self._logger.warning("Volume step was 0.00, using fallback of 5%%")
+
         new_volume = max(0.0, current_volume - step)
 
-        self._logger.debug("Volume down: %.2f -> %.2f (step=%.2f)", current_volume, new_volume, step)
+        self._logger.debug(
+            "Volume down: %.2f -> %.2f (step=%.2f)", current_volume, new_volume, step
+        )
         await self.set_volume(new_volume)
 
     def get_volume_level(self) -> float | None:
@@ -226,6 +260,17 @@ class MediaControllerCoreMixin:
         try:
             self._logger.debug("Stopping playback for %s", self.speaker.name)
 
+            # Check if current source is Bluetooth - use pause instead of stop
+            current_source = self.speaker.get_current_source()
+            if current_source and current_source.lower() in ["bluetooth", "bt"]:
+                self._logger.debug(
+                    "Bluetooth source detected - using pause instead of stop for %s",
+                    self.speaker.name,
+                )
+                # Use pause for Bluetooth sources since stop is not supported
+                await self.pause()
+                return
+
             # Implement master/slave logic - slaves should control master
             if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
                 self._logger.debug("Slave speaker redirecting stop to master")
@@ -261,13 +306,17 @@ class MediaControllerCoreMixin:
             # Implement master/slave logic - slaves should control master
             if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
                 self._logger.debug("Slave speaker redirecting previous to master")
-                await self.speaker.coordinator_speaker.coordinator.client.previous_track()
+                await (
+                    self.speaker.coordinator_speaker.coordinator.client.previous_track()
+                )
             else:
                 await self.speaker.coordinator.client.previous_track()
 
         except Exception as err:
             self._logger.error("Failed to skip to previous track: %s", err)
-            raise HomeAssistantError(f"Failed to skip to previous track: {err}") from err
+            raise HomeAssistantError(
+                f"Failed to skip to previous track: {err}"
+            ) from err
 
     async def seek(self, position: float) -> None:
         """Seek to position.
@@ -276,7 +325,9 @@ class MediaControllerCoreMixin:
             position: Position in seconds
         """
         try:
-            self._logger.debug("Seeking to position %.1f for %s", position, self.speaker.name)
+            self._logger.debug(
+                "Seeking to position %.1f for %s", position, self.speaker.name
+            )
 
             await self.speaker.coordinator.client.seek(int(position))
 
@@ -297,7 +348,9 @@ class MediaControllerCoreMixin:
             source: Source name to select
         """
         try:
-            self._logger.debug("Selecting source '%s' for %s", source, self.speaker.name)
+            self._logger.debug(
+                "Selecting source '%s' for %s", source, self.speaker.name
+            )
 
             # Map friendly source names to WiiM source IDs
             from .const import SOURCE_MAP
@@ -313,7 +366,9 @@ class MediaControllerCoreMixin:
             if wiim_source is None:
                 wiim_source = source.lower()
 
-            self._logger.debug("Mapped source '%s' to WiiM source '%s'", source, wiim_source)
+            self._logger.debug(
+                "Mapped source '%s' to WiiM source '%s'", source, wiim_source
+            )
 
             # Implement slave group leaving logic - slaves should leave group when changing source
             if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
@@ -321,14 +376,18 @@ class MediaControllerCoreMixin:
                 try:
                     await self.speaker.async_leave_group()
                 except Exception as leave_err:
-                    self._logger.warning("Failed to leave group before source change: %s", leave_err)
+                    self._logger.warning(
+                        "Failed to leave group before source change: %s", leave_err
+                    )
                     # Continue with source change anyway
 
             await self.speaker.coordinator.client.set_source(wiim_source)
 
         except Exception as err:
             self._logger.error("Failed to select source '%s': %s", source, err)
-            raise HomeAssistantError(f"Failed to select source '{source}' on {self.speaker.name}: {err}") from err
+            raise HomeAssistantError(
+                f"Failed to select source '{source}' on {self.speaker.name}: {err}"
+            ) from err
 
     async def set_eq_preset(self, preset: str) -> None:
         """Set EQ preset.
@@ -337,7 +396,9 @@ class MediaControllerCoreMixin:
             preset: EQ preset name (either internal key or display name)
         """
         try:
-            self._logger.debug("Setting EQ preset '%s' for %s", preset, self.speaker.name)
+            self._logger.debug(
+                "Setting EQ preset '%s' for %s", preset, self.speaker.name
+            )
 
             # Handle both internal keys and display names
             preset_key = None
@@ -366,7 +427,62 @@ class MediaControllerCoreMixin:
 
         except Exception as err:
             self._logger.error("Failed to set EQ preset '%s': %s", preset, err)
-            raise HomeAssistantError(f"Failed to set EQ preset '{preset}' on {self.speaker.name}: {err}") from err
+            raise HomeAssistantError(
+                f"Failed to set EQ preset '{preset}' on {self.speaker.name}: {err}"
+            ) from err
+
+    async def select_output_mode(self, output_mode: str) -> None:
+        """Select hardware output mode.
+
+        Args:
+            output_mode: Output mode to select (Line Out, Optical Out, Coax Out, Bluetooth Out)
+        """
+        try:
+            self._logger.info(
+                "WiiM Media Controller: Selecting output mode '%s' for %s",
+                output_mode,
+                self.speaker.name,
+            )
+
+            # Map friendly output mode names to API values
+            from .const import AUDIO_OUTPUT_MODES
+
+            # Find the API value for the output mode
+            api_value = None
+            for api_val, friendly_name in AUDIO_OUTPUT_MODES.items():
+                if (
+                    output_mode == friendly_name
+                    or output_mode.lower() == friendly_name.lower()
+                ):
+                    api_value = api_val
+                    break
+
+            if api_value is None:
+                raise ValueError(
+                    f"Invalid output mode: {output_mode}. Valid modes: {list(AUDIO_OUTPUT_MODES.values())}"
+                )
+
+            self._logger.info(
+                "WiiM Media Controller: Mapped output mode '%s' to API value '%s'",
+                output_mode,
+                api_value,
+            )
+
+            await self.speaker.coordinator.client.set_audio_output_hardware_mode(
+                int(api_value)
+            )
+            self._logger.info(
+                "WiiM Media Controller: Successfully sent API command setAudioOutputHardwareMode:%s",
+                api_value,
+            )
+
+        except Exception as err:
+            self._logger.error(
+                "Failed to select output mode '%s': %s", output_mode, err
+            )
+            raise HomeAssistantError(
+                f"Failed to select output mode '{output_mode}' on {self.speaker.name}: {err}"
+            ) from err
 
     async def set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode using WiiM's loopmode command.
@@ -375,7 +491,9 @@ class MediaControllerCoreMixin:
             shuffle: True to enable shuffle, False to disable
         """
         try:
-            self._logger.debug("Setting shuffle to %s for %s", shuffle, self.speaker.name)
+            self._logger.debug(
+                "Setting shuffle to %s for %s", shuffle, self.speaker.name
+            )
 
             # Check current source - Airplay sources may not support shuffle control
             current_source = self.get_current_source()
@@ -419,7 +537,9 @@ class MediaControllerCoreMixin:
             repeat: Repeat mode - "off", "one", "all"
         """
         try:
-            self._logger.debug("Setting repeat to '%s' for %s", repeat, self.speaker.name)
+            self._logger.debug(
+                "Setting repeat to '%s' for %s", repeat, self.speaker.name
+            )
 
             # Check current source - Airplay sources may not support repeat control
             current_source = self.get_current_source()
@@ -459,12 +579,10 @@ class MediaControllerCoreMixin:
     def get_source_list(self) -> list[str]:
         """Get sources (master/slave aware)."""
         try:
-            from .const import SOURCE_MAP
+            from .const import SELECTABLE_SOURCES
 
-            # Built-in sources first
-            built_in = list(SOURCE_MAP.values())
-
-            return built_in
+            # Return only selectable sources - excludes status indicators like "Idle", "Multiroom", "Follower"
+            return SELECTABLE_SOURCES.copy()
         except Exception as err:
             self._logger.error("Failed to get source list: %s", err)
             return ["WiFi", "Bluetooth", "Line In", "Optical"]  # Basic fallback
@@ -531,7 +649,9 @@ class MediaControllerCoreMixin:
 
     def get_sound_mode_list(self) -> list[str]:
         """Get available EQ presets (capitalized display names)."""
-        return list(EQ_PRESET_MAP.values())  # Return display names: ["Flat", "Acoustic", "Bass"]
+        return list(
+            EQ_PRESET_MAP.values()
+        )  # Return display names: ["Flat", "Acoustic", "Bass"]
 
     def get_sound_mode(self) -> str | None:
         """Get current EQ preset."""
@@ -539,7 +659,9 @@ class MediaControllerCoreMixin:
             sound_mode = self.speaker.get_sound_mode()
 
             if sound_mode != self._last_sound_mode:
-                self._logger.debug("Detected sound mode: '%s' for %s", sound_mode, self.speaker.name)
+                self._logger.debug(
+                    "Detected sound mode: '%s' for %s", sound_mode, self.speaker.name
+                )
                 self._last_sound_mode = sound_mode
 
             return sound_mode

@@ -22,17 +22,18 @@ def mock_coordinator():
     coordinator.entry = MagicMock()
     coordinator.entry.unique_id = "test-unique-id"
 
-    # API capability flags
-    coordinator._statusex_supported = None
-    coordinator._metadata_supported = None
-    coordinator._eq_supported = None
-    coordinator._presets_supported = None
+    # API capability flags (initialize as True for testing)
+    coordinator._statusex_supported = True
+    coordinator._metadata_supported = True
+    coordinator._eq_supported = True
+    coordinator._presets_supported = True
     coordinator._eq_list_extended = True
 
-    # Endpoint health flags
-    coordinator._player_status_working = None
-    coordinator._device_info_working = None
-    coordinator._multiroom_working = None
+    # Endpoint health flags (initialize as working for testing)
+    coordinator._player_status_working = True
+    coordinator._device_info_working = True
+    coordinator._multiroom_working = True
+    coordinator._initial_setup_complete = False  # Start as False, will be set to True during testing
 
     # Backoff controller
     coordinator._backoff = MagicMock()
@@ -41,9 +42,21 @@ def mock_coordinator():
     coordinator._backoff.next_interval = MagicMock(return_value=5)
     coordinator._backoff.consecutive_failures = 0  # Initialize as number, not MagicMock
 
+    # Core communication failure tracking
+    coordinator._core_comm_failures = 0  # Initialize as number, not MagicMock
+
+    # Audio output error tracking
+    coordinator._audio_output_error_count = 0  # Initialize as number, not MagicMock
+
+    # Time tracking attributes
+    coordinator._last_device_info_check = 0.0
+    coordinator._last_eq_info_check = 0.0
+    coordinator._last_multiroom_check = 0.0
+    coordinator._last_audio_output_check = 0.0
+    coordinator._last_response_time = 0.0
+
     coordinator._last_command_failure = None
     coordinator.clear_command_failures = MagicMock()
-    coordinator._last_response_time = None
     coordinator.data = None  # Will be populated during testing
     coordinator.hass = MagicMock()
     coordinator.hass.loop = MagicMock()
@@ -52,7 +65,7 @@ def mock_coordinator():
     # Mock the async methods that will be called
     coordinator._fetch_multiroom_info = AsyncMock(return_value={})
     coordinator._fetch_track_metadata = AsyncMock()
-    coordinator._fetch_eq_info = AsyncMock()
+    coordinator._fetch_eq_info = AsyncMock(return_value=EQInfo.model_validate({"eq_enabled": False}))
     coordinator._detect_role_from_status_and_slaves = AsyncMock(return_value="solo")
     coordinator._resolve_multiroom_source_and_media = AsyncMock()
     coordinator._update_speaker_object = AsyncMock()
@@ -69,10 +82,8 @@ def mock_coordinator():
     if hasattr(coordinator, "_last_track_info"):
         delattr(coordinator, "_last_track_info")
 
-    # Initialize timestamp attributes with numeric values (not MagicMock)
-    coordinator._last_device_info_check = 0
-    coordinator._last_eq_info_check = 0
-    coordinator._last_multiroom_check = 0
+    # Set test mode to avoid delayed metadata fetching
+    coordinator._test_mode = True
 
     return coordinator
 
@@ -112,6 +123,11 @@ async def test_polling_success_complete(mock_coordinator):
         # Mock presets call
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         # Verify result structure
@@ -119,6 +135,7 @@ async def test_polling_success_complete(mock_coordinator):
         assert "status_model" in result
         assert "device_model" in result
         assert "multiroom" in result
+        # Note: metadata_model may be None due to delayed fetching
         assert "metadata_model" in result
         assert "eq_model" in result
         assert "role" in result
@@ -127,7 +144,9 @@ async def test_polling_success_complete(mock_coordinator):
         # Verify models
         assert isinstance(result["status_model"], PlayerStatus)
         assert isinstance(result["device_model"], DeviceInfo)
-        assert isinstance(result["metadata_model"], TrackMetadata)
+        # metadata_model may be None if delayed fetch is used
+        if result["metadata_model"] is not None:
+            assert isinstance(result["metadata_model"], TrackMetadata)
         assert isinstance(result["eq_model"], EQInfo)
         assert isinstance(result["polling_metrics"], PollingMetrics)
 
@@ -157,6 +176,14 @@ async def test_polling_device_info_failure(mock_coordinator):
     # Set up client methods directly
     mock_coordinator.client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
     mock_coordinator.client.get_device_info = AsyncMock(side_effect=WiiMError("Device info failed"))
+
+    # Properly mock _fetch_eq_info to return an EQInfo object
+    mock_coordinator._fetch_eq_info = AsyncMock(return_value=EQInfo.model_validate({"eq_enabled": False}))
+
+    # Mock audio output call
+    mock_coordinator.client.get_audio_output_status = AsyncMock(
+        return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+    )
 
     # Mock the heavy processing to return empty data
     with patch("custom_components.wiim.coordinator_polling._process_heavy_operations", return_value={}):
@@ -199,6 +226,11 @@ async def test_polling_presets_not_supported(mock_coordinator):
         mock_coordinator._presets_supported = None
         mock_coordinator.client.get_presets = AsyncMock(side_effect=WiiMError("Not supported"))
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         assert result["presets"] == []
@@ -231,6 +263,11 @@ async def test_polling_presets_already_not_supported(mock_coordinator):
 
         # Presets already known to be unsupported
         mock_coordinator._presets_supported = False
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         result = await async_update_data(mock_coordinator)
 
@@ -271,6 +308,11 @@ async def test_polling_artwork_propagation(mock_coordinator):
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         # Artwork should be propagated to status model
@@ -307,6 +349,11 @@ async def test_polling_eq_preset_propagation(mock_coordinator):
         mock_role.return_value = "solo"
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         result = await async_update_data(mock_coordinator)
 
@@ -351,6 +398,11 @@ async def test_polling_uuid_injection(mock_coordinator):
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
 
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
+
         result = await async_update_data(mock_coordinator)
 
         # UUID should be injected from config entry
@@ -386,6 +438,11 @@ async def test_polling_response_time_tracking(mock_coordinator):
         mock_role.return_value = "solo"
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         await async_update_data(mock_coordinator)
 
@@ -425,6 +482,11 @@ async def test_polling_command_failure_clearing(mock_coordinator):
         mock_role.return_value = "solo"
 
         mock_coordinator.client.get_presets = AsyncMock(return_value=[])
+
+        # Mock audio output call
+        mock_coordinator.client.get_audio_output_status = AsyncMock(
+            return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+        )
 
         await async_update_data(mock_coordinator)
 

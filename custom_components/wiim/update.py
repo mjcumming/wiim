@@ -60,7 +60,11 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
     def latest_version(self) -> str | None:  # type: ignore[override]
         if self.speaker.device_model is None:
             return None
-        return getattr(self.speaker.device_model, "latest_version", None)
+        version = getattr(self.speaker.device_model, "latest_version", None)
+        # Ignore '0', 0, empty, or '-' as valid versions
+        if not version or str(version).strip() in {"0", "-", ""}:
+            return None
+        return version
 
     @property
     def available(self) -> bool:  # type: ignore[override]

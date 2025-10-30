@@ -64,7 +64,7 @@ async def test_device_creation(hass: HomeAssistant, bypass_get_data) -> None:
 
     assert device.name == MOCK_DEVICE_DATA["DeviceName"]
     assert device.manufacturer == "WiiM"
-    assert device.model == MOCK_DEVICE_DATA["project"]
+    assert device.model == "WiiM Speaker"  # Fallback model when project not in status
 
 
 @pytest.mark.skip(reason="Skipped due to HA background thread issue - functionality covered by other tests")
@@ -107,6 +107,25 @@ async def test_service_registration(hass: HomeAssistant, bypass_get_data) -> Non
 
     # Check if domain services are available
     assert hass.services.has_service(DOMAIN, "join_group") or len(hass.data[DOMAIN]) > 0
+
+
+@pytest.mark.skip(reason="Skipped due to HA background thread issue - functionality covered by other tests")
+async def test_reboot_service_registration(hass: HomeAssistant, bypass_get_data) -> None:
+    """Test reboot service is registered."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="WiiM Mini",
+        data=MOCK_CONFIG,
+        unique_id=MOCK_DEVICE_DATA["uuid"],
+    )
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Check if reboot service is available
+    assert hass.services.has_service(DOMAIN, "reboot_device")
+    assert hass.services.has_service(DOMAIN, "sync_time")
 
 
 @pytest.mark.skip(reason="Skipped due to HA background thread issue - functionality covered by other tests")

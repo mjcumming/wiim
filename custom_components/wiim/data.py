@@ -21,11 +21,14 @@ This follows cursor rules: simple, composable, < 200 LOC modules.
 from __future__ import annotations
 
 import logging
+import time
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.media_player import MediaPlayerState
+from async_upnp_client.exceptions import UpnpResponseError
+from homeassistant.components.media_player.const import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo as HADeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -98,6 +101,13 @@ class Speaker:
         self.group_members: list[Speaker] = []
         self.coordinator_speaker: Speaker | None = None
 
+        # UPnP components (Samsung/DLNA pattern)
+        self._upnp_client: Any | None = None
+        self._upnp_eventer: Any | None = None
+        self._upnp_state: Any | None = None
+        self._subscriptions_failed: bool = False
+        self._poll_timer: Any | None = None  # Fallback polling timer
+
         # HA integration
         self.device_info: HADeviceInfo | None = None
         self._available: bool = True
@@ -106,6 +116,9 @@ class Speaker:
         self._last_position_update: float | None = None
         self._last_position: int | None = None
         self._artwork_version: int = 0
+
+        # Missing device tracking (prevent spam warnings)
+        self._missing_devices_reported: set[str] = set()
 
         # Some unit tests use simplified MockConfigEntry objects that omit the
         # `entry_id` attribute.  Many helper functions use this field as a key
@@ -120,9 +133,30 @@ class Speaker:
 
     async def async_setup(self, entry: ConfigEntry) -> None:
         """Complete async setup of the speaker."""
+        _LOGGER.info("🔧 Speaker.async_setup() called for %s (UUID: %s)", self.name, self.uuid)
+
         # _populate_device_info is a synchronous helper; no need to await.
         self._populate_device_info()
         await self._register_ha_device(entry)
+
+        # Initialize UPnP (Samsung/DLNA pattern - always try, gracefully fallback to polling)
+        # Follows DLNA DMR/SamsungTV pattern: always attempt UPnP subscriptions, fallback to HTTP polling on failure
+        # In Docker/WSL bridge mode, callbacks may not be reachable, but code handles this gracefully
+        # To enable UPnP callbacks in Docker: use network_mode: host in docker-compose.yml or --network=host
+        # To enable UPnP callbacks in VS Code DevContainer: add "runArgs": ["--network=host"] to devcontainer.json
+        _LOGGER.info("📡 Initializing UPnP event subscriptions for %s (Samsung/DLNA pattern)...", self.name)
+        try:
+            await self._setup_upnp_subscriptions(entry)
+            _LOGGER.info("✅ UPnP setup completed for %s", self.name)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "⚠️  Failed to setup UPnP for %s: %s - will use HTTP polling fallback",
+                self.name,
+                err,
+            )
+            _LOGGER.debug("UPnP setup error details:", exc_info=True)
+            self._subscriptions_failed = True
+
         _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
     @property
@@ -151,7 +185,8 @@ class Speaker:
 
     def async_write_entity_states(self) -> None:
         """Notify all entities of state changes."""
-        async_dispatcher_send(self.hass, f"wiim_state_updated_{self.uuid}")
+        signal = f"wiim_state_updated_{self.uuid}"
+        async_dispatcher_send(self.hass, signal)
 
     def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
@@ -213,6 +248,11 @@ class Speaker:
 
     def update_from_coordinator_data(self, data: dict[str, Any]) -> None:
         """Update speaker state from coordinator data."""
+        _LOGGER.debug(
+            "🎵 update_from_coordinator_data called with data keys: %s",
+            list(data.keys()) if data else "None",
+        )
+
         if not data:
             return
 
@@ -346,17 +386,32 @@ class Speaker:
             if slave_speaker:
                 new_group_members.append(slave_speaker)
                 slave_speaker.coordinator_speaker = self
+                # Clear from missing devices set if found
+                if slave_uuid in self._missing_devices_reported:
+                    self._missing_devices_reported.discard(slave_uuid)
             else:
-                # Missing slave - trigger discovery
-                _LOGGER.warning(
-                    "Master %s cannot find slave %s (IP: %s, UUID: %s)",
-                    self.name,
-                    slave_name,
-                    slave_ip,
-                    slave_uuid,
-                )
-                if slave_uuid:
-                    self.hass.async_create_task(self._trigger_missing_device_discovery(slave_uuid, slave_name))
+                # Missing slave - only warn and trigger discovery once per device
+                if slave_uuid and slave_uuid not in self._missing_devices_reported:
+                    _LOGGER.warning(
+                        "Master %s cannot find slave %s (IP: %s, UUID: %s) - triggering automatic discovery",
+                        self.name,
+                        slave_name,
+                        slave_ip,
+                        slave_uuid,
+                    )
+                    self._missing_devices_reported.add(slave_uuid)
+                    self.hass.async_create_task(
+                        self._trigger_missing_device_discovery(slave_uuid, slave_name, slave_ip)
+                    )
+                elif slave_uuid:
+                    # Subsequent polls - only log at debug level to avoid spam
+                    _LOGGER.debug(
+                        "Master %s still cannot find slave %s (IP: %s, UUID: %s) - discovery already triggered",
+                        self.name,
+                        slave_name,
+                        slave_ip,
+                        slave_uuid,
+                    )
 
         self.group_members = new_group_members
 
@@ -377,17 +432,37 @@ class Speaker:
             master_speaker = find_speaker_by_uuid(self.hass, master_uuid)
             if master_speaker:
                 self.coordinator_speaker = master_speaker
+                # Clear from missing devices set if found
+                if master_uuid in self._missing_devices_reported:
+                    self._missing_devices_reported.discard(master_uuid)
             else:
-                _LOGGER.warning("Slave %s cannot find master UUID: %s", self.name, master_uuid)
-                # Trigger discovery for missing master
-                self.hass.async_create_task(self._trigger_missing_device_discovery(master_uuid, "Missing Master"))
+                # Missing master - only warn and trigger discovery once per device
+                if master_uuid not in self._missing_devices_reported:
+                    _LOGGER.warning(
+                        "Slave %s cannot find master UUID: %s - triggering automatic discovery",
+                        self.name,
+                        master_uuid,
+                    )
+                    self._missing_devices_reported.add(master_uuid)
+                    self.hass.async_create_task(
+                        self._trigger_missing_device_discovery(master_uuid, "Missing Master", None)
+                    )
+                else:
+                    # Subsequent polls - only log at debug level to avoid spam
+                    _LOGGER.debug(
+                        "Slave %s still cannot find master UUID: %s - discovery already triggered",
+                        self.name,
+                        master_uuid,
+                    )
 
     def _clear_group_state(self) -> None:
         """Clear group state for solo speakers."""
         self.group_members = []
         self.coordinator_speaker = None
 
-    async def _trigger_missing_device_discovery(self, device_uuid: str, device_name: str) -> None:
+    async def _trigger_missing_device_discovery(
+        self, device_uuid: str, device_name: str, device_ip: str | None = None
+    ) -> None:
         """Trigger discovery flow for missing device."""
         try:
             from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
@@ -412,17 +487,26 @@ class Speaker:
                 device_uuid,
             )
 
+            # Prepare discovery data
+            discovery_data = {
+                "device_uuid": device_uuid,
+                "device_name": device_name,
+                "discovery_source": "missing_device" if not device_ip else "automatic_slave",
+            }
+
+            # Include IP if available (enables automatic setup without user input)
+            if device_ip:
+                from homeassistant.const import CONF_HOST
+
+                discovery_data[CONF_HOST] = device_ip
+
             await self.hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={
                     "source": SOURCE_INTEGRATION_DISCOVERY,
                     "unique_id": device_uuid,
                 },
-                data={
-                    "device_uuid": device_uuid,
-                    "device_name": device_name,
-                    "discovery_source": "missing_device",
-                },
+                data=discovery_data,
             )
         except Exception as err:
             _LOGGER.error("Failed to trigger discovery for %s: %s", device_name, err)
@@ -449,14 +533,18 @@ class Speaker:
             Clean device name string, never empty or containing IP addresses
         """
         # Extract device name with multiple fallback attempts
-        # DO NOT USE 'title' - that's the song title, not device name!
+        # PRIORITY 1: DeviceName from WiiM API (custom name set in app)
+        # PRIORITY 2: Other common name fields
+        # PRIORITY 3: Network/SSID name (less reliable)
+        # PRIORITY 4: Generic fallback
+
         device_name = (
-            status.get("DeviceName")  # WiiM API primary field
+            status.get("DeviceName")  # WiiM API primary field - custom name from app
             or status.get("device_name")  # Alternative field name
             or status.get("friendlyName")  # Common API field
             or status.get("name")  # Generic name field
             or status.get("GroupName")  # Group name field
-            or status.get("ssid", "").replace("_", " ")  # Device hotspot name
+            or status.get("ssid", "").replace("_", " ")  # Device hotspot name (fallback)
             # REMOVED: or status.get("title")  # This is SONG TITLE, not device name!
             or "WiiM Speaker"  # Clean final fallback (no IP)
         )
@@ -571,7 +659,6 @@ class Speaker:
     def get_playback_state(self) -> MediaPlayerState:
         """Map WiiM play_status to Home Assistant MediaPlayerState."""
         if self.status_model is None:
-            _LOGGER.debug("🎵 DEVICE STATE: status_model=None")
             return MediaPlayerState.IDLE
 
         # Debug: Show ALL fields in the status model to see what the device provides
@@ -583,8 +670,7 @@ class Speaker:
             )
 
             # Check if status field exists under a different name
-            raw_status = getattr(self.status_model, "status", None)
-            _LOGGER.debug("🎵 DEVICE STATE: checking raw 'status' field=%s", raw_status)
+            getattr(self.status_model, "status", None)
             return MediaPlayerState.IDLE
 
         play_status = str(self.status_model.play_state)
@@ -610,7 +696,6 @@ class Speaker:
             )
             mapped_state = MediaPlayerState.IDLE
 
-        _LOGGER.debug("🎵 DEVICE STATE: '%s' → %s", play_status, mapped_state)
         return mapped_state
 
     def is_volume_muted(self) -> bool | None:
@@ -680,31 +765,143 @@ class Speaker:
 
     def get_media_duration(self) -> int | None:
         duration = self._status_field("duration")
+        _LOGGER.debug(
+            "🎵 get_media_duration: raw duration=%s (type: %s)",
+            duration,
+            type(duration),
+        )
 
         try:
-            return int(float(duration)) if duration is not None else None
+            if duration is not None:
+                result = int(float(duration))
+                # Return None for zero duration (streaming services without duration info)
+                if result == 0:
+                    return None
+                return result
+            else:
+                return None
         except (TypeError, ValueError):
             return None
 
     def get_media_position(self) -> int | None:
         position = self._status_field("position", "seek")
+        _LOGGER.debug(
+            "🎵 get_media_position: raw position=%s (type: %s)",
+            position,
+            type(position),
+        )
 
         # Position may vary by source type and streaming service
 
         try:
-            return int(float(position)) if position is not None else None
+            if position is not None:
+                pos_value = int(float(position))
+                # Ensure position is non-negative
+                if pos_value < 0:
+                    return None
+
+                # Clamp to known duration if available
+                try:
+                    duration_value = self.get_media_duration()
+                except Exception:  # pragma: no cover - defensive
+                    duration_value = None
+                if duration_value is not None and duration_value > 0:
+                    if pos_value > duration_value:
+                        _LOGGER.debug(
+                            "🎵 get_media_position: clamping %s to duration %s",
+                            pos_value,
+                            duration_value,
+                        )
+                        pos_value = duration_value
+
+                return pos_value
+            return None
         except (TypeError, ValueError):
             return None
 
     def get_media_position_updated_at(self) -> float | None:
-        # Coordinator could track this precisely; for now, update time when we last saw a position.
+        # Only bump the timestamp when actually playing and either
+        # the numeric position increases or the track changes.
         import time
 
-        pos = self.get_media_position()
-        if pos is not None:
+        current_position = self.get_media_position()
+
+        # Derive a simple track signature from current metadata
+        try:
+            title = self._status_field("title") or ""
+            artist = self._status_field("artist") or ""
+            album = self._status_field("album") or ""
+            content_id = self._status_field("media_content_id", "uri") or ""
+            current_signature = f"{title}|{artist}|{album}|{content_id}"
+        except Exception:  # pragma: no cover - best-effort
+            current_signature = ""
+
+        # Initialize storage if not present
+        if not hasattr(self, "_last_position_update"):
+            self._last_position_update = None  # type: ignore[attr-defined]
+        if not hasattr(self, "_last_position"):
+            self._last_position = None  # type: ignore[attr-defined]
+        if not hasattr(self, "_last_track_signature"):
+            self._last_track_signature = None  # type: ignore[attr-defined]
+
+        previous_position = getattr(self, "_last_position", None)
+        previous_signature = getattr(self, "_last_track_signature", None)
+
+        # Determine if we are actively playing (avoid advancing while paused/idle)
+        try:
+            # Use the same logic as get_playback_state() for consistency
+            if self.status_model is None:
+                is_playing = False
+            else:
+                play_status = str(self.status_model.play_state) if self.status_model.play_state is not None else ""
+                is_playing = play_status.lower() in ("play", "playing", "load")
+        except Exception:
+            is_playing = True  # fall back to permissive behavior
+
+        # Update timestamp on new track or real position change while playing
+        track_changed = current_signature and current_signature != previous_signature
+
+        # Treat clear position decrease as implicit track switch (some sources delay metadata)
+        position_decreased = (
+            current_position is not None and previous_position is not None and current_position + 2 < previous_position
+        )
+
+        _LOGGER.debug(
+            "🎵 get_media_position_updated_at: current_pos=%s, prev_pos=%s, is_playing=%s, track_changed=%s, pos_decreased=%s",
+            current_position,
+            previous_position,
+            is_playing,
+            track_changed,
+            position_decreased,
+        )
+
+        if (track_changed or position_decreased) and current_position is not None:
             self._last_position_update = time.time()
-            self._last_position = pos
-        return self._last_position_update
+            self._last_position = current_position
+            self._last_track_signature = current_signature
+            _LOGGER.debug(
+                "🎵 get_media_position_updated_at: Updated timestamp due to track change or position decrease"
+            )
+        elif (
+            is_playing
+            and current_position is not None
+            and previous_position is not None
+            and current_position > previous_position
+        ):
+            self._last_position_update = time.time()
+            self._last_position = current_position
+            self._last_track_signature = current_signature or previous_signature
+        elif previous_position is None and current_position is not None:
+            self._last_position_update = time.time()
+            self._last_position = current_position
+            self._last_track_signature = current_signature or previous_signature
+
+        # Ensure we always return a valid timestamp
+        if getattr(self, "_last_position_update", None) is None:
+            self._last_position_update = time.time()
+
+        result = self._last_position_update
+        return result
 
     def get_media_image_url(self) -> str | None:
         return self._status_field("entity_picture", "cover_url")
@@ -723,9 +920,116 @@ class Speaker:
         try:
             from .const import SOURCE_MAP
 
-            return SOURCE_MAP.get(str(source_internal).lower(), str(source_internal))
+            result = SOURCE_MAP.get(str(source_internal).lower(), str(source_internal))
+            return result
         except Exception:
             return str(source_internal)
+
+    # ----- AUDIO OUTPUT HELPERS -----
+
+    def is_bluetooth_output_active(self) -> bool:
+        """Return True if Bluetooth output is currently active."""
+        if self.status_model is None:
+            return False
+
+        # Check if audio output data is available
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None or audio_output == {}:
+            return False
+
+        try:
+            return audio_output.get("source") == "1"
+        except Exception:
+            # Handle any unexpected data format issues
+            return False
+
+    def get_hardware_output_mode(self) -> str | None:
+        """Return current hardware output mode name."""
+        if self.status_model is None:
+            return None
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None or audio_output == {}:
+            return None
+
+        try:
+            mode_map = {"1": "SPDIF", "2": "AUX", "3": "COAX"}
+            hardware_mode = audio_output.get("hardware")
+            return mode_map.get(str(hardware_mode), f"Unknown ({hardware_mode})")
+        except Exception:
+            # Handle any unexpected data format issues
+            return None
+
+    def is_audio_cast_active(self) -> bool:
+        """Return True if audio cast mode is currently active."""
+        if self.status_model is None:
+            return False
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None:
+            return False
+
+        return audio_output.get("audiocast") == "1"
+
+    def get_current_output_mode(self) -> str | None:
+        """Return current hardware output mode name."""
+        if self.status_model is None:
+            return None
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+
+        if audio_output is None or audio_output == {}:
+            return None
+
+        try:
+            from .const import AUDIO_OUTPUT_MODES
+
+            hardware_mode = audio_output.get("hardware")
+
+            if hardware_mode is None:
+                return None
+
+            mode_str = str(hardware_mode)
+
+            # Return known mode or "Unknown" with the raw value
+            result = AUDIO_OUTPUT_MODES.get(mode_str, f"Unknown ({hardware_mode})")
+            return result
+        except Exception:
+            # Handle any unexpected data format issues
+            return None
+
+    def get_output_mode_list(self) -> list[str]:
+        """Return list of selectable output modes."""
+        from .const import SELECTABLE_OUTPUT_MODES
+
+        return SELECTABLE_OUTPUT_MODES.copy()
+
+    def get_discovered_output_modes(self) -> list[str]:
+        """Return list of output modes discovered from device status."""
+        if self.status_model is None:
+            return []
+
+        audio_output = getattr(self.status_model, "audio_output", None)
+        if audio_output is None or audio_output == {}:
+            return []
+
+        try:
+            from .const import AUDIO_OUTPUT_MODES
+
+            # Get all known modes plus any unknown ones we've seen
+            discovered_modes = []
+            hardware_mode = audio_output.get("hardware")
+            if hardware_mode is not None:
+                mode_str = str(hardware_mode)
+                if mode_str in AUDIO_OUTPUT_MODES:
+                    discovered_modes.append(AUDIO_OUTPUT_MODES[mode_str])
+                else:
+                    discovered_modes.append(f"Unknown ({hardware_mode})")
+
+            return discovered_modes
+        except Exception:
+            # Handle any unexpected data format issues
+            return []
 
     def get_shuffle_state(self) -> bool | None:
         """Return True if shuffle is active, False if off, None if unknown."""
@@ -807,6 +1111,296 @@ class Speaker:
             if isinstance(raw, PlayerStatus):
                 return raw
         return None
+
+    def _merge_upnp_state_to_coordinator(self) -> None:
+        """Merge UPnP state changes into coordinator.data.
+
+        This ensures entities can read UPnP state updates via status_model.
+        Follows Home Assistant pattern: external events → update coordinator.data → entities read it.
+        """
+        if not self.coordinator or not self.coordinator.data or not self._upnp_state:
+            return
+
+        # Get current status_model from coordinator
+        current_status = self.coordinator.data.get("status_model")
+        if not isinstance(current_status, PlayerStatus):
+            # If no status_model exists yet, create a minimal one
+            # (coordinator polling will fill it in, but UPnP can update it earlier)
+            current_status = PlayerStatus(play_status="idle")
+
+        # Map UPnP state fields to PlayerStatus model fields
+        updates: dict[str, Any] = {}
+
+        # play_state: Convert UPnP format to PlayerStatus format
+        # UPnP: "playing", "paused playback", "stopped"
+        # PlayerStatus: "play", "pause", "stop", "idle"
+        if self._upnp_state.play_state is not None:
+            upnp_play_state = self._upnp_state.play_state.lower().strip()
+            if "play" in upnp_play_state and "pause" not in upnp_play_state:
+                updates["play_status"] = "play"
+            elif "pause" in upnp_play_state:
+                updates["play_status"] = "pause"
+            elif "stop" in upnp_play_state or "idle" in upnp_play_state:
+                updates["play_status"] = "stop"
+            else:
+                updates["play_status"] = "idle"
+
+        # volume: Convert float 0-1 to int 0-100
+        if self._upnp_state.volume is not None:
+            updates["vol"] = int(self._upnp_state.volume * 100)
+
+        # muted: Direct mapping (bool → bool)
+        if self._upnp_state.muted is not None:
+            updates["mute"] = self._upnp_state.muted
+
+        # position: Direct mapping (int seconds → int seconds)
+        if self._upnp_state.position is not None:
+            updates["position"] = self._upnp_state.position
+
+        # duration: Direct mapping (int seconds → int seconds)
+        if self._upnp_state.duration is not None:
+            updates["duration"] = self._upnp_state.duration
+
+        # Media metadata: Direct mapping
+        if self._upnp_state.title is not None:
+            updates["Title"] = self._upnp_state.title
+        if self._upnp_state.artist is not None:
+            updates["Artist"] = self._upnp_state.artist
+        if self._upnp_state.album is not None:
+            updates["Album"] = self._upnp_state.album
+        if self._upnp_state.image_url is not None:
+            updates["cover_url"] = self._upnp_state.image_url
+
+        # source: Direct mapping
+        if self._upnp_state.source is not None:
+            updates["mode"] = self._upnp_state.source
+
+        # Apply updates to status_model if we have any
+        if updates:
+            try:
+                # Create updated PlayerStatus model
+                updated_status = current_status.model_copy(update=updates)
+
+                # Update coordinator.data (following Home Assistant pattern)
+                # Create a copy of coordinator.data to avoid mutating in place
+                data_copy = self.coordinator.data.copy()
+                data_copy["status_model"] = updated_status
+                self.coordinator.async_set_updated_data(data_copy)
+
+                _LOGGER.debug(
+                    "Merged UPnP state into coordinator.data for %s: %s",
+                    self.name,
+                    list(updates.keys()),
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Failed to merge UPnP state into coordinator for %s: %s",
+                    self.name,
+                    err,
+                )
+
+    # ==========================================================
+    # UPnP Integration Methods (Samsung/DLNA Pattern)
+    # ==========================================================
+
+    async def _setup_upnp_subscriptions(self, entry: ConfigEntry) -> None:
+        """Create UPnP subscriptions (Samsung/DLNA pattern).
+
+        This follows the Samsung/DLNA DmrDevice pattern using async_upnp_client:
+        1. Create UpnpClient from SSDP discovery info
+        2. Create UpnpEventer with state manager
+        3. Start subscriptions with callbacks
+        4. Set up fallback polling if needed
+        See: /workspaces/core/homeassistant/components/dlna_dmr/media_player.py
+        """
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+        from .state import WiiMState
+        from .upnp_client import UpnpClient
+        from .upnp_eventer import UpnpEventer
+
+        # Get SSDP discovery info from config entry (stored during SSDP/zeroconf discovery)
+        ssdp_info = entry.data.get("ssdp_info")
+        if not ssdp_info or not ssdp_info.get("location"):
+            # Fallback: construct description URL from device IP
+            # WiiM devices use HTTP (port 49152) for UPnP, not HTTPS
+            _LOGGER.info(
+                "No SSDP info available for %s, constructing fallback description URL from IP (port 49152)",
+                self.name,
+            )
+            description_url = f"http://{self.ip_address}:49152/description.xml"
+        else:
+            description_url = ssdp_info.get("location")
+            _LOGGER.info(
+                "Using SSDP location for %s: %s",
+                self.name,
+                description_url,
+            )
+
+        # Create UPnP client (Samsung/DLNA pattern)
+        _LOGGER.info(
+            "🔧 Creating UPnP client for %s from description URL: %s",
+            self.name,
+            description_url,
+        )
+        session = async_get_clientsession(self.hass)
+        client_start_time = time.time()
+        try:
+            self._upnp_client = await UpnpClient.create(
+                host=self.ip_address,
+                description_url=description_url,
+                session=session,
+            )
+            client_duration = time.time() - client_start_time
+            _LOGGER.info(
+                "✅ UPnP client created successfully for %s (completed in %.2fs)",
+                self.name,
+                client_duration,
+            )
+        except Exception as err:  # noqa: BLE001
+            client_duration = time.time() - client_start_time
+            _LOGGER.warning(
+                "⚠️  Failed to create UPnP client for %s (after %.2fs): %s - continuing with HTTP polling only",
+                self.name,
+                client_duration,
+                err,
+            )
+            _LOGGER.debug(
+                "UPnP client creation failed, integration will use HTTP polling (1s when playing, 5s idle)",
+            )
+            # Don't raise - UPnP is optional, HTTP polling works fine
+            return
+
+        # Create state manager
+        self._upnp_state = WiiMState()
+
+        # Create eventer with callback (Samsung/DLNA pattern)
+        self._upnp_eventer = UpnpEventer(
+            hass=self.hass,
+            upnp_client=self._upnp_client,
+            state_manager=self._upnp_state,
+            device_uuid=self.uuid,
+        )
+
+        # Start subscriptions with callbacks (Samsung/DLNA pattern)
+        # Following dlna_dmr pattern: subscription failure is NOT fatal
+        subscription_start_time = time.time()
+        try:
+            await self._upnp_eventer.start(
+                callback_host=entry.options.get("upnp_callback_host"),
+                callback_port=entry.options.get("upnp_callback_port", 0),
+            )
+            subscription_duration = time.time() - subscription_start_time
+            _LOGGER.info(
+                "✅ UPnP event subscriptions established for %s (%.2fs) - will receive real-time events",
+                self.name,
+                subscription_duration,
+            )
+            # Reset subscription failure flag on successful setup
+            self._subscriptions_failed = False
+        except UpnpResponseError as err:
+            # Device rejected subscription - this is OK (DLNA pattern)
+            subscription_duration = time.time() - subscription_start_time
+            _LOGGER.info(
+                "Device %s rejected UPnP subscription (%.2fs): %s - will use HTTP polling instead",
+                self.name,
+                subscription_duration,
+                err,
+            )
+            self._subscriptions_failed = True
+            self._upnp_eventer = None
+            return
+        except Exception as err:  # noqa: BLE001
+            # Any subscription failure is non-fatal
+            subscription_duration = time.time() - subscription_start_time
+            _LOGGER.warning(
+                "⚠️  UPnP subscription failed for %s (%.2fs): %s - will use HTTP polling instead",
+                self.name,
+                subscription_duration,
+                err,
+            )
+            _LOGGER.debug(
+                "UPnP subscription error details: %s",
+                err,
+                exc_info=True,
+            )
+            self._subscriptions_failed = True
+            self._upnp_eventer = None
+            return
+
+        # Create fallback polling timer (for resilience)
+        # This ensures entities continue to update even if UPnP events stop arriving
+        from functools import partial
+
+        from homeassistant.helpers.event import async_track_time_interval
+
+        from .const import WIIM_FALLBACK_POLL
+
+        if not self._poll_timer:
+            poll_interval_seconds = entry.options.get("fallback_poll_interval", 45)
+            poll_interval = timedelta(seconds=poll_interval_seconds)
+
+            self._poll_timer = async_track_time_interval(
+                self.hass,
+                partial(
+                    async_dispatcher_send,
+                    self.hass,
+                    f"{WIIM_FALLBACK_POLL}-{self.uuid}",
+                ),
+                poll_interval,
+            )
+            _LOGGER.debug(
+                "Fallback polling timer created for %s (interval: %ds)",
+                self.name,
+                poll_interval_seconds,
+            )
+
+        # Register lifecycle cleanup (Samsung/DLNA pattern)
+        entry.async_on_unload(self._cleanup_upnp_subscriptions)
+
+        _LOGGER.info("UPnP subscriptions established for %s", self.name)
+
+    async def _cleanup_upnp_subscriptions(self) -> None:
+        """Clean up UPnP subscriptions (Samsung/DLNA pattern)."""
+        # Cancel fallback polling timer
+        if self._poll_timer:
+            self._poll_timer()
+            self._poll_timer = None
+            _LOGGER.debug("Fallback polling timer cancelled for %s", self.name)
+
+        if self._upnp_eventer:
+            await self._upnp_eventer.async_unsubscribe()
+            self._upnp_eventer = None
+
+        if self._upnp_client:
+            await self._upnp_client.unwind_notify_server()
+            self._upnp_client = None
+
+        self._upnp_state = None
+        _LOGGER.debug("UPnP subscriptions cleaned up for %s", self.name)
+
+    @callback
+    def _on_upnp_event(self, variables: dict[str, Any]) -> None:
+        """Handle UPnP event notifications (Samsung/DLNA pattern).
+
+        This callback is called by UpnpEventer when events arrive.
+        It updates the speaker state and triggers entity updates.
+        """
+        if not self._upnp_state:
+            return
+
+        # Apply state changes from UPnP event
+        changed = self._upnp_state.apply_diff(variables)
+
+        if changed:
+            # Merge UPnP state into coordinator.data so entities can read it
+            self._merge_upnp_state_to_coordinator()
+
+            # Trigger entity updates via dispatcher (entities listen for this signal)
+            async_dispatcher_send(
+                self.hass,
+                f"wiim_state_updated_{self.uuid}",
+            )
 
     @property
     def device_model(self) -> WiiMDeviceInfo | None:  # noqa: D401

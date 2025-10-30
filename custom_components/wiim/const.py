@@ -33,8 +33,12 @@ DOMAIN = "wiim"
 
 # Integration metadata
 NAME = "WiiM"
-VERSION = "1.0.12"
+VERSION = "0.1.44"
 ATTRIBUTION = "Integration created by Michael Cumming @mjcumming"
+
+# Dispatcher signals
+WIIM_STATE_UPDATED = "wiim_state_updated"
+WIIM_FALLBACK_POLL = "wiim_fallback_poll"
 
 # Config keys
 CONF_HOST = "host"
@@ -134,6 +138,24 @@ API_ENDPOINT_EQ_LIST = "/httpapi.asp?command=EQGetList"
 API_ENDPOINT_SOURCE = "/httpapi.asp?command=setPlayerCmd:switchmode:"
 API_ENDPOINT_SOURCES = "/httpapi.asp?command=getPlayerCmd:switchmode"
 
+# Audio Output Control
+API_ENDPOINT_AUDIO_OUTPUT_STATUS = "/httpapi.asp?command=getNewAudioOutputHardwareMode"
+API_ENDPOINT_AUDIO_OUTPUT_SET = "/httpapi.asp?command=setAudioOutputHardwareMode:"
+
+# Audio Output Modes
+# Based on API documentation: 1=SPDIF, 2=AUX, 3=COAX
+# WiiM Amp has 4 options: Line Out, Optical Out, Coax Out, BT Out
+# Mode 0 likely = Line Out, Mode 4 likely = Bluetooth Out
+AUDIO_OUTPUT_MODES = {
+    "1": "Optical Out",  # SPDIF/Optical Out
+    "2": "Line Out",  # AUX/Analog Out (shows as Line Out in WiiM app)
+    "3": "Coax Out",  # Coaxial Out
+    "4": "Bluetooth Out",  # Bluetooth Out
+}
+
+# Selectable output modes (hardware only - Bluetooth is firmware-controlled)
+SELECTABLE_OUTPUT_MODES = ["Line Out", "Optical Out", "Coax Out", "Bluetooth Out"]
+
 # Device Info
 API_ENDPOINT_DEVICE_INFO = "/httpapi.asp?command=getDeviceInfo"
 API_ENDPOINT_FIRMWARE = "/httpapi.asp?command=getFirmwareVersion"
@@ -142,6 +164,15 @@ API_ENDPOINT_MAC = "/httpapi.asp?command=getMAC"
 # LED Control
 API_ENDPOINT_LED = "/httpapi.asp?command=setLED:"
 API_ENDPOINT_LED_BRIGHTNESS = "/httpapi.asp?command=setLEDBrightness:"
+
+# Arylic-specific LED commands (experimental - based on user research)
+# User reported: UART command "MCU+PAS+RAKOIT:LED:0" works
+# TCP API commands below are experimental and may need adjustment
+# Documentation: https://github.com/mjcumming/wiim/issues/55
+API_ENDPOINT_ARYLIC_LED = "/httpapi.asp?command=MCU+PAS+RAKOIT:LED:"
+API_ENDPOINT_ARYLIC_LED_BRIGHTNESS = (
+    "/httpapi.asp?command=MCU+PAS+RAKOIT:LEDBRIGHTNESS:"
+)
 
 # Play Modes
 PLAY_MODE_NORMAL = "normal"
@@ -206,24 +237,28 @@ SOURCE_NETWORK = "network"
 SOURCE_ARC = "arc"
 SOURCE_FOLLOWER = "follower"
 
+# Map internal API source names to user-friendly display names
+# Note: We prioritize showing the actual streaming service name over generic "Ethernet"
 SOURCE_MAP = {
-    "wifi": "WiFi",
+    "wifi": "Network",  # Generic network connection - fallback only
+    "ethernet": "Network",  # Generic network connection - fallback only
     "line_in": "Line In",
     "bluetooth": "Bluetooth",
     "optical": "Optical",
     "coaxial": "Coaxial",
     "arc": "ARC",
     "follower": "Follower",
-    "airplay": "AirPlay",
-    "dlna": "DLNA",
-    "spotify": "Spotify",
-    "spotify connect": "Spotify Connect",
-    "tidal": "Tidal",
-    "amazon": "Amazon Music",
-    "qobuz": "Qobuz",
-    "deezer": "Deezer",
+    "airplay": "AirPlay",  # Show actual service name
+    "dlna": "DLNA",  # Show actual service name
+    "spotify": "Spotify",  # Show actual service name
+    "spotify connect": "Spotify Connect",  # Show actual service name
+    "tidal": "Tidal",  # Show actual service name
+    "amazon": "Amazon Music",  # Show actual service name
+    "apple_music": "Apple Music",  # Show actual service name
+    "qobuz": "Qobuz",  # Show actual service name
+    "deezer": "Deezer",  # Show actual service name
     "usb": "USB",
-    "network": "Network",
+    "network": "Network",  # Generic network status - fallback only
     "idle": "Idle",
     "multiroom": "Multiroom",
     "usb dac": "USB DAC",
@@ -231,6 +266,32 @@ SOURCE_MAP = {
     # Handle "Following [name]" sources from slaves
     "following": "Following",  # Partial match for slave sources
 }
+
+# Selectable sources only - physical inputs that users can manually switch to
+# These are the actual sources that work with the switchmode API command
+# Network-based streaming services (Spotify, AirPlay, etc.) are handled automatically
+SELECTABLE_SOURCES = [
+    "Bluetooth",  # Bluetooth input
+    "Line In",  # Analog input
+    "Optical",  # Digital optical input
+    "Coaxial",  # Digital coaxial input (if supported)
+    "HDMI",  # HDMI input (if supported)
+    "ARC",  # HDMI ARC input (if supported)
+    "USB",  # USB input (if supported)
+    "Line In 2",  # Second analog input (if supported)
+]
+
+# Status-only sources that should be displayed but not selectable
+# These are either status indicators or generic network modes
+STATUS_ONLY_SOURCES = [
+    "Idle",
+    "Multiroom",
+    "Follower",
+    "Following",
+    "Network",  # Generic network mode (fallback when specific service unknown)
+    "Ethernet",  # Legacy network mode name (fallback)
+    "USB DAC",  # May be a status rather than selectable input
+]
 
 # Services – extended diagnostic helpers
 SERVICE_REBOOT = "reboot_device"
@@ -250,3 +311,31 @@ LATEST_VERSION_KEY = "latest_version"
 PROJECT_KEY = "project"
 
 API_ENDPOINT_PRESET_INFO = "/httpapi.asp?command=getPresetInfo"
+
+# ===== UNOFFICIAL API ENDPOINTS =====
+# These endpoints are not officially documented and may change in future firmware updates
+
+
+# Bluetooth Operations (Unofficial)
+API_ENDPOINT_START_BT_DISCOVERY = "/httpapi.asp?command=startbtdiscovery:"
+API_ENDPOINT_GET_BT_DISCOVERY_RESULT = "/httpapi.asp?command=getbtdiscoveryresult"
+
+# Audio Settings (Unofficial)
+API_ENDPOINT_GET_SPDIF_SAMPLE_RATE = "/httpapi.asp?command=getSpdifOutSampleRate"
+API_ENDPOINT_SET_SPDIF_SWITCH_DELAY = "/httpapi.asp?command=setSpdifOutSwitchDelayMs:"
+API_ENDPOINT_GET_CHANNEL_BALANCE = "/httpapi.asp?command=getChannelBalance"
+API_ENDPOINT_SET_CHANNEL_BALANCE = "/httpapi.asp?command=setChannelBalance:"
+
+# Squeezelite/LMS Integration (Unofficial)
+API_ENDPOINT_SQUEEZELITE_STATE = "/httpapi.asp?command=Squeezelite:getState"
+API_ENDPOINT_SQUEEZELITE_DISCOVER = "/httpapi.asp?command=Squeezelite:discover"
+API_ENDPOINT_SQUEEZELITE_AUTO_CONNECT = (
+    "/httpapi.asp?command=Squeezelite:autoConnectEnable:"
+)
+API_ENDPOINT_SQUEEZELITE_CONNECT_SERVER = (
+    "/httpapi.asp?command=Squeezelite:connectServer:"
+)
+
+# Miscellaneous Operations (Unofficial)
+API_ENDPOINT_SET_LED = "/httpapi.asp?command=LED_SWITCH_SET:"
+API_ENDPOINT_SET_BUTTONS = "/httpapi.asp?command=Button_Enable_SET:"

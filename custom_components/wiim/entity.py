@@ -15,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WiimEntity(CoordinatorEntity):
-    """Base class for all WiiM entities (like SonosEntity)."""
+    """Base class for all WiiM entities."""
 
     def __init__(self, speaker: Speaker) -> None:
         """Initialize with speaker reference."""

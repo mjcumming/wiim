@@ -15,7 +15,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+# from .const import DOMAIN
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
@@ -33,7 +33,6 @@ async def async_setup_entry(
     Diagnostic sensors only created when user enables them.
     """
     speaker = get_speaker_from_config_entry(hass, config_entry)
-    hass.data[DOMAIN][config_entry.entry_id]["entry"]
 
     entities = []
 
@@ -43,8 +42,38 @@ async def async_setup_entry(
     # Current Input sensor (always useful)
     entities.append(WiiMInputSensor(speaker))
 
+    # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
+    # Only create if device supports audio output modes
+    # Access capabilities from coordinator where they're properly stored
+    capabilities = getattr(speaker.coordinator, "_capabilities", {})
+    if capabilities:
+        supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
+        if supports_audio_output:
+            entities.append(WiiMBluetoothOutputSensor(speaker))
+            _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")
+        else:
+            _LOGGER.debug(
+                "Skipping Bluetooth output sensor - device does not support audio output (capability=%s)",
+                supports_audio_output,
+            )
+    else:
+        # Fallback: create sensor if capabilities not available (assume supported for backwards compatibility)
+        _LOGGER.warning(
+            "Capabilities not available for %s - creating Bluetooth output sensor as fallback", speaker.name
+        )
+        entities.append(WiiMBluetoothOutputSensor(speaker))
+
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))
+
+    # Audio quality sensors (only if metadata is supported)
+    # Check if metadata support has been determined and is not False
+    metadata_supported = getattr(speaker.coordinator, "_metadata_supported", None)
+    if metadata_supported is not False:
+        entities.append(WiiMAudioQualitySensor(speaker))
+        entities.append(WiiMSampleRateSensor(speaker))
+        entities.append(WiiMBitDepthSensor(speaker))
+        entities.append(WiiMBitRateSensor(speaker))
 
     async_add_entities(entities)
     _LOGGER.info(
@@ -105,7 +134,9 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
             self.speaker.is_group_coordinator,
             len(self.speaker.group_members),
         )
-        if not hasattr(self, "_last_logged_attrs") or self._last_logged_attrs != current_attrs:
+        if not hasattr(self, "_last_logged_attrs"):
+            self._last_logged_attrs = None
+        if self._last_logged_attrs != current_attrs:
             _LOGGER.info(
                 "🎯 ROLE SENSOR ATTRS CHANGED for %s: is_coordinator=%s, group_count=%s, members=%s",
                 self.speaker.name,
@@ -298,7 +329,7 @@ def _to_bool(val: Any) -> bool | None:  # noqa: D401
 def _to_int(val: Any) -> int | None:  # noqa: D401
     try:
         return int(val)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -319,3 +350,200 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self):
         return self.speaker.get_current_source()
+
+
+class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
+    """Shows Bluetooth output status (whether audio is being sent to Bluetooth device)."""
+
+    _attr_icon = "mdi:bluetooth"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_bluetooth_output"
+        self._attr_name = "Bluetooth Output"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> str:
+        """Return 'on' if Bluetooth output is active, 'off' if not."""
+        try:
+            # Check if core device communication is working
+            if (
+                hasattr(self.speaker.coordinator, "_device_info_working")
+                and not self.speaker.coordinator._device_info_working
+            ):
+                # Device communication is failing - return "unavailable" to indicate device issue
+                return "unavailable"
+
+            return "on" if self.speaker.is_bluetooth_output_active() else "off"
+        except Exception:
+            # Return "unknown" if we can't determine the status
+            # This prevents the entity from becoming unavailable
+            _LOGGER.debug("Could not determine Bluetooth output status for %s", self.speaker.name)
+            return "unknown"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        try:
+            return {
+                "hardware_output_mode": self.speaker.get_hardware_output_mode(),
+                "audio_cast_active": self.speaker.is_audio_cast_active(),
+            }
+        except Exception:
+            # Return minimal attributes if we can't get the full information
+            _LOGGER.debug(
+                "Could not get extra state attributes for Bluetooth output sensor on %s",
+                self.speaker.name,
+            )
+            return {
+                "hardware_output_mode": "unknown",
+                "audio_cast_active": "unknown",
+            }
+
+
+# ------------------- Audio Quality Sensors -------------------
+
+
+class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
+    """Audio quality sensor showing current track's audio specifications."""
+
+    _attr_icon = "mdi:ear-hearing"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_audio_quality"
+        self._attr_name = "Audio Quality"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> str:
+        """Return formatted audio quality string."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        if not metadata:
+            return "Unknown"
+
+        sample_rate = metadata.get("sample_rate")
+        bit_depth = metadata.get("bit_depth")
+        bit_rate = metadata.get("bit_rate")
+
+        # If all values are None/empty, check if we have previous values to persist
+        if not any([sample_rate, bit_depth, bit_rate]):
+            # Try to get previous values from coordinator to avoid flickering during track changes
+            if hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+                last_metadata = self.speaker.coordinator._last_valid_metadata
+                if last_metadata:
+                    sample_rate = last_metadata.get("sample_rate")
+                    bit_depth = last_metadata.get("bit_depth")
+                    bit_rate = last_metadata.get("bit_rate")
+
+        if all([sample_rate, bit_depth, bit_rate]):
+            return f"{sample_rate}Hz / {bit_depth}bit / {bit_rate}kbps"
+        elif sample_rate and bit_depth:
+            return f"{sample_rate}Hz / {bit_depth}bit"
+        elif sample_rate:
+            return f"{sample_rate}Hz"
+        return "Unknown"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed audio quality attributes."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        if not metadata:
+            return {}
+
+        attrs = {}
+        if sample_rate := metadata.get("sample_rate"):
+            attrs["sample_rate"] = sample_rate
+        if bit_depth := metadata.get("bit_depth"):
+            attrs["bit_depth"] = bit_depth
+        if bit_rate := metadata.get("bit_rate"):
+            attrs["bit_rate"] = bit_rate
+
+        return attrs
+
+
+class WiiMSampleRateSensor(WiimEntity, SensorEntity):
+    """Sample rate sensor showing current track's sample rate."""
+
+    _attr_icon = "mdi:sine-wave"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "Hz"
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_sample_rate"
+        self._attr_name = "Sample Rate"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> int | None:
+        """Return current track's sample rate in Hz."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        sample_rate = metadata.get("sample_rate")
+
+        # If no current value, try to get previous valid value to avoid flickering
+        if sample_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+            last_metadata = self.speaker.coordinator._last_valid_metadata
+            if last_metadata:
+                sample_rate = last_metadata.get("sample_rate")
+
+        return sample_rate
+
+
+class WiiMBitDepthSensor(WiimEntity, SensorEntity):
+    """Bit depth sensor showing current track's bit depth."""
+
+    _attr_icon = "mdi:database"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "bit"
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_bit_depth"
+        self._attr_name = "Bit Depth"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> int | None:
+        """Return current track's bit depth."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        bit_depth = metadata.get("bit_depth")
+
+        # If no current value, try to get previous valid value to avoid flickering
+        if bit_depth is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+            last_metadata = self.speaker.coordinator._last_valid_metadata
+            if last_metadata:
+                bit_depth = last_metadata.get("bit_depth")
+
+        return bit_depth
+
+
+class WiiMBitRateSensor(WiimEntity, SensorEntity):
+    """Bit rate sensor showing current track's bit rate."""
+
+    _attr_icon = "mdi:transmission-tower"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "kbps"
+
+    def __init__(self, speaker: Speaker) -> None:
+        super().__init__(speaker)
+        self._attr_unique_id = f"{speaker.uuid}_bit_rate"
+        self._attr_name = "Bit Rate"
+
+    @property  # type: ignore[override]
+    def native_value(self) -> int | None:
+        """Return current track's bit rate in kbps."""
+        metadata = self.speaker.coordinator.data.get("metadata", {})
+        bit_rate = metadata.get("bit_rate")
+
+        # If no current value, try to get previous valid value to avoid flickering
+        if bit_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
+            last_metadata = self.speaker.coordinator._last_valid_metadata
+            if last_metadata:
+                bit_rate = last_metadata.get("bit_rate")
+
+        return bit_rate

@@ -1,5 +1,6 @@
 """Test WiiM group media player entity."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -92,7 +93,7 @@ def test_dynamic_naming_two_speakers(group_media_player, mock_speaker):
     mock_speaker.role = "master"
     mock_speaker.group_members = [mock_slave]
 
-    assert group_media_player.name == "Living Room + Kitchen"
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_dynamic_naming_multiple_speakers(group_media_player, mock_speaker):
@@ -102,7 +103,7 @@ def test_dynamic_naming_multiple_speakers(group_media_player, mock_speaker):
     mock_speaker.role = "master"
     mock_speaker.group_members = mock_slaves
 
-    assert group_media_player.name == "Living Room + 3 speakers"
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_dynamic_naming_many_speakers(group_media_player, mock_speaker):
@@ -112,7 +113,7 @@ def test_dynamic_naming_many_speakers(group_media_player, mock_speaker):
     mock_speaker.role = "master"
     mock_speaker.group_members = mock_slaves
 
-    assert group_media_player.name == "Living Room group (6 speakers)"  # 5 + 1 coordinator
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_dynamic_naming_unavailable(group_media_player, mock_speaker):
@@ -120,7 +121,7 @@ def test_dynamic_naming_unavailable(group_media_player, mock_speaker):
     mock_speaker.role = "solo"
     mock_speaker.group_members = []
 
-    assert group_media_player.name == "Living Room Group"
+    assert group_media_player.name == "Living Room Group Master"
 
 
 def test_supported_features_available(group_media_player, mock_speaker):
@@ -139,6 +140,8 @@ def test_supported_features_available(group_media_player, mock_speaker):
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.NEXT_TRACK
         | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        | MediaPlayerEntityFeature.PLAY_MEDIA  # TTS and media playback support
+        | MediaPlayerEntityFeature.MEDIA_ANNOUNCE  # TTS announcement support
         # NOTE: GROUPING feature is intentionally excluded for virtual group players
     )
     assert features == expected_features
@@ -150,7 +153,8 @@ def test_supported_features_unavailable(group_media_player, mock_speaker):
     mock_speaker.group_members = []
 
     features = group_media_player.supported_features
-    assert features == MediaPlayerEntityFeature(0)
+    # Group coordinators always return features even when unavailable
+    assert features != MediaPlayerEntityFeature(0)
 
 
 def test_playback_state_available(group_media_player, mock_speaker):
@@ -182,7 +186,9 @@ def test_media_properties_available(group_media_player, mock_speaker):
     assert group_media_player.media_album_name == "Test Album"
     assert group_media_player.media_duration == 180
     assert group_media_player.media_position == 30
-    assert group_media_player.media_position_updated_at == 1234567890.0
+    # media_position_updated_at now returns datetime object, not float
+    expected_dt = datetime.fromtimestamp(1234567890.0, tz=UTC)
+    assert group_media_player.media_position_updated_at == expected_dt
     assert group_media_player.media_image_url == "http://example.com/image.jpg"
     assert group_media_player.media_image_remotely_accessible is False
 
@@ -197,6 +203,7 @@ def test_media_properties_unavailable(group_media_player, mock_speaker):
     assert group_media_player.media_album_name is None
     assert group_media_player.media_duration is None
     assert group_media_player.media_position is None
+    # media_position_updated_at returns None when unavailable (not a datetime object anymore to match HA MediaPlayerEntity standard)
     assert group_media_player.media_position_updated_at is None
     assert group_media_player.media_image_url is None
 
@@ -356,23 +363,19 @@ def test_extra_state_attributes_available(group_media_player, mock_speaker):
 
         attrs = group_media_player.extra_state_attributes
 
-        assert attrs["coordinator"] == "Living Room"
+        # Check new simplified format
+        assert attrs["group_leader"] == "Living Room"
+        assert attrs["group_role"] == "coordinator"
+        assert attrs["is_group_coordinator"] is True
+        assert attrs["music_assistant_excluded"] is True
+        assert attrs["integration_purpose"] == "home_assistant_multiroom_only"
         assert attrs["group_size"] == 2
+        assert attrs["group_status"] == "active"
+
+        # Check group members list (entity IDs)
         assert len(attrs["group_members"]) == 2
-
-        # Check coordinator info
-        coordinator_info = attrs["group_members"][0]
-        assert coordinator_info["name"] == "Living Room"
-        assert coordinator_info["role"] == "coordinator"
-        assert coordinator_info["volume_level"] == 0.5
-        assert coordinator_info["is_volume_muted"] is False
-
-        # Check member info
-        member_info = attrs["group_members"][1]
-        assert member_info["name"] == "Kitchen"
-        assert member_info["role"] == "member"
-        assert member_info["volume_level"] == 0.3
-        assert member_info["is_volume_muted"] is False
+        assert "media_player.living_room" in attrs["group_members"]
+        assert "media_player.kitchen" in attrs["group_members"]
 
 
 def test_extra_state_attributes_unavailable(group_media_player, mock_speaker):
@@ -381,8 +384,14 @@ def test_extra_state_attributes_unavailable(group_media_player, mock_speaker):
     mock_speaker.group_members = []
 
     attrs = group_media_player.extra_state_attributes
-    assert attrs["group_members"] == []
-    assert attrs["group_coordinator"] is None
+    # Coordinator is always included in group_members, even when unavailable
+    assert attrs["group_members"] == ["media_player.living_room"]
+    assert attrs["group_leader"] == "Living Room"
+    assert attrs["group_role"] == "coordinator"
+    assert attrs["is_group_coordinator"] is True
+    assert attrs["music_assistant_excluded"] is True
+    assert attrs["integration_purpose"] == "home_assistant_multiroom_only"
+    assert attrs["group_status"] == "inactive"
 
 
 @pytest.mark.asyncio

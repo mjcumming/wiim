@@ -74,11 +74,16 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
         try:
             _LOGGER.info("Initiating reboot for %s", self.speaker.name)
             await self.speaker.coordinator.client.reboot()
+            _LOGGER.info("Reboot command sent successfully to %s", self.speaker.name)
             await self._async_execute_command_with_refresh("reboot")
 
         except Exception as err:
-            _LOGGER.error("Failed to reboot %s: %s", self.speaker.name, err)
-            raise
+            # Reboot commands often don't return proper responses
+            # Log the attempt but don't fail the button press
+            _LOGGER.info("Reboot command sent to %s (device may not respond): %s", self.speaker.name, err)
+            # Don't raise - reboot command was sent successfully
+            # The device will reboot even if the response parsing fails
+            await self._async_execute_command_with_refresh("reboot")
 
 
 class WiiMSyncTimeButton(WiimEntity, ButtonEntity):

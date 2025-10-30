@@ -27,6 +27,12 @@ def wiim_client():
     client = AsyncMock()
     client.host = "192.168.1.100"
 
+    # Mock the internal _request method for API endpoint testing
+    client._request = AsyncMock()
+
+    # Add actual API methods for testing
+    client.set_source = AsyncMock(return_value=True)
+
     # Mock common API responses
     client.get_status.return_value = {
         "uuid": "test-speaker-uuid",

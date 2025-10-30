@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-import time
+import time as _time
 from datetime import timedelta
 from typing import Any
 
+import aiohttp
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WiiMClient, WiiMError
 from .coordinator_backoff import BackoffController
@@ -21,8 +22,11 @@ _LOGGER = logging.getLogger(__name__)
 # which is usually enough for troubleshooting without spamming the log.
 VERBOSE_DEBUG = False
 
-# Number of consecutive failures after which we escalate to ERROR level
-FAILURE_ERROR_THRESHOLD = 3  # Reduced from 10 - mark offline after 15 seconds instead of 50
+# Enhanced logging escalation thresholds (more balanced for production)
+# 1-2 failures: debug (likely transient network issues)
+# 3-4 failures: warning (device having connectivity problems)
+# 5+ failures: error (device likely offline/unavailable)
+FAILURE_ERROR_THRESHOLD = 5  # More balanced - escalate after ~25s with normal polling
 
 # Command failure tracking - for immediate user feedback
 COMMAND_FAILURE_TIMEOUT = 30  # seconds - how long to remember command failures
@@ -49,17 +53,47 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         client: WiiMClient,
         entry=None,
+        capabilities: dict[str, Any] | None = None,
     ) -> None:
-        """Initialize the coordinator with adaptive polling."""
+        """Initialize the coordinator with adaptive polling and firmware capabilities."""
         super().__init__(
             hass,
             _LOGGER,
             name=f"WiiM {client.host}",
-            update_interval=timedelta(seconds=5),  # Initial interval, will be adaptive
+            update_interval=timedelta(seconds=5),  # Default interval, will adapt based on state/failures
         )
         self.client = client
         self.hass = hass
         self.entry = entry
+        self._capabilities = capabilities or {}
+
+        # Enhanced Audio Pro logging on initialization
+        is_legacy_device = self._capabilities.get("is_legacy_device", False)
+        audio_pro_generation = self._capabilities.get("audio_pro_generation", "unknown")
+
+        if is_legacy_device:
+            if audio_pro_generation == "mkii":
+                _LOGGER.info(
+                    "🔊 Audio Pro MkII device detected: %s - using enhanced compatibility mode",
+                    client.host,
+                )
+            elif audio_pro_generation == "w_generation":
+                _LOGGER.info(
+                    "🔊 Audio Pro W-Generation device detected: %s - using advanced features",
+                    client.host,
+                )
+            else:
+                _LOGGER.info(
+                    "🔊 Audio Pro legacy device detected: %s - using compatibility mode",
+                    client.host,
+                )
+        elif self._capabilities.get("is_wiim_device", False):
+            _LOGGER.info("✅ WiiM device detected: %s - using full feature set", client.host)
+        else:
+            _LOGGER.info(
+                "📻 LinkPlay device detected: %s - using standard compatibility",
+                client.host,
+            )
 
         # API capability flags (None = untested, True/False = tested)
         self._statusex_supported: bool | None = None
@@ -209,19 +243,126 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {}
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Thin wrapper delegating polling logic to external module (see coordinator_polling)."""
+        """Centralized polling logic with adaptive intervals and backoff on failure."""
+        # Imports are here to prevent circular dependency issues at startup
         from . import coordinator_polling as _poll
+        from .coordinator_polling import (
+            NORMAL_POLL_INTERVAL,
+            _determine_adaptive_interval,
+        )
 
-        return await _poll.async_update_data(self)
+        try:
+            # Delegate the actual data fetching to the polling module
+            data = await _poll.async_update_data(self)
+
+            # On success, reset the backoff controller
+            if self._backoff.consecutive_failures > 0:
+                _LOGGER.info(
+                    "Successfully reconnected to %s, restoring normal polling",
+                    self.client.host,
+                )
+            self._backoff.record_success()
+
+            # Dynamically adjust polling interval based on the device's current state
+            status_model = data.get("status_model")
+            role = data.get("role")
+
+            if status_model and role:
+                new_interval_seconds = _determine_adaptive_interval(self, status_model, role)
+            else:
+                # Fallback to normal idle polling if state is not fully determined
+                new_interval_seconds = NORMAL_POLL_INTERVAL
+
+            # Only update the interval if it has changed to avoid unnecessary churn
+            if self.update_interval.total_seconds() != new_interval_seconds:
+                _LOGGER.debug(
+                    "Polling interval for %s set to %ss",
+                    self.client.host,
+                    new_interval_seconds,
+                )
+                self.update_interval = timedelta(seconds=new_interval_seconds)
+
+            return data
+
+        except (WiiMError, aiohttp.ClientError) as err:
+            # Handle firmware-specific errors
+            from .firmware_capabilities import is_legacy_firmware_error
+
+            if self._capabilities.get("is_legacy_device", False) and is_legacy_firmware_error(err):
+                _LOGGER.debug("Legacy firmware error on %s: %s", self.client.host, err)
+                # Return cached data instead of failing completely for legacy devices
+                return self._get_cached_data_with_fallback()
+            else:
+                # If the update fails, engage the backoff strategy
+                self._backoff.record_failure()
+
+                # Determine the new interval from the backoff controller
+                base_interval = NORMAL_POLL_INTERVAL
+                new_interval = self._backoff.next_interval(default_seconds=base_interval)
+                self.update_interval = new_interval
+
+                # Enhanced escalation: debug → debug → warning → warning → error
+                failures = self._backoff.consecutive_failures
+                if failures <= 2:
+                    log_level = logging.DEBUG  # Likely transient network issues
+                elif failures <= 4:
+                    log_level = logging.WARNING  # Device having connectivity problems
+                else:
+                    log_level = logging.ERROR  # Device likely offline/unavailable
+                _LOGGER.log(
+                    log_level,
+                    "Update failed for %s (%d consecutive), backing off to %ss. Error: %s",
+                    self.client.host,
+                    self._backoff.consecutive_failures,
+                    new_interval.total_seconds(),
+                    err,
+                )
+
+                # Raise UpdateFailed to notify Home Assistant of the failure
+                raise UpdateFailed(f"Failed to communicate with {self.client.host}: {err}") from err
 
     async def _fetch_multiroom_info(self) -> dict:
-        """Get multiroom info with proper API usage per API guide.
+        """Enhanced multiroom info with firmware compatibility.
 
         According to the API guide:
         - getSlaveList only works on MASTER devices
         - Slave devices (group: "1") already know they're slaves
         - Only call getSlaveList when group: "0" to distinguish master from solo
         """
+        # For legacy devices, use simplified approach
+        if self._capabilities.get("is_legacy_device", False):
+            generation = self._capabilities.get("audio_pro_generation", "original")
+            _LOGGER.debug(
+                "Using legacy multiroom approach for %s (generation: %s)",
+                self.client.host,
+                generation,
+            )
+            return await self._fetch_multiroom_info_legacy()
+
+        # Enhanced approach for WiiM devices
+        return await self._fetch_multiroom_info_enhanced()
+
+    async def _fetch_multiroom_info_legacy(self) -> dict:
+        """Simplified multiroom info for legacy Audio Pro units."""
+        try:
+            # Legacy devices may not support getSlaveList reliably
+            # Use basic group field detection instead
+            device_info = await self._fetch_device_info()
+            group_field = device_info.get("group", "0")
+
+            if group_field == "1":
+                # Device reports being in a group
+                return {"slaves": 0, "slave_list": [], "legacy_group": True}
+            else:
+                # Device reports being solo
+                return {"slaves": 0, "slave_list": [], "legacy_group": False}
+
+        except Exception as err:
+            _LOGGER.debug("Legacy multiroom info failed: %s", err)
+            return {"slaves": 0, "slave_list": [], "legacy_group": False}
+
+    async def _fetch_multiroom_info_enhanced(self) -> dict:
+        """Enhanced multiroom info for WiiM devices (original logic)."""
         try:
             # First check if this device is a slave - if so, no need for getSlaveList
             device_info = await self._fetch_device_info()
@@ -263,11 +404,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Type ignore because helper expects coordinator instance first.
         return _meta._enhance_metadata_with_artwork(self, metadata, status)  # type: ignore[attr-defined]
 
-    def _extract_basic_metadata(self, status: dict) -> dict:  # noqa: D401
+    async def _extract_basic_metadata(self, status: dict) -> dict:  # noqa: D401
         """Delegated to *coordinator_metadata* (legacy shim)."""
         from . import coordinator_metadata as _meta
 
-        return _meta._extract_basic_metadata(self, status)
+        return await _meta._extract_basic_metadata(self, status)
 
     async def _fetch_eq_info(self) -> dict:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_eq* helper."""
@@ -277,7 +418,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _should_update_device_info(self) -> bool:
         """Check if we should update device info (every 30-60 seconds)."""
-        now = time.time()
+        now = _time.time()
         if now - self._last_device_info_update >= self._device_info_interval:
             self._last_device_info_update = now  # type: ignore[assignment]
             return True
@@ -311,7 +452,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return await _role.detect_role_from_status_and_slaves(self, status, multiroom, device_info)
 
-    async def _update_speaker_object(self, status: dict) -> None:
+    async def _update_speaker_object(self, data: dict) -> None:
         """Update Speaker object if it exists."""
         try:
             from .data import get_speaker_from_config_entry
@@ -319,8 +460,15 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # In v2.0.0 simplified architecture, get speaker directly from config entry
             speaker = get_speaker_from_config_entry(self.hass, self.entry)
 
-            # Build data structure for speaker update
-            speaker.update_from_coordinator_data(status)
+            if speaker:
+                _LOGGER.debug(
+                    "🎵 Found speaker %s, calling update_from_coordinator_data",
+                    speaker.name,
+                )
+                # Build data structure for speaker update
+                speaker.update_from_coordinator_data(data)
+            else:
+                _LOGGER.debug("🎵 No speaker found for config entry %s", self.entry.entry_id)
 
         except Exception as speaker_err:
             _LOGGER.debug(
@@ -341,24 +489,37 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.update_interval = timedelta(seconds=1)
 
     def record_command_failure(self, command_type: str, error: Exception) -> None:
-        """Record immediate command failure for user feedback.
-
-        This provides instant feedback when user commands fail, separate from
-        background polling failures. Device will appear temporarily unavailable
-        until either a command succeeds or the failure timeout expires.
-        """
+        """Record command failure for immediate UI feedback."""
         import time
 
         self._last_command_failure = time.time()
         self._command_failure_count += 1
 
-        _LOGGER.warning(
-            "Command '%s' failed for %s (failure #%d): %s - device temporarily unavailable",
-            command_type,
+        # Log for debugging (avoid noise from common issues)
+        if self._command_failure_count <= 3:  # Only log first few failures
+            _LOGGER.warning(
+                "Command '%s' failed for %s: %s (failure count: %d)",
+                command_type,
+                self.client.host,
+                error,
+                self._command_failure_count,
+            )
+
+        # Force endpoint reprobe on severe connection failures
+        if isinstance(error, aiohttp.ClientConnectorError | aiohttp.ServerDisconnectedError):
+            self.force_endpoint_reprobe()
+
+    def force_endpoint_reprobe(self) -> None:
+        """Force the client to reprobe protocol/port on next request.
+
+        Useful when connection is completely lost and we need to re-establish
+        communication from scratch.
+        """
+        _LOGGER.info(
+            "Forcing endpoint reprobe for %s due to connection failure",
             self.client.host,
-            self._command_failure_count,
-            error,
         )
+        self.client._endpoint = None  # Clear established endpoint
 
     def clear_command_failures(self) -> None:
         """Clear command failure state when a command succeeds."""
@@ -372,9 +533,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._last_command_failure is None:
             return False
 
-        import time
-
-        time_since_failure = time.time() - self._last_command_failure
+        time_since_failure = _time.time() - self._last_command_failure
         return time_since_failure < COMMAND_FAILURE_TIMEOUT
 
     # Group management methods (simplified from legacy)
@@ -426,9 +585,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return friendly name for the device."""
         return self.device_name
 
-    async def _resolve_multiroom_source_and_media(
-        self, status: PlayerStatus, metadata: dict, role: str
-    ) -> None:  # noqa: D401
+    async def _resolve_multiroom_source_and_media(self, status: PlayerStatus, metadata: dict, role: str) -> None:  # noqa: D401
         """Thin wrapper delegating heavy logic to *coordinator_multiroom* helper."""
         from . import coordinator_multiroom as _mr
 
@@ -443,3 +600,19 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         from . import coordinator_eq as _eq
 
         await _eq.extend_eq_preset_map_once(self)
+
+    def _get_cached_data_with_fallback(self) -> dict[str, Any]:
+        """Return cached data with safe fallbacks for legacy devices.
+
+        Returns:
+            Dictionary with cached data or safe defaults
+        """
+        if not self.data:
+            return {"role": "solo", "status_model": None, "device_model": None}
+
+        # Ensure we have safe defaults for legacy devices
+        data = self.data.copy()
+        if "role" not in data:
+            data["role"] = "solo"
+
+        return data

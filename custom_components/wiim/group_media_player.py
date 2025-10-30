@@ -1,17 +1,18 @@
 """WiiM group media player entity.
 
-Provides unified control for WiiM multiroom groups following the Sonos pattern.
+Provides unified control for WiiM multiroom groups.
 A persistent entity that becomes available when a speaker acts as group master.
 """
 
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 from typing import Any
 
-from homeassistant.components.media_player import (
-    MediaPlayerEntity,
+from homeassistant.components.media_player import MediaPlayerEntity
+from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
@@ -30,10 +31,13 @@ _LOGGER = logging.getLogger(__name__)
 class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     """Representation of a WiiM speaker group coordinator.
 
-    This entity follows the Sonos pattern - it's always created but only becomes
-    available when the speaker acts as a group master with active slaves.
+    This entity is always created but only becomes available when the speaker
+    acts as a group master with active slaves.
     Provides unified control for volume, mute, and playback across all group members.
     """
+
+    # Group coordinators are visible by default
+    entity_registry_visible_default = True
 
     def __init__(self, speaker: Speaker) -> None:
         """Initialize the group media player."""
@@ -47,7 +51,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # Create virtual device for the group
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{speaker.uuid}_group")},
+            identifiers={(DOMAIN, f"{speaker.uuid}_group_coordinator")},
             name=f"{speaker.name} Speaker Group",
             model="Multiroom Group",
             manufacturer="WiiM",
@@ -58,7 +62,54 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         self._last_group_members: set[str] = set()
         self._last_available: bool | None = None
 
+        # Set initial name based on current state
+        self._update_name()
+
+    async def async_added_to_hass(self) -> None:
+        """Set up entity."""
+        await super().async_added_to_hass()
+        # WiimEntity already handles the dispatcher connection
+        # We'll override async_write_ha_state to add group-specific logic
+
     # ===== ENTITY PROPERTIES =====
+
+    def _update_name(self) -> None:
+        """Update the entity name based on current state."""
+        # Always show "Group Master" for group coordinator entities
+        master_name = self.speaker.name.replace(" Speakers", "").replace(" Speaker", "")
+        new_name = f"{master_name} Group Master"
+
+        # Update the attribute name
+        self._attr_name = new_name
+
+        # Update the entity registry name if it has changed
+        if hasattr(self, "_last_registry_name") and self._last_registry_name != new_name:
+            self._last_registry_name = new_name
+            # Schedule entity registry update
+            if self.hass and self.hass.is_running:
+                self.hass.async_create_task(self._async_update_registry_name(new_name))
+        elif not hasattr(self, "_last_registry_name"):
+            self._last_registry_name = new_name
+
+    async def _async_update_registry_name(self, new_name: str) -> None:
+        """Update the entity registry name."""
+        try:
+            from homeassistant.helpers import entity_registry as er
+
+            registry = er.async_get(self.hass)
+            if registry:
+                registry.async_update_entity(self.entity_id, name=new_name)
+                _LOGGER.debug(
+                    "Updated entity registry name for %s to '%s'",
+                    self.entity_id,
+                    new_name,
+                )
+        except Exception as e:
+            _LOGGER.warning(
+                "Failed to update entity registry name for %s: %s",
+                self.entity_id,
+                e,
+            )
 
     @property
     def available(self) -> bool:
@@ -68,52 +119,60 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def name(self) -> str:
-        """Return the dynamic name of the group based on composition."""
-        if not self.available:
-            return f"{self.speaker.name} Group"
-
-        # Dynamic naming based on group size
-        member_count = len(self.speaker.group_members)
-        if member_count == 1:
-            # "Living Room + Kitchen"
-            other_speaker = self.speaker.group_members[0]
-            return f"{self.speaker.name} + {other_speaker.name}"
-        elif member_count <= 3:
-            # "Living Room + 2 speakers"
-            return f"{self.speaker.name} + {member_count} speakers"
-        else:
-            # "Living Room group (4 speakers)"
-            return f"{self.speaker.name} group ({member_count + 1} speakers)"
+        """Return the name of the group coordinator."""
+        # Always return the current _attr_name to ensure consistency
+        return self._attr_name
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
         """Return the supported features mirroring the coordinator."""
         # Groups support all features of the coordinator EXCEPT grouping
         # Virtual group players should not be able to join/unjoin other players
-        if self.available and hasattr(self.speaker, "coordinator"):
-            # Mirror the features from the physical media player but exclude GROUPING
-            features = (
-                MediaPlayerEntityFeature.VOLUME_SET
-                | MediaPlayerEntityFeature.VOLUME_MUTE
-                | MediaPlayerEntityFeature.VOLUME_STEP
-                | MediaPlayerEntityFeature.PLAY
-                | MediaPlayerEntityFeature.PAUSE
-                | MediaPlayerEntityFeature.STOP
-                | MediaPlayerEntityFeature.NEXT_TRACK
-                | MediaPlayerEntityFeature.PREVIOUS_TRACK
-                # NOTE: GROUPING feature is intentionally excluded
-                # Virtual group players should not participate in join/unjoin operations
-            )
-            return features
-        return MediaPlayerEntityFeature(0)
+
+        # Always return features without GROUPING, regardless of availability
+        # This ensures group coordinators never appear in join/unjoin menus
+        features = (
+            MediaPlayerEntityFeature.VOLUME_SET
+            | MediaPlayerEntityFeature.VOLUME_MUTE
+            | MediaPlayerEntityFeature.VOLUME_STEP
+            | MediaPlayerEntityFeature.PLAY
+            | MediaPlayerEntityFeature.PAUSE
+            | MediaPlayerEntityFeature.STOP
+            | MediaPlayerEntityFeature.NEXT_TRACK
+            | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            | MediaPlayerEntityFeature.PLAY_MEDIA
+            | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
+            # NOTE: GROUPING feature is intentionally excluded
+            # Virtual group players should not participate in join/unjoin operations
+        )
+
+        # Explicitly ensure GROUPING is never included (defensive programming)
+        features = features & ~MediaPlayerEntityFeature.GROUPING
+
+        # Log the features to help debug any issues
+        _LOGGER.debug(
+            "Group coordinator %s supported features: %s (GROUPING: %s, Available: %s)",
+            self.name,
+            features,
+            bool(features & MediaPlayerEntityFeature.GROUPING),
+            self.available,
+        )
+
+        return features
 
     # ===== PLAYBACK STATE (mirrors coordinator) =====
 
     @property
     def state(self) -> MediaPlayerState | None:
         """Return the state of the coordinator."""
+        # Check if underlying device is offline first
+        if not self.speaker.available:
+            return None  # Device offline - let HA show as unavailable
+
+        # If device is online but group is inactive, show idle
         if not self.available:
-            return MediaPlayerState.IDLE
+            return MediaPlayerState.IDLE  # Group inactive - show idle
+
         return self.speaker.get_playback_state()
 
     @property
@@ -141,17 +200,51 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def media_duration(self) -> int | None:
         """Duration of current playing media in seconds."""
-        return self.speaker.get_media_duration() if self.available else None
+        duration = self.speaker.get_media_duration() if self.available else None
+        return duration
 
     @property
     def media_position(self) -> int | None:
         """Position of current playing media in seconds."""
-        return self.speaker.get_media_position() if self.available else None
+        position = self.speaker.get_media_position() if self.available else None
+        return position
 
     @property
-    def media_position_updated_at(self) -> float | None:
+    def media_position_updated_at(self) -> datetime.datetime | None:
         """Last time media position was updated."""
-        return self.speaker.get_media_position_updated_at() if self.available else None
+        # Only return timestamp if entity is available
+        if not self.available:
+            return None
+
+        # Ensure we always return a valid timestamp for Music Assistant compatibility
+        timestamp = self.speaker.get_media_position_updated_at()
+        if timestamp is None:
+            from homeassistant.util.dt import utcnow
+
+            return utcnow()
+
+        # Convert Unix timestamp to datetime object
+        from homeassistant.util.dt import utc_from_timestamp
+
+        return utc_from_timestamp(timestamp)
+
+    @property
+    def elapsed_time_last_updated(self) -> str | None:
+        """ISO format timestamp when the elapsed time was last updated.
+
+        This attribute is required by Music Assistant's hass_players provider.
+        Returns an ISO format datetime string that can be parsed by fromisoformat().
+        """
+        import time
+
+        if self.available:
+            timestamp = self.speaker.get_media_position_updated_at()
+        else:
+            timestamp = time.time()
+
+        # Convert timestamp to ISO format string
+        dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)  # noqa: UP017
+        return dt.isoformat()
 
     @property
     def media_image_url(self) -> str | None:
@@ -165,6 +258,47 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         """If the image url is remotely accessible."""
         # WiiM devices serve images locally - HA must proxy them
         return False
+
+    @property
+    def media_image_hash(self) -> str | None:
+        """Hash value for media image.
+
+        WiiM devices often keep the same image URL but change the image content when
+        tracks change. We create a hash based on both URL and track metadata to ensure
+        Home Assistant's image cache updates when the track changes, even if URL stays same.
+        """
+        url = self.media_image_url
+        if not url:
+            return None
+
+        # Include track metadata in hash to force cache refresh when track changes
+        # even if URL stays the same (common WiiM behavior)
+        track_info = f"{url}|{self.media_title}|{self.media_artist}|{self.media_album_name}"
+
+        import hashlib
+
+        return hashlib.sha256(track_info.encode("utf-8")).hexdigest()[:16]
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        """Fetch media image of current playing media for group coordinator.
+
+        Returns:
+            Tuple of (image_data, content_type) or (None, None) if no image available.
+        """
+        if not self.available:
+            return None, None
+
+        # Delegate to the speaker's media controller to fetch the image
+        from .media_controller import MediaPlayerController
+
+        # Create a media controller for the speaker to handle image fetching
+        media_controller = MediaPlayerController(self.speaker)
+
+        try:
+            return await media_controller.get_media_image()
+        except Exception as err:
+            _LOGGER.debug("Failed to fetch media image for group %s: %s", self.speaker.name, err)
+            return None, None
 
     # ===== VOLUME CONTROL (group-wide) =====
 
@@ -318,6 +452,24 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.speaker.coordinator.client.previous_track()
             await self.coordinator.async_request_refresh()
 
+    async def async_play_media(
+        self, media_type: str, media_id: str, announce: bool | None = None, **kwargs: Any
+    ) -> None:
+        """Handle TTS announcements for the entire group."""
+        if not self.available:
+            _LOGGER.warning("Cannot play media - group not active")
+            return
+
+        if announce:
+            # Delegate to master speaker for group-wide TTS
+            _LOGGER.debug("Group TTS announcement requested for %s", self.speaker.name)
+            await self.speaker._async_handle_tts_announcement(media_id, **kwargs)
+        else:
+            # Normal group media playback
+            _LOGGER.debug("Group media playback requested for %s", self.speaker.name)
+            await self.speaker.coordinator.client.play_url(media_id)
+            await self.coordinator.async_request_refresh()
+
     # ===== GROUP MANAGEMENT =====
 
     async def async_unjoin(self) -> None:
@@ -350,51 +502,52 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return entity specific state attributes with group member info."""
-        if not self.available:
-            return {"group_members": [], "group_coordinator": None}
-
+        """Return entity specific state attributes."""
         attrs = {
-            "group_members": [],
-            "coordinator": self.speaker.name,
-            "coordinator_entity_id": self._get_speaker_entity_id(self.speaker),
-            "group_size": len(self.speaker.group_members) + 1,  # +1 for coordinator
+            "group_members": self.get_group_member_entity_ids(),
+            "group_leader": self.speaker.name,
+            "group_role": "coordinator",
+            "is_group_coordinator": True,
+            # Explicitly mark as not suitable for Music Assistant
+            "music_assistant_excluded": True,
+            "integration_purpose": "home_assistant_multiroom_only",
         }
 
-        # Add coordinator info first
-        attrs["group_members"].append(
-            {
-                "name": self.speaker.name,
-                "entity_id": self._get_speaker_entity_id(self.speaker),
-                "volume_level": self.speaker.get_volume_level(),
-                "is_volume_muted": self.speaker.is_volume_muted(),
-                "role": "coordinator",
-            }
-        )
-
-        # Add member info
-        for member in self.speaker.group_members:
-            attrs["group_members"].append(
-                {
-                    "name": member.name,
-                    "entity_id": self._get_speaker_entity_id(member),
-                    "volume_level": member.get_volume_level(),
-                    "is_volume_muted": member.is_volume_muted(),
-                    "role": "member",
-                }
-            )
+        # Add group composition info
+        if self.available:
+            member_count = len(self.speaker.group_members)
+            attrs["group_size"] = member_count + 1  # +1 for coordinator
+            attrs["group_status"] = "active"
+        else:
+            attrs["group_status"] = "inactive"
 
         return attrs
 
     # ===== HELPER METHODS =====
 
     def _get_speaker_entity_id(self, speaker: Speaker) -> str | None:
-        """Get the entity ID for a speaker using entity registry lookup."""
-        from homeassistant.helpers import entity_registry as er
+        """Get the entity ID for a speaker."""
+        try:
+            return f"media_player.{speaker.name.lower().replace(' ', '_')}"
+        except Exception:
+            return None
 
-        ent_reg = er.async_get(self.hass)
-        entity_id = ent_reg.async_get_entity_id("media_player", DOMAIN, speaker.uuid)
-        return entity_id
+    def get_group_member_entity_ids(self) -> list[str]:
+        """Get list of entity IDs for group members."""
+        entity_ids = []
+
+        # Add coordinator entity ID
+        coordinator_id = self._get_speaker_entity_id(self.speaker)
+        if coordinator_id:
+            entity_ids.append(coordinator_id)
+
+        # Add member entity IDs
+        for member in self.speaker.group_members:
+            member_id = self._get_speaker_entity_id(member)
+            if member_id:
+                entity_ids.append(member_id)
+
+        return entity_ids
 
     async def _set_speaker_volume(self, speaker: Speaker, volume: float, role: str) -> None:
         """Set volume for a specific speaker with error handling."""
@@ -422,26 +575,80 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         if hasattr(self, "_last_available") and self._last_available != current_available:
             if current_available:
                 _LOGGER.info(
-                    "Group coordinator %s became available with %d members", self.name, len(self.speaker.group_members)
+                    "Group coordinator %s became available with %d members",
+                    self.name,
+                    len(self.speaker.group_members),
                 )
             else:
                 _LOGGER.info("Group coordinator %s became unavailable", self.speaker.name)
         self._last_available = current_available
 
-        # Detect group composition changes
-        current_members = {m.uuid for m in self.speaker.group_members}
-        if current_members != self._last_group_members:
+        # Detect group composition changes and force name update
+        # Handle both Speaker objects and string names in group_members
+        current_members = set()
+        member_names = []
+        for member in self.speaker.group_members:
+            if hasattr(member, "uuid"):
+                current_members.add(member.uuid)
+                member_names.append(member.name)
+            else:
+                # String name - use the string as identifier
+                current_members.add(str(member))
+                member_names.append(str(member))
+
+        # Check if we need to update the name
+        if current_members != self._last_group_members or current_available != self._last_available:
             self._last_group_members = current_members.copy()
+            self._last_available = current_available
+
+            # Update the name based on current state
+            self._update_name()
+
             if current_available:  # Only log when active
-                member_names = [m.name for m in self.speaker.group_members]
                 _LOGGER.info(
-                    "Group composition changed for %s: coordinator + %s", self.speaker.name, ", ".join(member_names)
+                    "Group composition changed for %s: coordinator + %s (name: %s)",
+                    self.speaker.name,
+                    ", ".join(member_names),
+                    self._attr_name,
                 )
 
-        super().async_write_ha_state()
+        # Check if track metadata changed to clear image cache (like regular media player)
+        current_track_info = {
+            "title": self.media_title,
+            "artist": self.media_artist,
+            "album": self.media_album_name,
+            "image_url": self.media_image_url,
+        }
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle coordinator update for group state changes."""
-        # Trigger state write to check for availability/composition changes
-        self.async_write_ha_state()
+        # Remove None values for comparison
+        current_track_info = {k: v for k, v in current_track_info.items() if v is not None}
+
+        # Initialize last track info if not set
+        if not hasattr(self, "_last_track_info"):
+            self._last_track_info = {}
+
+        # Check if track changed (title/artist change indicates new song)
+        if current_track_info != self._last_track_info:
+            # Track metadata changed - log for debugging
+            for key in set(current_track_info.keys()) | set(self._last_track_info.keys()):
+                old_val = self._last_track_info.get(key)
+                new_val = current_track_info.get(key)
+                if old_val != new_val:
+                    if key == "image_url":
+                        _LOGGER.debug(
+                            "🎨 Group media player image URL changed: %s -> %s",
+                            old_val,
+                            new_val,
+                        )
+                    else:
+                        _LOGGER.debug(
+                            "🎵 Group media player track info changed: %s: %s -> %s",
+                            key,
+                            old_val,
+                            new_val,
+                        )
+
+            # Update last track info
+            self._last_track_info = current_track_info.copy()
+
+        super().async_write_ha_state()

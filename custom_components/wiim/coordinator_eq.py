@@ -78,15 +78,28 @@ async def extend_eq_preset_map_once(coordinator) -> None:
 
 
 async def fetch_eq_info(coordinator) -> EQInfo:
-    """Return EQ information model (may be empty)."""
+    """Return EQ information model (may be empty).
 
+    Implements robust capability detection:
+    - Once marked as unsupported, never retry EQ calls
+    - Better detection of 'unknown command' responses
+    - Clear logging when EQ is disabled permanently
+    """
+
+    # STRICT CHECK: If we've already determined EQ is not supported, don't retry
     if coordinator._eq_supported is False:  # noqa: SLF001
-        _LOGGER.debug("[WiiM] %s: EQ not supported, skipping EQ info collection", coordinator.client.host)
+        _LOGGER.debug(
+            "[WiiM] %s: EQ permanently disabled (previously detected as unsupported)", coordinator.client.host
+        )
         return EQInfo()
 
-    _LOGGER.debug("[WiiM] %s: Collecting EQ information", coordinator.client.host)
+    _LOGGER.debug(
+        "[WiiM] %s: Collecting EQ information (supported=%s)", coordinator.client.host, coordinator._eq_supported
+    )
 
     eq_dict: dict[str, Any] = {}
+    eq_status_failed = False
+    eq_data_failed = False
 
     # Try to get EQ status first
     try:
@@ -94,21 +107,37 @@ async def fetch_eq_info(coordinator) -> EQInfo:
         eq_dict["eq_enabled"] = eq_enabled
         _LOGGER.debug("[WiiM] %s: EQ enabled status: %s", coordinator.client.host, eq_enabled)
     except WiiMError as err:
+        eq_status_failed = True
         _LOGGER.debug("[WiiM] %s: EQ status request failed: %s", coordinator.client.host, err)
-        # Don't return early - still try to get EQ data
+        # Continue - maybe EQ data call will work
 
     # Try to get EQ data
     try:
         eq_data = await coordinator.client.get_eq()
         if eq_data:
-            # Detect 'unknown command' responses and treat as unsupported.
-            if "raw" in eq_data and str(eq_data["raw"]).lower().startswith("unknown command"):
+            # ROBUST detection of 'unknown command' responses
+            raw_response = eq_data.get("raw", "")
+            if (
+                isinstance(raw_response, str)
+                and raw_response.strip()
+                and ("unknown command" in raw_response.lower() or "unknow command" in raw_response.lower())
+            ):  # Typo in some firmware
                 _LOGGER.info(
-                    "[WiiM] %s: Device responded 'unknown command' to getEQ – disabling EQ polling",
+                    "[WiiM] %s: Device responded 'unknown command' to getEQ – permanently disabling EQ polling",
                     coordinator.client.host,
                 )
                 coordinator._eq_supported = False  # noqa: SLF001
+                # Return with any data we collected from status call, but no preset data
                 return EQInfo.model_validate(eq_dict)
+
+            # Check for other indicators of unsupported EQ
+            if "error" in eq_data and "unsupported" in str(eq_data.get("error", "")).lower():
+                _LOGGER.info(
+                    "[WiiM] %s: Device reports EQ as unsupported – permanently disabling EQ polling",
+                    coordinator.client.host,
+                )
+                coordinator._eq_supported = False  # noqa: SLF001
+                return EQInfo()
 
             eq_dict.update(eq_data)
             _LOGGER.debug("[WiiM] %s: Raw EQ data: %s", coordinator.client.host, eq_data)
@@ -121,24 +150,28 @@ async def fetch_eq_info(coordinator) -> EQInfo:
             # Prioritize "EQ" field as it usually contains the display name
             for field_name in ["EQ", "eq_preset", "eq_mode", "sound_mode", "preset"]:
                 preset_val = eq_data.get(field_name)
-                if preset_val is not None:
+                if preset_val is not None and str(preset_val).strip() not in ["", "unknown", "none"]:
                     eq_dict["eq_preset"] = preset_val
-                    _LOGGER.info("[WiiM] %s: Current EQ preset detected: %s", coordinator.client.host, preset_val)
+                    _LOGGER.debug("[WiiM] %s: Current EQ preset detected: %s", coordinator.client.host, preset_val)
                     break
     except WiiMError as err:
+        eq_data_failed = True
         _LOGGER.debug("[WiiM] %s: EQ data request failed: %s", coordinator.client.host, err)
-        # Continue with whatever data we have
 
-    # Check if we got any useful data
-    if not eq_dict:
-        # Both calls failed - mark as unsupported if first time
+    # ROBUST CAPABILITY DETERMINATION
+    if eq_status_failed and eq_data_failed:
+        # Both calls failed completely
         if coordinator._eq_supported is None:  # noqa: SLF001
+            _LOGGER.info(
+                "[WiiM] %s: EQ not supported by device - both getEQ and EQGetStat failed", coordinator.client.host
+            )
             coordinator._eq_supported = False  # noqa: SLF001
-            _LOGGER.info("[WiiM] %s: EQ not supported by device", coordinator.client.host)
         return EQInfo()
 
-    # Mark endpoint as working (first success).
+    # At least one call succeeded
     if coordinator._eq_supported is None:  # noqa: SLF001
         coordinator._eq_supported = True  # noqa: SLF001
+        _LOGGER.info("[WiiM] %s: EQ support confirmed - polling enabled", coordinator.client.host)
 
+    # Return whatever data we managed to collect
     return EQInfo.model_validate(eq_dict)

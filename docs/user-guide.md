@@ -179,7 +179,9 @@ Configure each speaker via **Configure** button:
 
 ## 🎛️ Services Reference
 
-### WiiM-Specific Services
+### Official WiiM Services
+
+#### WiiM-Specific Services
 
 **`wiim.play_preset`** - Play hardware preset (1-20)
 
@@ -264,6 +266,88 @@ data:
 service: media_player.join
 service: media_player.unjoin
 ```
+
+### Unofficial API Services
+
+⚠️ **Advanced Features** - These services use reverse-engineered API endpoints that may not work on all firmware versions or device models. Test thoroughly before using in production automations.
+
+#### Bluetooth Device Scanning
+
+**`wiim.scan_bluetooth`** - Scan for nearby Bluetooth devices
+
+```yaml
+service: wiim.scan_bluetooth
+target:
+  entity_id: media_player.living_room
+data:
+  duration: 5 # Optional, 3-10 seconds, defaults to 3
+```
+
+#### Audio Settings
+
+**`wiim.set_channel_balance`** - Adjust left/right channel balance
+
+```yaml
+service: wiim.set_channel_balance
+target:
+  entity_id: media_player.living_room
+data:
+  balance: 0.2 # -1.0 (left) to 1.0 (right), 0.0 is center
+```
+
+**`wiim.set_spdif_delay`** - Set SPDIF sample rate switch delay
+
+```yaml
+service: wiim.set_spdif_delay
+target:
+  entity_id: media_player.living_room
+data:
+  delay_ms: 800 # 0-3000 milliseconds
+```
+
+#### LMS/Squeezelite Integration
+
+**`wiim.discover_lms_servers`** - Search for LMS servers on network
+
+```yaml
+service: wiim.discover_lms_servers
+target:
+  entity_id: media_player.living_room
+```
+
+**`wiim.connect_lms_server`** - Connect to specific LMS server
+
+```yaml
+service: wiim.connect_lms_server
+target:
+  entity_id: media_player.living_room
+data:
+  server_address: "192.168.1.123:3483"
+```
+
+**`wiim.set_auto_connect_lms`** - Enable/disable LMS auto-connect
+
+```yaml
+service: wiim.set_auto_connect_lms
+target:
+  entity_id: media_player.living_room
+data:
+  enabled: true
+```
+
+#### Device Controls
+
+**`wiim.set_touch_buttons`** - Enable/disable physical touch buttons
+
+```yaml
+service: wiim.set_touch_buttons
+target:
+  entity_id: media_player.living_room
+data:
+  enabled: false # Disable touch buttons
+```
+
+**Note:** These unofficial services may require specific firmware versions or device models. If a service fails, check the Home Assistant logs for detailed error information. For complete technical documentation, see [Unofficial API Endpoints](../development/API_GUIDE.md#-unofficialundocumented-endpoints) in the API Guide.
 
 ## 📱 Dashboard Integration
 
