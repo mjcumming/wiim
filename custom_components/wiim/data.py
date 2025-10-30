@@ -1111,6 +1111,93 @@ class Speaker:
                 return raw
         return None
 
+    def _merge_upnp_state_to_coordinator(self) -> None:
+        """Merge UPnP state changes into coordinator.data.
+
+        This ensures entities can read UPnP state updates via status_model.
+        Follows Home Assistant pattern: external events → update coordinator.data → entities read it.
+        """
+        if not self.coordinator or not self.coordinator.data or not self._upnp_state:
+            return
+
+        # Get current status_model from coordinator
+        current_status = self.coordinator.data.get("status_model")
+        if not isinstance(current_status, PlayerStatus):
+            # If no status_model exists yet, create a minimal one
+            # (coordinator polling will fill it in, but UPnP can update it earlier)
+            current_status = PlayerStatus(play_status="idle")
+
+        # Map UPnP state fields to PlayerStatus model fields
+        updates: dict[str, Any] = {}
+
+        # play_state: Convert UPnP format to PlayerStatus format
+        # UPnP: "playing", "paused playback", "stopped"
+        # PlayerStatus: "play", "pause", "stop", "idle"
+        if self._upnp_state.play_state is not None:
+            upnp_play_state = self._upnp_state.play_state.lower().strip()
+            if "play" in upnp_play_state and "pause" not in upnp_play_state:
+                updates["play_status"] = "play"
+            elif "pause" in upnp_play_state:
+                updates["play_status"] = "pause"
+            elif "stop" in upnp_play_state or "idle" in upnp_play_state:
+                updates["play_status"] = "stop"
+            else:
+                updates["play_status"] = "idle"
+
+        # volume: Convert float 0-1 to int 0-100
+        if self._upnp_state.volume is not None:
+            updates["vol"] = int(self._upnp_state.volume * 100)
+
+        # muted: Direct mapping (bool → bool)
+        if self._upnp_state.muted is not None:
+            updates["mute"] = self._upnp_state.muted
+
+        # position: Direct mapping (int seconds → int seconds)
+        if self._upnp_state.position is not None:
+            updates["position"] = self._upnp_state.position
+
+        # duration: Direct mapping (int seconds → int seconds)
+        if self._upnp_state.duration is not None:
+            updates["duration"] = self._upnp_state.duration
+
+        # Media metadata: Direct mapping
+        if self._upnp_state.title is not None:
+            updates["Title"] = self._upnp_state.title
+        if self._upnp_state.artist is not None:
+            updates["Artist"] = self._upnp_state.artist
+        if self._upnp_state.album is not None:
+            updates["Album"] = self._upnp_state.album
+        if self._upnp_state.image_url is not None:
+            updates["cover_url"] = self._upnp_state.image_url
+
+        # source: Direct mapping
+        if self._upnp_state.source is not None:
+            updates["mode"] = self._upnp_state.source
+
+        # Apply updates to status_model if we have any
+        if updates:
+            try:
+                # Create updated PlayerStatus model
+                updated_status = current_status.model_copy(update=updates)
+
+                # Update coordinator.data (following Home Assistant pattern)
+                # Create a copy of coordinator.data to avoid mutating in place
+                data_copy = self.coordinator.data.copy()
+                data_copy["status_model"] = updated_status
+                self.coordinator.async_set_updated_data(data_copy)
+
+                _LOGGER.debug(
+                    "Merged UPnP state into coordinator.data for %s: %s",
+                    self.name,
+                    list(updates.keys()),
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Failed to merge UPnP state into coordinator for %s: %s",
+                    self.name,
+                    err,
+                )
+
     # ==========================================================
     # UPnP Integration Methods (Samsung/DLNA Pattern)
     # ==========================================================
@@ -1264,8 +1351,10 @@ class Speaker:
         changed = self._upnp_state.apply_diff(variables)
 
         if changed:
-            # Trigger coordinator update (Home Assistant dispatcher pattern)
-            # Use UUID consistently for signal names
+            # Merge UPnP state into coordinator.data so entities can read it
+            self._merge_upnp_state_to_coordinator()
+
+            # Trigger entity updates via dispatcher (entities listen for this signal)
             async_dispatcher_send(
                 self.hass,
                 f"wiim_state_updated_{self.uuid}",
