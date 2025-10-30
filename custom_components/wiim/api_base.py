@@ -222,6 +222,11 @@ class WiiMClient:
         # Basic mutex to avoid concurrent protocol-probe races.
         self._lock = asyncio.Lock()
 
+    @property
+    def capabilities(self) -> dict[str, Any]:
+        """Expose device capabilities for entity setup."""
+        return self._capabilities
+
     # ------------------------------------------------------------------
     # SSL helpers -------------------------------------------------------
     # ------------------------------------------------------------------

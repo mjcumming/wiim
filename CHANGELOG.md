@@ -2,6 +2,16 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.1] - 2025-10-30
+
+### Fixed
+
+- **Audio Output Mode Select Entity**: Fixed capability detection for audio output mode control
+  - Added `capabilities` property to `WiiMClient` to properly expose device capabilities
+  - Resolves issue where audio output select entity was greyed out/unavailable
+  - Ensures WiiM devices are properly detected and audio output control is enabled
+  - Affected GitHub issue: #79
+
 ## [0.2.0] - 2025-10-30
 
 ### Added

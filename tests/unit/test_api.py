@@ -326,3 +326,25 @@ async def test_all_unofficial_api_methods_available():
         assert hasattr(client, method_name), f"Method {method_name} not found in WiiMClient"
 
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_client_capabilities_property():
+    """Test that client properly exposes capabilities property."""
+    # Test with no capabilities
+    client = WiiMClient("192.168.1.100")
+    assert hasattr(client, "capabilities")
+    assert client.capabilities == {}
+    await client.close()
+
+    # Test with custom capabilities
+    test_capabilities = {
+        "supports_audio_output": True,
+        "is_wiim_device": True,
+        "firmware_version": "4.8.731953",
+    }
+    client = WiiMClient("192.168.1.100", capabilities=test_capabilities)
+    assert client.capabilities == test_capabilities
+    assert client.capabilities.get("supports_audio_output") is True
+    assert client.capabilities.get("is_wiim_device") is True
+    await client.close()
