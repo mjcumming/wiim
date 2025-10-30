@@ -1328,8 +1328,10 @@ class Speaker:
             self._upnp_eventer = None
             return
 
-        # Create fallback polling timer (for resilience)
-        # This ensures entities continue to update even if UPnP events stop arriving
+        # Create fallback polling timer (watchdog for UPnP health)
+        # This timer checks if UPnP events are still arriving.
+        # If events stop for 2+ minutes, it automatically switches to HTTP polling.
+        # Does NOT shut down working UPnP subscriptions.
         from functools import partial
 
         from homeassistant.helpers.event import async_track_time_interval
@@ -1350,7 +1352,7 @@ class Speaker:
                 poll_interval,
             )
             _LOGGER.debug(
-                "Fallback polling timer created for %s (interval: %ds)",
+                "UPnP watchdog timer created for %s (checks health every %ds, switches to polling if no events for 2+ minutes)",
                 self.name,
                 poll_interval_seconds,
             )

@@ -245,6 +245,33 @@ Does device respond to description.xml on port 49152?
 - The integration will work perfectly with 1-second state updates
 - Only concern yourself with UPnP if you need sub-second real-time updates
 
+## UPnP Health Watchdog
+
+The integration includes a **watchdog timer** (default: checks every 45 seconds) that monitors UPnP health:
+
+### How It Works
+
+1. **Timer checks**: Every 45 seconds, the integration checks when the last UPnP event was received
+2. **Healthy UPnP**: If events arrived within the last 2 minutes, UPnP is considered healthy and continues
+3. **Dead UPnP**: If no events for 2+ minutes, the integration automatically switches to HTTP polling
+4. **Non-destructive**: The watchdog does NOT shut down working UPnP subscriptions
+
+### Benefits
+
+- **Automatic recovery**: If UPnP stops working, the integration seamlessly switches to polling
+- **No manual intervention**: Users don't need to reload the integration
+- **Resilient**: Handles network issues, device firmware bugs, or temporary UPnP failures
+
+### Configuration
+
+The watchdog interval can be configured in the integration options:
+
+- **Default**: 45 seconds
+- **Minimum**: 30 seconds (recommended)
+- **Maximum**: 300 seconds (5 minutes)
+
+**Note**: The watchdog is only active when UPnP subscriptions are established. If UPnP setup fails initially, the integration uses HTTP polling from the start.
+
 ## Future Improvements
 
 Potential enhancements if UPnP proves reliable:

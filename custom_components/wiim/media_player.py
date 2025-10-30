@@ -354,16 +354,46 @@ class WiiMMediaPlayer(
         self.async_schedule_update_ha_state()
 
     async def _async_fallback_poll(self, now: datetime.datetime | None = None) -> None:
-        """Poll the entity if UPnP subscriptions fail."""
-        # Mark subscriptions as failed to trigger HTTP-only polling
-        if not self.speaker._subscriptions_failed:
-            self.speaker._subscriptions_failed = True
-            _LOGGER.info(
-                "UPnP subscriptions unavailable for %s (likely container networking), using HTTP polling",
+        """Check UPnP health and fallback to polling if subscriptions are dead."""
+        # Check if UPnP is actually failing (watchdog pattern)
+        # Only switch to polling if UPnP events have stopped arriving
+
+        # If already marked as failed, just refresh
+        if self.speaker._subscriptions_failed:
+            await self.coordinator.async_request_refresh()
+            return
+
+        # Check if UPnP eventer exists and is healthy
+        if self.speaker._upnp_eventer:
+            import time
+
+            last_event_time = self.speaker._upnp_eventer._last_notify_ts
+            if last_event_time:
+                time_since_last_event = time.time() - last_event_time
+                # If events arrived recently (within last 2 minutes), UPnP is healthy
+                if time_since_last_event < 120:
+                    _LOGGER.debug(
+                        "UPnP healthy for %s (last event %.1fs ago), fallback timer continuing",
+                        self.speaker.name,
+                        time_since_last_event,
+                    )
+                    # Just refresh, don't shut down UPnP
+                    await self.coordinator.async_request_refresh()
+                    return
+
+            # UPnP appears dead (no events for 2+ minutes)
+            _LOGGER.warning(
+                "UPnP events stopped arriving for %s (no events for 2+ minutes), switching to HTTP polling",
                 self.speaker.name,
             )
-            # Clean up failed UPnP subscriptions
+            self.speaker._subscriptions_failed = True
             await self.speaker._cleanup_upnp_subscriptions()
+        else:
+            # No UPnP eventer - already using polling
+            _LOGGER.debug(
+                "No UPnP eventer for %s, using HTTP polling",
+                self.speaker.name,
+            )
 
         # Trigger coordinator refresh
         await self.coordinator.async_request_refresh()

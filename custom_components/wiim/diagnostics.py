@@ -189,7 +189,9 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
 
             upnp_info = {
                 "status": "Active" if (is_healthy and has_active_subscriptions) else "Not Active",
-                "status_detail": "Receiving Events" if (is_healthy and has_active_subscriptions) else "Eventer Running but No Events",
+                "status_detail": "Receiving Events"
+                if (is_healthy and has_active_subscriptions)
+                else "Eventer Running but No Events",
                 "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
                 "subscription_failed": actual_subscription_failed,
                 "event_count": getattr(eventer, "_event_count", 0),
@@ -210,7 +212,9 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                     "has_notify_server": hasattr(speaker._upnp_client, "_notify_server")
                     and speaker._upnp_client._notify_server is not None,
                     "description_url": speaker._upnp_client.description_url,
-                    "callback_url": getattr(speaker._upnp_client._notify_server, "callback_url", None) if hasattr(speaker._upnp_client, "_notify_server") and speaker._upnp_client._notify_server else None,
+                    "callback_url": getattr(speaker._upnp_client._notify_server, "callback_url", None)
+                    if hasattr(speaker._upnp_client, "_notify_server") and speaker._upnp_client._notify_server
+                    else None,
                 }
         else:
             # No UPnP eventer - either setup never ran or failed completely
