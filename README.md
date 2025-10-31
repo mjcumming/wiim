@@ -55,7 +55,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 | **Quick Stations**    | Custom radio station list in Browse Media                                     |
 | **EQ Control**        | 10-band equalizer with presets                                                |
 | **Presets**           | Hardware preset buttons (device dependent, up to 20)                          |
-| **Auto-Discovery**    | Finds speakers automatically via UPnP/Zeroconf strength                       |
+| **Auto-Discovery**    | Finds speakers automatically via UPnP/Zeroconf                                |
 | **Real-Time Updates** | UPnP event subscriptions for instant state changes with HTTP polling fallback |
 
 ## How It Works
@@ -69,11 +69,10 @@ The integration uses a **hybrid approach** combining UPnP event subscriptions an
   - Automatically falls back to polling if UPnP becomes unavailable
 
 - **HTTP Polling (Fallback)**: Adaptive polling strategy ensures reliability
-
-- 1-second polling during active playback for position updates
-- 5-second polling when idle for resource efficiency
-- Always available as fallback if UPnP subscriptions fail
-- Gracefully handles network issues and device restarts
+  - 1-second polling during active playback for position updates
+  - 5-second polling when idle for resource efficiency
+  - Always available as fallback if UPnP subscriptions fail
+  - Gracefully handles network issues and device restarts
 
 This dual approach ensures you get the best of both worlds: real-time responsiveness when UPnP is working, and reliable operation even when it's not.
 
