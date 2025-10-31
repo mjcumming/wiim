@@ -63,6 +63,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 The integration uses a **hybrid approach** combining UPnP event subscriptions and HTTP polling for optimal reliability and responsiveness:
 
 - **UPnP Events (Primary)**: Real-time state updates via DLNA DMR event subscriptions
+
   - Instant updates when device state changes (play/pause/volume/mute)
   - Reduces network traffic and improves responsiveness
   - Automatically falls back to polling if UPnP becomes unavailable
