@@ -20,6 +20,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 - **⚡ Zero Dependencies** - No external Python packages needed
 - **🚀 Auto-Discovery** - Finds speakers automatically on your network
 - **📱 Universal Compatibility** - Works with all Home Assistant dashboards and voice assistants
+- **⚡ Hybrid State Updates** - Uses UPnP events for real-time updates + HTTP polling for reliability
 
 ## Supported Devices
 
@@ -44,17 +45,36 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ## Key Features
 
-| Feature              | Description                                                        |
-| -------------------- | ------------------------------------------------------------------ |
-| **Media Control**    | Play, pause, stop, next/previous, seek                             |
-| **Volume Control**   | Individual and synchronized group volume                           |
-| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, etc.)           |
-| **Audio Output**     | Control hardware output modes (Line Out, Optical, Coax, Bluetooth) |
-| **Multiroom Groups** | Synchronized playback across speaker groups                        |
-| **Quick Stations**   | Custom radio station list in Browse Media                          |
-| **EQ Control**       | 10-band equalizer with presets                                     |
-| **Presets**          | Hardware preset buttons (device dependent, up to 20)               |
-| **Auto-Discovery**   | Finds speakers automatically via UPnP/Zeroconf                     |
+| Feature               | Description                                                                   |
+| --------------------- | ----------------------------------------------------------------------------- |
+| **Media Control**     | Play, pause, stop, next/previous, seek                                        |
+| **Volume Control**    | Individual and synchronized group volume                                      |
+| **Smart Sources**     | Detects streaming services (Spotify, Amazon Music, etc.)                      |
+| **Audio Output**      | Control hardware output modes (Line Out, Optical, Coax, Bluetooth)            |
+| **Multiroom Groups**  | Synchronized playback across speaker groups                                   |
+| **Quick Stations**    | Custom radio station list in Browse Media                                     |
+| **EQ Control**        | 10-band equalizer with presets                                                |
+| **Presets**           | Hardware preset buttons (device dependent, up to 20)                          |
+| **Auto-Discovery**    | Finds speakers automatically via UPnP/Zeroconf strength                       |
+| **Real-Time Updates** | UPnP event subscriptions for instant state changes with HTTP polling fallback |
+
+## How It Works
+
+The integration uses a **hybrid approach** combining UPnP event subscriptions and HTTP polling for optimal reliability and responsiveness:
+
+- **UPnP Events (Primary)**: Real-time state updates via DLNA DMR event subscriptions
+  - Instant updates when device state changes (play/pause/volume/mute)
+  - Reduces network traffic and improves responsiveness
+  - Automatically falls back to polling if UPnP becomes unavailable
+
+- **HTTP Polling (Fallback)**: Adaptive polling strategy ensures reliability
+
+- 1-second polling during active playback for position updates
+- 5-second polling when idle for resource efficiency
+- Always available as fallback if UPnP subscriptions fail
+- Gracefully handles network issues and device restarts
+
+This dual approach ensures you get the best of both worlds: real-time responsiveness when UPnP is working, and reliable operation even when it's not.
 
 ## Usage Examples
 
