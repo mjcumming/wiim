@@ -2,6 +2,17 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.11] - 2025-01-XX
+
+### Changed
+
+- **Enhanced Diagnostic Logging**: Added comprehensive INFO/WARNING level logging for volume control and media browsing
+  - Volume commands now log at INFO level with speaker name, volume percentage, and step changes
+  - API volume requests log endpoint URLs and device hosts
+  - Media browser operations log content types and IDs for troubleshooting
+  - All errors include full exception details and stack traces for better debugging
+  - Helps diagnose issues when volume control or media browsing has no effect
+
 ## [0.2.10] - 2025-01-XX
 
 ### Fixed

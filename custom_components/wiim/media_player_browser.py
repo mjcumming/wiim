@@ -285,6 +285,13 @@ class MediaBrowserMixin:
         speaker: Speaker = self.speaker  # type: ignore[attr-defined]
         hass = self.hass  # type: ignore[attr-defined]
 
+        _LOGGER.info(
+            "Media browser request for %s: content_type=%s, content_id=%s",
+            speaker.name,
+            media_content_type,
+            media_content_id,
+        )
+
         # Handle media-source:// URLs by delegating to HA media source system
         if media_content_id and media_content_id.startswith("media-source://"):
             try:
@@ -354,7 +361,9 @@ class MediaBrowserMixin:
                             )
                         )
             except Exception as err:
-                _LOGGER.debug("Media sources not available: %s", err)
+                _LOGGER.warning(
+                    "Media sources not available for %s: %s (type: %s)", speaker.name, err, type(err).__name__
+                )
 
             if presets_supported:
                 children.append(

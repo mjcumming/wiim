@@ -61,7 +61,8 @@ class VolumeCommandsMixin:
         # Required attributes from implementing class
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
 
-        _LOGGER.debug("Setting volume to %.2f for %s", volume, self.speaker.name)  # type: ignore[attr-defined]
+        speaker_name = self.speaker.name  # type: ignore[attr-defined]
+        _LOGGER.info("Setting volume to %.2f (%.0f%%) for %s", volume, volume * 100, speaker_name)
 
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_volume = volume  # type: ignore[attr-defined]
@@ -69,22 +70,34 @@ class VolumeCommandsMixin:
         self.async_write_ha_state()  # type: ignore[attr-defined]
 
         try:
-            if hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None:  # type: ignore[attr-defined]
+            has_debouncer = hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None  # type: ignore[attr-defined]
+            if has_debouncer:
                 # Use the debouncer – command will be sent after cooldown
                 # _pending_volume already set above; do NOT clear it here!
+                _LOGGER.debug("Volume command queued with debouncer for %s", speaker_name)
                 await self._volume_debouncer.async_call()  # type: ignore[attr-defined]
             else:
-                # Debouncer not available (shouldn’t happen) – send immediately
+                # Debouncer not available (shouldn't happen) – send immediately
+                _LOGGER.debug("Sending volume command immediately (no debouncer) for %s", speaker_name)
                 await controller.set_volume(volume)
                 # Command sent → clear the pending flag
                 self._pending_volume = None  # type: ignore[attr-defined]
 
-            _LOGGER.debug("Volume set command completed successfully")
+            _LOGGER.info("Volume set command completed successfully for %s at %.0f%%", speaker_name, volume * 100)
 
             # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
-        except Exception:
+        except Exception as err:
             # Clear optimistic state on error
+            _LOGGER.error(
+                "Failed to set volume to %.2f (%.0f%%) for %s: %s (type: %s)",
+                volume,
+                volume * 100,
+                speaker_name,
+                err,
+                type(err).__name__,
+                exc_info=True,
+            )
             self._optimistic_volume = None  # type: ignore[attr-defined]
             self._pending_volume = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
@@ -93,6 +106,9 @@ class VolumeCommandsMixin:
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute the volume."""
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+        speaker_name = self.speaker.name  # type: ignore[attr-defined]
+
+        _LOGGER.info("Setting mute to %s for %s", mute, speaker_name)
 
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_mute = mute  # type: ignore[attr-defined]
@@ -100,12 +116,22 @@ class VolumeCommandsMixin:
 
         try:
             # 2. Send command to device
+            _LOGGER.debug("Sending mute command to device for %s", speaker_name)
             await controller.set_mute(mute)
+            _LOGGER.info("Mute command completed successfully for %s (mute=%s)", speaker_name, mute)
 
             # 3. Let adaptive polling handle sync (no immediate refresh needed)
 
-        except Exception:
+        except Exception as err:
             # Clear optimistic state on error so real state shows
+            _LOGGER.error(
+                "Failed to set mute to %s for %s: %s (type: %s)",
+                mute,
+                speaker_name,
+                err,
+                type(err).__name__,
+                exc_info=True,
+            )
             self._optimistic_mute = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
@@ -124,21 +150,40 @@ class VolumeCommandsMixin:
         )
         new_volume = min(1.0, current + step)
 
+        speaker_name = self.speaker.name  # type: ignore[attr-defined]
+        _LOGGER.info(
+            "Volume up: %.0f%% -> %.0f%% (step=%.0f%%) for %s",
+            current * 100,
+            new_volume * 100,
+            step * 100,
+            speaker_name,
+        )
+
         # Optimistic UI update
         self._optimistic_volume = new_volume  # type: ignore[attr-defined]
         self._pending_volume = new_volume  # type: ignore[attr_defined]
-        self.async_write_ha_state()  # type: ignore[attr_defined]
+        self.async_write_ha_state()  # type: ignore[attr-defined]
 
         try:
-            if hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None:  # type: ignore[attr-defined]
+            has_debouncer = hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None  # type: ignore[attr-defined]
+            if has_debouncer:
+                _LOGGER.debug("Volume up command queued with debouncer for %s", speaker_name)
                 await self._volume_debouncer.async_call()  # type: ignore[attr_defined]
             else:
+                _LOGGER.debug("Sending volume up command immediately for %s", speaker_name)
                 await controller.set_volume(new_volume)
+            _LOGGER.info("Volume up command completed for %s", speaker_name)
         except Exception as err:
             # Revert optimistic state on error
+            _LOGGER.error(
+                "Volume up failed for %s: %s (type: %s)",
+                speaker_name,
+                err,
+                type(err).__name__,
+                exc_info=True,
+            )
             self._optimistic_volume = None  # type: ignore[attr_defined]
             self.async_write_ha_state()  # type: ignore[attr_defined]
-            _LOGGER.warning("Volume up failed: %s", err)
 
     async def async_volume_down(self) -> None:
         """Decrease volume using debounced step updates."""
@@ -153,19 +198,38 @@ class VolumeCommandsMixin:
         )
         new_volume = max(0.0, current - step)
 
+        speaker_name = self.speaker.name  # type: ignore[attr-defined]
+        _LOGGER.info(
+            "Volume down: %.0f%% -> %.0f%% (step=%.0f%%) for %s",
+            current * 100,
+            new_volume * 100,
+            step * 100,
+            speaker_name,
+        )
+
         self._optimistic_volume = new_volume  # type: ignore[attr_defined]
         self._pending_volume = new_volume  # type: ignore[attr_defined]
         self.async_write_ha_state()  # type: ignore[attr_defined]
 
         try:
-            if hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None:  # type: ignore[attr_defined]
+            has_debouncer = hasattr(self, "_volume_debouncer") and self._volume_debouncer is not None  # type: ignore[attr-defined]
+            if has_debouncer:
+                _LOGGER.debug("Volume down command queued with debouncer for %s", speaker_name)
                 await self._volume_debouncer.async_call()  # type: ignore[attr_defined]
             else:
+                _LOGGER.debug("Sending volume down command immediately for %s", speaker_name)
                 await controller.set_volume(new_volume)
+            _LOGGER.info("Volume down command completed for %s", speaker_name)
         except Exception as err:
+            _LOGGER.error(
+                "Volume down failed for %s: %s (type: %s)",
+                speaker_name,
+                err,
+                type(err).__name__,
+                exc_info=True,
+            )
             self._optimistic_volume = None  # type: ignore[attr_defined]
             self.async_write_ha_state()  # type: ignore[attr_defined]
-            _LOGGER.warning("Volume down failed: %s", err)
 
 
 class PlaybackCommandsMixin:

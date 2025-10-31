@@ -69,7 +69,21 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
     async def set_volume(self, volume: float) -> None:  # type: ignore[override]
         """Set absolute volume (0.0 – 1.0)."""
         vol_pct = int(max(0.0, min(volume, 1.0)) * 100)
-        await self._request(f"{API_ENDPOINT_VOLUME}{vol_pct}")  # type: ignore[attr-defined]
+        endpoint = f"{API_ENDPOINT_VOLUME}{vol_pct}"
+        _LOGGER.info("Sending volume API request: %s to %s (%.0f%%)", endpoint, self._host, vol_pct)
+        try:
+            result = await self._request(endpoint)  # type: ignore[attr-defined]
+            _LOGGER.debug("Volume API request successful: %s", result)
+        except Exception as err:
+            _LOGGER.error(
+                "Volume API request failed: %s to %s: %s (type: %s)",
+                endpoint,
+                self._host,
+                err,
+                type(err).__name__,
+                exc_info=True,
+            )
+            raise
 
     async def set_mute(self, mute: bool) -> None:  # type: ignore[override]
         await self._request(f"{API_ENDPOINT_MUTE}{1 if mute else 0}")  # type: ignore[attr-defined]

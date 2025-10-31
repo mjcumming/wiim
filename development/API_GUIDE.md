@@ -8,10 +8,13 @@
 
 **Official Documentation**: [Arylic LinkPlay API](https://developer.arylic.com/httpapi/)
 
-| Source                                                                              | Coverage                   | Notes                       |
-| ----------------------------------------------------------------------------------- | -------------------------- | --------------------------- |
-| [WiiM API PDF](https://www.wiimhome.com/pdf/HTTP%20API%20for%20WiiM%20Products.pdf) | WiiM-specific enhancements | Accurate for WiiM devices   |
-| [Arylic LinkPlay API](https://developer.arylic.com/httpapi/)                        | Core LinkPlay protocol     | Universal LinkPlay baseline |
+| Source                                                                                    | Coverage                   | Notes                               |
+| ----------------------------------------------------------------------------------------- | -------------------------- | ----------------------------------- |
+| [WiiM API PDF](https://www.wiimhome.com/pdf/HTTP%20API%20for%20WiiM%20Products.pdf)       | WiiM-specific enhancements | Accurate for WiiM devices           |
+| [Arylic LinkPlay API](https://developer.arylic.com/httpapi/)                              | Core LinkPlay protocol     | Universal LinkPlay baseline         |
+| [OpenAPI Specification](https://github.com/cvdlinden/wiim-httpapi/blob/main/openapi.yaml) | Complete API reference     | OpenAPI 3.0 spec with all endpoints |
+
+**OpenAPI Reference**: The [WiiM HTTP API OpenAPI Specification](https://github.com/cvdlinden/wiim-httpapi/blob/main/openapi.yaml) provides a comprehensive, machine-readable reference for all available endpoints, request parameters, and response structures. This is the most complete and up-to-date API documentation available.
 
 ---
 
@@ -1274,6 +1277,66 @@ GET /httpapi.asp?command=Button_Enable_SET:1
 - Avoid rapid successive calls to the same endpoint
 - Some endpoints may have internal cooldown periods
 - Discovery operations should not be run continuously
+
+---
+
+## 📋 **OpenAPI Spec Commands Not Currently Used**
+
+The [OpenAPI Specification](https://github.com/cvdlinden/wiim-httpapi/blob/main/openapi.yaml) includes several endpoints that our integration does not currently implement. These may be candidates for future enhancements:
+
+### **Alarm Clock Operations**
+
+- `getAlarmClock` - Get alarm clock settings
+- `setAlarmClock` - Set alarm clock configuration
+- `alarmStop` - Stop active alarm
+
+### **Bluetooth Advanced Operations**
+
+- `getbthistory` - Get Bluetooth connection history
+- `getbtpairstatus` - Get Bluetooth pairing status
+- `clearbtdiscoveryresult` - Clear Bluetooth discovery results
+- `connectbta2dpsynk` - Connect Bluetooth A2DP sync
+- `disconnectbta2dpsynk` - Disconnect Bluetooth A2DP sync
+
+### **Audio Hardware Capabilities**
+
+- `getActiveSoundCardOutputMode` - Get current sound card output mode
+- `getSoundCardModeSupportList` - Get supported sound card modes
+- `getAuxVoltageSupportList` - Get auxiliary voltage support list
+- `getSpdifOutMaxCap` - Get SPDIF output maximum capability
+- `getCoaxOutMaxCap` - Get coaxial output maximum capability
+
+### **Network Configuration**
+
+- `getStaticIP` - Get static IP info (deprecated - use `getStaticIpInfo`)
+- `getWlanBandConfig` - Get WiFi band configuration
+- `getWlanRoamConfig` - Get WiFi roaming configuration
+- `getNetworkPreferDNS` - Get preferred DNS settings
+- `getIPV6Enable` - Get IPv6 enable status
+
+### **Device Management**
+
+- `setDeviceName` - Set device name (UPnP/DLNA/AirPlay)
+- `setSSID` - Set device SSID (hex format)
+- `setNetwork` - Set WiFi password and security
+- `restoreToDefault` - Factory reset
+- `setPowerWifiDown` - Turn off WiFi signal
+
+### **Remote Control Features**
+
+- `getMvRemoteSilenceUpdateTime` - Get remote silence update time
+- `getMvRemoteUpdateStart` - Get remote update start status
+- `getMvRemoteUpdateStartCheck` - Check remote update start
+- `getMvRemoteUpdateStatus` - Get remote update status
+- `getMvRomBurnPrecent` - Get ROM burn percentage
+
+### **Other Features**
+
+- `GetFadeFeature` - Get fade feature settings
+- `audio_cast` - Audio cast operations
+- `setLightOperationBrightConfig` - Set LED brightness configuration
+
+**Note**: These endpoints may not be available on all devices or firmware versions. Before implementing, test thoroughly and verify device support.
 
 ---
 

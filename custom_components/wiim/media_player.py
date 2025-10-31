@@ -421,8 +421,19 @@ class WiiMMediaPlayer(
         volume = self._pending_volume
         self._pending_volume = None  # Clear pending
 
-        _LOGGER.debug("Debounced volume command: %.2f", volume)
-        await self.controller.set_volume(volume)
+        _LOGGER.info("Sending debounced volume command: %.2f (%.0f%%) for %s", volume, volume * 100, self.speaker.name)
+        try:
+            await self.controller.set_volume(volume)
+            _LOGGER.info("Debounced volume command completed successfully for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error(
+                "Debounced volume command failed for %s: %s (type: %s)",
+                self.speaker.name,
+                err,
+                type(err).__name__,
+                exc_info=True,
+            )
+            raise
 
     # ===== HOME ASSISTANT ENTITY PROPERTIES =====
 
