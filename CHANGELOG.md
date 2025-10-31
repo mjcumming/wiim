@@ -2,6 +2,28 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.10] - 2025-01-XX
+
+### Fixed
+
+- **Media Browser**: Fixed issue where media library showed no items when selecting WiiM speaker
+
+  - Improved media source detection to properly show Media Library entry even when children are initially empty
+  - Lookup now checks `can_expand` property to determine if media sources are browsable
+
+- **Playback Control**: Fixed play button restarting song when already playing
+  - Added state check before sending play command - if device is already playing, command is skipped
+  - Triggers refresh to get latest metadata/position when already playing (helps with external app playback)
+  - Prevents song restart when user presses play while music is already playing
+
+### Changed
+
+- **State Detection**: Simplified playback state detection logic
+  - Removed metadata-based assumptions about playing state
+  - Now uses only documented API states: "play", "pause", "stop", "load", "idle"
+  - Handles common variations: "playing", "paused", "stopped"
+  - More reliable and consistent with actual API responses
+
 ## [0.2.1] - 2025-10-30
 
 ### Fixed

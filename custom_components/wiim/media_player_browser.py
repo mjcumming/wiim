@@ -330,24 +330,29 @@ class MediaBrowserMixin:
             # Add HA Media Library if media sources are available
             try:
                 media_source_root = await media_source.async_browse_media(hass, None)
-                if media_source_root and media_source_root.children:
+                if media_source_root:
+                    # Check if there are actual media sources available
                     # Handle case where children might be a coroutine
                     root_children = media_source_root.children
                     if hasattr(root_children, "__await__"):
                         root_children = await root_children
 
-                    children.append(
-                        BrowseMedia(
-                            media_class=MediaClass.DIRECTORY,
-                            media_content_id="media-source://",
-                            media_content_type="media_source",
-                            title="Media Library",
-                            can_play=False,
-                            can_expand=True,
-                            children=[],
-                            thumbnail="mdi:folder-music",
+                    # Show Media Library entry if there are sources or children
+                    # Use can_expand to determine if it's browsable even if children is empty initially
+                    has_content = (root_children and len(root_children) > 0) if root_children else False
+                    if has_content or media_source_root.can_expand:
+                        children.append(
+                            BrowseMedia(
+                                media_class=MediaClass.DIRECTORY,
+                                media_content_id="media-source://",
+                                media_content_type="media_source",
+                                title="Media Library",
+                                can_play=False,
+                                can_expand=True,
+                                children=[],
+                                thumbnail="mdi:folder-music",
+                            )
                         )
-                    )
             except Exception as err:
                 _LOGGER.debug("Media sources not available: %s", err)
 

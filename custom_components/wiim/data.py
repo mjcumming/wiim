@@ -710,8 +710,10 @@ class Speaker:
                 self._logged_missing_play_state = True
             return MediaPlayerState.IDLE
 
-        play_status = str(self.status_model.play_state)
+        play_status = str(self.status_model.play_state).lower()
 
+        # Map valid states from model: "play", "pause", "stop", "load", "idle"
+        # Also handle common variations: "playing", "paused", "stopped"
         if play_status in ["play", "playing", "load"]:
             return MediaPlayerState.PLAYING
         elif play_status in ["pause", "paused"]:
@@ -1118,6 +1120,26 @@ class Speaker:
             if isinstance(raw, PlayerStatus):
                 return raw
         return None
+
+    def should_use_upnp_volume(self) -> bool:
+        """Check if UPnP volume events should be used instead of HTTP polling.
+
+        Returns:
+            True if UPnP is healthy and has provided volume data, False otherwise
+        """
+        # Check if UPnP eventer exists and is healthy
+        if not self._upnp_eventer:
+            return False
+
+        # Check if UPnP is healthy
+        if not hasattr(self._upnp_eventer, "healthy") or not self._upnp_eventer.healthy():
+            return False
+
+        # Check if UPnP has provided volume data
+        if not self._upnp_state or self._upnp_state.volume is None:
+            return False
+
+        return True
 
     def _merge_upnp_state_to_coordinator(self) -> None:
         """Merge UPnP state changes into coordinator.data.

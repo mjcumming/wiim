@@ -200,6 +200,15 @@ class PlaybackCommandsMixin:
         import time
 
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+        speaker = self.speaker  # type: ignore[attr-defined]
+
+        # Check current state - don't restart if already playing
+        current_state = self.state  # type: ignore[attr-defined]
+        if current_state == MediaPlayerState.PLAYING:
+            _LOGGER.debug("Device %s is already playing, skipping play command", speaker.name)
+            # Trigger a refresh to get latest metadata/position if playing from external app
+            await speaker.coordinator.async_request_refresh()
+            return
 
         # 1. Optimistic update for immediate UI feedback
         self._optimistic_state = MediaPlayerState.PLAYING  # type: ignore[attr-defined]
@@ -210,7 +219,8 @@ class PlaybackCommandsMixin:
             # 2. Send command to device
             await controller.play()
 
-            # 3. Let adaptive polling handle sync (no immediate refresh needed)
+            # 3. Trigger immediate refresh to get updated state/metadata
+            await speaker.coordinator.async_request_refresh()
 
         except Exception:
             # Clear optimistic state on error so real state shows

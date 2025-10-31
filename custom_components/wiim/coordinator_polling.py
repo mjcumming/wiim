@@ -40,11 +40,10 @@ def _determine_adaptive_interval(coordinator, status_model: PlayerStatus, role: 
     from .firmware_capabilities import get_optimal_polling_interval
 
     capabilities = getattr(coordinator, "_capabilities", {})
-    is_playing = str(status_model.play_state or "").lower() in (
-        "play",
-        "playing",
-        "load",
-    )
+    play_state_str = str(status_model.play_state or "").lower()
+    # Check play state - valid states from model: "play", "pause", "stop", "load", "idle"
+    # Also handle common variations: "playing", "paused", "stopped"
+    is_playing = play_state_str in ("play", "playing", "load")
 
     return get_optimal_polling_interval(capabilities, role, is_playing)
 
@@ -281,8 +280,28 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         status_raw = await coordinator.client.get_player_status()
         coordinator._player_status_working = True
 
+        # Check if we should use UPnP volume instead of HTTP polling
+        # If UPnP is healthy and has provided volume, exclude volume from HTTP status
+        status_raw_copy = status_raw.copy()  # Don't modify original dict
+        try:
+            from .data_helpers import get_speaker_from_config_entry
+
+            speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
+            if speaker and speaker.should_use_upnp_volume():
+                # Remove volume fields from HTTP status - UPnP will provide them
+                status_raw_copy.pop("vol", None)
+                status_raw_copy.pop("volume", None)
+                status_raw_copy.pop("volume_level", None)
+                _LOGGER.debug(
+                    "Using UPnP volume for %s - excluding volume from HTTP polling",
+                    coordinator.client.host,
+                )
+        except Exception as err:
+            # If speaker lookup fails, continue with normal polling (graceful fallback)
+            _LOGGER.debug("Could not check UPnP volume status: %s", err)
+
         # Quick validation to create status model for activity detection
-        status_model: PlayerStatus = PlayerStatus.model_validate(status_raw)
+        status_model: PlayerStatus = PlayerStatus.model_validate(status_raw_copy)
 
         # Detect activity for conditional polling triggers
         track_changed = _track_changed(coordinator, status_model)
@@ -296,7 +315,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # ------------------------------------------------------------------
         fetch_tasks = []
         task_names = []
-        raw_data = {"status_raw": status_raw}
+        raw_data = {"status_raw": status_raw_copy}
 
         # Device info (health check - every 60s per POLLING_STRATEGY.md)
         if _should_update_device_info(coordinator):
@@ -617,6 +636,28 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             except Exception as eq_err:
                 _LOGGER.debug("Fallback EQ processing failed: %s", eq_err)
                 eq_data = {}
+
+        # Preserve UPnP volume/mute if UPnP is being used (don't overwrite with HTTP polling)
+        try:
+            from .data_helpers import get_speaker_from_config_entry
+
+            speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
+            if speaker and speaker.should_use_upnp_volume() and coordinator.data:
+                # Get existing status_model with UPnP volume
+                existing_status = coordinator.data.get("status_model")
+                if isinstance(existing_status, PlayerStatus) and existing_status.volume is not None:
+                    # Preserve volume and mute from UPnP
+                    status_model.volume = existing_status.volume
+                    if existing_status.mute is not None:
+                        status_model.mute = existing_status.mute
+                    _LOGGER.debug(
+                        "Preserving UPnP volume %d for %s",
+                        existing_status.volume,
+                        coordinator.client.host,
+                    )
+        except Exception as err:
+            # Graceful fallback if speaker lookup fails
+            _LOGGER.debug("Could not preserve UPnP volume: %s", err)
 
         data: dict[str, Any] = {
             "status_model": status_model,
