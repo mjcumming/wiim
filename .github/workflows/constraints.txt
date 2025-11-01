@@ -7,7 +7,7 @@ pytest==8.4.2
 pytest-cov==7.0.0
 aiohttp==3.12.15
 
-pip==25.2
+pip==25.3
 pre-commit==4.3.0
 
 black==25.9.0
