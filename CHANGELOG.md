@@ -2,7 +2,18 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
-## [0.2.11] - 2025-01-XX
+## [0.2.12] - 2025-11-04
+
+### Changed
+
+- **Media Browser Filtering**: Enhanced media browser to automatically filter out non-audio content
+  - Added content filter to show only audio-compatible media types in the browser
+  - Video and other non-audio media types are now automatically excluded
+  - Uses Home Assistant's native content_filter API for proper media source filtering
+  - Improved media library browsing with direct source access for DLNA and other media sources
+  - Better handling of media-source:// URLs using proper Home Assistant API
+
+## [0.2.11] - 2025-10-31
 
 ### Changed
 
@@ -13,7 +24,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - All errors include full exception details and stack traces for better debugging
   - Helps diagnose issues when volume control or media browsing has no effect
 
-## [0.2.10] - 2025-01-XX
+## [0.2.10] - 2025-10-31
 
 ### Fixed
 
@@ -30,10 +41,20 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Changed
 
 - **State Detection**: Simplified playback state detection logic
+
   - Removed metadata-based assumptions about playing state
   - Now uses only documented API states: "play", "pause", "stop", "load", "idle"
   - Handles common variations: "playing", "paused", "stopped"
   - More reliable and consistent with actual API responses
+
+- **Multiroom UI Responsiveness**: Improved multiroom group UI updates with immediate refresh triggers
+  - When creating or dissolving multiroom groups via Home Assistant, all affected devices now trigger immediate coordinator refreshes
+  - Role changes (master/slave/solo) now appear in UI almost instantly instead of waiting up to 30 seconds for next poll cycle
+  - Added debug logging to track refresh triggers with graceful error handling
+
+### Technical
+
+- **Code Quality**: Fixed linting issues (removed unused imports, sorted imports)
 
 ## [0.2.1] - 2025-10-30
 

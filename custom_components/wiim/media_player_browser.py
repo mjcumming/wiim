@@ -213,6 +213,29 @@ class AppNameValidatorMixin:
 class MediaBrowserMixin:
     """Mixin for media browser tree implementation."""
 
+    def _media_source_filter(self, browse_item) -> bool:
+        """Filter media sources to show only audio content compatible with WiiM.
+
+        This filter ensures that only audio content is shown in the media browser,
+        excluding video and other non-audio media types that WiiM cannot play.
+
+        Args:
+            browse_item: BrowseMedia item to check
+
+        Returns:
+            True if item should be shown (audio content or expandable directories)
+        """
+        # Always allow directories to be browsed (they may contain audio)
+        if browse_item.can_expand:
+            return True
+
+        # Filter by media content type - only audio
+        if hasattr(browse_item, "media_content_type") and browse_item.media_content_type:
+            return browse_item.media_content_type.startswith("audio/")
+
+        # Use the existing _is_audio_content check as fallback
+        return self._is_audio_content(browse_item)
+
     def _is_audio_content(self, browse_item) -> bool:
         """Check if a browse item represents audio content compatible with WiiM.
 
@@ -293,26 +316,12 @@ class MediaBrowserMixin:
         )
 
         # Handle media-source:// URLs by delegating to HA media source system
-        if media_content_id and media_content_id.startswith("media-source://"):
+        if media_content_id and media_source.is_media_source_id(media_content_id):
             try:
-                # Handle root media library browsing
-                if media_content_id == "media-source://":
-                    browse_result = await media_source.async_browse_media(hass, None)
-                else:
-                    browse_result = await media_source.async_browse_media(hass, media_content_id)
-
-                # Filter audio content only for WiiM compatibility
-                if browse_result.children:
-                    # Handle case where children might be a coroutine
-                    children = browse_result.children
-                    if hasattr(children, "__await__"):
-                        children = await children
-
-                    audio_children = []
-                    for child in children:
-                        if self._is_audio_content(child):
-                            audio_children.append(child)
-                    browse_result.children = audio_children
+                # Use content filter to ensure only audio content is shown
+                browse_result = await media_source.async_browse_media(
+                    hass, media_content_id, content_filter=self._media_source_filter
+                )
 
                 return browse_result
             except Exception as err:
@@ -334,20 +343,24 @@ class MediaBrowserMixin:
         if media_content_id in (None, "root"):
             children: list[BrowseMedia] = []
 
-            # Add HA Media Library if media sources are available
+            # Add HA Media Library sources (DLNA, local media, etc.)
             try:
-                media_source_root = await media_source.async_browse_media(hass, None)
+                media_source_root = await media_source.async_browse_media(
+                    hass, None, content_filter=self._media_source_filter
+                )
                 if media_source_root:
-                    # Check if there are actual media sources available
                     # Handle case where children might be a coroutine
                     root_children = media_source_root.children
                     if hasattr(root_children, "__await__"):
                         root_children = await root_children
 
-                    # Show Media Library entry if there are sources or children
-                    # Use can_expand to determine if it's browsable even if children is empty initially
-                    has_content = (root_children and len(root_children) > 0) if root_children else False
-                    if has_content or media_source_root.can_expand:
+                    # If domain is None, it's an overview of available sources
+                    # Show individual sources directly (like DLNA servers) instead of nesting them
+                    if media_source_root.domain is None and root_children:
+                        # Extend with individual media sources (DLNA, etc.)
+                        children.extend(root_children)
+                    elif root_children or media_source_root.can_expand:
+                        # Show Media Library entry as a container
                         children.append(
                             BrowseMedia(
                                 media_class=MediaClass.DIRECTORY,
