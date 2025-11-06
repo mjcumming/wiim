@@ -217,10 +217,10 @@ class TestWiiMInputSensor:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
-        speaker.get_current_source = MagicMock(return_value="Bluetooth")
+        speaker.get_current_source = MagicMock(return_value="Amazon Music")
 
         sensor = WiiMInputSensor(speaker)
-        assert sensor.native_value == "Bluetooth"
+        assert sensor.native_value == "Amazon Music"
 
 
 class TestWiiMBluetoothOutputSensor:

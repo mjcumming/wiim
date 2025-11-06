@@ -58,6 +58,7 @@ class DeviceInfo(_WiimBase):
     master_ip: str | None = None  # IP of group master
     version_update: str | None = Field(None, alias="VersionUpdate")  # Available update version
     latest_version: str | None = Field(None, alias="NewVer")  # Latest firmware version
+    input_list: list[str] | None = None  # Available input sources from device
 
 
 class PlayerStatus(_WiimBase):

@@ -39,7 +39,9 @@ async def async_setup_entry(
     # ALWAYS CREATE: Role sensor - ESSENTIAL for users to understand multiroom status
     entities.append(WiiMRoleSensor(speaker))
 
-    # Current Input sensor (always useful)
+    # Current Input sensor - shows current source (including non-selectable like "Amazon Music")
+    # Useful for automations that need to detect streaming service changes
+    # Note: Media player source attribute also works, but sensor is simpler for automation triggers
     entities.append(WiiMInputSensor(speaker))
 
     # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
@@ -404,19 +406,31 @@ def _to_int(val: Any) -> int | None:  # noqa: D401
 
 
 class WiiMInputSensor(WiimEntity, SensorEntity):
-    """Shows current input/source (AirPlay, Bluetooth, etc.)."""
+    """Shows current input/source (AirPlay, Bluetooth, Amazon Music, etc.).
+
+    This sensor shows the CURRENT source, including non-selectable streaming services
+    like "Amazon Music", "Spotify", etc. This is useful for automations that need to
+    detect when the source changes, regardless of whether it's selectable.
+
+    Note: The media player entity's `source` attribute also provides this information,
+    but a sensor is simpler for automation triggers and state-based conditions.
+    """
 
     _attr_icon = "mdi:import"  # generic input symbol
+    _attr_has_entity_name = True
 
     def __init__(self, speaker: Speaker) -> None:
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_current_input"
         self._attr_name = "Current Input"  # Generic label
-        self._attr_has_entity_name = True
 
     @property  # type: ignore[override]
     def native_value(self):
+        """Return the current input source (can be selectable or non-selectable)."""
         return self.speaker.get_current_source()
+
+
+# ------------------- Bluetooth Output Sensor -------------------
 
 
 class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):

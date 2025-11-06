@@ -48,9 +48,7 @@ async def async_setup_entry(
         if supports_audio_output:
             # Audio Output Mode Select
             entities.append(WiiMOutputModeSelect(speaker))
-            _LOGGER.debug(
-                "Creating audio output select entity - device supports audio output"
-            )
+            _LOGGER.debug("Creating audio output select entity - device supports audio output")
         else:
             _LOGGER.debug(
                 "Skipping audio output select entity - device does not support audio output (capability=%s)",
@@ -102,10 +100,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             current_mode = self.speaker.get_current_output_mode()
 
             # If Bluetooth output is active, show the connected device instead of just "Bluetooth Out"
-            if (
-                current_mode == "Bluetooth Out"
-                and self.speaker.is_bluetooth_output_active()
-            ):
+            if current_mode == "Bluetooth Out" and self.speaker.is_bluetooth_output_active():
                 connected_device = self.speaker.get_connected_bluetooth_device()
                 if connected_device:
                     device_name = connected_device.get("name", "Unknown")
@@ -155,17 +150,6 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             # Ensure bt_history is a list (can be None if not fetched yet)
             if not bt_history or not isinstance(bt_history, list):
                 bt_history = []
-                _LOGGER.debug(
-                    "No Bluetooth history available for %s yet (options will update when history is fetched)",
-                    self.speaker.name,
-                )
-            else:
-                _LOGGER.debug(
-                    "Found %d Bluetooth devices in history for %s: %s",
-                    len(bt_history),
-                    self.speaker.name,
-                    [d.get("name", "Unknown") for d in bt_history[:5]],
-                )
             bt_options = []
 
             # Add option to refresh paired devices list (user may have paired new device via WiiM app)
@@ -203,9 +187,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             # Handle special Bluetooth options
             # Update paired devices list (refresh from WiiM device)
             if option == "BT Update Paired Devices":
-                _LOGGER.info(
-                    "Updating Bluetooth paired devices list for %s", self.speaker.name
-                )
+                _LOGGER.info("Updating Bluetooth paired devices list for %s", self.speaker.name)
 
                 # Fetch fresh Bluetooth history from device
                 async def _refresh_and_update():
@@ -215,9 +197,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                         _LOGGER.info(
                             "Bluetooth history updated for %s: %d devices found",
                             self.speaker.name,
-                            len(fresh_history)
-                            if isinstance(fresh_history, list)
-                            else 0,
+                            len(fresh_history) if isinstance(fresh_history, list) else 0,
                         )
                         # Update coordinator data with fresh history
                         if self.coordinator.data:
@@ -239,9 +219,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                 else:
                     import asyncio
 
-                    _ = asyncio.create_task(
-                        _refresh_and_update()
-                    )  # Store reference to avoid warning
+                    _ = asyncio.create_task(_refresh_and_update())  # Store reference to avoid warning
                 _LOGGER.info(
                     "Bluetooth devices list refresh initiated for %s. Options will update after refresh completes.",
                     self.speaker.name,
@@ -268,9 +246,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                         "Could not find MAC address for Bluetooth device '%s'",
                         device_name,
                     )
-                    raise ValueError(
-                        f"Bluetooth device '{device_name}' not found in history"
-                    )
+                    raise ValueError(f"Bluetooth device '{device_name}' not found in history")
 
                 # Store current output mode before attempting connection (for revert on failure)
                 previous_output_mode = self.speaker.get_current_output_mode()
@@ -283,9 +259,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
 
                 try:
                     # Connect to the device
-                    await self.speaker.coordinator.client.connect_bluetooth_device(
-                        mac_address
-                    )
+                    await self.speaker.coordinator.client.connect_bluetooth_device(mac_address)
 
                     # Set output mode to Bluetooth Out
                     from .media_controller import MediaPlayerController
@@ -352,9 +326,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             from .media_controller import MediaPlayerController
 
             controller = MediaPlayerController(self.speaker)
-            _LOGGER.info(
-                "WiiM Output Mode Select: Calling select_output_mode('%s')", option
-            )
+            _LOGGER.info("WiiM Output Mode Select: Calling select_output_mode('%s')", option)
             await controller.select_output_mode(option)
             _LOGGER.info(
                 "WiiM Output Mode Select: Successfully set output mode to '%s'",
@@ -381,9 +353,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             if not bt_history or not isinstance(bt_history, list):
                 bt_device_count = 0
             else:
-                bt_device_count = len(
-                    [d for d in bt_history if d.get("ad") or d.get("mac")]
-                )
+                bt_device_count = len([d for d in bt_history if d.get("ad") or d.get("mac")])
         except Exception:
             bt_device_count = 0
 
@@ -449,14 +419,10 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                     if mac and mac not in device_map:
                         device_map[mac] = device
                 # Store merged list
-                self.speaker.set_bluetooth_devices(
-                    list(device_map.values()), "History loaded"
-                )
+                self.speaker.set_bluetooth_devices(list(device_map.values()), "History loaded")
                 self.async_write_ha_state()
         except Exception as err:
-            _LOGGER.warning(
-                "Failed to load Bluetooth history for %s: %s", self.speaker.name, err
-            )
+            _LOGGER.warning("Failed to load Bluetooth history for %s: %s", self.speaker.name, err)
 
         # Listen for Bluetooth scan completion to auto-update options
         from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -485,9 +451,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
         """Force refresh of entity options."""
         # Give a moment for the data to settle
         await asyncio.sleep(0.1)
-        _LOGGER.info(
-            "🔄 Refreshing Bluetooth device select options for %s", self.speaker.name
-        )
+        _LOGGER.info("🔄 Refreshing Bluetooth device select options for %s", self.speaker.name)
         self.async_write_ha_state()
 
     @property
@@ -504,10 +468,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
             # Find the device name from history or scan results
             connected_device = self.speaker.get_connected_bluetooth_device()
             if connected_device:
-                device_mac = (
-                    connected_device.get("mac")
-                    or connected_device.get("ad", "").lower()
-                )
+                device_mac = connected_device.get("mac") or connected_device.get("ad", "").lower()
                 if device_mac == self._connected_device_mac.lower():
                     device_name = connected_device.get("name", "Unknown")
                     result = f"{device_name} ({device_mac})"
@@ -528,29 +489,16 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
             connected_device = self.speaker.get_connected_bluetooth_device()
             if connected_device:
                 device_name = connected_device.get("name", "Unknown")
-                device_mac = (
-                    connected_device.get("mac")
-                    or connected_device.get("ad", "").lower()
-                )
+                device_mac = connected_device.get("mac") or connected_device.get("ad", "").lower()
                 result = f"{device_name} ({device_mac})"
-                _LOGGER.debug(
-                    "Bluetooth select current_option (Priority 2 - from history): %s",
-                    result,
-                )
                 return result
 
             # Fallback: try to get from scan results
             devices = self.speaker.get_bluetooth_devices()
             if devices:
                 # If we have devices but no connected device from history, show generic
-                _LOGGER.debug(
-                    "Bluetooth select current_option (Priority 2 fallback): Connected (no device from history)"
-                )
                 return "Connected"
 
-        _LOGGER.debug(
-            "Bluetooth select current_option (default): None (BT output not active or no device)"
-        )
         return "None"
 
     @property
@@ -558,13 +506,6 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
         """Return list of available Bluetooth devices from last scan."""
         devices = self.speaker.get_bluetooth_devices()
         options = ["None"]  # Option to disconnect
-
-        _LOGGER.debug(
-            "🔍 Bluetooth device select options for %s: %d devices available (scan status: %s)",
-            self.speaker.name,
-            len(devices),
-            self.speaker.get_bluetooth_scan_status(),
-        )
 
         # Add devices from scan/history
         for device in devices:
@@ -574,12 +515,10 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                 # Format as "Name (MAC)" for display
                 option_str = f"{name} ({mac})"
                 options.append(option_str)
-                _LOGGER.debug("  Added option: %s", option_str)
             elif mac:
                 # If no name, just use MAC
                 option_str = f"Unknown Device ({mac})"
                 options.append(option_str)
-                _LOGGER.debug("  Added option: %s", option_str)
             else:
                 _LOGGER.warning("Bluetooth device missing MAC address: %s", device)
 
@@ -587,54 +526,14 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
         # This is required for Home Assistant to display current_option correctly
         if self.speaker.is_bluetooth_output_active():
             connected_device = self.speaker.get_connected_bluetooth_device()
-            _LOGGER.debug(
-                "Checking connected device for options: BT active=%s, connected_device=%s",
-                self.speaker.is_bluetooth_output_active(),
-                connected_device,
-            )
             if connected_device:
                 device_name = connected_device.get("name", "Unknown")
-                device_mac = (
-                    connected_device.get("mac")
-                    or connected_device.get("ad", "").lower()
-                )
-                _LOGGER.debug(
-                    "Connected device details: name=%s, mac=%s, ad=%s",
-                    device_name,
-                    device_mac,
-                    connected_device.get("ad"),
-                )
+                device_mac = connected_device.get("mac") or connected_device.get("ad", "").lower()
                 if device_name and device_mac:
                     option_str = f"{device_name} ({device_mac})"
                     # Only add if not already in options (avoid duplicates)
                     if option_str not in options:
                         options.append(option_str)
-                        _LOGGER.info(
-                            "  Added currently connected device to options: %s",
-                            option_str,
-                        )
-                    else:
-                        _LOGGER.debug(
-                            "  Connected device already in options: %s", option_str
-                        )
-                else:
-                    _LOGGER.debug(
-                        "Cannot add connected device to options: name=%s, mac=%s",
-                        device_name,
-                        device_mac,
-                    )
-            else:
-                _LOGGER.debug(
-                    "No connected device found for %s (BT active but no device)",
-                    self.speaker.name,
-                )
-
-        _LOGGER.debug(
-            "✅ Bluetooth device select returning %d options for %s: %s",
-            len(options),
-            self.speaker.name,
-            options,
-        )
         return options
 
     async def async_select_option(self, option: str) -> None:
@@ -693,25 +592,19 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                         )
                         break
                     else:
-                        _LOGGER.debug(
-                            "Pattern %d: NO MATCH for option: %s", i + 1, option
-                        )
+                        _LOGGER.debug("Pattern %d: NO MATCH for option: %s", i + 1, option)
 
                 if not mac_address:
                     # Detailed error logging - CRITICAL for debugging
-                    error_details = f"option={option!r}, length={len(option)}, type={type(option).__name__}, repr={option!r}"
-                    _LOGGER.error(
-                        "❌ FAILED to extract MAC address - %s", error_details
+                    error_details = (
+                        f"option={option!r}, length={len(option)}, type={type(option).__name__}, repr={option!r}"
                     )
+                    _LOGGER.error("❌ FAILED to extract MAC address - %s", error_details)
                     # Show character-by-character breakdown for debugging
-                    char_breakdown = " ".join(
-                        f"{i}:{ord(c)}" for i, c in enumerate(option[:50])
-                    )
+                    char_breakdown = " ".join(f"{i}:{ord(c)}" for i, c in enumerate(option[:50]))
                     _LOGGER.error("Character breakdown: %s", char_breakdown)
                     # Raise with detailed message
-                    raise ValueError(
-                        f"Could not extract MAC address from option: {option} | DEBUG: {error_details}"
-                    )
+                    raise ValueError(f"Could not extract MAC address from option: {option} | DEBUG: {error_details}")
                 _LOGGER.info(
                     "Connecting to Bluetooth device %s (%s) for %s",
                     option,
@@ -724,9 +617,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                     mac_address,
                 )
                 try:
-                    await self.speaker.coordinator.client.connect_bluetooth_device(
-                        mac_address
-                    )
+                    await self.speaker.coordinator.client.connect_bluetooth_device(mac_address)
                     _LOGGER.info(
                         "connect_bluetooth_device API call completed successfully for %s",
                         mac_address,
@@ -790,9 +681,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
 
                     controller = MediaPlayerController(self.speaker)
                     await controller.select_output_mode("Bluetooth Out")
-                    _LOGGER.info(
-                        "Switched output mode to Bluetooth for %s", self.speaker.name
-                    )
+                    _LOGGER.info("Switched output mode to Bluetooth for %s", self.speaker.name)
                 except Exception as err:
                     _LOGGER.warning(
                         "Failed to switch output mode to Bluetooth (connection may still work): %s",
@@ -813,9 +702,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
             # Check if it's a WiiMRequestError/WiiMConnectionError with additional context
             if hasattr(err, "last_error") and err.last_error:
                 underlying_error = err.last_error
-                error_details.append(
-                    f"underlying_error={type(underlying_error).__name__}: {underlying_error}"
-                )
+                error_details.append(f"underlying_error={type(underlying_error).__name__}: {underlying_error}")
 
                 # Check for HTTP response errors
                 if hasattr(underlying_error, "status"):
@@ -823,9 +710,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                 if hasattr(underlying_error, "message"):
                     error_details.append(f"http_message={underlying_error.message}")
                 if hasattr(underlying_error, "request_info"):
-                    error_details.append(
-                        f"request_url={underlying_error.request_info.real_url}"
-                    )
+                    error_details.append(f"request_url={underlying_error.request_info.real_url}")
 
                 # Check for connection errors
                 if hasattr(underlying_error, "os_error"):
@@ -839,9 +724,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
             if hasattr(err, "device_info") and err.device_info:
                 device_info = err.device_info
                 if device_info.get("firmware_version"):
-                    error_details.append(
-                        f"firmware={device_info.get('firmware_version')}"
-                    )
+                    error_details.append(f"firmware={device_info.get('firmware_version')}")
                 if device_info.get("device_model"):
                     error_details.append(f"model={device_info.get('device_model')}")
 
@@ -852,9 +735,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                 error_details.append(f"selected_option={option}")
 
             # Log with all details
-            error_msg = (
-                f"Failed to connect/disconnect Bluetooth device for {self.speaker.name}"
-            )
+            error_msg = f"Failed to connect/disconnect Bluetooth device for {self.speaker.name}"
             if error_details:
                 error_msg += f" | {' | '.join(error_details)}"
             else:

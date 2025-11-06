@@ -92,8 +92,14 @@ def mock_coordinator_fixture():
 
 # This fixture, when used, will result in calls to get data to return mock data
 @pytest.fixture(name="bypass_get_data")
-def bypass_get_data_fixture():
+def bypass_get_data_fixture(hass):
     """Skip calls to get data from API."""
+    # Mock hass.http to prevent AttributeError when registering static paths
+    from unittest.mock import AsyncMock, Mock
+
+    hass.http = Mock()
+    hass.http.async_register_static_paths = AsyncMock()
+
     # Create proper mock data with volume_level included and merge device data
     mock_status = MOCK_STATUS_RESPONSE.copy()
     mock_status["volume_level"] = 0.5  # Add parsed volume_level

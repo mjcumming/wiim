@@ -146,7 +146,9 @@ API_ENDPOINT_AUDIO_OUTPUT_SET = "/httpapi.asp?command=setAudioOutputHardwareMode
 # Based on API documentation: 1=SPDIF, 2=AUX, 3=COAX
 # WiiM Amp has 4 options: Line Out, Optical Out, Coax Out, BT Out
 # Mode 0 likely = Line Out, Mode 4 likely = Bluetooth Out
+# Mode 0 for Ultra = Headphone Out (needs verification - see Issue #86)
 AUDIO_OUTPUT_MODES = {
+    "0": "Headphone Out",  # Headphone Out (Ultra only - mode value needs verification)
     "1": "Optical Out",  # SPDIF/Optical Out
     "2": "Line Out",  # AUX/Analog Out (shows as Line Out in WiiM app)
     "3": "Coax Out",  # Coaxial Out
@@ -261,6 +263,8 @@ SOURCE_MAP = {
     "multiroom": "Multiroom",
     "usb dac": "USB DAC",
     "line in 2": "Line In 2",
+    "phono": "Phono",
+    "phono_in": "Phono",  # Alternative API name
     # Handle "Following [name]" sources from slaves
     "following": "Following",  # Partial match for slave sources
 }
@@ -277,6 +281,7 @@ SELECTABLE_SOURCES = [
     "ARC",  # HDMI ARC input (if supported)
     "USB",  # USB input (if supported)
     "Line In 2",  # Second analog input (if supported)
+    "Phono",  # Phono input (Ultra only)
 ]
 
 # Status-only sources that should be displayed but not selectable

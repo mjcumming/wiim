@@ -203,6 +203,48 @@ automation:
 
 ## 🚨 Event-Driven Automations
 
+### Source Change Detection
+
+**Note**: The media player entity's `source` attribute shows the current input (Bluetooth, AirPlay, Line In, etc.). You can trigger automations when the source changes:
+
+```yaml
+automation:
+  - alias: "Bluetooth Connected"
+    description: "Adjust volume when Bluetooth source is selected"
+    trigger:
+      platform: state
+      entity_id: media_player.living_room
+      attribute: source
+      to: "Bluetooth"
+    action:
+      - service: media_player.volume_set
+        target:
+          entity_id: media_player.living_room
+        data:
+          volume_level: 0.6
+      - service: notify.mobile_app
+        data:
+          message: "Bluetooth connected to Living Room speaker"
+```
+
+**Alternative: Template Trigger for Any Source Change**
+
+```yaml
+automation:
+  - alias: "Source Change Notification"
+    description: "Notify when input source changes"
+    trigger:
+      platform: template
+      value_template: >
+        {{ states.media_player.living_room.attributes.source !=
+           state_attr('media_player.living_room', 'source') }}
+    action:
+      - service: notify.mobile_app
+        data:
+          message: >
+            Input changed to: {{ states.media_player.living_room.attributes.source }}
+```
+
 ### Doorbell Announcements
 
 ```yaml

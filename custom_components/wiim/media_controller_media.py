@@ -14,11 +14,12 @@ Following the successful API refactor pattern with logical cohesion over arbitra
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import PRESET_SLOTS_KEY
+from .const import DOMAIN, PRESET_SLOTS_KEY
 
 if TYPE_CHECKING:
     from .data import Speaker
@@ -107,6 +108,7 @@ class MediaControllerMediaMixin:
         - Network timeouts and connection errors
         - Large image handling with size limits
         - Caching to avoid unnecessary re-downloads
+        - Local static files (e.g., logo when idle)
 
         Returns:
             Tuple of (image_bytes, content_type) or (None, None) if unavailable.
@@ -125,6 +127,58 @@ class MediaControllerMediaMixin:
             logger.debug("Returning cached media image for %s", speaker.name)
             return self._media_image_bytes, self._media_image_content_type
 
+        # Handle local static files (e.g., logo when idle)
+        if image_url.startswith("/static/"):
+            try:
+                speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+                hass = self.hass  # type: ignore[attr-defined]
+                logger = getattr(self, "_logger", _LOGGER)
+                logger.debug("Loading local static image: %s", image_url)
+
+                # Extract the path after /static/{domain}/
+                # Remove /static/{domain}/ prefix to get the filename
+                prefix = f"/static/{DOMAIN}/"
+                if image_url.startswith(prefix):
+                    filename = image_url[len(prefix) :]
+                    integration_dir = Path(__file__).parent
+                    logo_path = integration_dir / "www" / filename
+
+                    if logo_path.exists():
+                        # Read the file asynchronously
+                        def read_file():
+                            return logo_path.read_bytes()
+
+                        image_data = await hass.async_add_executor_job(read_file)
+
+                        # Determine content type from file extension
+                        content_type = "image/png"  # Default for logo.png
+                        if filename.lower().endswith(".jpg") or filename.lower().endswith(".jpeg"):
+                            content_type = "image/jpeg"
+                        elif filename.lower().endswith(".gif"):
+                            content_type = "image/gif"
+                        elif filename.lower().endswith(".webp"):
+                            content_type = "image/webp"
+
+                        # Cache the result
+                        self._media_image_url_cached = image_url
+                        self._media_image_bytes = image_data
+                        self._media_image_content_type = content_type
+
+                        logger.debug("Successfully loaded local static image for %s", speaker.name)
+                        return image_data, content_type
+                    else:
+                        logger.warning("Local static image not found: %s", logo_path)
+                        return None, None
+                else:
+                    logger.warning("Invalid static path format: %s", image_url)
+                    return None, None
+            except Exception as err:
+                speaker: Speaker = self.speaker  # type: ignore[attr-defined]
+                logger = getattr(self, "_logger", _LOGGER)
+                logger.error("Failed to load local static image for %s: %s", speaker.name, err)
+                return None, None
+
+        # Handle remote URLs (device album artwork)
         try:
             speaker: Speaker = self.speaker  # type: ignore[attr-defined]
             hass = self.hass  # type: ignore[attr-defined]

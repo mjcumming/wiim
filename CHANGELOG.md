@@ -2,6 +2,40 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.14] - 2025-01-27
+
+### Added
+
+- **Phono Input Support**: Added Phono input source support for WiiM Ultra devices
+
+  - Phono input now appears in source selection dropdown
+  - Proper source mapping for phono/phono_in API values
+
+- **Headphone Out Support**: Added Headphone Out audio output mode (mode 0) for WiiM Ultra
+
+  - Headphone Out option available in audio output mode select entity
+  - Mode value verification pending (see Issue #86)
+
+- **Input List Tracking**: Enhanced device info tracking with input_list field
+
+  - Devices now track available input sources from API
+  - Enables future dynamic source list generation based on device capabilities
+
+### Changed
+
+- **Code Cleanup**: Reduced excessive debug logging throughout codebase
+
+  - Removed verbose debug logs from volume control, playback commands, and media controller
+  - Cleaned up formatting and improved code readability
+  - Reduced log noise while maintaining essential error logging
+
+### Technical
+
+- **Media Controller**: Enhanced `_fetch_media_image()` to handle local static files
+- **Device Info Model**: Added `input_list` field to DeviceInfo Pydantic model
+- **Constants**: Added Phono source mapping and Headphone Out mode to constants
+- **Test Cleanup**: Removed redundant test code and improved test structure
+
 ## [0.2.13] - 2025-11-05
 
 ### Added

@@ -127,11 +127,7 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
             - audiocast: Audio cast mode (0=disabled, 1=active)
         """
         try:
-            _LOGGER.debug(
-                "[AUDIO OUTPUT DEBUG] %s: Calling API endpoint: %s", self.host, API_ENDPOINT_AUDIO_OUTPUT_STATUS
-            )
             result = await self._request(API_ENDPOINT_AUDIO_OUTPUT_STATUS)  # type: ignore[attr-defined]
-            _LOGGER.debug("[AUDIO OUTPUT DEBUG] %s: Audio output API result: %s", self.host, result)
             return result if result else None
         except Exception as e:
             # Log with more details for first few failures
@@ -142,7 +138,7 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
             # Log first 5 failures with full details, then throttle
             if self._audio_output_error_count <= 5:
                 _LOGGER.warning(
-                    "[AUDIO OUTPUT DEBUG] %s: Audio output API call failed (attempt %d), error type: %s, error: %s",
+                    "%s: Audio output API call failed (attempt %d), error type: %s, error: %s",
                     self.host,
                     self._audio_output_error_count,
                     type(e).__name__,
@@ -150,7 +146,7 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
                 )
             elif self._audio_output_error_count % 10 == 1:
                 _LOGGER.debug(
-                    "[AUDIO OUTPUT DEBUG] %s: Audio output API still failing (%d consecutive failures)",
+                    "%s: Audio output API still failing (%d consecutive failures)",
                     self.host,
                     self._audio_output_error_count,
                 )
@@ -215,7 +211,6 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
     async def _verify_play_mode(self) -> None:
         try:
             await asyncio.sleep(0.5)
-            status = await self.get_player_status()  # type: ignore[attr-defined]
-            _LOGGER.debug("Status after mode change: %s", status.get("loop_mode"))
+            await self.get_player_status()  # type: ignore[attr-defined]
         except Exception:  # noqa: BLE001 – best-effort only
             pass

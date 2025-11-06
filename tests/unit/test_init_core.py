@@ -127,13 +127,7 @@ class TestGetEnabledPlatforms:
         mock_coordinator = MagicMock()
         mock_coordinator._capabilities = {"supports_audio_output": True}
 
-        hass.data = {
-            "wiim": {
-                "test-entry": {
-                    "coordinator": mock_coordinator
-                }
-            }
-        }
+        hass.data = {"wiim": {"test-entry": {"coordinator": mock_coordinator}}}
 
         platforms = get_enabled_platforms(hass, entry)
 
@@ -347,13 +341,7 @@ class TestRebootDeviceService:
         hass.helpers.device_registry.async_get.return_value = device_registry
 
         # Mock WiiM data with speaker
-        hass.data = {
-            "wiim": {
-                "config_entry_123": {
-                    "speaker": MagicMock(name="Test Speaker")
-                }
-            }
-        }
+        hass.data = {"wiim": {"config_entry_123": {"speaker": MagicMock(name="Test Speaker")}}}
 
         # Mock speaker reboot
         mock_speaker = hass.data["wiim"]["config_entry_123"]["speaker"]
@@ -393,13 +381,7 @@ class TestRebootDeviceService:
         hass.helpers.device_registry.async_get.return_value = device_registry
 
         # Mock WiiM data with speaker
-        hass.data = {
-            "wiim": {
-                "config_entry_123": {
-                    "speaker": MagicMock(name="Test Speaker")
-                }
-            }
-        }
+        hass.data = {"wiim": {"config_entry_123": {"speaker": MagicMock(name="Test Speaker")}}}
 
         # Mock speaker reboot with exception
         mock_speaker = hass.data["wiim"]["config_entry_123"]["speaker"]
@@ -490,13 +472,7 @@ class TestSyncTimeService:
         hass.helpers.device_registry.async_get.return_value = device_registry
 
         # Mock WiiM data with speaker
-        hass.data = {
-            "wiim": {
-                "config_entry_123": {
-                    "speaker": MagicMock(name="Test Speaker")
-                }
-            }
-        }
+        hass.data = {"wiim": {"config_entry_123": {"speaker": MagicMock(name="Test Speaker")}}}
 
         # Mock speaker sync_time
         mock_speaker = hass.data["wiim"]["config_entry_123"]["speaker"]
@@ -536,13 +512,7 @@ class TestSyncTimeService:
         hass.helpers.device_registry.async_get.return_value = device_registry
 
         # Mock WiiM data with speaker
-        hass.data = {
-            "wiim": {
-                "config_entry_123": {
-                    "speaker": MagicMock(name="Test Speaker")
-                }
-            }
-        }
+        hass.data = {"wiim": {"config_entry_123": {"speaker": MagicMock(name="Test Speaker")}}}
 
         # Mock speaker sync_time with exception
         mock_speaker = hass.data["wiim"]["config_entry_123"]["speaker"]

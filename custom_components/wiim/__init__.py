@@ -40,6 +40,7 @@ except ModuleNotFoundError:  # pragma: no cover – only executed in test env
 import logging
 from typing import Any
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -264,6 +265,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register global services if this is the first entry
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
+
+        # Register static path for logo
+        integration_dir = Path(__file__).parent
+        www_dir = integration_dir / "www"
+        if www_dir.exists():
+            await hass.http.async_register_static_paths(
+                [
+                    StaticPathConfig(
+                        url_path=f"/static/{DOMAIN}",
+                        path=str(www_dir),
+                        cache_headers=True,
+                    )
+                ]
+            )
 
         # Register global services
         async_register_admin_service(

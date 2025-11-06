@@ -1,6 +1,6 @@
 """Integration tests for WiiM integration setup and teardown."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -14,12 +14,21 @@ from custom_components.wiim.const import DOMAIN
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 
+def _setup_mock_http(hass: HomeAssistant) -> None:
+    """Helper to mock hass.http for tests that need it."""
+    hass.http = Mock()
+    hass.http.async_register_static_paths = AsyncMock()
+
+
 class TestIntegrationSetup:
     """Test WiiM integration setup functionality."""
 
     @pytest.mark.asyncio
     async def test_setup_entry_connection_error(self, hass: HomeAssistant) -> None:
         """Test setup failure due to connection error."""
+        # Mock hass.http to prevent AttributeError
+        _setup_mock_http(hass)
+
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="WiiM Mini",
@@ -40,6 +49,9 @@ class TestIntegrationSetup:
     @pytest.mark.asyncio
     async def test_setup_retry_count_tracking(self, hass: HomeAssistant) -> None:
         """Test that retry count is properly tracked during setup failures."""
+        # Mock hass.http to prevent AttributeError
+        _setup_mock_http(hass)
+
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="WiiM Mini",
@@ -68,6 +80,9 @@ class TestIntegrationSetup:
     async def test_setup_wrapped_wiim_error_detection(self, hass: HomeAssistant) -> None:
         """Test that wrapped WiiM errors are properly detected."""
         from homeassistant.helpers.update_coordinator import UpdateFailed
+
+        # Mock hass.http to prevent AttributeError
+        _setup_mock_http(hass)
 
         entry = MockConfigEntry(
             domain=DOMAIN,

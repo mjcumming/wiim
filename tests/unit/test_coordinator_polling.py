@@ -76,7 +76,9 @@ def mock_coordinator():
     coordinator.client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
     coordinator.client.get_presets = AsyncMock(return_value=[])
     coordinator.client.get_bluetooth_pair_status = AsyncMock(return_value=None)
-    coordinator.client.get_audio_output_status = AsyncMock(return_value={"hardware": "2", "source": "0", "audiocast": "0"})
+    coordinator.client.get_audio_output_status = AsyncMock(
+        return_value={"hardware": "2", "source": "0", "audiocast": "0"}
+    )
 
     # Initialize tracking attributes that might be checked
     # Don't set _last_track_info so it gets properly initialized in _track_changed
