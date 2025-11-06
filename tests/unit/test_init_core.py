@@ -9,7 +9,7 @@ from homeassistant.const import Platform
 class TestPlatformConstants:
     """Test platform constants and configuration."""
 
-    def test_core_platforms_definition(self):
+    def test_core_platforms_definition(self, hass):
         """Test CORE_PLATFORMS constant."""
         from custom_components.wiim import CORE_PLATFORMS
 
@@ -25,7 +25,7 @@ class TestPlatformConstants:
         assert "update" in platform_names
         assert "light" in platform_names
 
-    def test_optional_platforms_definition(self):
+    def test_optional_platforms_definition(self, hass):
         """Test OPTIONAL_PLATFORMS constant."""
         from custom_components.wiim import OPTIONAL_PLATFORMS
 
@@ -38,7 +38,7 @@ class TestPlatformConstants:
         assert OPTIONAL_PLATFORMS["enable_maintenance_buttons"] == Platform.BUTTON
         assert OPTIONAL_PLATFORMS["enable_network_monitoring"] == Platform.BINARY_SENSOR
 
-    def test_platform_constants_immutable(self):
+    def test_platform_constants_immutable(self, hass):
         """Test that platform constants are properly defined."""
         from custom_components.wiim import CORE_PLATFORMS, OPTIONAL_PLATFORMS
 
@@ -53,19 +53,19 @@ class TestPlatformConstants:
 class TestGetEnabledPlatforms:
     """Test get_enabled_platforms function."""
 
-    def test_get_enabled_platforms_core_only(self):
+    async def test_get_enabled_platforms_core_only(self, hass):
         """Test get_enabled_platforms with core platforms only."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant and config entry
-        hass = MagicMock()
+        # Mock config entry
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
+        entry.options = {}
 
         platforms = get_enabled_platforms(hass, entry)
 
-        # Should include all core platforms
+        # Should include all core platforms (including SELECT and BUTTON)
         platform_names = [p.value for p in platforms]
         assert "media_player" in platform_names
         assert "sensor" in platform_names
@@ -73,49 +73,52 @@ class TestGetEnabledPlatforms:
         assert "switch" in platform_names
         assert "update" in platform_names
         assert "light" in platform_names
+        assert "select" in platform_names  # Now in core for audio output/Bluetooth
+        assert "button" in platform_names  # Now in core for Bluetooth scan
 
-    def test_get_enabled_platforms_with_capabilities_audio_output(self):
+    def test_get_enabled_platforms_with_capabilities_audio_output(self, hass):
         """Test get_enabled_platforms when device supports audio output."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant and config entry
-        hass = MagicMock()
+        # Mock config entry
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
+        entry.options = {}
 
         capabilities = {"supports_audio_output": True}
 
         platforms = get_enabled_platforms(hass, entry, capabilities)
 
         # Should include select platform when audio output is supported
+        # Note: SELECT is now always in CORE_PLATFORMS (line 71 in __init__.py)
         platform_names = [p.value for p in platforms]
         assert "select" in platform_names
 
-    def test_get_enabled_platforms_without_audio_output(self):
+    def test_get_enabled_platforms_without_audio_output(self, hass):
         """Test get_enabled_platforms when device doesn't support audio output."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant and config entry
-        hass = MagicMock()
+        # Mock config entry
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
+        entry.options = {}
 
         capabilities = {"supports_audio_output": False}
 
         platforms = get_enabled_platforms(hass, entry, capabilities)
 
-        # Should not include select platform when audio output is not supported
+        # SELECT platform is now ALWAYS enabled (for Bluetooth device selection)
+        # See __init__.py lines 113-134
         platform_names = [p.value for p in platforms]
-        assert "select" not in platform_names
+        assert "select" in platform_names
 
-    def test_get_enabled_platforms_capabilities_from_coordinator(self):
+    def test_get_enabled_platforms_capabilities_from_coordinator(self, hass):
         """Test get_enabled_platforms getting capabilities from coordinator."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant with coordinator data
-        hass = MagicMock()
+        # Mock config entry
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
@@ -138,30 +141,30 @@ class TestGetEnabledPlatforms:
         platform_names = [p.value for p in platforms]
         assert "select" in platform_names
 
-    def test_get_enabled_platforms_no_capabilities(self):
+    def test_get_enabled_platforms_no_capabilities(self, hass):
         """Test get_enabled_platforms when no capabilities are available."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant without coordinator data
-        hass = MagicMock()
+        # Mock config entry
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
+        entry.options = {}
 
         hass.data = {}
 
         platforms = get_enabled_platforms(hass, entry)
 
-        # Should not include select platform when no capabilities available
+        # SELECT platform is now ALWAYS enabled (fallback for Bluetooth)
+        # See __init__.py lines 128-134
         platform_names = [p.value for p in platforms]
-        assert "select" not in platform_names
+        assert "select" in platform_names
 
-    def test_get_enabled_platforms_with_optional_platforms(self):
+    def test_get_enabled_platforms_with_optional_platforms(self, hass):
         """Test get_enabled_platforms with optional platforms enabled."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant and config entry with optional platforms enabled
-        hass = MagicMock()
+        # Mock config entry with optional platforms enabled
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
@@ -177,12 +180,11 @@ class TestGetEnabledPlatforms:
         assert "button" in platform_names
         assert "binary_sensor" in platform_names
 
-    def test_get_enabled_platforms_optional_platforms_disabled(self):
+    def test_get_enabled_platforms_optional_platforms_disabled(self, hass):
         """Test get_enabled_platforms with optional platforms disabled."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant and config entry with optional platforms disabled
-        hass = MagicMock()
+        # Mock config entry with optional platforms disabled
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
@@ -193,17 +195,17 @@ class TestGetEnabledPlatforms:
 
         platforms = get_enabled_platforms(hass, entry)
 
-        # Should not include optional platforms when disabled
+        # BUTTON is now in CORE_PLATFORMS (for Bluetooth scan button)
+        # Only maintenance buttons are optional
         platform_names = [p.value for p in platforms]
-        assert "button" not in platform_names
-        assert "binary_sensor" not in platform_names
+        assert "button" in platform_names  # Always enabled for Bluetooth scan
+        assert "binary_sensor" not in platform_names  # Only enabled with network monitoring
 
-    def test_get_enabled_platforms_no_options(self):
+    def test_get_enabled_platforms_no_options(self, hass):
         """Test get_enabled_platforms with no options configured."""
         from custom_components.wiim import get_enabled_platforms
 
-        # Mock Home Assistant and config entry with no options
-        hass = MagicMock()
+        # Mock config entry with no options
         entry = MagicMock()
         entry.data = {"host": "192.168.1.100"}
         entry.entry_id = "test-entry"
@@ -211,17 +213,17 @@ class TestGetEnabledPlatforms:
 
         platforms = get_enabled_platforms(hass, entry)
 
-        # Should not include optional platforms when no options set
+        # BUTTON is now in CORE_PLATFORMS (for Bluetooth scan button)
         platform_names = [p.value for p in platforms]
-        assert "button" not in platform_names
-        assert "binary_sensor" not in platform_names
+        assert "button" in platform_names  # Always enabled for Bluetooth scan
+        assert "binary_sensor" not in platform_names  # Only with network monitoring option
 
 
 class TestRebootDeviceService:
     """Test reboot device service functionality."""
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service_missing_entity_id(self):
+    async def test_reboot_device_service_missing_entity_id(self, hass):
         """Test reboot device service with missing entity_id."""
         from custom_components.wiim import _reboot_device_service
 
@@ -237,7 +239,7 @@ class TestRebootDeviceService:
         # Note: We can't easily test the logger output without complex mocking
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service_entity_not_found(self):
+    async def test_reboot_device_service_entity_not_found(self, hass):
         """Test reboot device service when entity doesn't exist."""
         from custom_components.wiim import _reboot_device_service
 
@@ -253,7 +255,7 @@ class TestRebootDeviceService:
         # Should log error and return
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service_wrong_domain(self):
+    async def test_reboot_device_service_wrong_domain(self, hass):
         """Test reboot device service with wrong domain."""
         from custom_components.wiim import _reboot_device_service
 
@@ -269,7 +271,7 @@ class TestRebootDeviceService:
         # Should log error and return
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service_no_device(self):
+    async def test_reboot_device_service_no_device(self, hass):
         """Test reboot device service when entity has no device."""
         from custom_components.wiim import _reboot_device_service
 
@@ -291,7 +293,7 @@ class TestRebootDeviceService:
         # Should log error and return
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service_device_not_found(self):
+    async def test_reboot_device_service_device_not_found(self, hass):
         """Test reboot device service when device not found."""
         from custom_components.wiim import _reboot_device_service
 
@@ -319,7 +321,7 @@ class TestRebootDeviceService:
         # Should log error and return
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service_success(self):
+    async def test_reboot_device_service_success(self, hass):
         """Test reboot device service with successful reboot."""
         from custom_components.wiim import _reboot_device_service
 
@@ -365,7 +367,7 @@ class TestRebootDeviceService:
         mock_speaker.coordinator.client.reboot.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service_with_exception(self):
+    async def test_reboot_device_service_with_exception(self, hass):
         """Test reboot device service when reboot fails."""
         from custom_components.wiim import _reboot_device_service
 
@@ -415,7 +417,7 @@ class TestSyncTimeService:
     """Test sync time service functionality."""
 
     @pytest.mark.asyncio
-    async def test_sync_time_service_missing_entity_id(self):
+    async def test_sync_time_service_missing_entity_id(self, hass):
         """Test sync time service with missing entity_id."""
         from custom_components.wiim import _sync_time_service
 
@@ -430,7 +432,7 @@ class TestSyncTimeService:
         # Should log error and return
 
     @pytest.mark.asyncio
-    async def test_sync_time_service_entity_not_found(self):
+    async def test_sync_time_service_entity_not_found(self, hass):
         """Test sync time service when entity doesn't exist."""
         from custom_components.wiim import _sync_time_service
 
@@ -446,7 +448,7 @@ class TestSyncTimeService:
         # Should log error and return
 
     @pytest.mark.asyncio
-    async def test_sync_time_service_wrong_domain(self):
+    async def test_sync_time_service_wrong_domain(self, hass):
         """Test sync time service with wrong domain."""
         from custom_components.wiim import _sync_time_service
 
@@ -462,7 +464,7 @@ class TestSyncTimeService:
         # Should log error and return
 
     @pytest.mark.asyncio
-    async def test_sync_time_service_success(self):
+    async def test_sync_time_service_success(self, hass):
         """Test sync time service with successful sync."""
         from custom_components.wiim import _sync_time_service
 
@@ -508,7 +510,7 @@ class TestSyncTimeService:
         mock_speaker.coordinator.client.sync_time.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_sync_time_service_with_exception(self):
+    async def test_sync_time_service_with_exception(self, hass):
         """Test sync time service when sync fails."""
         from custom_components.wiim import _sync_time_service
 
@@ -557,12 +559,11 @@ class TestUpdateListener:
     """Test update listener functionality."""
 
     @pytest.mark.asyncio
-    async def test_update_listener_reload(self):
+    async def test_update_listener_reload(self, hass):
         """Test update listener triggers reload."""
         from custom_components.wiim import _update_listener
 
-        # Mock Home Assistant and config entry
-        hass = MagicMock()
+        # Mock config entry
         entry = MagicMock()
         entry.entry_id = "test-entry"
 
@@ -578,7 +579,7 @@ class TestUpdateListener:
 class TestServiceRegistration:
     """Test service registration functionality."""
 
-    def test_service_registration_constants(self):
+    def test_service_registration_constants(self, hass):
         """Test service registration constants."""
         # Services should be registered for these functions
         from custom_components.wiim import _reboot_device_service, _sync_time_service
@@ -587,7 +588,7 @@ class TestServiceRegistration:
         assert callable(_reboot_device_service)
         assert callable(_sync_time_service)
 
-    def test_service_function_signatures(self):
+    def test_service_function_signatures(self, hass):
         """Test service function signatures."""
         # Check function signatures
         import inspect
@@ -608,19 +609,19 @@ class TestServiceRegistration:
 class TestCoreIntegration:
     """Test core integration functionality."""
 
-    def test_domain_constant(self):
+    def test_domain_constant(self, hass):
         """Test domain constant."""
         from custom_components.wiim import DOMAIN
 
         assert DOMAIN == "wiim"
 
-    def test_logger_configuration(self):
+    def test_logger_configuration(self, hass):
         """Test logger configuration."""
         from custom_components.wiim import _LOGGER
 
         assert _LOGGER.name == "custom_components.wiim"
 
-    def test_platform_imports(self):
+    def test_platform_imports(self, hass):
         """Test that all platform imports work."""
         from custom_components.wiim import (
             CORE_PLATFORMS,

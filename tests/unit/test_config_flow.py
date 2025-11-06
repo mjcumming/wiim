@@ -104,6 +104,7 @@ class TestIPv6ConfigFlowHandling:
         with patch("custom_components.wiim.config_flow.WiiMClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get_status = AsyncMock(return_value={"DeviceName": "WiiM Ultra", "uuid": "test-uuid-123"})
+            mock_client.get_device_info = AsyncMock(return_value={"uuid": "test-uuid-123"})
             mock_client.close = AsyncMock()
             mock_client_class.return_value = mock_client
 
@@ -123,10 +124,12 @@ class TestIPv6ConfigFlowHandling:
 
 async def test_form(hass: HomeAssistant) -> None:
     """Test we get the manual entry form directly (setup mode choice was removed)."""
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "manual"  # Goes directly to manual entry now
-    assert result["errors"] is None or result["errors"] == {}
+    # Mock async_search to prevent socket usage during discovery
+    with patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "manual"  # Goes directly to manual entry now
+        assert result["errors"] is None or result["errors"] == {}
 
 
 @pytest.mark.skip(reason="Skipped due to HA background thread issue - functionality covered by other tests")
@@ -153,10 +156,13 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
 
 async def test_form_connection_error(hass: HomeAssistant) -> None:
     """Test connection error during config flow."""
-    with patch(
-        "custom_components.wiim.config_flow.validate_wiim_device",
-        new_callable=AsyncMock,
-        return_value=(False, "192.168.1.100"),
+    with (
+        patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock),
+        patch(
+            "custom_components.wiim.config_flow.validate_wiim_device",
+            new_callable=AsyncMock,
+            return_value=(False, "192.168.1.100"),
+        ),
     ):
         # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
@@ -173,10 +179,13 @@ async def test_form_connection_error(hass: HomeAssistant) -> None:
 
 async def test_form_timeout_error(hass: HomeAssistant) -> None:
     """Test timeout error during config flow."""
-    with patch(
-        "custom_components.wiim.config_flow.validate_wiim_device",
-        new_callable=AsyncMock,
-        return_value=(False, "192.168.1.100"),
+    with (
+        patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock),
+        patch(
+            "custom_components.wiim.config_flow.validate_wiim_device",
+            new_callable=AsyncMock,
+            return_value=(False, "192.168.1.100"),
+        ),
     ):
         # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
@@ -193,10 +202,13 @@ async def test_form_timeout_error(hass: HomeAssistant) -> None:
 
 async def test_form_invalid_host(hass: HomeAssistant) -> None:
     """Test invalid host error."""
-    with patch(
-        "custom_components.wiim.config_flow.validate_wiim_device",
-        new_callable=AsyncMock,
-        return_value=(False, "invalid_host"),
+    with (
+        patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock),
+        patch(
+            "custom_components.wiim.config_flow.validate_wiim_device",
+            new_callable=AsyncMock,
+            return_value=(False, "invalid_host"),
+        ),
     ):
         # Start the flow (manual entry directly)
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})

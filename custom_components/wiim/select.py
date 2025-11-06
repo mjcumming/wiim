@@ -360,13 +360,16 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                 "WiiM Output Mode Select: Successfully set output mode to '%s'",
                 option,
             )
+        except ValueError:
+            # Re-raise ValueError (validation errors) - these should propagate
+            raise
         except Exception as err:
             _LOGGER.warning(
                 "WiiM Output Mode Select: Failed to select output mode '%s': %s",
                 option,
                 err,
             )
-            # Don't re-raise the exception - let Home Assistant handle it
+            # Don't re-raise other exceptions - let Home Assistant handle them
             # This prevents the entity from becoming unavailable
 
     @property

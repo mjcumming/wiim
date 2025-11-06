@@ -8,7 +8,7 @@ import pytest
 class TestWiiMOutputModeSelect:
     """Test WiiM Output Mode Select Entity."""
 
-    async def test_select_creation(self):
+    async def test_select_creation(self, hass):
         """Test select entity creation."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -23,7 +23,7 @@ class TestWiiMOutputModeSelect:
         assert select.name == "Audio Output Mode"
         assert select.icon == "mdi:audio-video"
 
-    def test_current_option_with_device_communication(self):
+    def test_current_option_with_device_communication(self, hass):
         """Test current option when device communication is working."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -35,7 +35,7 @@ class TestWiiMOutputModeSelect:
         select = WiiMOutputModeSelect(speaker)
         assert select.current_option == "speaker"
 
-    def test_current_option_device_communication_fails(self):
+    def test_current_option_device_communication_fails(self, hass):
         """Test current option when device communication fails."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -48,7 +48,7 @@ class TestWiiMOutputModeSelect:
         select = WiiMOutputModeSelect(speaker)
         assert select.current_option is None
 
-    def test_current_option_exception_handling(self):
+    def test_current_option_exception_handling(self, hass):
         """Test current option when get_current_output_mode throws exception."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -60,7 +60,7 @@ class TestWiiMOutputModeSelect:
         select = WiiMOutputModeSelect(speaker)
         assert select.current_option is None
 
-    def test_options_with_discovered_modes(self):
+    def test_options_with_discovered_modes(self, hass):
         """Test options when discovered modes are available."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -81,7 +81,7 @@ class TestWiiMOutputModeSelect:
         # "Bluetooth Out" should be excluded (replaced by device-specific options)
         assert "Bluetooth Out" not in options
 
-    def test_options_with_exception(self):
+    def test_options_with_exception(self, hass):
         """Test options when methods throw exceptions."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -98,7 +98,7 @@ class TestWiiMOutputModeSelect:
         assert len(options) > 0
         assert "Line Out" in options or "Bluetooth Out" in options
 
-    def test_options_fallback_to_defaults(self):
+    def test_options_fallback_to_defaults(self, hass):
         """Test options fallback to default modes."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -119,7 +119,7 @@ class TestWiiMOutputModeSelect:
         assert not any(opt.startswith("BT Device") and " - " in opt for opt in options)
 
     @pytest.mark.asyncio
-    async def test_async_select_option_success(self):
+    async def test_async_select_option_success(self, hass):
         """Test selecting option successfully."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -139,7 +139,7 @@ class TestWiiMOutputModeSelect:
             mock_controller.select_output_mode.assert_called_once_with("bluetooth")
 
     @pytest.mark.asyncio
-    async def test_async_select_option_error(self):
+    async def test_async_select_option_error(self, hass):
         """Test selecting option with error."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -161,7 +161,7 @@ class TestWiiMOutputModeSelect:
             mock_controller_class.assert_called_once_with(speaker)
             mock_controller.select_output_mode.assert_called_once_with("bluetooth")
 
-    def test_extra_state_attributes(self):
+    def test_extra_state_attributes(self, hass):
         """Test extra state attributes."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -184,12 +184,11 @@ class TestSelectPlatformSetup:
     """Test select platform setup functionality."""
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry_with_capabilities(self):
+    async def test_async_setup_entry_with_capabilities(self, hass):
         """Test select platform setup when device supports audio output."""
         from custom_components.wiim.select import async_setup_entry
 
         # Mock dependencies
-        hass = MagicMock()
         config_entry = MagicMock()
 
         # Mock speaker with capabilities
@@ -214,12 +213,11 @@ class TestSelectPlatformSetup:
             assert entities[0].__class__.__name__ == "WiiMOutputModeSelect"
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry_without_capabilities(self):
+    async def test_async_setup_entry_without_capabilities(self, hass):
         """Test select platform setup when device doesn't support audio output."""
         from custom_components.wiim.select import async_setup_entry
 
         # Mock dependencies
-        hass = MagicMock()
         config_entry = MagicMock()
 
         # Mock speaker without capabilities
@@ -246,12 +244,11 @@ class TestSelectPlatformSetup:
             assert len(entities) == 0
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry_no_capabilities_available(self):
+    async def test_async_setup_entry_no_capabilities_available(self, hass):
         """Test select platform setup when capabilities are not available (fallback)."""
         from custom_components.wiim.select import async_setup_entry
 
         # Mock dependencies
-        hass = MagicMock()
         config_entry = MagicMock()
 
         # Mock speaker without capabilities attribute (fallback case)
@@ -276,12 +273,11 @@ class TestSelectPlatformSetup:
             assert entities[0].__class__.__name__ == "WiiMOutputModeSelect"
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry_with_capabilities_attribute_check(self):
+    async def test_async_setup_entry_with_capabilities_attribute_check(self, hass):
         """Test select platform setup with hasattr check for capabilities."""
         from custom_components.wiim.select import async_setup_entry
 
         # Mock dependencies
-        hass = MagicMock()
         config_entry = MagicMock()
 
         # Mock speaker with capabilities (using hasattr check)
@@ -310,7 +306,7 @@ class TestSelectPlatformSetup:
 class TestWiiMOutputModeSelectBluetoothIntegration:
     """Test Bluetooth device integration in Audio Output Mode select."""
 
-    def test_options_includes_bluetooth_devices_from_history(self):
+    def test_options_includes_bluetooth_devices_from_history(self, hass):
         """Test that options include Bluetooth devices from history."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -339,7 +335,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         # Should NOT include "Bluetooth Out" (replaced by device-specific options)
         assert "Bluetooth Out" not in options
 
-    def test_options_no_bluetooth_devices(self):
+    def test_options_no_bluetooth_devices(self, hass):
         """Test options when no Bluetooth devices are paired."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -359,7 +355,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         # Should not have any BT device options
         assert not any(opt.startswith("BT Device") for opt in options)
 
-    def test_current_option_bluetooth_device(self):
+    def test_current_option_bluetooth_device(self, hass):
         """Test current_option shows Bluetooth device when BT output is active."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -384,7 +380,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         # Should show BT device format instead of just "Bluetooth Out"
         assert current == "BT Device 1 - TOZO-T6"
 
-    def test_current_option_regular_mode(self):
+    def test_current_option_regular_mode(self, hass):
         """Test current_option shows regular mode when not Bluetooth."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -400,7 +396,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         assert current == "Line Out"
 
     @pytest.mark.asyncio
-    async def test_async_select_option_bluetooth_device(self):
+    async def test_async_select_option_bluetooth_device(self, hass):
         """Test selecting a Bluetooth device option."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -420,7 +416,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         )
 
         # Mock the media controller
-        with patch("custom_components.wiim.select.MediaPlayerController") as mock_controller_class:
+        with patch("custom_components.wiim.media_controller.MediaPlayerController") as mock_controller_class:
             mock_controller = AsyncMock()
             mock_controller_class.return_value = mock_controller
 
@@ -437,7 +433,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
             coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_async_select_option_bluetooth_device_not_found(self):
+    async def test_async_select_option_bluetooth_device_not_found(self, hass):
         """Test selecting a Bluetooth device that doesn't exist in history."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -447,15 +443,18 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         coordinator = MagicMock()
         speaker.coordinator = coordinator
         speaker.get_bluetooth_history = MagicMock(return_value=[])
+        speaker.get_current_output_mode = MagicMock(return_value="Line Out")
 
         select = WiiMOutputModeSelect(speaker)
+        # Ensure coordinator is accessible from select entity
+        select.coordinator = coordinator
 
         # Should raise ValueError when device not found
         with pytest.raises(ValueError, match="Bluetooth device.*not found in history"):
             await select.async_select_option("BT Device 1 - Unknown Device")
 
     @pytest.mark.asyncio
-    async def test_async_select_option_regular_mode(self):
+    async def test_async_select_option_regular_mode(self, hass):
         """Test selecting a regular output mode (non-Bluetooth)."""
         from custom_components.wiim.select import WiiMOutputModeSelect
 
@@ -467,7 +466,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         speaker.coordinator = coordinator
 
         # Mock the media controller
-        with patch("custom_components.wiim.select.MediaPlayerController") as mock_controller_class:
+        with patch("custom_components.wiim.media_controller.MediaPlayerController") as mock_controller_class:
             mock_controller = AsyncMock()
             mock_controller_class.return_value = mock_controller
 

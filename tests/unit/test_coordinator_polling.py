@@ -62,19 +62,21 @@ def mock_coordinator():
     coordinator.hass.loop = MagicMock()
     coordinator.hass.loop.run_in_executor = AsyncMock(return_value={})
 
-    # Mock the async methods that will be called
+    # Mock the async methods that will be called - ensure they return proper coroutines
     coordinator._fetch_multiroom_info = AsyncMock(return_value={})
-    coordinator._fetch_track_metadata = AsyncMock()
+    coordinator._fetch_track_metadata = AsyncMock(return_value=None)
     coordinator._fetch_eq_info = AsyncMock(return_value=EQInfo.model_validate({"eq_enabled": False}))
     coordinator._detect_role_from_status_and_slaves = AsyncMock(return_value="solo")
-    coordinator._resolve_multiroom_source_and_media = AsyncMock()
-    coordinator._update_speaker_object = AsyncMock()
-    coordinator._extend_eq_preset_map_once = AsyncMock()
+    coordinator._resolve_multiroom_source_and_media = AsyncMock(return_value=None)
+    coordinator._update_speaker_object = AsyncMock(return_value=None)
+    coordinator._extend_eq_preset_map_once = AsyncMock(return_value=None)
 
     # Mock client async methods
     coordinator.client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
     coordinator.client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
     coordinator.client.get_presets = AsyncMock(return_value=[])
+    coordinator.client.get_bluetooth_pair_status = AsyncMock(return_value=None)
+    coordinator.client.get_audio_output_status = AsyncMock(return_value={"hardware": "2", "source": "0", "audiocast": "0"})
 
     # Initialize tracking attributes that might be checked
     # Don't set _last_track_info so it gets properly initialized in _track_changed
@@ -105,18 +107,20 @@ async def test_polling_success_complete(mock_coordinator):
         patch.object(mock_coordinator, "_resolve_multiroom_source_and_media", new_callable=AsyncMock) as mock_resolve,
         patch.object(mock_coordinator, "_update_speaker_object", new_callable=AsyncMock) as mock_update_speaker,
     ):
-        # Set up return values
+        # Set up return values - ensure AsyncMock functions return awaitables
         status_model = PlayerStatus.model_validate(MOCK_STATUS_RESPONSE)
         device_model = DeviceInfo.model_validate(MOCK_DEVICE_DATA)
         metadata_model = TrackMetadata.model_validate({"title": "Test Track"})
         eq_model = EQInfo.model_validate({"eq_enabled": False})
 
+        # Use AsyncMock with proper return values (AsyncMock already makes them awaitable)
         mock_player_status.return_value = status_model
         mock_device_info.return_value = device_model
         mock_multiroom.return_value = {"slave_count": 0}
         mock_metadata.return_value = metadata_model
         mock_eq.return_value = eq_model
         mock_role.return_value = "solo"
+        # For AsyncMock, setting return_value is sufficient
         mock_resolve.return_value = None
         mock_update_speaker.return_value = None
 
