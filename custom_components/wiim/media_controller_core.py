@@ -307,23 +307,46 @@ class MediaControllerCoreMixin:
             # Map friendly source names to WiiM source IDs
             from .const import SOURCE_MAP
 
-            # Try to find the internal source ID for the friendly name
-            # Normalize both source and friendly_name for comparison (strip whitespace, lowercase)
-            source_normalized = source.strip().lower()
             wiim_source = None
-            for internal_id, friendly_name in SOURCE_MAP.items():
-                friendly_normalized = friendly_name.strip().lower()
-                if source == friendly_name or source_normalized == friendly_normalized:
-                    wiim_source = internal_id
-                    self._logger.debug(
-                        "Found source mapping: '%s' -> '%s' (internal_id: '%s')",
-                        source,
-                        friendly_name,
-                        internal_id,
-                    )
-                    break
 
-            # If no mapping found, try to convert friendly name format to internal ID format
+            # First, try to use the API-provided input_list to find the exact API source name
+            # This ensures we use the exact format the device expects
+            if hasattr(self.speaker, "input_list") and self.speaker.input_list:
+                source_normalized = source.strip().lower()
+                for api_source in self.speaker.input_list:
+                    # Convert API name to friendly name to compare with user selection
+                    friendly_name = SOURCE_MAP.get(
+                        api_source.lower(),
+                        api_source.title(),  # Fallback: capitalize first letter
+                    )
+                    friendly_normalized = friendly_name.strip().lower()
+
+                    # Check if this API source matches the user's selection
+                    if source == friendly_name or source_normalized == friendly_normalized:
+                        wiim_source = api_source.lower()  # Use the exact API source name
+                        self._logger.debug(
+                            "Found API source match: '%s' -> '%s' (from input_list)",
+                            source,
+                            wiim_source,
+                        )
+                        break
+
+            # If not found in input_list, try reverse mapping from SOURCE_MAP
+            if wiim_source is None:
+                source_normalized = source.strip().lower()
+                for internal_id, friendly_name in SOURCE_MAP.items():
+                    friendly_normalized = friendly_name.strip().lower()
+                    if source == friendly_name or source_normalized == friendly_normalized:
+                        wiim_source = internal_id
+                        self._logger.debug(
+                            "Found source mapping: '%s' -> '%s' (internal_id: '%s')",
+                            source,
+                            friendly_name,
+                            internal_id,
+                        )
+                        break
+
+            # If still no mapping found, try to convert friendly name format to internal ID format
             # Convert spaces to underscores and lowercase (e.g., "Line In" -> "line_in")
             if wiim_source is None:
                 # First check if it's already an internal ID (has underscore or is lowercase single word)
@@ -337,6 +360,9 @@ class MediaControllerCoreMixin:
                     self._logger.debug(
                         "No mapping found for '%s', converted to internal format: '%s'", source, wiim_source
                     )
+
+            if wiim_source is None:
+                raise ValueError(f"Could not map source '{source}' to a valid WiiM source ID")
 
             self._logger.info("Mapped source '%s' to WiiM source '%s' for %s", source, wiim_source, self.speaker.name)
 

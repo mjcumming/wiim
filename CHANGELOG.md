@@ -2,6 +2,16 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.15] - 2025-01-27
+
+### Fixed
+
+- **Source Selection Bug**: Fixed issue where source selection from the media player entity UI was not working
+  - Source selection now correctly uses the exact API source name from the device's `input_list` when available
+  - Ensures proper mapping between friendly display names and device API source IDs
+  - Falls back to reverse mapping from SOURCE_MAP if input_list is not available
+  - Resolves issue #95 where users could select sources but the device wouldn't change
+
 ## [0.2.14] - 2025-01-27
 
 ### Added
