@@ -681,7 +681,7 @@ class MediaCommandsMixin:
                     from homeassistant.components import media_source
 
                     # Resolve the media source to get the actual playable URL
-                    play_item = await media_source.async_resolve_media(hass, media_id)
+                    play_item = await media_source.async_resolve_media(hass, media_id, self.entity_id)  # type: ignore[attr-defined]
                     resolved_url = play_item.url
 
                     _LOGGER.debug("%s source resolved: %s -> %s", content_type, media_id, resolved_url)

@@ -2,6 +2,15 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.16] - 2025-01-28
+
+### Fixed
+
+- **Media Source Integration**: Fixed Home Assistant warning about missing `entity_id` parameter in `media_source.async_resolve_media()` call
+  - Now properly passes `entity_id` parameter when resolving media sources
+  - Resolves Home Assistant frame helper warning about deprecated API usage
+  - Ensures compatibility with current Home Assistant media source requirements
+
 ## [0.2.15] - 2025-01-27
 
 ### Fixed

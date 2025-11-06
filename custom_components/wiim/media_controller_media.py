@@ -13,12 +13,14 @@ Following the successful API refactor pattern with logical cohesion over arbitra
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN, PRESET_SLOTS_KEY
+from .logo_data import LOGO_BASE64, LOGO_CONTENT_TYPE
 
 if TYPE_CHECKING:
     from .data import Speaker
@@ -136,12 +138,7 @@ class MediaControllerMediaMixin:
                 # Check if this is the WiiM logo URL
                 prefix = f"/static/{DOMAIN}/"
                 if image_url.startswith(prefix) and "logo" in image_url.lower():
-                    # Import embedded logo data
-                    from .logo_data import LOGO_BASE64, LOGO_CONTENT_TYPE
-
                     # Decode base64 logo data
-                    import base64
-
                     image_data = base64.b64decode(LOGO_BASE64)
 
                     # Cache the result

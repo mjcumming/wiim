@@ -15,6 +15,7 @@ def mock_media_player():
     player.hass = MagicMock()
     player.controller = MagicMock()
     player.speaker = MagicMock()
+    player.entity_id = "media_player.test_wiim"
     player._optimistic_media_title = None
     player._optimistic_state = None
     player._optimistic_source = None

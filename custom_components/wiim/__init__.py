@@ -40,7 +40,6 @@ except ModuleNotFoundError:  # pragma: no cover – only executed in test env
 import logging
 from typing import Any
 
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
