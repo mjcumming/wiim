@@ -175,7 +175,6 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         upnp_info = {}
         if hasattr(speaker, "_upnp_eventer") and speaker._upnp_eventer:
             eventer = speaker._upnp_eventer
-            is_healthy = getattr(eventer, "_push_healthy", False)
 
             # Check if subscriptions actually exist (have SIDs)
             has_sid_avt = getattr(eventer, "_sid_avt", None) is not None
@@ -187,11 +186,13 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             subscription_failed_flag = getattr(speaker, "_subscriptions_failed", False)
             actual_subscription_failed = subscription_failed_flag and not has_active_subscriptions
 
+            # Determine status based on active subscriptions (DLNA DMR pattern - no health checking)
+            status = "Active" if has_active_subscriptions else "Not Active"
+            status_detail = "Receiving Events" if has_active_subscriptions else "Eventer Running but No Events"
+
             upnp_info = {
-                "status": "Active" if (is_healthy and has_active_subscriptions) else "Not Active",
-                "status_detail": "Receiving Events"
-                if (is_healthy and has_active_subscriptions)
-                else "Eventer Running but No Events",
+                "status": status,
+                "status_detail": status_detail,
                 "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
                 "subscription_failed": actual_subscription_failed,
                 "event_count": getattr(eventer, "_event_count", 0),
@@ -202,7 +203,6 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 "has_sid_avt": has_sid_avt,
                 "has_sid_rcs": has_sid_rcs,
                 "retry_count": getattr(eventer, "_retry_count", 0),
-                "push_healthy": is_healthy,
             }
 
             # Add UPnP client info if available

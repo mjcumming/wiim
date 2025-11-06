@@ -2,6 +2,17 @@
 
 Technical documentation for WiiM integration developers and contributors.
 
+## 🚀 **Quick Start - Running Home Assistant**
+
+To start Home Assistant with the WiiM integration for development:
+
+```bash
+# From any directory, start HA with explicit config path
+hass -c /workspaces/core/config --open-ui
+```
+
+**Important**: Always use the `-c /workspaces/core/config` flag to ensure HA loads the correct configuration directory with the symlinked WiiM integration.
+
 ## 📋 **Essential Technical Docs**
 
 | Document                                         | Purpose                                               | Audience       |

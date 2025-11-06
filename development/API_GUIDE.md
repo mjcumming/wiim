@@ -1118,26 +1118,40 @@ Get Discovery Results:
 GET /httpapi.asp?command=getbtdiscoveryresult
 ```
 
-**Response:**
+**Response (Actual API Format):**
 
 ```json
 {
-  "num": 3,
-  "scan_status": 0,
-  "bt_device": [
+  "num": 1,
+  "scan_status": 3,
+  "list": [
     {
-      "name": "iPhone",
-      "mac": "AA:BB:CC:DD:EE:FF",
-      "rssi": -45
+      "name": "DELL27KITCHEN",
+      "ad": "ac:5a:fc:02:2c:a8",
+      "ct": 0,
+      "role": "Audio Sink"
     }
   ]
 }
 ```
 
-**Notes:**
+**Response Fields:**
 
+- `num`: Number of devices found
 - `scan_status`: 0=Not started, 1=Initializing, 2=Scanning, 3=Complete
-- Results include device names, MAC addresses, and RSSI values
+- `list`: Array of discovered Bluetooth devices
+  - `name`: Device name (e.g., "DELL27KITCHEN")
+  - `ad`: MAC address (e.g., "ac:5a:fc:02:2c:a8") - **Note**: API uses `ad` not `mac`
+  - `ct`: Connection type (0=unknown, may vary)
+  - `role`: Device role (e.g., "Audio Sink", "Audio Source")
+  - `rssi`: Signal strength (optional, may not always be present)
+
+**Important Notes:**
+
+- The API returns `list` (not `bt_device`) and uses `ad` (not `mac`) for the MAC address
+- The integration normalizes this format internally for consistency
+- `scan_status` must be checked before reading results (status 3 = complete)
+- Wait at least the scan duration + a few seconds before checking results
 
 ### **Audio Settings**
 
@@ -1290,13 +1304,61 @@ The [OpenAPI Specification](https://github.com/cvdlinden/wiim-httpapi/blob/main/
 - `setAlarmClock` - Set alarm clock configuration
 - `alarmStop` - Stop active alarm
 
-### **Bluetooth Advanced Operations**
+### **Bluetooth Advanced Operations** (Implemented)
 
-- `getbthistory` - Get Bluetooth connection history
+These endpoints are now implemented in the integration:
+
+#### **Bluetooth Device History**
+
+- `getbthistory` - Get Bluetooth connection history (previously paired devices)
+
+  - **Response**: `{"num": 0, "scan_status": 3}` or list of devices
+  - Returns devices that have been paired before, even if not currently in range
+  - **Device Fields**:
+    - `name`: Device friendly name (e.g., "TOZO-T6")
+    - `ad`: MAC address (format: "19:12:25:08:0f:b7")
+    - `mac`: Alternative MAC address field (same as `ad`)
+    - `ct`: Connection status (0=not connected, 1=connected)
+    - `role`: Device role ("Audio Sink" for headphones/speakers, "Audio Source" for input devices)
+  - **Important**: This endpoint reliably enumerates ALL devices that have been paired with the WiiM, making it suitable for populating device selection menus without requiring scanning
+  - **Polling Strategy**: Fetched once at startup, then only when Bluetooth output is active (to track connected device)
+
+#### **Bluetooth Connection Status**
+
 - `getbtpairstatus` - Get Bluetooth pairing status
+
+  - **Response**: `{"result": 0}` (0=not paired, 1=paired)
+  - Used to determine if Bluetooth device is currently connected
+  - Polled every 15 seconds when Bluetooth output is active
+
+#### **Bluetooth Connection Control**
+
+- `connectbta2dpsynk:MAC_ADDRESS` - Connect to Bluetooth device by MAC address
+
+  - **Parameters**: MAC address in format `AA:BB:CC:DD:EE:FF` or `AA-BB-CC-DD-EE-FF`
+  - **Response**: `OK` on success
+  - **Timeout**: 30 seconds (device takes ~15 seconds to respond)
+  - **Behavior**: Automatically switches output mode to "Bluetooth Out" when connection succeeds
+  - **Note**: Device must have been previously paired via WiiM app - this endpoint only connects to known devices
+
+- `disconnectbta2dpsynk` - Disconnect current Bluetooth connection
+  - **Response**: `OK` on success
+
+#### **Bluetooth Discovery** (Legacy - not used in current implementation)
+
 - `clearbtdiscoveryresult` - Clear Bluetooth discovery results
-- `connectbta2dpsynk` - Connect Bluetooth A2DP sync
-- `disconnectbta2dpsynk` - Disconnect Bluetooth A2DP sync
+  - **Response**: `OK` on success
+  - **Note**: Discovery scanning is not implemented - pairing is done via WiiM app, connection is done via `connectbta2dpsynk`
+
+#### **Implementation Notes**
+
+- **Pairing**: Must be done via WiiM app - Home Assistant integration cannot pair new devices
+- **Connection**: Home Assistant can connect to previously paired devices using `connectbta2dpsynk`
+- **History Reliability**: `getbthistory` always returns complete list of paired devices, making it reliable for UI population
+- **Polling Strategy**:
+  - History fetched once at startup (for dropdown population)
+  - Only polls when BT output is active (to track connected device)
+  - Manual refresh available via UI option
 
 ### **Audio Hardware Capabilities**
 

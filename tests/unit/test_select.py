@@ -68,17 +68,18 @@ class TestWiiMOutputModeSelect:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.get_output_mode_list = MagicMock(return_value=["speaker", "headphones"])
-        speaker.get_discovered_output_modes = MagicMock(return_value=["bluetooth", "usb"])
+        speaker.get_discovered_output_modes = MagicMock(return_value=["usb"])
+        speaker.get_bluetooth_history = MagicMock(return_value=[])
 
         select = WiiMOutputModeSelect(speaker)
         options = select.options
 
-        # Should combine and deduplicate modes
-        assert len(options) == 4
+        # Should combine and deduplicate modes (excluding "Bluetooth Out" - replaced by device-specific options)
         assert "speaker" in options
         assert "headphones" in options
-        assert "bluetooth" in options
         assert "usb" in options
+        # "Bluetooth Out" should be excluded (replaced by device-specific options)
+        assert "Bluetooth Out" not in options
 
     def test_options_with_exception(self):
         """Test options when methods throw exceptions."""
@@ -106,12 +107,16 @@ class TestWiiMOutputModeSelect:
         speaker.uuid = "test-speaker-uuid"
         speaker.get_output_mode_list = MagicMock(return_value=[])
         speaker.get_discovered_output_modes = MagicMock(return_value=[])
+        speaker.get_bluetooth_history = MagicMock(return_value=[])
 
         select = WiiMOutputModeSelect(speaker)
         options = select.options
 
-        # When both methods return empty lists, the result should be an empty sorted list
-        assert options == []
+        # When all methods return empty lists, should only have "BT Update Paired Devices" option
+        # (since we always include the refresh option)
+        assert "BT Update Paired Devices" in options
+        # Should not have any device-specific options
+        assert not any(opt.startswith("BT Device") and " - " in opt for opt in options)
 
     @pytest.mark.asyncio
     async def test_async_select_option_success(self):
@@ -300,3 +305,174 @@ class TestSelectPlatformSetup:
             # Should create select entity when capabilities support audio output
             assert len(entities) == 1
             assert entities[0].__class__.__name__ == "WiiMOutputModeSelect"
+
+
+class TestWiiMOutputModeSelectBluetoothIntegration:
+    """Test Bluetooth device integration in Audio Output Mode select."""
+
+    def test_options_includes_bluetooth_devices_from_history(self):
+        """Test that options include Bluetooth devices from history."""
+        from custom_components.wiim.select import WiiMOutputModeSelect
+
+        speaker = MagicMock()
+        speaker.name = "Test WiiM"
+        speaker.uuid = "test-speaker-uuid"
+        speaker.get_output_mode_list = MagicMock(return_value=["Line Out", "Optical Out"])
+        speaker.get_discovered_output_modes = MagicMock(return_value=[])
+        speaker.get_bluetooth_history = MagicMock(
+            return_value=[
+                {"name": "TOZO-T6", "ad": "19:12:25:08:0f:b7", "ct": 0, "role": "Audio Sink"},
+                {"name": "DELL27KITCHEN", "ad": "ac:5a:fc:02:2c:a8", "ct": 0, "role": "Audio Source"},
+            ]
+        )
+
+        select = WiiMOutputModeSelect(speaker)
+        options = select.options
+
+        # Should include standard modes and BT devices
+        assert "Line Out" in options
+        assert "Optical Out" in options
+        assert "BT Device 1 - TOZO-T6" in options
+        assert "BT Device 2 - DELL27KITCHEN" in options
+        # Should NOT include "BT Scan" (disabled by default)
+        assert "BT Scan" not in options
+        # Should NOT include "Bluetooth Out" (replaced by device-specific options)
+        assert "Bluetooth Out" not in options
+
+    def test_options_no_bluetooth_devices(self):
+        """Test options when no Bluetooth devices are paired."""
+        from custom_components.wiim.select import WiiMOutputModeSelect
+
+        speaker = MagicMock()
+        speaker.name = "Test WiiM"
+        speaker.uuid = "test-speaker-uuid"
+        speaker.get_output_mode_list = MagicMock(return_value=["Line Out", "Optical Out"])
+        speaker.get_discovered_output_modes = MagicMock(return_value=[])
+        speaker.get_bluetooth_history = MagicMock(return_value=[])
+
+        select = WiiMOutputModeSelect(speaker)
+        options = select.options
+
+        # Should only include standard modes
+        assert "Line Out" in options
+        assert "Optical Out" in options
+        # Should not have any BT device options
+        assert not any(opt.startswith("BT Device") for opt in options)
+
+    def test_current_option_bluetooth_device(self):
+        """Test current_option shows Bluetooth device when BT output is active."""
+        from custom_components.wiim.select import WiiMOutputModeSelect
+
+        speaker = MagicMock()
+        speaker.name = "Test WiiM"
+        speaker.uuid = "test-speaker-uuid"
+        speaker.get_current_output_mode = MagicMock(return_value="Bluetooth Out")
+        speaker.is_bluetooth_output_active = MagicMock(return_value=True)
+        speaker.get_connected_bluetooth_device = MagicMock(
+            return_value={"name": "TOZO-T6", "ad": "19:12:25:08:0f:b7", "mac": "19:12:25:08:0f:b7"}
+        )
+        speaker.get_bluetooth_history = MagicMock(
+            return_value=[
+                {"name": "TOZO-T6", "ad": "19:12:25:08:0f:b7", "ct": 1, "role": "Audio Sink"},
+                {"name": "DELL27KITCHEN", "ad": "ac:5a:fc:02:2c:a8", "ct": 0, "role": "Audio Source"},
+            ]
+        )
+
+        select = WiiMOutputModeSelect(speaker)
+        current = select.current_option
+
+        # Should show BT device format instead of just "Bluetooth Out"
+        assert current == "BT Device 1 - TOZO-T6"
+
+    def test_current_option_regular_mode(self):
+        """Test current_option shows regular mode when not Bluetooth."""
+        from custom_components.wiim.select import WiiMOutputModeSelect
+
+        speaker = MagicMock()
+        speaker.name = "Test WiiM"
+        speaker.uuid = "test-speaker-uuid"
+        speaker.get_current_output_mode = MagicMock(return_value="Line Out")
+        speaker.is_bluetooth_output_active = MagicMock(return_value=False)
+
+        select = WiiMOutputModeSelect(speaker)
+        current = select.current_option
+
+        assert current == "Line Out"
+
+    @pytest.mark.asyncio
+    async def test_async_select_option_bluetooth_device(self):
+        """Test selecting a Bluetooth device option."""
+        from custom_components.wiim.select import WiiMOutputModeSelect
+
+        speaker = MagicMock()
+        speaker.name = "Test WiiM"
+        speaker.uuid = "test-speaker-uuid"
+        coordinator = MagicMock()
+        coordinator.client = AsyncMock()
+        coordinator.client.connect_bluetooth_device = AsyncMock()
+        coordinator.async_request_refresh = AsyncMock()
+        speaker.coordinator = coordinator
+
+        speaker.get_bluetooth_history = MagicMock(
+            return_value=[
+                {"name": "TOZO-T6", "ad": "19:12:25:08:0f:b7", "ct": 0, "role": "Audio Sink"},
+            ]
+        )
+
+        # Mock the media controller
+        with patch("custom_components.wiim.select.MediaPlayerController") as mock_controller_class:
+            mock_controller = AsyncMock()
+            mock_controller_class.return_value = mock_controller
+
+            select = WiiMOutputModeSelect(speaker)
+            # Ensure coordinator is accessible
+            select.coordinator = coordinator
+            await select.async_select_option("BT Device 1 - TOZO-T6")
+
+            # Should connect to Bluetooth device
+            coordinator.client.connect_bluetooth_device.assert_called_once_with("19:12:25:08:0f:b7")
+            # Should set output mode to Bluetooth
+            mock_controller.select_output_mode.assert_called_once_with("Bluetooth Out")
+            # Should refresh coordinator
+            coordinator.async_request_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_select_option_bluetooth_device_not_found(self):
+        """Test selecting a Bluetooth device that doesn't exist in history."""
+        from custom_components.wiim.select import WiiMOutputModeSelect
+
+        speaker = MagicMock()
+        speaker.name = "Test WiiM"
+        speaker.uuid = "test-speaker-uuid"
+        coordinator = MagicMock()
+        speaker.coordinator = coordinator
+        speaker.get_bluetooth_history = MagicMock(return_value=[])
+
+        select = WiiMOutputModeSelect(speaker)
+
+        # Should raise ValueError when device not found
+        with pytest.raises(ValueError, match="Bluetooth device.*not found in history"):
+            await select.async_select_option("BT Device 1 - Unknown Device")
+
+    @pytest.mark.asyncio
+    async def test_async_select_option_regular_mode(self):
+        """Test selecting a regular output mode (non-Bluetooth)."""
+        from custom_components.wiim.select import WiiMOutputModeSelect
+
+        speaker = MagicMock()
+        speaker.name = "Test WiiM"
+        speaker.uuid = "test-speaker-uuid"
+        # Regular mode doesn't need coordinator, but set it up to avoid errors
+        coordinator = MagicMock()
+        speaker.coordinator = coordinator
+
+        # Mock the media controller
+        with patch("custom_components.wiim.select.MediaPlayerController") as mock_controller_class:
+            mock_controller = AsyncMock()
+            mock_controller_class.return_value = mock_controller
+
+            select = WiiMOutputModeSelect(speaker)
+            await select.async_select_option("Line Out")
+
+            # Should call select_output_mode with regular mode
+            mock_controller.select_output_mode.assert_called_once_with("Line Out")

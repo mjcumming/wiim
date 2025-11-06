@@ -2,6 +2,23 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.13] - 2025-11-05
+
+### Added
+
+- **Bluetooth Device Selection in Audio Output Mode**: Integrated Bluetooth device selection directly into the Audio Output Mode select entity
+  - Shows all previously paired Bluetooth devices as selectable options (e.g., "BT Device 1 - TOZO-T6")
+  - Automatically fetches Bluetooth device history at startup for immediate availability
+  - Includes "BT Update Paired Devices" option to manually refresh the list after pairing new devices via WiiM app
+  - No constant polling - only fetches when needed or when Bluetooth output is active
+
+### Changed
+
+- **Bluetooth Polling Optimization**: Reduced unnecessary Bluetooth history polling
+  - History fetched once at startup (for dropdown population)
+  - Only polls when Bluetooth output is active (to track connected device)
+  - Manual refresh available via "BT Update Paired Devices" option
+
 ## [0.2.12] - 2025-11-04
 
 ### Changed

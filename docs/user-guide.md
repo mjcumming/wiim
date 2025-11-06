@@ -160,8 +160,29 @@ Configure each speaker via **Configure** button:
 
 **Optional:**
 
+- `select.{device_name}_audio_output_mode` - Audio output mode selection (Line Out, Optical Out, Bluetooth devices)
 - `button.{device_name}_reboot` - Device restart
 - `button.{device_name}_sync_time` - Time synchronization
+
+### Audio Output Mode Selection
+
+The **Audio Output Mode** select entity allows you to choose how audio is routed from your WiiM device:
+
+**Standard Output Modes:**
+
+- **Line Out** - Analog line output
+- **Optical Out** - Digital optical (TOSLINK) output
+- **Coaxial Out** - Digital coaxial output
+- **HDMI ARC** - HDMI Audio Return Channel
+
+**Bluetooth Device Selection:**
+
+- Previously paired Bluetooth devices appear as options (e.g., "BT Device 1 - TOZO-T6")
+- Devices are automatically listed when paired via the WiiM app
+- Selecting a Bluetooth device connects to it and switches output mode to Bluetooth
+- Use **"BT Update Paired Devices"** to refresh the list after pairing new devices via the WiiM app
+
+**Note**: Bluetooth pairing must be done via the WiiM app - Home Assistant only connects to already-paired devices.
 
 ### Network Requirements
 

@@ -203,10 +203,16 @@ class WiiMClient:
             self.port = port
 
         # Normalise host for URL contexts (IPv6 needs brackets).
-        self._host_url = f"[{self._host}]" if ":" in self._host and not self._host.startswith("[") else self._host
+        self._host_url = (
+            f"[{self._host}]"
+            if ":" in self._host and not self._host.startswith("[")
+            else self._host
+        )
 
         # Use firmware-specific timeout if provided
-        self.timeout = capabilities.get("response_timeout", timeout) if capabilities else timeout
+        self.timeout = (
+            capabilities.get("response_timeout", timeout) if capabilities else timeout
+        )
         self.ssl_context = ssl_context
         self._session = session
         self._capabilities = capabilities or {}
@@ -257,14 +263,18 @@ class WiiMClient:
         # require a client certificate will simply ignore it.
         try:
             # Create temporary files from the embedded PEM string since load_cert_chain() requires file paths
-            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pem") as cert_file:
+            with tempfile.NamedTemporaryFile(
+                mode="w", delete=False, suffix=".pem"
+            ) as cert_file:
                 cert_file.write(AUDIO_PRO_CLIENT_CERT)
                 cert_temp_path = cert_file.name
 
             # Load certificate from temporary file using executor to avoid blocking event loop
             # See: https://developers.home-assistant.io/docs/asyncio_blocking_operations/#load_cert_chain
             await asyncio.to_thread(ctx.load_cert_chain, cert_temp_path)
-            _LOGGER.info("✓ Client certificate loaded for mutual TLS authentication (Audio Pro devices)")
+            _LOGGER.info(
+                "✓ Client certificate loaded for mutual TLS authentication (Audio Pro devices)"
+            )
 
             # Clean up temporary file
             try:
@@ -283,7 +293,9 @@ class WiiMClient:
     # Low-level request helper -----------------------------------------
     # ------------------------------------------------------------------
 
-    async def _request(self, endpoint: str, method: str = "GET", **kwargs: Any) -> dict[str, Any]:
+    async def _request(
+        self, endpoint: str, method: str = "GET", **kwargs: Any
+    ) -> dict[str, Any]:
         """Perform an HTTP(S) request with smart protocol fallback and firmware-specific handling.
 
         Protocol fallback strategy:
@@ -293,7 +305,9 @@ class WiiMClient:
         4. Apply firmware-specific error handling and retries
         """
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout))
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
+            )
 
         kwargs.setdefault("headers", HEADERS)
 
@@ -303,11 +317,15 @@ class WiiMClient:
 
         for attempt in range(retry_count):
             try:
-                result = await self._request_with_protocol_fallback(endpoint, method, **kwargs)
+                result = await self._request_with_protocol_fallback(
+                    endpoint, method, **kwargs
+                )
 
                 # Validate response for legacy firmware
                 if is_legacy_device:
-                    generation = self._capabilities.get("audio_pro_generation", "original")
+                    generation = self._capabilities.get(
+                        "audio_pro_generation", "original"
+                    )
                     _LOGGER.debug(
                         "Validating response for legacy device %s (generation: %s) on %s",
                         self.host,
@@ -326,13 +344,19 @@ class WiiMClient:
                         if hasattr(self, "_capabilities") and self._capabilities:
                             caps = self._capabilities
                             device_info = {
-                                "firmware_version": caps.get("firmware_version", "unknown"),
+                                "firmware_version": caps.get(
+                                    "firmware_version", "unknown"
+                                ),
                                 "device_model": caps.get("device_type", "unknown"),
                                 "device_name": caps.get("device_name", "unknown"),
                                 "is_wiim_device": caps.get("is_wiim_device", False),
                                 "is_legacy_device": caps.get("is_legacy_device", False),
-                                "supports_metadata": caps.get("supports_metadata", False),
-                                "supports_audio_output": caps.get("supports_audio_output", False),
+                                "supports_metadata": caps.get(
+                                    "supports_metadata", False
+                                ),
+                                "supports_audio_output": caps.get(
+                                    "supports_audio_output", False
+                                ),
                             }
                     except Exception:  # noqa: BLE001
                         pass  # Device info not available, continue without it
@@ -365,6 +389,11 @@ class WiiMClient:
     ) -> dict[str, Any]:
         """Perform HTTP(S) request with protocol fallback (original logic)."""
 
+        # Use longer timeout for Bluetooth connection operations (30 seconds)
+        # Bluetooth pairing can take 15-20+ seconds, so we need a longer timeout
+        is_bluetooth_connection = "connectbta2dpsynk" in endpoint.lower()
+        request_timeout = 30.0 if is_bluetooth_connection else self.timeout
+
         # -----------------------------
         # Fast-path: use established endpoint.
         # -----------------------------
@@ -383,7 +412,7 @@ class WiiMClient:
                 else:
                     kwargs.pop("ssl", None)
 
-                async with async_timeout.timeout(self.timeout):
+                async with async_timeout.timeout(request_timeout):
                     resp = await self._session.request(method, url, **kwargs)
                     async with resp:
                         resp.raise_for_status()
@@ -393,10 +422,14 @@ class WiiMClient:
                         if not text or text.strip() == "":
                             # For certain commands like reboot, empty response is expected
                             if "reboot" in endpoint.lower():
-                                _LOGGER.debug("Reboot command sent successfully (empty response expected)")
+                                _LOGGER.debug(
+                                    "Reboot command sent successfully (empty response expected)"
+                                )
                                 return {"raw": "OK"}
                             else:
-                                _LOGGER.debug("Empty response from device for %s", endpoint)
+                                _LOGGER.debug(
+                                    "Empty response from device for %s", endpoint
+                                )
                                 return {"raw": ""}
 
                         if text.strip() == "OK":
@@ -423,7 +456,9 @@ class WiiMClient:
                 _LOGGER.debug("Established endpoint %s failed: %s", self._endpoint, err)
                 # Don't immediately fall back to full probe - this could be a temporary network issue
                 # Only clear endpoint after multiple consecutive failures or specific error types
-                if isinstance(err, aiohttp.ClientConnectorError | aiohttp.ServerDisconnectedError):
+                if isinstance(
+                    err, aiohttp.ClientConnectorError | aiohttp.ServerDisconnectedError
+                ):
                     # Only log occasionally to reduce noise - this is normal during network issues
                     if not hasattr(self, "_connection_retry_count"):
                         self._connection_retry_count = 0
@@ -452,13 +487,19 @@ class WiiMClient:
                         if hasattr(self, "_capabilities") and self._capabilities:
                             caps = self._capabilities
                             device_info = {
-                                "firmware_version": caps.get("firmware_version", "unknown"),
+                                "firmware_version": caps.get(
+                                    "firmware_version", "unknown"
+                                ),
                                 "device_model": caps.get("device_type", "unknown"),
                                 "device_name": caps.get("device_name", "unknown"),
                                 "is_wiim_device": caps.get("is_wiim_device", False),
                                 "is_legacy_device": caps.get("is_legacy_device", False),
-                                "supports_metadata": caps.get("supports_metadata", False),
-                                "supports_audio_output": caps.get("supports_audio_output", False),
+                                "supports_metadata": caps.get(
+                                    "supports_metadata", False
+                                ),
+                                "supports_audio_output": caps.get(
+                                    "supports_audio_output", False
+                                ),
                             }
                     except Exception:  # noqa: BLE001
                         pass  # Device info not available, continue without it
@@ -479,7 +520,9 @@ class WiiMClient:
         self._protocol_probe_count += 1
 
         if self._protocol_probe_count <= 2:
-            _LOGGER.info("No established endpoint for %s, performing protocol probe", self._host)
+            _LOGGER.info(
+                "No established endpoint for %s, performing protocol probe", self._host
+            )
         elif self._protocol_probe_count % 3 == 1:  # Every 3rd probe
             _LOGGER.debug(
                 "Protocol probe still needed for %s (attempt %d)",
@@ -490,8 +533,12 @@ class WiiMClient:
         protocols: list[tuple[str, int, ssl.SSLContext | None]]
 
         # Use protocol priority from capabilities if available
-        protocol_priority = self._capabilities.get("protocol_priority", ["https", "http"])
-        _LOGGER.debug("Using protocol priority for %s: %s", self._host, protocol_priority)
+        protocol_priority = self._capabilities.get(
+            "protocol_priority", ["https", "http"]
+        )
+        _LOGGER.debug(
+            "Using protocol priority for %s: %s", self._host, protocol_priority
+        )
 
         # Get SSL context once (cached after first call) and reuse for all HTTPS protocols
         ssl_ctx = await self._get_ssl_context()
@@ -544,7 +591,10 @@ class WiiMClient:
 
             # Add Audio Pro MkII specific endpoints as fallback
             # These devices may use different API structures or additional ports
-            if self._capabilities.get("audio_pro_generation") in ("mkii", "w_generation"):
+            if self._capabilities.get("audio_pro_generation") in (
+                "mkii",
+                "w_generation",
+            ):
                 _LOGGER.debug("Adding Audio Pro MkII specific fallback endpoints")
                 protocols.extend(
                     [
@@ -564,7 +614,11 @@ class WiiMClient:
         tried: list[str] = []
 
         for scheme, port, ssl_ctx in protocols:
-            host_for_url = f"[{self._host}]" if ":" in self._host and not self._host.startswith("[") else self._host
+            host_for_url = (
+                f"[{self._host}]"
+                if ":" in self._host and not self._host.startswith("[")
+                else self._host
+            )
 
             # Build candidate endpoint paths to try for this scheme/port
             paths_to_try: list[str] = [endpoint]
@@ -578,7 +632,10 @@ class WiiMClient:
                 )
 
                 # Audio Pro MkII/W: try a few common REST/CGI variants
-                if self._capabilities.get("audio_pro_generation") in ("mkii", "w_generation"):
+                if self._capabilities.get("audio_pro_generation") in (
+                    "mkii",
+                    "w_generation",
+                ):
                     paths_to_try.extend(
                         [
                             "/api/status",
@@ -603,7 +660,7 @@ class WiiMClient:
                 tried.append(url)
 
                 try:
-                    async with async_timeout.timeout(self.timeout):
+                    async with async_timeout.timeout(request_timeout):
                         resp = await self._session.request(method, url, **kwargs)
                         async with resp:
                             resp.raise_for_status()
@@ -612,18 +669,32 @@ class WiiMClient:
                             # Handle empty responses gracefully
                             if not text or text.strip() == "":
                                 if "reboot" in path.lower():
-                                    _LOGGER.debug("Reboot command sent successfully (empty response expected)")
+                                    _LOGGER.debug(
+                                        "Reboot command sent successfully (empty response expected)"
+                                    )
                                     self._endpoint = f"{scheme}://{host_for_url}:{port}"
-                                    _LOGGER.debug("Established endpoint for %s: %s", self._host, self._endpoint)
+                                    _LOGGER.debug(
+                                        "Established endpoint for %s: %s",
+                                        self._host,
+                                        self._endpoint,
+                                    )
                                     return {"raw": "OK"}
                                 _LOGGER.debug("Empty response from device for %s", path)
                                 self._endpoint = f"{scheme}://{host_for_url}:{port}"
-                                _LOGGER.debug("Established endpoint for %s: %s", self._host, self._endpoint)
+                                _LOGGER.debug(
+                                    "Established endpoint for %s: %s",
+                                    self._host,
+                                    self._endpoint,
+                                )
                                 return {"raw": ""}
 
                             # SUCCESS: Lock in this base endpoint
                             self._endpoint = f"{scheme}://{host_for_url}:{port}"
-                            _LOGGER.debug("Established endpoint for %s: %s", self._host, self._endpoint)
+                            _LOGGER.debug(
+                                "Established endpoint for %s: %s",
+                                self._host,
+                                self._endpoint,
+                            )
 
                             if text.strip() == "OK":
                                 return {"raw": "OK"}
@@ -634,16 +705,24 @@ class WiiMClient:
                             except json.JSONDecodeError as json_err:
                                 if "reboot" in path.lower():
                                     _LOGGER.debug(
-                                        "Reboot command sent successfully (parsing error expected): %s", json_err
+                                        "Reboot command sent successfully (parsing error expected): %s",
+                                        json_err,
                                     )
                                     return {"raw": "OK"}
                                 # Provide context on invalid JSON
                                 device_info = {}
                                 try:
-                                    if hasattr(self, "_capabilities") and self._capabilities:
+                                    if (
+                                        hasattr(self, "_capabilities")
+                                        and self._capabilities
+                                    ):
                                         device_info = {
-                                            "firmware_version": self._capabilities.get("firmware_version", "unknown"),
-                                            "device_model": self._capabilities.get("device_model", "unknown"),
+                                            "firmware_version": self._capabilities.get(
+                                                "firmware_version", "unknown"
+                                            ),
+                                            "device_model": self._capabilities.get(
+                                                "device_model", "unknown"
+                                            ),
                                         }
                                 except Exception:  # noqa: BLE001
                                     pass
@@ -664,7 +743,9 @@ class WiiMClient:
         try:
             if hasattr(self, "_capabilities") and self._capabilities:
                 device_info = {
-                    "firmware_version": self._capabilities.get("firmware_version", "unknown"),
+                    "firmware_version": self._capabilities.get(
+                        "firmware_version", "unknown"
+                    ),
                     "device_model": self._capabilities.get("device_model", "unknown"),
                 }
         except Exception:  # noqa: BLE001
@@ -682,7 +763,9 @@ class WiiMClient:
             operation_context="protocol_fallback",
         )
 
-    def _validate_legacy_response(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+    def _validate_legacy_response(
+        self, response: dict[str, Any], endpoint: str
+    ) -> dict[str, Any]:
         """Handle malformed responses from older firmware.
 
         Args:
@@ -695,7 +778,9 @@ class WiiMClient:
         # Enhanced Audio Pro response validation
         return self._validate_audio_pro_response(response, endpoint)
 
-    def _validate_audio_pro_response(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+    def _validate_audio_pro_response(
+        self, response: dict[str, Any], endpoint: str
+    ) -> dict[str, Any]:
         """Handle Audio Pro specific response variations and legacy firmware issues.
 
         Args:
@@ -750,11 +835,15 @@ class WiiMClient:
 
         # Log field normalization if any mappings were applied
         if normalized != response:
-            _LOGGER.debug("Normalized Audio Pro response fields for %s on %s", self.host, endpoint)
+            _LOGGER.debug(
+                "Normalized Audio Pro response fields for %s on %s", self.host, endpoint
+            )
 
         return normalized
 
-    def _normalize_audio_pro_string_response(self, response: str, endpoint: str) -> dict[str, Any]:
+    def _normalize_audio_pro_string_response(
+        self, response: str, endpoint: str
+    ) -> dict[str, Any]:
         """Normalize Audio Pro string responses to standard dict format."""
         response = response.strip()
 
@@ -765,7 +854,9 @@ class WiiMClient:
             return {"error": response}
         elif "error" in response.lower():
             return {"error": response}
-        elif "not supported" in response.lower() or "unknown command" in response.lower():
+        elif (
+            "not supported" in response.lower() or "unknown command" in response.lower()
+        ):
             return {"error": "unsupported_command", "raw": response}
         else:
             # For status endpoints, try to parse as key:value pairs
@@ -812,7 +903,9 @@ class WiiMClient:
 
         return result
 
-    def _normalize_audio_pro_fields(self, response: dict[str, Any], endpoint: str) -> dict[str, Any]:
+    def _normalize_audio_pro_fields(
+        self, response: dict[str, Any], endpoint: str
+    ) -> dict[str, Any]:
         """Normalize Audio Pro specific field names and variations."""
         normalized = response.copy()
 
@@ -938,7 +1031,9 @@ class WiiMClient:
                 endpoint = "/httpapi.asp?command=getPlayerStatusEx"
             else:
                 # Audio Pro MkII uses getStatusEx instead (from capabilities)
-                endpoint = self._capabilities.get("status_endpoint", "/httpapi.asp?command=getStatusEx")
+                endpoint = self._capabilities.get(
+                    "status_endpoint", "/httpapi.asp?command=getStatusEx"
+                )
                 _LOGGER.debug("Using Audio Pro MkII fallback endpoint: %s", endpoint)
 
             try:
@@ -962,7 +1057,9 @@ class WiiMClient:
             # Log specific error types for debugging
             error_str = str(err).lower()
             if "404" in error_str:
-                _LOGGER.debug("getPlayerStatusEx not supported by device at %s", self.host)
+                _LOGGER.debug(
+                    "getPlayerStatusEx not supported by device at %s", self.host
+                )
             elif "timeout" in error_str:
                 _LOGGER.debug("Timeout getting player status from %s", self.host)
             else:

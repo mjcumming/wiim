@@ -170,9 +170,7 @@ API_ENDPOINT_LED_BRIGHTNESS = "/httpapi.asp?command=setLEDBrightness:"
 # TCP API commands below are experimental and may need adjustment
 # Documentation: https://github.com/mjcumming/wiim/issues/55
 API_ENDPOINT_ARYLIC_LED = "/httpapi.asp?command=MCU+PAS+RAKOIT:LED:"
-API_ENDPOINT_ARYLIC_LED_BRIGHTNESS = (
-    "/httpapi.asp?command=MCU+PAS+RAKOIT:LEDBRIGHTNESS:"
-)
+API_ENDPOINT_ARYLIC_LED_BRIGHTNESS = "/httpapi.asp?command=MCU+PAS+RAKOIT:LEDBRIGHTNESS:"
 
 # Play Modes
 PLAY_MODE_NORMAL = "normal"
@@ -319,6 +317,11 @@ API_ENDPOINT_PRESET_INFO = "/httpapi.asp?command=getPresetInfo"
 # Bluetooth Operations (Unofficial)
 API_ENDPOINT_START_BT_DISCOVERY = "/httpapi.asp?command=startbtdiscovery:"
 API_ENDPOINT_GET_BT_DISCOVERY_RESULT = "/httpapi.asp?command=getbtdiscoveryresult"
+API_ENDPOINT_CONNECT_BT_A2DP = "/httpapi.asp?command=connectbta2dpsynk:"
+API_ENDPOINT_DISCONNECT_BT_A2DP = "/httpapi.asp?command=disconnectbta2dpsynk"
+API_ENDPOINT_GET_BT_PAIR_STATUS = "/httpapi.asp?command=getbtpairstatus"
+API_ENDPOINT_GET_BT_HISTORY = "/httpapi.asp?command=getbthistory"
+API_ENDPOINT_CLEAR_BT_DISCOVERY = "/httpapi.asp?command=clearbtdiscoveryresult"
 
 # Audio Settings (Unofficial)
 API_ENDPOINT_GET_SPDIF_SAMPLE_RATE = "/httpapi.asp?command=getSpdifOutSampleRate"
@@ -329,12 +332,8 @@ API_ENDPOINT_SET_CHANNEL_BALANCE = "/httpapi.asp?command=setChannelBalance:"
 # Squeezelite/LMS Integration (Unofficial)
 API_ENDPOINT_SQUEEZELITE_STATE = "/httpapi.asp?command=Squeezelite:getState"
 API_ENDPOINT_SQUEEZELITE_DISCOVER = "/httpapi.asp?command=Squeezelite:discover"
-API_ENDPOINT_SQUEEZELITE_AUTO_CONNECT = (
-    "/httpapi.asp?command=Squeezelite:autoConnectEnable:"
-)
-API_ENDPOINT_SQUEEZELITE_CONNECT_SERVER = (
-    "/httpapi.asp?command=Squeezelite:connectServer:"
-)
+API_ENDPOINT_SQUEEZELITE_AUTO_CONNECT = "/httpapi.asp?command=Squeezelite:autoConnectEnable:"
+API_ENDPOINT_SQUEEZELITE_CONNECT_SERVER = "/httpapi.asp?command=Squeezelite:connectServer:"
 
 # Miscellaneous Operations (Unofficial)
 API_ENDPOINT_SET_LED = "/httpapi.asp?command=LED_SWITCH_SET:"

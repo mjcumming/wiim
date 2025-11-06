@@ -383,10 +383,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return WiiMOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
-        """Handle user-initiated setup - go straight to manual entry."""
-        # Skip the setup mode choice and go directly to manual entry
-        # since autodiscovery often fails and manual is more reliable
-        return await self.async_step_manual()
+        """Handle user-initiated setup - try discovery first, then manual entry."""
+        # Try to discover devices first and show them in a dropdown
+        # If no devices found or user wants manual entry, go to manual step
+        return await self.async_step_discovery()
 
     async def async_step_discovery(self, discovery_info: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
         """Handle automatic discovery."""

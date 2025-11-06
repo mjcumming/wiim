@@ -111,6 +111,10 @@ class Speaker:
         self.device_info: HADeviceInfo | None = None
         self._available: bool = True
 
+        # Bluetooth scan results (stored temporarily for entity access)
+        self._bluetooth_devices: list[dict[str, Any]] = []
+        self._bluetooth_scan_status: str = "Not started"
+
         # Media tracking
         self._last_position_update: float | None = None
         self._last_position: int | None = None
@@ -125,14 +129,21 @@ class Speaker:
         # placeholder) so the test fixtures don't crash while still keeping a
         # stable identifier for look-ups.
 
-        if not hasattr(self.config_entry, "entry_id") or self.config_entry.entry_id is None:
-            fallback_entry_id = getattr(self.config_entry, "unique_id", None) or "mock_entry_id"
+        if (
+            not hasattr(self.config_entry, "entry_id")
+            or self.config_entry.entry_id is None
+        ):
+            fallback_entry_id = (
+                getattr(self.config_entry, "unique_id", None) or "mock_entry_id"
+            )
             # Direct assignment is safe on MagicMock / MockConfigEntry instances used in tests
             self.config_entry.entry_id = fallback_entry_id
 
     async def async_setup(self, entry: ConfigEntry) -> None:
         """Complete async setup of the speaker."""
-        _LOGGER.info("🔧 Speaker.async_setup() called for %s (UUID: %s)", self.name, self.uuid)
+        _LOGGER.info(
+            "🔧 Speaker.async_setup() called for %s (UUID: %s)", self.name, self.uuid
+        )
 
         # _populate_device_info is a synchronous helper; no need to await.
         self._populate_device_info()
@@ -143,7 +154,10 @@ class Speaker:
         # In Docker/WSL bridge mode, callbacks may not be reachable, but code handles this gracefully
         # To enable UPnP callbacks in Docker: use network_mode: host in docker-compose.yml or --network=host
         # To enable UPnP callbacks in VS Code DevContainer: add "runArgs": ["--network=host"] to devcontainer.json
-        _LOGGER.info("📡 Initializing UPnP event subscriptions for %s (Samsung/DLNA pattern)...", self.name)
+        _LOGGER.info(
+            "📡 Initializing UPnP event subscriptions for %s (Samsung/DLNA pattern)...",
+            self.name,
+        )
         try:
             await self._setup_upnp_subscriptions(entry)
             _LOGGER.info("✅ UPnP setup completed for %s", self.name)
@@ -156,7 +170,9 @@ class Speaker:
             _LOGGER.debug("UPnP setup error details:", exc_info=True)
             self._subscriptions_failed = True
 
-        _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
+        _LOGGER.info(
+            "Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name
+        )
 
     @property
     def uuid(self) -> str:
@@ -189,15 +205,27 @@ class Speaker:
 
     def _populate_device_info(self) -> None:
         """Extract device info from coordinator data."""
-        status_model = self.coordinator.data.get("status_model") if self.coordinator and self.coordinator.data else None
+        status_model = (
+            self.coordinator.data.get("status_model")
+            if self.coordinator and self.coordinator.data
+            else None
+        )
         status: dict[str, Any] = (
-            status_model.model_dump(exclude_none=True) if isinstance(status_model, PlayerStatus) else {}
+            status_model.model_dump(exclude_none=True)
+            if isinstance(status_model, PlayerStatus)
+            else {}
         )
 
         # Debug: Log available fields for device naming
         _LOGGER.debug(
             "Available status fields for device naming: %s",
-            {k: v for k, v in status.items() if any(name in k.lower() for name in ["name", "device", "group", "ssid"])},
+            {
+                k: v
+                for k, v in status.items()
+                if any(
+                    name in k.lower() for name in ["name", "device", "group", "ssid"]
+                )
+            },
         )
 
         self.ip_address = self.coordinator.client.host
@@ -220,7 +248,11 @@ class Speaker:
         # Group info - role is stored in main coordinator data, not multiroom section
         # Only set role if it hasn't been set by role detection yet (avoid overriding)
         if not hasattr(self, "role") or self.role is None:
-            self.role = self.coordinator.data.get("role", "solo") if self.coordinator.data else "solo"
+            self.role = (
+                self.coordinator.data.get("role", "solo")
+                if self.coordinator.data
+                else "solo"
+            )
 
     async def _register_ha_device(self, entry: ConfigEntry) -> None:
         """Register device in HA registry."""
@@ -260,10 +292,14 @@ class Speaker:
         device_model = data.get("device_model")
 
         status: dict[str, Any] = (
-            status_model.model_dump(exclude_none=True) if isinstance(status_model, PlayerStatus) else {}
+            status_model.model_dump(exclude_none=True)
+            if isinstance(status_model, PlayerStatus)
+            else {}
         )
         device_info: dict[str, Any] = (
-            device_model.model_dump(exclude_none=True) if isinstance(device_model, WiiMDeviceInfo) else {}
+            device_model.model_dump(exclude_none=True)
+            if isinstance(device_model, WiiMDeviceInfo)
+            else {}
         )
         # Get role from coordinator data, preserving existing role if coordinator data unavailable
         # Role detection sets the role correctly, don't override with fallback defaults
@@ -305,14 +341,18 @@ class Speaker:
                 "WiiM Speaker",
                 "WiiM Device",
             ]:
-                self.hass.config_entries.async_update_entry(self.config_entry, title=new_name)
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, title=new_name
+                )
 
         # Update role and group state
         old_role = self.role
         self.role = role
 
         if old_role != self.role:
-            _LOGGER.info("Speaker %s role changed: %s -> %s", self.name, old_role, self.role)
+            _LOGGER.info(
+                "Speaker %s role changed: %s -> %s", self.name, old_role, self.role
+            )
 
         # Handle group relationships using simple lookups
         if self.role == "master":
@@ -346,7 +386,9 @@ class Speaker:
         self.coordinator_speaker = None  # Masters don't have coordinators
 
         # Only log when group composition actually changes
-        current_slave_ips = [m.ip_address for m in self.group_members if hasattr(m, "ip_address")]
+        current_slave_ips = [
+            m.ip_address for m in self.group_members if hasattr(m, "ip_address")
+        ]
         new_slave_ips = []
         for slave_info in slave_list:
             if isinstance(slave_info, dict):
@@ -401,7 +443,9 @@ class Speaker:
                     )
                     self._missing_devices_reported.add(slave_uuid)
                     self.hass.async_create_task(
-                        self._trigger_missing_device_discovery(slave_uuid, slave_name, slave_ip)
+                        self._trigger_missing_device_discovery(
+                            slave_uuid, slave_name, slave_ip
+                        )
                     )
                 elif slave_uuid:
                     # Subsequent polls - only log at debug level to avoid spam
@@ -445,7 +489,9 @@ class Speaker:
                     )
                     self._missing_devices_reported.add(master_uuid)
                     self.hass.async_create_task(
-                        self._trigger_missing_device_discovery(master_uuid, "Missing Master", None)
+                        self._trigger_missing_device_discovery(
+                            master_uuid, "Missing Master", None
+                        )
                     )
                 else:
                     # Subsequent polls - only log at debug level to avoid spam
@@ -468,14 +514,18 @@ class Speaker:
             from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 
             # Check if already have config entry
-            existing = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, device_uuid)
+            existing = self.hass.config_entries.async_entry_for_domain_unique_id(
+                DOMAIN, device_uuid
+            )
             if existing:
                 return
 
             # Check for existing discovery flows
             existing_flows = [
                 flow
-                for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+                for flow in self.hass.config_entries.flow.async_progress_by_handler(
+                    DOMAIN
+                )
                 if flow.get("context", {}).get("unique_id") == device_uuid
             ]
             if existing_flows:
@@ -491,7 +541,9 @@ class Speaker:
             discovery_data = {
                 "device_uuid": device_uuid,
                 "device_name": device_name,
-                "discovery_source": "missing_device" if not device_ip else "automatic_slave",
+                "discovery_source": "missing_device"
+                if not device_ip
+                else "automatic_slave",
             }
 
             # Include IP if available (enables automatic setup without user input)
@@ -544,7 +596,9 @@ class Speaker:
             or status.get("friendlyName")  # Common API field
             or status.get("name")  # Generic name field
             or status.get("GroupName")  # Group name field
-            or status.get("ssid", "").replace("_", " ")  # Device hotspot name (fallback)
+            or status.get("ssid", "").replace(
+                "_", " "
+            )  # Device hotspot name (fallback)
             # REMOVED: or status.get("title")  # This is SONG TITLE, not device name!
             or "WiiM Speaker"  # Clean final fallback (no IP)
         )
@@ -608,7 +662,9 @@ class Speaker:
             ordered_members = [self] + self.group_members
 
         # Map to entity IDs and filter out any unresolved speakers (None)
-        return [eid for eid in (_speaker_to_entity_id(s) for s in ordered_members) if eid]
+        return [
+            eid for eid in (_speaker_to_entity_id(s) for s in ordered_members) if eid
+        ]
 
     async def async_join_group(self, target_speakers: list[Speaker]) -> None:
         """Create or extend a multiroom group with *self* as master.
@@ -633,12 +689,19 @@ class Speaker:
                 await slave.coordinator.client.join_slave(self.ip_address)
 
             # 3. Trigger immediate refresh on all slaves for faster UI updates
-            _LOGGER.debug("Triggering immediate refresh on %d slave devices for faster role detection", len(slaves))
+            _LOGGER.debug(
+                "Triggering immediate refresh on %d slave devices for faster role detection",
+                len(slaves),
+            )
             for slave in slaves:
                 try:
                     await slave.coordinator.async_request_refresh()
                 except Exception as refresh_err:
-                    _LOGGER.warning("Failed to trigger refresh on slave %s: %s", slave.name, refresh_err)
+                    _LOGGER.warning(
+                        "Failed to trigger refresh on slave %s: %s",
+                        slave.name,
+                        refresh_err,
+                    )
 
             # 4. Also refresh master to update its group member list
             await self.coordinator.async_request_refresh()
@@ -658,16 +721,25 @@ class Speaker:
                 await self.coordinator.client.leave_group()
 
                 # Trigger refresh on all former slaves for faster UI updates
-                _LOGGER.debug("Triggering immediate refresh on %d former slave devices", len(former_slaves))
+                _LOGGER.debug(
+                    "Triggering immediate refresh on %d former slave devices",
+                    len(former_slaves),
+                )
                 for slave in former_slaves:
                     try:
                         await slave.coordinator.async_request_refresh()
                     except Exception as refresh_err:
-                        _LOGGER.warning("Failed to trigger refresh on former slave %s: %s", slave.name, refresh_err)
+                        _LOGGER.warning(
+                            "Failed to trigger refresh on former slave %s: %s",
+                            slave.name,
+                            refresh_err,
+                        )
 
             elif self.role == "slave" and self.coordinator_speaker:
                 # Ask master to kick us out.
-                await self.coordinator_speaker.coordinator.client.kick_slave(self.ip_address)
+                await self.coordinator_speaker.coordinator.client.kick_slave(
+                    self.ip_address
+                )
 
                 # Trigger refresh on former master to update its group member list
                 if former_master:
@@ -675,7 +747,9 @@ class Speaker:
                         await former_master.coordinator.async_request_refresh()
                     except Exception as refresh_err:
                         _LOGGER.warning(
-                            "Failed to trigger refresh on former master %s: %s", former_master.name, refresh_err
+                            "Failed to trigger refresh on former master %s: %s",
+                            former_master.name,
+                            refresh_err,
                         )
             # Solo => nothing to do.
 
@@ -874,7 +948,11 @@ class Speaker:
             if self.status_model is None:
                 is_playing = False
             else:
-                play_status = str(self.status_model.play_state) if self.status_model.play_state is not None else ""
+                play_status = (
+                    str(self.status_model.play_state)
+                    if self.status_model.play_state is not None
+                    else ""
+                )
                 is_playing = play_status.lower() in ("play", "playing", "load")
         except Exception:
             is_playing = True  # fall back to permissive behavior
@@ -884,7 +962,9 @@ class Speaker:
 
         # Treat clear position decrease as implicit track switch (some sources delay metadata)
         position_decreased = (
-            current_position is not None and previous_position is not None and current_position + 2 < previous_position
+            current_position is not None
+            and previous_position is not None
+            and current_position + 2 < previous_position
         )
 
         if (track_changed or position_decreased) and current_position is not None:
@@ -922,7 +1002,9 @@ class Speaker:
         if self.status_model is None:
             return None
 
-        source_internal = self.status_model.source or getattr(self.status_model, "mode", None)
+        source_internal = self.status_model.source or getattr(
+            self.status_model, "mode", None
+        )
 
         if not source_internal:
             return None
@@ -1002,9 +1084,23 @@ class Speaker:
 
             # Return known mode or "Unknown" with the raw value
             result = AUDIO_OUTPUT_MODES.get(mode_str, f"Unknown ({hardware_mode})")
+            # Only log if there's an unexpected value or error
+            if result.startswith("Unknown"):
+                _LOGGER.debug(
+                    "get_current_output_mode for %s: unexpected hardware_mode=%s, audio_output=%s",
+                    self.name,
+                    hardware_mode,
+                    audio_output,
+                )
             return result
-        except Exception:
+        except Exception as err:
             # Handle any unexpected data format issues
+            _LOGGER.debug(
+                "get_current_output_mode for %s: exception: %s, audio_output=%s",
+                self.name,
+                err,
+                audio_output,
+            )
             return None
 
     def get_output_mode_list(self) -> list[str]:
@@ -1125,14 +1221,11 @@ class Speaker:
         """Check if UPnP volume events should be used instead of HTTP polling.
 
         Returns:
-            True if UPnP is healthy and has provided volume data, False otherwise
+            True if UPnP eventer exists and has provided volume data, False otherwise.
+            No health checking per DLNA DMR pattern - trust auto_resubscribe=True.
         """
-        # Check if UPnP eventer exists and is healthy
+        # Check if UPnP eventer exists (subscription succeeded)
         if not self._upnp_eventer:
-            return False
-
-        # Check if UPnP is healthy
-        if not hasattr(self._upnp_eventer, "healthy") or not self._upnp_eventer.healthy():
             return False
 
         # Check if UPnP has provided volume data
@@ -1412,4 +1505,97 @@ class Speaker:
             raw = self.coordinator.data.get("device_model")
             if isinstance(raw, WiiMDeviceInfo):
                 return raw
+        return None
+
+    # ----- BLUETOOTH HELPERS -----
+
+    def get_bluetooth_devices(self) -> list[dict[str, Any]]:
+        """Return list of discovered Bluetooth devices."""
+        return self._bluetooth_devices.copy()
+
+    def set_bluetooth_devices(
+        self, devices: list[dict[str, Any]], scan_status: str = "Complete"
+    ) -> None:
+        """Update Bluetooth scan results."""
+        self._bluetooth_devices = devices
+        self._bluetooth_scan_status = scan_status
+
+    def get_bluetooth_scan_status(self) -> str:
+        """Return current Bluetooth scan status."""
+        return self._bluetooth_scan_status
+
+    def get_bluetooth_pair_status(self) -> dict[str, Any] | None:
+        """Return current Bluetooth pairing status from coordinator data."""
+        if self.coordinator and self.coordinator.data:
+            return self.coordinator.data.get("bt_pair_status")
+        return None
+
+    def is_bluetooth_paired(self) -> bool:
+        """Return True if a Bluetooth device is currently paired."""
+        pair_status = self.get_bluetooth_pair_status()
+        if not pair_status:
+            return False
+
+        # Check result field - 0=not paired, 1=paired, other values may indicate different states
+        result = pair_status.get("result", 0)
+        return result != 0  # Any non-zero value likely means paired
+
+    def get_bluetooth_history(self) -> list[dict[str, Any]]:
+        """Return Bluetooth connection history from coordinator data."""
+        if self.coordinator and self.coordinator.data:
+            return self.coordinator.data.get("bt_history", [])
+        return []
+
+    def get_connected_bluetooth_device(self) -> dict[str, Any] | None:
+        """Return the currently connected Bluetooth device from history.
+
+        Looks for devices with ct=1 (connected) and role="Audio Sink" (output mode).
+
+        Returns:
+            Dict with device info (name, ad/mac, etc.) or None if no device connected
+        """
+        history = self.get_bluetooth_history()
+        if not history:
+            _LOGGER.debug(
+                "No Bluetooth history available for %s to find connected device",
+                self.name,
+            )
+            return None
+
+        _LOGGER.debug(
+            "Checking %d devices in Bluetooth history for %s", len(history), self.name
+        )
+
+        # Find device with ct=1 (connected) and role="Audio Sink" (output mode)
+        for device in history:
+            ct = device.get("ct", 0)
+            role = device.get("role", "")
+            name = device.get("name", "Unknown")
+            mac = device.get("ad", "")
+            _LOGGER.debug(
+                "Checking device: name=%s, mac=%s, ct=%s, role=%s",
+                name,
+                mac,
+                ct,
+                role,
+            )
+            # ct=1 means connected, role="Audio Sink" means receiving audio (BT output)
+            if ct == 1 and role == "Audio Sink":
+                # Normalize MAC address field (API uses 'ad', we normalize to 'mac')
+                normalized_device = device.copy()
+                if "ad" in normalized_device and "mac" not in normalized_device:
+                    normalized_device["mac"] = normalized_device["ad"].lower()
+                _LOGGER.debug(
+                    "Found connected Bluetooth device for %s: %s (%s)",
+                    self.name,
+                    normalized_device.get("name"),
+                    normalized_device.get("mac"),
+                )
+                return normalized_device
+
+        _LOGGER.debug(
+            "No connected Bluetooth device found in history for %s (checked %d devices)",
+            self.name,
+            len(history),
+        )
         return None

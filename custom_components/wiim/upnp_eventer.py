@@ -44,8 +44,7 @@ class UpnpEventer:
         self.state_manager = state_manager
         self.device_uuid = device_uuid
 
-        # Health tracking
-        self._push_healthy = False
+        # Event statistics (for diagnostics only - no health checking per DLNA DMR pattern)
         self._last_notify_ts: float | None = None
         self._event_count = 0
 
@@ -84,7 +83,11 @@ class UpnpEventer:
                 )
                 # Validate callback URL reachability
                 server_host = getattr(self.upnp_client.notify_server, "host", "unknown")
-                if server_host.startswith("172.") or server_host.startswith("192.168.65") or server_host == "0.0.0.0":
+                if (
+                    server_host.startswith("172.")
+                    or server_host.startswith("192.168.65")
+                    or server_host == "0.0.0.0"
+                ):
                     _LOGGER.error(
                         "   ⚠️  CRITICAL: Callback URL uses unreachable IP %s - devices on your LAN cannot reach this!",
                         server_host,
@@ -99,7 +102,9 @@ class UpnpEventer:
 
             # Reference pattern: Set callback and subscribe - auto_resubscribe handles everything
             self.upnp_client._dmr_device.on_event = self._on_event
-            await self.upnp_client._dmr_device.async_subscribe_services(auto_resubscribe=True)
+            await self.upnp_client._dmr_device.async_subscribe_services(
+                auto_resubscribe=True
+            )
 
             subscription_duration = time.time() - subscription_start_time
             _LOGGER.info(
@@ -107,9 +112,6 @@ class UpnpEventer:
                 self.upnp_client.host,
                 subscription_duration,
             )
-
-            # Mark push as healthy
-            self._push_healthy = True
 
         except UpnpResponseError as err:
             # Device rejected subscription - this is OK, we'll poll instead (reference pattern)
@@ -144,7 +146,6 @@ class UpnpEventer:
         # Stop notify server
         await self.upnp_client.unwind_notify_server()
 
-        self._push_healthy = False
         _LOGGER.info("UPnP event subscriptions stopped for %s", self.upnp_client.host)
 
     def _on_event(
@@ -155,7 +156,10 @@ class UpnpEventer:
         """Handle UPnP events from DmrDevice (reference: dlna_dmr/media_player.py:510)."""
         # Handle empty state_variables (resubscription failure indication)
         if not state_variables:
-            _LOGGER.debug("Empty state_variables from %s - may indicate resubscription failure", self.upnp_client.host)
+            _LOGGER.debug(
+                "Empty state_variables from %s - may indicate resubscription failure",
+                self.upnp_client.host,
+            )
             return
 
         # Extract service type from service.service_id
@@ -182,10 +186,22 @@ class UpnpEventer:
             service_type,
             list(variables_dict.keys()),
         )
+        # Log all variable values for debugging (especially to see if audio output mode changes are included)
+        # Always log LastChange XML to see what variables are available
+        if "LastChange" in variables_dict:
+            _LOGGER.debug(
+                "UPnP event LastChange XML for %s: %s",
+                self.upnp_client.host,
+                variables_dict.get("LastChange", "")[
+                    :500
+                ],  # First 500 chars to avoid huge logs
+            )
 
         # Parse LastChange XML (same as original)
         if "LastChange" in variables_dict:
-            changes = self._parse_last_change(service_type, variables_dict["LastChange"])
+            changes = self._parse_last_change(
+                service_type, variables_dict["LastChange"]
+            )
         else:
             changes = variables_dict
 
@@ -218,13 +234,21 @@ class UpnpEventer:
                             var_value = var.get("val", "")
 
                             if var_name == "TransportState":
-                                changes["play_state"] = var_value.lower().replace("_", " ")
+                                changes["play_state"] = var_value.lower().replace(
+                                    "_", " "
+                                )
                             elif var_name == "AbsoluteTimePosition":
-                                changes["position"] = self._parse_time_position(var_value)
+                                changes["position"] = self._parse_time_position(
+                                    var_value
+                                )
                             elif var_name == "RelativeTimePosition":
-                                changes["position"] = self._parse_time_position(var_value)
+                                changes["position"] = self._parse_time_position(
+                                    var_value
+                                )
                             elif var_name == "CurrentTrackDuration":
-                                changes["duration"] = self._parse_time_position(var_value)
+                                changes["duration"] = self._parse_time_position(
+                                    var_value
+                                )
 
                     # Parse RenderingControl service variables
                     elif service_type == "RenderingControl":
@@ -243,6 +267,23 @@ class UpnpEventer:
                             elif var_name == "Mute":
                                 if channel == "Master" or not channel:
                                     changes["muted"] = var_value.lower() == "1"
+                            # Log any other RenderingControl variables we're not parsing
+                            # (might include audio output mode changes)
+                            else:
+                                _LOGGER.debug(
+                                    "Unparsed RenderingControl variable: %s = %s",
+                                    var_name,
+                                    var_value,
+                                )
+
+                    # Log any other variables we encounter (for discovering audio output mode changes)
+                    else:
+                        _LOGGER.debug(
+                            "Unparsed variable in %s service: %s = %s",
+                            service_type,
+                            var_name,
+                            var_value,
+                        )
 
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Error parsing LastChange XML: %s", err)
@@ -272,30 +313,13 @@ class UpnpEventer:
 
         return None
 
-    def healthy(self) -> bool:
-        """Check if push path is healthy."""
-        if not self._push_healthy:
-            return False
-
-        now = time.time()
-        time_since_last = now - (self._last_notify_ts or 0)
-
-        # Consider unhealthy if no events for 4+ minutes
-        if time_since_last > 240:
-            _LOGGER.warning(
-                "⚠️  No UPnP events for %.0f seconds - marking push unhealthy",
-                time_since_last,
-            )
-            return False
-
-        return True
-
     def get_subscription_stats(self) -> dict[str, Any]:
-        """Get subscription statistics for diagnostics."""
+        """Get subscription statistics for diagnostics (following DLNA DMR pattern - no health checking)."""
         now = time.time()
         return {
-            "push_healthy": self._push_healthy,
             "total_events": self._event_count,
             "last_notify_ts": self._last_notify_ts,
-            "time_since_last": now - (self._last_notify_ts or 0),
+            "time_since_last": now - self._last_notify_ts
+            if self._last_notify_ts is not None
+            else None,
         }

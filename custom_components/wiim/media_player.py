@@ -225,6 +225,20 @@ async def async_setup_entry(
         "async_set_touch_buttons",
     )
 
+    # Connect Bluetooth Device service
+    platform.async_register_entity_service(
+        "connect_bluetooth_device",
+        {vol.Required("mac_address"): str},
+        "async_connect_bluetooth_device",
+    )
+
+    # Disconnect Bluetooth Device service
+    platform.async_register_entity_service(
+        "disconnect_bluetooth_device",
+        None,
+        "async_disconnect_bluetooth_device",
+    )
+
 
 class WiiMMediaPlayer(
     WiimEntity,
@@ -957,16 +971,72 @@ class WiiMMediaPlayer(
     # ===== UNOFFICIAL API SERVICES =====
 
     async def async_scan_bluetooth(self, duration: int = 3) -> None:
-        """Scan for nearby Bluetooth devices.
+        """Scan for nearby Bluetooth devices and store results.
 
         WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
         """
         try:
             _LOGGER.info("Starting Bluetooth scan for %s (duration: %s seconds)", self.speaker.name, duration)
-            await self.speaker.coordinator.client.start_bluetooth_discovery(duration)
-            _LOGGER.info("Bluetooth scan started successfully for %s", self.speaker.name)
+            self.speaker.set_bluetooth_devices([], "Scanning")
+
+            # Perform the complete scan (start + wait for completion)
+            devices = await self.speaker.coordinator.client.scan_for_bluetooth_devices(duration=duration)
+
+            # Store results
+            self.speaker.set_bluetooth_devices(devices, "Complete")
+            _LOGGER.info(
+                "Bluetooth scan completed for %s: found %d devices",
+                self.speaker.name,
+                len(devices),
+            )
+
+            # Trigger update on select entities
+            from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+            async_dispatcher_send(
+                self.hass,
+                f"wiim_bluetooth_scan_complete_{self.speaker.uuid}",
+            )
+
         except Exception as err:
-            _LOGGER.error("Failed to start Bluetooth scan for %s: %s", self.speaker.name, err)
+            _LOGGER.error("Failed to scan Bluetooth devices for %s: %s", self.speaker.name, err)
+            self.speaker.set_bluetooth_devices([], "Failed")
+            raise
+
+    async def async_connect_bluetooth_device(self, mac_address: str) -> None:
+        """Connect to a Bluetooth device by MAC address.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Connecting to Bluetooth device %s for %s", mac_address, self.speaker.name)
+
+            # Connect to the device
+            await self.speaker.coordinator.client.connect_bluetooth_device(mac_address)
+            _LOGGER.info("Successfully connected to Bluetooth device %s for %s", mac_address, self.speaker.name)
+
+            # Optionally switch output mode to Bluetooth
+            try:
+                await self.controller.select_output_mode("Bluetooth Out")
+                _LOGGER.info("Switched output mode to Bluetooth for %s", self.speaker.name)
+            except Exception as err:
+                _LOGGER.warning("Failed to switch output mode to Bluetooth (connection may still work): %s", err)
+
+        except Exception as err:
+            _LOGGER.error("Failed to connect to Bluetooth device %s for %s: %s", mac_address, self.speaker.name, err)
+            raise
+
+    async def async_disconnect_bluetooth_device(self) -> None:
+        """Disconnect the current Bluetooth connection.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+        """
+        try:
+            _LOGGER.info("Disconnecting Bluetooth device for %s", self.speaker.name)
+            await self.speaker.coordinator.client.disconnect_bluetooth_device()
+            _LOGGER.info("Successfully disconnected Bluetooth device for %s", self.speaker.name)
+        except Exception as err:
+            _LOGGER.error("Failed to disconnect Bluetooth device for %s: %s", self.speaker.name, err)
             raise
 
     async def async_set_channel_balance(self, balance: float) -> None:

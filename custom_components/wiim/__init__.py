@@ -68,12 +68,13 @@ CORE_PLATFORMS: list[Platform] = [
     Platform.SWITCH,  # Always enabled - group mute control for multiroom
     Platform.UPDATE,  # Always enabled - firmware update indicator
     Platform.LIGHT,  # Always enabled - front-panel LED control
-    Platform.SELECT,  # Always enabled - audio output mode control
+    Platform.SELECT,  # Always enabled - audio output mode control and Bluetooth device selection
+    Platform.BUTTON,  # Always enabled - Bluetooth scan button (maintenance buttons are optional)
 ]
 
 # Essential optional platforms based on user configuration
 OPTIONAL_PLATFORMS: dict[str, Platform] = {
-    CONF_ENABLE_MAINTENANCE_BUTTONS: Platform.BUTTON,
+    CONF_ENABLE_MAINTENANCE_BUTTONS: Platform.BUTTON,  # Note: BUTTON is in CORE but maintenance buttons are optional
     CONF_ENABLE_NETWORK_MONITORING: Platform.BINARY_SENSOR,
     # Note: EQ controls are now handled within the switch platform conditionally
 }
@@ -120,15 +121,25 @@ def get_enabled_platforms(
             platforms.append(Platform.SELECT)
             _LOGGER.info("Enabling SELECT platform - device supports audio output control")
         else:
-            _LOGGER.info("Skipping SELECT platform - device does not support audio output control")
+            _LOGGER.info("Skipping audio output select entity - device does not support audio output control")
+            # Still enable SELECT platform for Bluetooth device selection
+            platforms.append(Platform.SELECT)
+            _LOGGER.info("Enabling SELECT platform for Bluetooth device selection")
     else:
         _LOGGER.warning(
-            "Capabilities not available for %s - skipping SELECT platform",
+            "Capabilities not available for %s - enabling SELECT platform for Bluetooth device selection",
             entry.data.get("host"),
         )
+        # Still enable SELECT platform for Bluetooth device selection
+        platforms.append(Platform.SELECT)
 
     # Add optional platforms based on user preferences
+    # Note: BUTTON is in CORE_PLATFORMS (for Bluetooth scan), but maintenance buttons are optional
     for config_key, platform in OPTIONAL_PLATFORMS.items():
+        # Skip if platform is already in core platforms
+        if platform in platforms:
+            _LOGGER.debug("Platform %s already enabled in core, skipping optional check", platform)
+            continue
         # All optional platforms default to disabled unless the user opts in
         default_enabled = False
         if entry.options.get(config_key, default_enabled):
