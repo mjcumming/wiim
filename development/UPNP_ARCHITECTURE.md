@@ -8,6 +8,7 @@
 ## 🎯 **Overview**
 
 The WiiM integration uses a **hybrid approach**:
+
 - **UPnP**: For real-time event notifications (play/pause, volume, track changes)
 - **HTTP API**: For all device control and configuration
 
@@ -20,6 +21,7 @@ This differs from some other implementations (like [WiiM Play](https://github.co
 ### **What We Use UPnP For**
 
 ✅ **Event Notifications** (via DLNA DMR pattern):
+
 - Play/pause/stop state changes
 - Volume changes
 - Mute state changes
@@ -27,6 +29,7 @@ This differs from some other implementations (like [WiiM Play](https://github.co
 - Position updates
 
 ❌ **What We DON'T Use UPnP For**:
+
 - Playback control (play, pause, stop, next, previous)
 - Volume control
 - Source selection
@@ -90,14 +93,17 @@ Home Assistant entity updates
 ### **Comparison with WiiM Play**
 
 **WiiM Play Approach:**
+
 - UPnP for transport control (play/pause/seek/volume)
 - HTTP API for device-specific features (EQ, audio output, balance, fade)
 
 **Our Approach:**
+
 - UPnP for events only (notifications)
 - HTTP API for everything (control + device features)
 
 **Why We Chose This:**
+
 - Home Assistant pattern: Most integrations use HTTP API for control
 - Simpler codebase: One control path instead of two
 - Better error handling: HTTP API errors are easier to handle than UPnP SOAP errors
@@ -176,6 +182,7 @@ def _merge_upnp_state_to_coordinator(self):
 **Purpose**: Transport state events (play/pause/stop, track changes)
 
 **Events We Listen To:**
+
 - `TransportState` - Current playback state
 - `CurrentTrackMetaData` - Track metadata
 - `CurrentTrack` - Current track number
@@ -183,6 +190,7 @@ def _merge_upnp_state_to_coordinator(self):
 - `RelativeTimePosition` - Current position
 
 **We DON'T Use:**
+
 - `Play()` - We use HTTP API `setPlayerCmd:play`
 - `Pause()` - We use HTTP API `setPlayerCmd:pause`
 - `Stop()` - We use HTTP API `setPlayerCmd:stop`
@@ -193,10 +201,12 @@ def _merge_upnp_state_to_coordinator(self):
 **Purpose**: Volume and mute events
 
 **Events We Listen To:**
+
 - `Volume` - Current volume level
 - `Mute` - Mute state
 
 **We DON'T Use:**
+
 - `SetVolume()` - We use HTTP API `setPlayerCmd:vol:<level>`
 - `SetMute()` - We use HTTP API `setPlayerCmd:mute:<state>`
 
@@ -252,6 +262,7 @@ If UPnP fails at any stage, the integration falls back to HTTP polling:
 ### **HTTP Polling Fallback**
 
 When UPnP is unavailable:
+
 - **Playing state**: Poll every 1 second
 - **Idle state**: Poll every 5 seconds
 - **All functionality works perfectly**
@@ -317,4 +328,3 @@ Potential enhancements:
 4. **Better Diagnostics**: More detailed UPnP health metrics
 
 But remember: **UPnP is an optimization, not a requirement**. The integration works great with HTTP polling alone.
-

@@ -128,7 +128,7 @@ API_ENDPOINT_GROUP_SLAVE_VOLUME = "/httpapi.asp?command=multiroom:SlaveVolume:"
 # EQ Controls
 API_ENDPOINT_EQ_PRESET = "/httpapi.asp?command=EQLoad:"
 API_ENDPOINT_EQ_CUSTOM = "/httpapi.asp?command=setEQ:custom:"
-API_ENDPOINT_EQ_GET = "/httpapi.asp?command=getEQ"
+API_ENDPOINT_EQ_GET = "/httpapi.asp?command=EQGetBand"
 API_ENDPOINT_EQ_ON = "/httpapi.asp?command=EQOn"
 API_ENDPOINT_EQ_OFF = "/httpapi.asp?command=EQOff"
 API_ENDPOINT_EQ_STATUS = "/httpapi.asp?command=EQGetStat"

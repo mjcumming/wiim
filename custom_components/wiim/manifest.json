@@ -37,6 +37,6 @@
       "st": "urn:schemas-upnp-org:service:ConnectionManager:1"
     }
   ],
-  "version": "0.2.17",
+  "version": "0.2.18",
   "zeroconf": [{ "type": "_linkplay._tcp.local." }]
 }

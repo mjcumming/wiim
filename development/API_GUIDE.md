@@ -200,8 +200,8 @@ async def get_eq_status(self) -> bool:
 
     Not all firmware builds implement ``EQGetStat`` – many return the
     generic ``{"status":"Failed"}`` payload instead.  In that case we
-    fall back to calling ``getEQ``: if the speaker answers *anything*
-    other than *unknown command* we assume that EQ support is present
+    fall back to calling ``EQGetBand``: if the speaker answers with a
+    valid response (status "OK") we assume that EQ support is present
     and therefore enabled.
     """
     try:
@@ -214,11 +214,14 @@ async def get_eq_status(self) -> bool:
         # Some firmwares return {"status":"Failed"} for unsupported
         # commands – treat this as *unknown* and use a heuristic.
         if str(response.get("status", "")).lower() == "failed":
-            # If /getEQ succeeds we take that as evidence that the EQ
+            # If EQGetBand succeeds we take that as evidence that the EQ
             # subsystem is operational which implies it is *enabled*.
             try:
-                await self._request(API_ENDPOINT_EQ_GET)
-                return True
+                response = await self._request(API_ENDPOINT_EQ_GET)
+                # Verify we got a valid response (not "unknown command")
+                if isinstance(response, dict) and response.get("status") == "OK":
+                    return True
+                return False
             except WiiMError:
                 return False
 

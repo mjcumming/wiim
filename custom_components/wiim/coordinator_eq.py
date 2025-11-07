@@ -123,7 +123,7 @@ async def fetch_eq_info(coordinator) -> EQInfo:
                 and ("unknown command" in raw_response.lower() or "unknow command" in raw_response.lower())
             ):  # Typo in some firmware
                 _LOGGER.info(
-                    "[WiiM] %s: Device responded 'unknown command' to getEQ – permanently disabling EQ polling",
+                    "[WiiM] %s: Device responded 'unknown command' to EQGetBand – permanently disabling EQ polling",
                     coordinator.client.host,
                 )
                 coordinator._eq_supported = False  # noqa: SLF001
@@ -143,12 +143,18 @@ async def fetch_eq_info(coordinator) -> EQInfo:
             _LOGGER.debug("[WiiM] %s: Raw EQ data: %s", coordinator.client.host, eq_data)
 
             # Extract eq_enabled from EQ data if not already set
-            if "eq_enabled" not in eq_dict and "enabled" in eq_data:
-                eq_dict["eq_enabled"] = eq_data["enabled"]
+            if "eq_enabled" not in eq_dict:
+                # Try "enabled" field first (legacy)
+                if "enabled" in eq_data:
+                    eq_dict["eq_enabled"] = eq_data["enabled"]
+                # Try "EQStat" field (EQGetBand uses this: "On" or "Off")
+                elif "EQStat" in eq_data:
+                    eq_stat = str(eq_data.get("EQStat", "")).lower()
+                    eq_dict["eq_enabled"] = eq_stat == "on"
 
             # Extract EQ preset from various possible field names.
-            # Prioritize "EQ" field as it usually contains the display name
-            for field_name in ["EQ", "eq_preset", "eq_mode", "sound_mode", "preset"]:
+            # Prioritize "Name" field (EQGetBand uses this) then "EQ" field
+            for field_name in ["Name", "EQ", "eq_preset", "eq_mode", "sound_mode", "preset"]:
                 preset_val = eq_data.get(field_name)
                 if preset_val is not None and str(preset_val).strip() not in ["", "unknown", "none"]:
                     eq_dict["eq_preset"] = preset_val
@@ -163,7 +169,7 @@ async def fetch_eq_info(coordinator) -> EQInfo:
         # Both calls failed completely
         if coordinator._eq_supported is None:  # noqa: SLF001
             _LOGGER.info(
-                "[WiiM] %s: EQ not supported by device - both getEQ and EQGetStat failed", coordinator.client.host
+                "[WiiM] %s: EQ not supported by device - both EQGetBand and EQGetStat failed", coordinator.client.host
             )
             coordinator._eq_supported = False  # noqa: SLF001
         return EQInfo()

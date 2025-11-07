@@ -2,6 +2,15 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.18] - 2025-01-27
+
+### Fixed
+
+- **EQ Endpoint Migration**: Fixed EQ information retrieval by migrating from non-existent `getEQ` endpoint to `EQGetBand`
+  - Updated endpoint constant to use correct `EQGetBand` command
+  - Enhanced response parsing to handle `Name` and `EQStat` fields from EQGetBand response
+  - Updated error messages and documentation to reflect correct endpoint usage
+
 ## [0.2.17] - 2025-11-07
 
 ### Fixed

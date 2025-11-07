@@ -61,7 +61,7 @@ async def test_eq_info_unknown_command_response(mock_coordinator):
     """Test EQ info when device returns 'unknown command'."""
     mock_coordinator._eq_supported = None
     mock_coordinator.client.get_eq_status = AsyncMock(return_value=True)
-    mock_coordinator.client.get_eq = AsyncMock(return_value={"raw": "unknown command: getEQ"})
+    mock_coordinator.client.get_eq = AsyncMock(return_value={"raw": "unknown command: EQGetBand"})
 
     result = await fetch_eq_info(mock_coordinator)
 
@@ -77,9 +77,11 @@ async def test_eq_info_preset_field_variations(mock_coordinator):
     mock_coordinator.client.get_eq_status = AsyncMock(return_value=True)
 
     # Test various field names that might contain the preset
+    # "Name" should be first priority (EQGetBand uses this)
     preset_fields = [
-        ("preset", "Classical"),
+        ("Name", "Flat"),  # EQGetBand uses "Name" field
         ("EQ", "Jazz"),
+        ("preset", "Classical"),
         ("eq_preset", "Pop"),
         ("eq_mode", "Vocal"),
         ("sound_mode", "Rock"),
@@ -134,6 +136,27 @@ async def test_eq_info_partial_data(mock_coordinator):
     assert isinstance(result, EQInfo)
     assert result.eq_enabled is True  # From status call
     assert result.eq_preset is None  # No preset data available
+
+
+async def test_eq_info_eqgetband_format(mock_coordinator):
+    """Test EQ info with EQGetBand response format (Name and EQStat fields)."""
+    mock_coordinator._eq_supported = True
+    mock_coordinator.client.get_eq_status = AsyncMock(side_effect=WiiMError("Status failed"))
+    # EQGetBand format: Name for preset, EQStat for enabled status
+    mock_coordinator.client.get_eq = AsyncMock(
+        return_value={
+            "status": "OK",
+            "Name": "Rock",
+            "EQStat": "On",
+            "EQBand": [],
+        }
+    )
+
+    result = await fetch_eq_info(mock_coordinator)
+
+    assert isinstance(result, EQInfo)
+    assert result.eq_enabled is True  # From EQStat: "On"
+    assert result.eq_preset == "Rock"  # From Name field
 
 
 async def test_eq_info_status_failure_eq_success(mock_coordinator):

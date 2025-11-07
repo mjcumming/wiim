@@ -72,10 +72,13 @@ class EQAPI:  # mix-in – appear before base client in MRO
             if "EQStat" in response:
                 return str(response["EQStat"]).lower() == "on"
             if str(response.get("status", "")).lower() == "failed":
-                # heuristic: if /getEQ succeeds, EQ subsystem exists – treat as enabled
+                # heuristic: if EQGetBand succeeds, EQ subsystem exists – treat as enabled
                 try:
-                    await self._request(API_ENDPOINT_EQ_GET)  # type: ignore[attr-defined]
-                    return True
+                    response = await self._request(API_ENDPOINT_EQ_GET)  # type: ignore[attr-defined]
+                    # Verify we got a valid response (not "unknown command")
+                    if isinstance(response, dict) and response.get("status") == "OK":
+                        return True
+                    return False
                 except Exception:  # noqa: BLE001
                     return False
             return False
