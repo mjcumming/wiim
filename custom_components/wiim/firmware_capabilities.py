@@ -136,20 +136,23 @@ class WiiMFirmwareCapabilities:
 
         # Probe for audio output support (getNewAudioOutputHardwareMode)
         # This is primarily a WiiM enhancement, but many devices support audio output modes
+        # Catch all WiiM exceptions including WiiMConnectionError which wraps JSON parsing errors
         try:
             result = await client._request("/httpapi.asp?command=getNewAudioOutputHardwareMode")
             capabilities["supports_audio_output"] = True
             _LOGGER.info(
                 "[AUDIO OUTPUT DEBUG] Device %s supports getNewAudioOutputHardwareMode, result: %s", client.host, result
             )
-        except WiiMError as e:
+        except (WiiMError, Exception) as e:
+            # Catch all exceptions including WiiMConnectionError (which wraps JSON parsing errors)
+            # and other connection/parsing errors that older devices may return
             # Only disable if not already determined to be supported (e.g., WiiM devices)
             if not capabilities.get("supports_audio_output", False):
                 capabilities["supports_audio_output"] = False
-                _LOGGER.warning(
-                    "[AUDIO OUTPUT DEBUG] Device %s getNewAudioOutputHardwareMode probe failed: %s - audio output entities will not be created",
+                _LOGGER.info(
+                    "[AUDIO OUTPUT DEBUG] Device %s does not support getNewAudioOutputHardwareMode (%s) - audio output entities will not be created",
                     client.host,
-                    e,
+                    type(e).__name__,
                 )
             else:
                 _LOGGER.debug(

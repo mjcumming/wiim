@@ -345,17 +345,36 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _fetch_multiroom_info_legacy(self) -> dict:
         """Simplified multiroom info for legacy Audio Pro units."""
         try:
-            # Legacy devices may not support getSlaveList reliably
-            # Use basic group field detection instead
             device_info = await self._fetch_device_info()
             group_field = device_info.get("group", "0")
 
             if group_field == "1":
-                # Device reports being in a group
+                # Device reports being in a group (slave)
                 return {"slaves": 0, "slave_list": [], "legacy_group": True}
-            else:
-                # Device reports being solo
-                return {"slaves": 0, "slave_list": [], "legacy_group": False}
+
+            # For potential masters/solos (group: "0"), try getSlaveList if supported
+            # This is critical for detecting masters - masters report group="0" but have slaves
+            supports_getslavelist = self._capabilities.get("supports_getslavelist", True)
+            if supports_getslavelist:
+                try:
+                    _LOGGER.debug(
+                        "Legacy device %s checking slave status (group='%s')",
+                        self.client.host,
+                        group_field,
+                    )
+                    result = await self.client._request("/httpapi.asp?command=multiroom:getSlaveList")
+                    _LOGGER.debug("Raw multiroom response for legacy %s: %s", self.client.host, result)
+                    if result:
+                        return result
+                except WiiMError as err:
+                    _LOGGER.debug(
+                        "Legacy device %s: getSlaveList failed: %s (treating as solo)",
+                        self.client.host,
+                        err,
+                    )
+
+            # Fallback: Device reports being solo (no slaves detected)
+            return {"slaves": 0, "slave_list": [], "legacy_group": False}
 
         except Exception as err:
             _LOGGER.debug("Legacy multiroom info failed: %s", err)

@@ -95,7 +95,18 @@ def _should_update_audio_output(coordinator) -> bool:
 
     Audio output modes change rarely, but we need to understand why the API is failing.
     Keeping original 15s polling to maintain consistency with other features.
+
+    Also checks device capabilities to avoid calling unsupported endpoints on older devices.
     """
+    # Check if device supports audio output API before attempting to fetch
+    capabilities = getattr(coordinator, "_capabilities", {})
+    supports_audio_output = capabilities.get("supports_audio_output", True)  # Default to True for backward compatibility
+
+    if not supports_audio_output:
+        # Device doesn't support audio output API - don't attempt to fetch
+        # This prevents repeated failures on older Audio Pro devices
+        return False
+
     if not hasattr(coordinator, "_last_audio_output_check"):
         coordinator._last_audio_output_check = 0
 

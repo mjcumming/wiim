@@ -32,18 +32,21 @@ async def detect_role_from_status_and_slaves(
 
     # For legacy devices, use simplified detection
     if capabilities and capabilities.get("is_legacy_device", False):
-        return _detect_role_legacy_firmware(coordinator, status, device_info, current_role)
+        return _detect_role_legacy_firmware(coordinator, status, multiroom, device_info, current_role)
 
     # Enhanced detection for WiiM devices
     return _detect_role_enhanced_firmware(coordinator, status, multiroom, device_info, current_role)
 
 
-def _detect_role_legacy_firmware(coordinator, status: PlayerStatus, device_info: DeviceInfo, current_role: str) -> str:
+def _detect_role_legacy_firmware(
+    coordinator, status: PlayerStatus, multiroom: dict[str, Any], device_info: DeviceInfo, current_role: str
+) -> str:
     """Simplified role detection for older Audio Pro units.
 
     Args:
         coordinator: WiiM coordinator instance
         status: Player status
+        multiroom: Multiroom information (may contain slave_list)
         device_info: Device information
         current_role: Current detected role
 
@@ -60,10 +63,46 @@ def _detect_role_legacy_firmware(coordinator, status: PlayerStatus, device_info:
         master_uuid = device_info.master_uuid or getattr(status, "master_uuid", None)
         device_name = device_info.name or "Unknown"
 
+    # Get slave count from multiroom data (from getSlaveList if available)
+    slaves_data = multiroom.get("slaves", 0)
+    slaves_list = multiroom.get("slave_list", [])
+
+    # Handle different data types for slaves field
+    if isinstance(slaves_data, list):
+        slave_count = len(slaves_data)
+        slaves_list = slaves_data
+    elif isinstance(slaves_data, int):
+        slave_count = slaves_data
+    else:
+        slave_count = multiroom.get("slave_count", 0)
+
+    # If slaves_list is a number, use it as count
+    if isinstance(slaves_list, int):
+        slave_count = slaves_list
+        slaves_list = []
+    elif isinstance(slaves_list, list) and slave_count == 0:
+        slave_count = len(slaves_list)
+
     # Legacy devices often have unreliable group state
     # Use conservative detection to avoid false positives
 
-    if group_field == "1" and master_uuid:
+    # MASTER – device has at least one slave attached (from getSlaveList)
+    if slave_count > 0:
+        if current_role != "master":
+            _LOGGER.info(
+                "LEGACY ROLE DETECTION: %s (%s) is MASTER because slave_count=%s > 0",
+                coordinator.client.host,
+                device_name,
+                slave_count,
+            )
+        role = "master"
+        coordinator.client._group_master = coordinator.client.host  # type: ignore[attr-defined]
+        coordinator.client._group_slaves = [
+            entry.get("ip") for entry in slaves_list if isinstance(entry, dict) and entry.get("ip") is not None
+        ]  # type: ignore[attr-defined]
+
+    # SLAVE – part of a group (group_field == "1") and knows master
+    elif group_field == "1" and master_uuid:
         if current_role != "slave":
             _LOGGER.info(
                 "LEGACY ROLE DETECTION: %s (%s) detected as SLAVE",
@@ -73,23 +112,27 @@ def _detect_role_legacy_firmware(coordinator, status: PlayerStatus, device_info:
         role = "slave"
         coordinator.client._group_master = master_uuid  # type: ignore[attr-defined]
         coordinator.client._group_slaves = []  # type: ignore[attr-defined]
+
+    # SOLO – group_field == "0" and no slaves detected
     elif group_field == "0":
-        # For legacy devices, assume solo unless we have clear evidence of slaves
         if current_role != "solo":
             _LOGGER.info(
-                "LEGACY ROLE DETECTION: %s (%s) detected as SOLO",
+                "LEGACY ROLE DETECTION: %s (%s) detected as SOLO (group='0', slave_count=%s)",
                 coordinator.client.host,
                 device_name,
+                slave_count,
             )
         role = "solo"
         coordinator.client._group_master = None  # type: ignore[attr-defined]
         coordinator.client._group_slaves = []  # type: ignore[attr-defined]
+
+    # Ambiguous state - treat as solo to avoid breaking controls
     else:
-        # Ambiguous state - treat as solo to avoid breaking controls
         _LOGGER.warning(
-            "LEGACY ROLE DETECTION: %s (%s) has ambiguous group state, treating as SOLO",
+            "LEGACY ROLE DETECTION: %s (%s) has ambiguous group state (group='%s'), treating as SOLO",
             coordinator.client.host,
             device_name,
+            group_field,
         )
         role = "solo"
         coordinator.client._group_master = None  # type: ignore[attr-defined]
