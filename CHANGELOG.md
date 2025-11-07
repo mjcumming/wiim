@@ -10,7 +10,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Audio output API (`getNewAudioOutputHardwareMode`) is now only called on devices that support it
   - Capability detection properly identifies devices that don't support this endpoint
   - Prevents repeated API failures that were causing state updates to fail
-  - Resolves issue #97 where devices appeared as `idle` when playing and volume showed as `Unavailable`
+  - Resolves issues #97 and #98 where devices appeared as `idle` when playing and volume showed as `Unavailable`
   - Improved exception handling to catch all error types including `WiiMConnectionError` with JSON parsing errors
 
 ## [0.2.16] - 2025-01-28
