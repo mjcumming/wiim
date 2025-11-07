@@ -25,17 +25,13 @@ FAST_POLL_INTERVAL = 1  # seconds - during active playback
 NORMAL_POLL_INTERVAL = 5  # seconds - when idle
 DEVICE_INFO_INTERVAL = 60  # seconds - device health check
 MULTIROOM_INTERVAL = 15  # seconds - role detection + group changes
-IDLE_TIMEOUT = (
-    600  # seconds (10 minutes) - return to normal polling after extended idle
-)
+IDLE_TIMEOUT = 600  # seconds (10 minutes) - return to normal polling after extended idle
 
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _determine_adaptive_interval(
-    coordinator, status_model: PlayerStatus, role: str
-) -> int:
+def _determine_adaptive_interval(coordinator, status_model: PlayerStatus, role: str) -> int:
     """Enhanced adaptive polling with firmware awareness.
 
     Returns:
@@ -83,9 +79,7 @@ def _should_update_multiroom(coordinator, is_activity_triggered: bool = False) -
         coordinator._last_multiroom_check = 0
 
     current_time = time.time()
-    time_based = (
-        current_time - coordinator._last_multiroom_check
-    ) >= MULTIROOM_INTERVAL
+    time_based = (current_time - coordinator._last_multiroom_check) >= MULTIROOM_INTERVAL
 
     return time_based or is_activity_triggered
 
@@ -100,7 +94,9 @@ def _should_update_audio_output(coordinator) -> bool:
     """
     # Check if device supports audio output API before attempting to fetch
     capabilities = getattr(coordinator, "_capabilities", {})
-    supports_audio_output = capabilities.get("supports_audio_output", True)  # Default to True for backward compatibility
+    supports_audio_output = capabilities.get(
+        "supports_audio_output", True
+    )  # Default to True for backward compatibility
 
     if not supports_audio_output:
         # Device doesn't support audio output API - don't attempt to fetch
@@ -130,11 +126,7 @@ def _check_and_clear_metadata_on_stop(coordinator, status_model: PlayerStatus) -
     is_stopped = play_state in ("stop", "stopped", "idle", "")
 
     # Only clear if we have stored metadata and playback has stopped
-    if (
-        is_stopped
-        and hasattr(coordinator, "_last_valid_metadata")
-        and coordinator._last_valid_metadata
-    ):
+    if is_stopped and hasattr(coordinator, "_last_valid_metadata") and coordinator._last_valid_metadata:
         if VERBOSE_DEBUG:
             _LOGGER.debug(
                 "Clearing stored metadata for %s - playback stopped (state: %s)",
@@ -144,19 +136,14 @@ def _check_and_clear_metadata_on_stop(coordinator, status_model: PlayerStatus) -
         coordinator._last_valid_metadata = None
 
 
-async def _schedule_delayed_metadata_fetch(
-    coordinator, status_model: PlayerStatus
-) -> None:
+async def _schedule_delayed_metadata_fetch(coordinator, status_model: PlayerStatus) -> None:
     """Schedule a delayed metadata fetch to give WiiM time to process track changes.
 
     This implements the user's suggestion for delayed polling to address metadata
     processing timing issues.
     """
     # Cancel any existing delayed fetch
-    if (
-        hasattr(coordinator, "_metadata_fetch_task")
-        and coordinator._metadata_fetch_task
-    ):
+    if hasattr(coordinator, "_metadata_fetch_task") and coordinator._metadata_fetch_task:
         coordinator._metadata_fetch_task.cancel()
 
     async def delayed_fetch():
@@ -164,17 +151,13 @@ async def _schedule_delayed_metadata_fetch(
         try:
             await asyncio.sleep(2.0)  # Give WiiM time to process track changes
             if VERBOSE_DEBUG:
-                _LOGGER.debug(
-                    "Executing delayed metadata fetch for %s", coordinator.client.host
-                )
+                _LOGGER.debug("Executing delayed metadata fetch for %s", coordinator.client.host)
             metadata_model = await coordinator._fetch_track_metadata(status_model)
 
             # Update coordinator data with the fetched metadata
             if coordinator.data and metadata_model:
                 coordinator.data["metadata_model"] = metadata_model
-                coordinator.data["metadata"] = metadata_model.model_dump(
-                    exclude_none=True
-                )
+                coordinator.data["metadata"] = metadata_model.model_dump(exclude_none=True)
                 if VERBOSE_DEBUG:
                     _LOGGER.debug(
                         "Updated coordinator data with delayed metadata for %s",
@@ -182,9 +165,7 @@ async def _schedule_delayed_metadata_fetch(
                     )
         except asyncio.CancelledError:
             if VERBOSE_DEBUG:
-                _LOGGER.debug(
-                    "Delayed metadata fetch cancelled for %s", coordinator.client.host
-                )
+                _LOGGER.debug("Delayed metadata fetch cancelled for %s", coordinator.client.host)
         except Exception as e:
             if VERBOSE_DEBUG:
                 _LOGGER.debug(
@@ -270,9 +251,7 @@ def _process_heavy_operations(raw_data: dict) -> dict[str, Any]:
     # Parse player status if available
     if "status_raw" in raw_data:
         try:
-            processed["status_model"] = PlayerStatus.model_validate(
-                raw_data["status_raw"]
-            )
+            processed["status_model"] = PlayerStatus.model_validate(raw_data["status_raw"])
         except Exception as err:
             _LOGGER.debug("Failed to parse status model: %s", err)
 
@@ -297,9 +276,7 @@ def _process_heavy_operations(raw_data: dict) -> dict[str, Any]:
     # Heavy model_dump operations
     if "metadata_model" in raw_data and raw_data["metadata_model"]:
         try:
-            processed["metadata"] = raw_data["metadata_model"].model_dump(
-                exclude_none=True
-            )
+            processed["metadata"] = raw_data["metadata_model"].model_dump(exclude_none=True)
         except Exception as err:
             _LOGGER.debug("Failed to dump metadata model: %s", err)
 
@@ -330,9 +307,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
     """
 
     if VERBOSE_DEBUG:
-        _LOGGER.debug(
-            "=== OPTIMIZED COORDINATOR UPDATE START for %s ===", coordinator.client.host
-        )
+        _LOGGER.debug("=== OPTIMIZED COORDINATOR UPDATE START for %s ===", coordinator.client.host)
     _start_time = time.perf_counter()
 
     # One-time startup calls
@@ -349,20 +324,31 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         coordinator._player_status_working = True
 
         # Check if we should use UPnP volume instead of HTTP polling
-        # If UPnP is healthy and has provided volume, exclude volume from HTTP status
+        # Only exclude HTTP volume if UPnP has actually provided volume data (not just subscribed)
+        # This fixes race condition at startup where UPnP hasn't sent first event yet
         status_raw_copy = status_raw.copy()  # Don't modify original dict
         try:
             from .data_helpers import get_speaker_from_config_entry
 
             speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
+            # Only exclude HTTP volume if UPnP has actually provided volume data
+            # This ensures we always have volume at startup, then switch to UPnP once it provides data
             if speaker and speaker.should_use_upnp_volume():
-                # Remove volume fields from HTTP status - UPnP will provide them
+                # UPnP has provided volume data - exclude from HTTP polling to avoid conflicts
                 status_raw_copy.pop("vol", None)
                 status_raw_copy.pop("volume", None)
                 status_raw_copy.pop("volume_level", None)
                 if VERBOSE_DEBUG:
                     _LOGGER.debug(
                         "Using UPnP volume for %s - excluding volume from HTTP polling",
+                        coordinator.client.host,
+                    )
+            else:
+                # UPnP not active or hasn't provided volume yet - keep HTTP volume polling
+                # This ensures volume is available at startup before UPnP sends first event
+                if VERBOSE_DEBUG and speaker and speaker._upnp_eventer:
+                    _LOGGER.debug(
+                        "UPnP subscribed but no volume data yet for %s - using HTTP volume",
                         coordinator.client.host,
                     )
         except Exception as err:
@@ -372,25 +358,13 @@ async def async_update_data(coordinator) -> dict[str, Any]:
 
         # Lightweight activity detection without full validation (avoids blocking event loop)
         # Extract minimal fields needed for activity detection from raw dict
-        play_state_str = str(
-            status_raw_copy.get("play_status") or status_raw_copy.get("status") or ""
-        ).lower()
+        play_state_str = str(status_raw_copy.get("play_status") or status_raw_copy.get("status") or "").lower()
 
         # Quick track change detection using raw dict (avoids expensive validation)
-        current_title = (
-            status_raw_copy.get("Title") or status_raw_copy.get("title") or ""
-        )
-        current_artist = (
-            status_raw_copy.get("Artist") or status_raw_copy.get("artist") or ""
-        )
-        current_source = (
-            status_raw_copy.get("mode") or status_raw_copy.get("source") or ""
-        )
-        current_artwork = (
-            status_raw_copy.get("entity_picture")
-            or status_raw_copy.get("cover_url")
-            or ""
-        )
+        current_title = status_raw_copy.get("Title") or status_raw_copy.get("title") or ""
+        current_artist = status_raw_copy.get("Artist") or status_raw_copy.get("artist") or ""
+        current_source = status_raw_copy.get("mode") or status_raw_copy.get("source") or ""
+        current_artwork = status_raw_copy.get("entity_picture") or status_raw_copy.get("cover_url") or ""
 
         if not hasattr(coordinator, "_last_track_info"):
             coordinator._last_track_info = (
@@ -401,9 +375,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             )
             track_changed = True
         else:
-            last_title, last_artist, last_source, last_artwork = (
-                coordinator._last_track_info
-            )
+            last_title, last_artist, last_source, last_artwork = coordinator._last_track_info
             track_changed = (
                 current_title != last_title
                 or current_artist != last_artist
@@ -422,11 +394,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
 
         # Quick play state check for metadata clearing (lightweight)
         is_stopped = play_state_str in ("stop", "stopped", "idle", "")
-        if (
-            is_stopped
-            and hasattr(coordinator, "_last_valid_metadata")
-            and coordinator._last_valid_metadata
-        ):
+        if is_stopped and hasattr(coordinator, "_last_valid_metadata") and coordinator._last_valid_metadata:
             if VERBOSE_DEBUG:
                 _LOGGER.debug(
                     "Clearing stored metadata for %s - playback stopped (state: %s)",
@@ -464,21 +432,14 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Fetch pairing status when we're fetching audio_output (same interval)
         # We'll only store it if BT output is actually active
         bt_output_was_active = False
-        if (
-            hasattr(coordinator, "_last_audio_output_data")
-            and coordinator._last_audio_output_data
-        ):
-            bt_output_was_active = (
-                coordinator._last_audio_output_data.get("source") == "1"
-            )
+        if hasattr(coordinator, "_last_audio_output_data") and coordinator._last_audio_output_data:
+            bt_output_was_active = coordinator._last_audio_output_data.get("source") == "1"
 
         # Fetch Bluetooth history if:
         # 1. History hasn't been fetched yet (startup - needed for Audio Output Mode select dropdown)
         # 2. BT output was active (to show connected device and refresh periodically)
         # Note: We do NOT fetch every 15s when BT is inactive - only at startup and when BT is active
-        should_fetch_bt_history = (
-            not hasattr(coordinator, "_bt_history_fetched") or bt_output_was_active
-        )
+        should_fetch_bt_history = not hasattr(coordinator, "_bt_history_fetched") or bt_output_was_active
 
         if should_fetch_bt_history:
             # Also fetch Bluetooth history to identify connected device and populate dropdown
@@ -506,40 +467,30 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # that don't support getMetaInfo - only fetch after device is confirmed working
         is_initial_setup = not hasattr(coordinator, "_initial_setup_complete")
         should_fetch_metadata = (
-            track_changed
-            and not is_initial_setup
-            and getattr(coordinator, "_metadata_supported", None) is not False
+            track_changed and not is_initial_setup and getattr(coordinator, "_metadata_supported", None) is not False
         )
 
         if should_fetch_metadata:
             # Create status_model only when needed for metadata fetching (deferred validation)
             # This avoids expensive validation on every poll cycle
-            status_model_for_metadata: PlayerStatus = PlayerStatus.model_validate(
-                status_raw_copy
-            )
+            status_model_for_metadata: PlayerStatus = PlayerStatus.model_validate(status_raw_copy)
 
             # For testing, use immediate metadata fetch to avoid async task issues
             # In production, this could be delayed, but tests need immediate results
             if hasattr(coordinator, "_test_mode") and coordinator._test_mode:
                 # Immediate fetch for tests
                 try:
-                    track_metadata_model = await coordinator._fetch_track_metadata(
-                        status_model_for_metadata
-                    )
+                    track_metadata_model = await coordinator._fetch_track_metadata(status_model_for_metadata)
                     if track_metadata_model:
                         raw_data["metadata_model"] = track_metadata_model
-                        fetch_tasks.append(
-                            asyncio.create_task(asyncio.sleep(0))
-                        )  # Dummy task
+                        fetch_tasks.append(asyncio.create_task(asyncio.sleep(0)))  # Dummy task
                         task_names.append("metadata")
                 except Exception as e:
                     _LOGGER.debug("Test metadata fetch failed: %s", e)
             else:
                 # Implement delayed metadata fetch to give WiiM time to process track changes
                 # This addresses the user's suggestion for delayed polling
-                await _schedule_delayed_metadata_fetch(
-                    coordinator, status_model_for_metadata
-                )
+                await _schedule_delayed_metadata_fetch(coordinator, status_model_for_metadata)
 
         # EQ info (every 60s per POLLING_STRATEGY.md - settings rarely change)
         if _should_update_eq_info(coordinator):
@@ -564,12 +515,8 @@ async def async_update_data(coordinator) -> dict[str, Any]:
 
         # Collect raw results for heavy processing
         result_idx = 0
-        multiroom_info = (
-            coordinator.data.get("multiroom", {}) if coordinator.data else {}
-        )
-        track_metadata_model = (
-            coordinator.data.get("metadata_model") if coordinator.data else None
-        )
+        multiroom_info = coordinator.data.get("multiroom", {}) if coordinator.data else {}
+        track_metadata_model = coordinator.data.get("metadata_model") if coordinator.data else None
         eq_info_model = coordinator.data.get("eq_model") if coordinator.data else None
 
         # Process device info result (core status)
@@ -590,9 +537,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                         coordinator._core_comm_failures,
                         results[result_idx],
                     )
-                    _LOGGER.info(
-                        "This may cause audio output and other features to be unavailable"
-                    )
+                    _LOGGER.info("This may cause audio output and other features to be unavailable")
                 elif coordinator._core_comm_failures % 10 == 1:
                     _LOGGER.debug(
                         "Core device communication still failing after %d attempts",
@@ -606,11 +551,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                     if coordinator._core_comm_failures > 0:
                         # Get device info for enhanced recovery logging
                         device_info = getattr(coordinator, "_capabilities", {})
-                        firmware = (
-                            device_info.get("firmware_version", "unknown")
-                            if device_info
-                            else "unknown"
-                        )
+                        firmware = device_info.get("firmware_version", "unknown") if device_info else "unknown"
 
                         # Enhanced recovery logging with comprehensive device info
                         device_type = (
@@ -668,9 +609,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
 
                 audio_output_data = None
             else:
-                audio_output_data = results[
-                    result_idx
-                ]  # Can be None if API not supported
+                audio_output_data = results[result_idx]  # Can be None if API not supported
                 # Reset error counter on success
                 if hasattr(coordinator, "_audio_output_error_count"):
                     coordinator._audio_output_error_count = 0
@@ -696,11 +635,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 bt_pair_status_data = None
             elif bt_output_is_active:
                 # Only store if BT output is active
-                bt_pair_status_data = (
-                    results[result_idx]
-                    if isinstance(results[result_idx], dict)
-                    else None
-                )
+                bt_pair_status_data = results[result_idx] if isinstance(results[result_idx], dict) else None
                 if bt_pair_status_data:
                     _LOGGER.debug(
                         "Bluetooth pairing status for %s: %s (BT output active)",
@@ -816,9 +751,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         try:
             # Use asyncio.to_thread if available (Python 3.9+)
             if hasattr(asyncio, "to_thread"):
-                processed_data = await asyncio.to_thread(
-                    _process_heavy_operations, raw_data
-                )
+                processed_data = await asyncio.to_thread(_process_heavy_operations, raw_data)
             else:
                 # Fallback for older Python versions
                 import concurrent.futures
@@ -828,9 +761,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                         executor, _process_heavy_operations, raw_data
                     )
         except Exception as processing_err:
-            _LOGGER.debug(
-                "Heavy processing failed, using light fallback: %s", processing_err
-            )
+            _LOGGER.debug("Heavy processing failed, using light fallback: %s", processing_err)
             processed_data = {}
 
         heavy_time = (time.perf_counter() - heavy_start) * 1000.0
@@ -843,13 +774,9 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             try:
                 status_model = PlayerStatus.model_validate(status_raw_copy)
             except Exception as fallback_err:
-                _LOGGER.debug(
-                    "Failed to create fallback status_model: %s", fallback_err
-                )
+                _LOGGER.debug("Failed to create fallback status_model: %s", fallback_err)
                 # Use existing status_model from previous update if available
-                status_model = (
-                    coordinator.data.get("status_model") if coordinator.data else None
-                )
+                status_model = coordinator.data.get("status_model") if coordinator.data else None
                 if not status_model:
                     # Last resort: create minimal status_model
                     status_model = PlayerStatus(play_status="idle")
@@ -878,9 +805,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # ------------------------------------------------------------------
 
         # Light role detection (avoid heavy processing here)
-        role = await coordinator._detect_role_from_status_and_slaves(
-            status_model, multiroom_info, device_model
-        )
+        role = await coordinator._detect_role_from_status_and_slaves(status_model, multiroom_info, device_model)
 
         # Use pre-processed metadata or create light version
         track_metadata = processed_data.get("metadata", {})
@@ -889,9 +814,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             track_metadata = {"title": getattr(track_metadata_model, "title", None)}
 
         # Light multiroom source resolution
-        await coordinator._resolve_multiroom_source_and_media(
-            status_model, track_metadata, role
-        )
+        await coordinator._resolve_multiroom_source_and_media(status_model, track_metadata, role)
 
         # ------------------------------------------------------------------
         # Adaptive polling interval determination
@@ -902,9 +825,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # ------------------------------------------------------------------
         # Presets (startup only)
         # ------------------------------------------------------------------
-        presets_list: list[dict] = (
-            coordinator.data.get("presets", []) if coordinator.data else []
-        )
+        presets_list: list[dict] = coordinator.data.get("presets", []) if coordinator.data else []
         if not presets_list and coordinator._presets_supported is not False:
             try:
                 presets_list = await coordinator.client.get_presets()
@@ -917,9 +838,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Artwork propagation
         # ------------------------------------------------------------------
         if track_metadata and track_metadata_model:
-            art_url = track_metadata.get("entity_picture") or track_metadata.get(
-                "cover_url"
-            )
+            art_url = track_metadata.get("entity_picture") or track_metadata.get("cover_url")
             if art_url:
                 status_model.entity_picture = art_url
                 status_model.cover_url = art_url
@@ -929,10 +848,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # ------------------------------------------------------------------
         polling_data_model = PollingMetrics(
             interval=new_interval,
-            is_playing=(
-                str(status_model.play_state or "").lower()
-                in ("play", "playing", "load")
-            ),
+            is_playing=(str(status_model.play_state or "").lower() in ("play", "playing", "load")),
             api_capabilities={
                 "statusex_supported": coordinator._statusex_supported,
                 "metadata_supported": coordinator._metadata_supported,
@@ -943,16 +859,10 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         polling_data.update(
             {
                 "adaptive_polling": True,
-                "interval_reason": "playback_active"
-                if new_interval == FAST_POLL_INTERVAL
-                else "idle",
+                "interval_reason": "playback_active" if new_interval == FAST_POLL_INTERVAL else "idle",
                 "fast_polling_active": new_interval == FAST_POLL_INTERVAL,
-                "last_device_info_check": getattr(
-                    coordinator, "_last_device_info_check", 0
-                ),
-                "last_multiroom_check": getattr(
-                    coordinator, "_last_multiroom_check", 0
-                ),
+                "last_device_info_check": getattr(coordinator, "_last_device_info_check", 0),
+                "last_multiroom_check": getattr(coordinator, "_last_multiroom_check", 0),
             }
         )
 
@@ -974,10 +884,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             if speaker and speaker.should_use_upnp_volume() and coordinator.data:
                 # Get existing status_model with UPnP volume
                 existing_status = coordinator.data.get("status_model")
-                if (
-                    isinstance(existing_status, PlayerStatus)
-                    and existing_status.volume is not None
-                ):
+                if isinstance(existing_status, PlayerStatus) and existing_status.volume is not None:
                     # Preserve volume and mute from UPnP
                     status_model.volume = existing_status.volume
                     if existing_status.mute is not None:
@@ -1020,10 +927,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             # We fetched it this cycle - use fresh data
             status_model.audio_output = audio_output_data
             coordinator._last_audio_output_data = audio_output_data
-        elif (
-            hasattr(coordinator, "_last_audio_output_data")
-            and coordinator._last_audio_output_data is not None
-        ):
+        elif hasattr(coordinator, "_last_audio_output_data") and coordinator._last_audio_output_data is not None:
             # Not fetched this cycle, but we have a previous value - reuse it
             status_model.audio_output = coordinator._last_audio_output_data
         # else: Never fetched successfully - leave audio_output as None
@@ -1056,11 +960,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 else "Unknown"
             )
             device_model = device_info.get("device_type", "Unknown")
-            firmware = (
-                device_info.get("firmware_version", "unknown")
-                if device_info
-                else "unknown"
-            )
+            firmware = device_info.get("firmware_version", "unknown") if device_info else "unknown"
 
             _LOGGER.info(
                 "%s: Device communication restored after %d consecutive failures (%s %s fw:%s)",
@@ -1194,9 +1094,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             else:
                 # No cached data available - must raise to indicate failure
                 # This ensures proper initialization during setup (first update must succeed)
-                raise UpdateFailed(
-                    f"Error updating WiiM device (no cached data): {err}"
-                ) from err
+                raise UpdateFailed(f"Error updating WiiM device (no cached data): {err}") from err
 
         # After 3+ consecutive failures, raise UpdateFailed to indicate a real problem
         # The base coordinator will log this, but only if it's the first failure after a success

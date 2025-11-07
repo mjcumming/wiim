@@ -19,7 +19,8 @@ hass -c /workspaces/core/config --open-ui
 | ------------------------------------------------ | ----------------------------------------------------- | -------------- |
 | **[API_GUIDE.md](API_GUIDE.md)**                 | WiiM/LinkPlay API reference and defensive programming | API Developers |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)**           | Integration design patterns and decisions             | Developers     |
-| **[CONTRIBUTING.md](CONTRIBUTING.md)**           | Contribution guidelines and workflow                  | Contributors   |
+| **[UPNP_ARCHITECTURE.md](UPNP_ARCHITECTURE.md)** | UPnP event architecture and hybrid approach           | Developers     |
+| **[UPNP_TESTING.md](UPNP_TESTING.md)**           | UPnP testing and troubleshooting                      | Developers     |
 | **[DOCKER_NETWORKING.md](DOCKER_NETWORKING.md)** | Docker networking for UPnP development                | Developers     |
 
 ## 🎯 **For New Contributors**

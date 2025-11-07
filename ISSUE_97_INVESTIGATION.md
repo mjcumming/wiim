@@ -13,7 +13,7 @@
 - **Note**: For Audio Pro devices, HTTP volume API might not work anyway, but we should still poll at startup for all devices
 - Volume parsing in `api_parser.py:111-117` looks for `vol` field, but it's being removed before parsing
 
-**Code Location**: 
+**Code Location**:
 - `custom_components/wiim/coordinator_polling.py:333-342` (removes volume when UPnP active)
 - `custom_components/wiim/coordinator_polling.py:868-890` (preserves UPnP volume)
 - `custom_components/wiim/data.py:1218-1233` (`should_use_upnp_volume()` check)
@@ -53,10 +53,13 @@
 - State detection in `data.py:722-760` reads from `status_model.play_state`, which comes from either:
   - HTTP API (`api_parser.py:84-86`) - for WiiM devices
   - UPnP events (`data.py:1254-1266`) - merged into status_model via `_merge_upnp_state_to_coordinator()`
-- **Clarification needed**: When user says "state", do they mean:
-  - **Player state** (playing/paused/idle)? 
-  - **Metadata state** (showing track info)?
-  - Both?
+
+**ACTION REQUIRED**: 
+- **Please clarify what "state" means**:
+  - Is the player showing as `idle` in Home Assistant (player state)?
+  - Or is metadata (title/artist) not showing (metadata state)?
+  - Or both?
+- **Please create a separate GitHub issue** for this problem so we can track it independently
 
 **Code Location**:
 - `custom_components/wiim/data.py:722-760` (state detection - reads from status_model)
@@ -65,7 +68,7 @@
 - `custom_components/wiim/api_parser.py:84-86` (HTTP play_state parsing)
 
 **Questions for User**:
-1. **Clarify what "state" means**: 
+1. **Clarify what "state" means**:
    - Is the player showing as `idle` in Home Assistant?
    - Or is metadata (title/artist) not showing?
    - Or both?
@@ -112,6 +115,9 @@
 - **Note**: User said "this is not a group speaker issue" - so it's a DLNA source detection issue
 - We're using UPnP for DLNA - maybe we should get source from UPnP instead of HTTP?
 
+**ACTION REQUIRED**: 
+- **Please create a separate GitHub issue** for this problem so we can track it independently
+
 **Code Location**:
 - `custom_components/wiim/data.py:961-1006` (source detection)
 - `custom_components/wiim/const.py:242-270` (SOURCE_MAP)
@@ -144,15 +150,20 @@
 
 **Symptom**: Integration attempts to communicate with `192.168.178.1` (Fritz!Box router), not a LinkPlay device.
 
-**Key Question**: We thought we were filtering this out - where is it coming from?
+**Key Question**: Is this just one call during discovery (expected) or repeated calls (problem)?
 
 **Root Cause Analysis**:
-- Likely in SSDP discovery (`config_flow.py:667-714`) picking up router's UPnP services
-- Router might be advertising UPnP services that match our SSDP filters in `manifest.json`
-- **Current validation**: `validate_wiim_device()` in `config_flow.py:96-184` should catch non-LinkPlay devices
-- But if router responds to `get_status()` with something that looks valid, it might pass validation
-- Could be in multiroom coordination (slave reporting wrong master IP)
+- **Expected behavior**: During SSDP discovery (`config_flow.py:667-714`), we check ALL UPnP devices to see if they're LinkPlay/WiiM devices
+- This means we will make ONE validation call to every UPnP device on the network, including routers
+- Router might be advertising UPnP services that match our SSDP filters in `manifest.json` (AVTransport, RenderingControl, etc.)
+- **Current validation**: `validate_wiim_device()` in `config_flow.py:96-184` should catch non-LinkPlay devices and fail validation
+- If router responds to `get_status()` with something that looks valid, it might pass validation (unlikely but possible)
 - **Note**: We filter WSL2 IPs (`192.168.65.x`) in UPnP code, but not router IPs
+
+**Questions for User**:
+1. **Is this just one call during discovery?** (This is expected - we check all UPnP devices)
+2. **Or is it repeated calls during normal operation?** (This would be a problem)
+3. **Does validation fail?** (Check logs - should see "SSDP discovery validation failed" or similar)
 
 **Code Location**:
 - `custom_components/wiim/config_flow.py:667-714` (SSDP discovery)

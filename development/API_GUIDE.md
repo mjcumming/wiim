@@ -1059,12 +1059,161 @@ async def async_set_native_value(self, value: float) -> None:
 | Audio Output  | `getNewAudioOutputHardwareMode` | JSON          | Hardware output status        |
 | Multiroom     | `multiroom:getSlaveList`        | JSON          | Only works on masters         |
 
+#### **Get Track Metadata**
+
+**Endpoint:**
+
+```
+GET /httpapi.asp?command=getMetaInfo
+```
+
+**Response:** Track metadata with album art and audio quality information
+
+**Example Response:**
+
+```json
+{
+  "metaData": {
+    "album": "Country Heat",
+    "title": "Old Dirt Roads",
+    "subtitle": "",
+    "artist": "Owen Riegling",
+    "albumArtURI": "https://m.media-amazon.com/images/I/51iU0odzJwL.jpg",
+    "sampleRate": "44100",
+    "bitDepth": "16",
+    "bitRate": "63",
+    "trackId": "s6707"
+  }
+}
+```
+
+**Response Fields:**
+
+- `metaData`: Metadata object containing track information
+  - `album`: Album name
+  - `title`: Track title
+  - `subtitle`: Track subtitle (may be empty)
+  - `artist`: Artist name
+  - `albumArtURI`: URL to the album artwork image
+  - `sampleRate`: Audio sample rate in Hz (e.g., "44100", "48000")
+  - `bitDepth`: Audio bit depth in bits (e.g., "16", "24")
+  - `bitRate`: Audio bit rate in kbps (e.g., "63", "320")
+  - `trackId`: Track identifier (service-specific)
+
+**Observations:**
+
+- Not all devices support this endpoint - many older LinkPlay devices return errors
+- When unavailable, metadata must be extracted from `getPlayerStatus` (which has limited fields)
+- Album artwork is only available via this endpoint
+- Audio quality fields (sampleRate, bitDepth, bitRate) provide detailed audio stream information
+- Fields may contain "unknow" or "un_known" when metadata is unavailable
+- `trackId` is service-specific and may vary by streaming service
+
 ### **Audio Output Controls**
 
 | Command    | Endpoint                            | Parameters | Notes                    |
 | ---------- | ----------------------------------- | ---------- | ------------------------ |
 | Get Output | `getNewAudioOutputHardwareMode`     | None       | Hardware output status   |
 | Set Output | `setAudioOutputHardwareMode:<mode>` | mode: 1-4  | Set hardware output mode |
+
+### **Fade Effects**
+
+| Command  | Endpoint                 | Parameters | Notes                   |
+| -------- | ------------------------ | ---------- | ----------------------- |
+| Get Fade | `GetFadeFeature`         | None       | Get fade effects status |
+| Set Fade | `SetFadeFeature:<value>` | value: 0/1 | Enable/disable fade     |
+
+#### **Get Fade Effects Status**
+
+**Endpoint:**
+
+```
+GET /httpapi.asp?command=GetFadeFeature
+```
+
+**Response:**
+
+```json
+{
+  "FadeFeature": 1 // 0 = disabled, 1 = enabled
+}
+```
+
+**Observations:**
+
+- Fade effects provide smooth transitions between tracks (fade out/in)
+- When enabled, tracks fade out at the end and fade in at the start
+- Useful for seamless playback experience
+
+#### **Set Fade Effects**
+
+**Endpoint:**
+
+```
+GET /httpapi.asp?command=SetFadeFeature:1
+```
+
+**Parameters:**
+
+- `0`: Disable fade effects
+- `1`: Enable fade effects
+
+**Response:** `OK` on success
+
+**Example:**
+
+```
+# Enable fade effects
+GET /httpapi.asp?command=SetFadeFeature:1
+
+# Disable fade effects
+GET /httpapi.asp?command=SetFadeFeature:0
+```
+
+### **Volume Control Settings**
+
+| Command          | Endpoint                   | Parameters | Notes                 |
+| ---------------- | -------------------------- | ---------- | --------------------- |
+| Set Fixed Volume | `setVolumeControl:<value>` | value: 0/1 | Set fixed volume mode |
+
+#### **Set Fixed Volume Mode**
+
+**Endpoint:**
+
+```
+GET /httpapi.asp?command=setVolumeControl:1
+```
+
+**Parameters:**
+
+- `0`: Variable volume (normal mode - volume can be adjusted)
+- `1`: Fixed volume (volume changes are prevented)
+
+**Response:** `OK` on success
+
+**Status Reading:**
+Fixed volume status is read from the `getStatusEx` endpoint:
+
+```json
+{
+  "volume_control": "0" // "0" = variable, "1" = fixed
+}
+```
+
+**Use Cases:**
+
+- **Fixed volume mode**: Useful when using line-out to external amplifier where you want to prevent volume changes
+- **Variable volume mode**: Normal operation where volume can be adjusted via API or device controls
+
+**Example:**
+
+```
+# Enable fixed volume mode
+GET /httpapi.asp?command=setVolumeControl:1
+
+# Disable fixed volume (return to variable)
+GET /httpapi.asp?command=setVolumeControl:0
+```
 
 **Audio Output Modes:**
 
@@ -1090,8 +1239,186 @@ async def async_set_native_value(self, value: float) -> None:
 | EQ Status   | `EQGetStat`       | None                         | May return {"status":"Failed"} |
 | EQ Enable   | `EQOn`            | None                         | Enable EQ processing           |
 | EQ Disable  | `EQOff`           | None                         | Disable EQ processing          |
+| Get Presets | `EQGetList`       | None                         | Returns array of preset names  |
 | Load Preset | `EQLoad:<preset>` | preset: "Flat", "Rock", etc. | Device-specific presets        |
-| Get EQ      | `getEQ`           | None                         | Current EQ settings            |
+| Get EQ      | `EQGetBand`       | None                         | Current EQ settings            |
+
+#### **Get Available EQ Presets**
+
+**Endpoint:**
+
+```
+GET /httpapi.asp?command=EQGetList
+```
+
+**Response:** Array of preset names (varies by device/firmware)
+
+**Example Response:**
+
+```json
+[
+  "Acoustic",
+  "Bass Booster",
+  "Bass Reducer",
+  "Classical",
+  "Dance",
+  "Deep",
+  "Electronic",
+  "Flat",
+  "Game",
+  "Hip-Hop",
+  "Jazz",
+  "Latin",
+  "Loudness",
+  "Lounge",
+  "Movie",
+  "Piano",
+  "Pop",
+  "R&B",
+  "Rock",
+  "Small Speakers",
+  "Spoken Word",
+  "Treble Booster",
+  "Treble Reducer",
+  "Vocal Booster"
+]
+```
+
+**Observations:**
+
+- Preset availability varies by device model and firmware version
+- Some devices may return a subset of these presets
+- Integration uses this endpoint to dynamically extend available presets at startup
+- Not all devices support EQ - endpoint may return error on unsupported devices
+
+#### **Set Equalizer Preset**
+
+**Endpoint:**
+
+```
+GET /httpapi.asp?command=EQLoad:<preset>
+```
+
+**Parameters:**
+
+- `preset`: Preset name (e.g., "Classical", "Rock", "Hip-Hop", "Bass Booster")
+
+**Response:** Detailed EQ configuration with 10-band equalizer settings
+
+**Example Response:**
+
+```json
+{
+  "EQStat": "On",
+  "Name": "Classical",
+  "pluginURI": "http://moddevices.com/plugins/caps/Eq10HP",
+  "EQBand": [
+    { "index": 0, "param_name": "band31Hz", "value": 4.8 },
+    { "index": 1, "param_name": "band63Hz", "value": 3.8 },
+    { "index": 2, "param_name": "band125Hz", "value": 3.0 },
+    { "index": 3, "param_name": "band250Hz", "value": 2.5 },
+    { "index": 4, "param_name": "band500Hz", "value": -1.5 },
+    { "index": 5, "param_name": "band1kHz", "value": -1.5 },
+    { "index": 6, "param_name": "band2kHz", "value": 0.0 },
+    { "index": 7, "param_name": "band4kHz", "value": 2.2 },
+    { "index": 8, "param_name": "band8kHz", "value": 3.2 },
+    { "index": 9, "param_name": "band16kHz", "value": 3.8 }
+  ],
+  "channelMode": "Stereo",
+  "status": "OK",
+  "source_name": "wifi"
+}
+```
+
+**Response Fields:**
+
+- `EQStat`: EQ status ("On" or "Off")
+- `Name`: Preset name
+- `pluginURI`: MOD Devices plugin URI reference
+- `EQBand`: Array of 10-band equalizer settings
+  - `index`: Band index (0-9)
+  - `param_name`: Frequency band name
+  - `value`: Gain value in dB (typically -12.0 to +12.0)
+- `channelMode`: Channel mode (typically "Stereo")
+- `status`: Operation status ("OK" or "Failed")
+- `source_name`: Current audio source
+
+**Frequency Bands:**
+
+- Band 0: 31 Hz (sub-bass)
+- Band 1: 63 Hz (bass)
+- Band 2: 125 Hz (low-mid)
+- Band 3: 250 Hz (mid)
+- Band 4: 500 Hz (mid)
+- Band 5: 1 kHz (mid-high)
+- Band 6: 2 kHz (high-mid)
+- Band 7: 4 kHz (high)
+- Band 8: 8 kHz (high)
+- Band 9: 16 kHz (ultra-high)
+
+**Parameter Encoding:**
+
+- Preset names with spaces should be URL encoded (e.g., "Bass Booster" → "Bass+Booster")
+- Some preset names contain special characters (e.g., "R&B") that may need encoding
+
+#### **Get Current EQ Settings**
+
+**Endpoint:**
+
+```
+GET /httpapi.asp?command=EQGetBand
+```
+
+**Response:** Current EQ configuration with 10-band equalizer settings (same format as `EQLoad` response)
+
+**Example Response:**
+
+```json
+{
+  "status": "OK",
+  "EQLevel": 1,
+  "source_name": "wifi",
+  "EQStat": "On",
+  "Name": "Flat",
+  "pluginURI": "http://moddevices.com/plugins/caps/Eq10HP",
+  "channelMode": "Stereo",
+  "EQBand": [
+    { "index": 0, "param_name": "band31hz", "value": 50 },
+    { "index": 1, "param_name": "band63hz", "value": 50 },
+    { "index": 2, "param_name": "band125hz", "value": 50 },
+    { "index": 3, "param_name": "band250hz", "value": 50 },
+    { "index": 4, "param_name": "band500hz", "value": 50 },
+    { "index": 5, "param_name": "band1khz", "value": 50 },
+    { "index": 6, "param_name": "band2khz", "value": 50 },
+    { "index": 7, "param_name": "band4khz", "value": 50 },
+    { "index": 8, "param_name": "band8khz", "value": 50 },
+    { "index": 9, "param_name": "band16khz", "value": 50 }
+  ]
+}
+```
+
+**Response Fields:**
+
+- `status`: Operation status ("OK" or "Failed")
+- `EQLevel`: EQ level (typically 1)
+- `source_name`: Current audio source
+- `EQStat`: EQ status ("On" or "Off")
+- `Name`: Current preset name (or "Custom" if using custom EQ)
+- `pluginURI`: MOD Devices plugin URI reference
+- `channelMode`: Channel mode (typically "Stereo")
+- `EQBand`: Array of 10-band equalizer settings
+  - `index`: Band index (0-9)
+  - `param_name`: Frequency band name (lowercase in response)
+  - `value`: Gain value (0-100 scale for custom EQ, or dB values for presets)
+
+**Observations:**
+
+- Returns current EQ settings whether using a preset or custom EQ
+- Response format matches `EQLoad` response structure
+- Value scale may differ: custom EQ uses 0-100, presets may use dB values
+- Parameter names in response are lowercase (e.g., "band31hz" vs "band31Hz" in `EQLoad`)
+
+**Note:** The `getEQ` endpoint does not exist on WiiM devices. Use `EQGetBand` instead.
 
 ---
 
@@ -1138,7 +1465,12 @@ GET /httpapi.asp?command=getbtdiscoveryresult
 **Response Fields:**
 
 - `num`: Number of devices found
-- `scan_status`: 0=Not started, 1=Initializing, 2=Scanning, 3=Complete
+- `scan_status`: Scan status value
+  - `0`: Not started
+  - `1`: Initializing
+  - `2`: ??? (rarely seen, unknown state)
+  - `3`: Scanning (in progress)
+  - `4`: Finished scanning (complete)
 - `list`: Array of discovered Bluetooth devices
   - `name`: Device name (e.g., "DELL27KITCHEN")
   - `ad`: MAC address (e.g., "ac:5a:fc:02:2c:a8") - **Note**: API uses `ad` not `mac`
@@ -1196,9 +1528,11 @@ GET /httpapi.asp?command=setChannelBalance:0.5
 
 ### **Squeezelite (LMS) Integration**
 
-#### **LMS Server Discovery and Connection**
+WiiM devices support integration with Lyrion Music Server (LMS, formerly Logitech Media Server) through the Squeezelite protocol. This allows the WiiM device to act as a Squeezelite player and connect to LMS instances on your network.
 
-Get Squeezelite State:
+#### **Get Squeezelite State**
+
+**Endpoint:**
 
 ```
 GET /httpapi.asp?command=Squeezelite:getState
@@ -1210,61 +1544,173 @@ GET /httpapi.asp?command=Squeezelite:getState
 {
   "default_server": "192.168.1.4:3483",
   "state": "connected",
-  "discover_list": ["192.168.1.4:3483"],
+  "discover_list": ["192.168.1.4:3483", "192.168.1.123:3483"],
   "connected_server": "192.168.1.4:3483",
   "auto_connect": 1
 }
 ```
 
-**State values:**
+**Response Fields:**
 
-- `discovering`: Searching for LMS instances
-- `connected`: Connected to LMS server
+- `default_server`: The LMS instance to which the player would connect automatically
+- `state`: Current connection state
+  - `discovering`: Player is discovering LMS instances on the network
+  - `connected`: Player is connected to an LMS server
+- `discover_list`: Array of LMS instances found in the player's network (IP:port format)
+- `connected_server`: Currently connected LMS server (IP:port format, only present when connected)
+- `auto_connect`: Auto-connect flag (0=disabled, 1=enabled)
 
-Trigger LMS Discovery:
+**Observations:**
+
+- `discover_list` may contain multiple LMS instances if multiple servers are on the network
+- `default_server` is the preferred server for auto-connection
+- State transitions from `discovering` to `connected` when a server is found and connected
+
+#### **Trigger LMS Discovery**
+
+**Endpoint:**
 
 ```
 GET /httpapi.asp?command=Squeezelite:discover
 ```
 
-Enable/Disable Auto-Connect:
+**Response:** `OK`
+
+**Purpose:** Manually trigger discovery of LMS instances on the network. Useful when:
+
+- A new LMS server is added to the network
+- Network configuration changes
+- Previous discovery didn't find all servers
+
+**Note:** Discovery may take several seconds. Check state with `Squeezelite:getState` after triggering.
+
+#### **Enable/Disable Auto-Connect**
+
+**Endpoint:**
 
 ```
 GET /httpapi.asp?command=Squeezelite:autoConnectEnable:1
 ```
 
-- **Parameters**: `1` to enable, `0` to disable
-- **Response**: `OK`
+**Parameters:**
 
-Connect to LMS Server:
+- `1`: Enable auto-connect (player will automatically connect to `default_server` on startup)
+- `0`: Disable auto-connect (manual connection required)
+
+**Response:** `OK`
+
+**Use Cases:**
+
+- Enable auto-connect for seamless integration with a primary LMS server
+- Disable auto-connect when using multiple LMS servers or manual control
+
+#### **Connect to LMS Server**
+
+**Endpoint:**
 
 ```
 GET /httpapi.asp?command=Squeezelite:connectServer:192.168.1.123
 ```
 
-- **Parameters**: LMS server IP address (with optional port)
-- **Response**: `OK`
+**Parameters:**
+
+- LMS server IP address (required)
+- Optional port (default: 3483) - format: `IP:PORT` or just `IP`
+
+**Examples:**
+
+```
+# Connect to server with default port
+GET /httpapi.asp?command=Squeezelite:connectServer:192.168.1.123
+
+# Connect to server with custom port
+GET /httpapi.asp?command=Squeezelite:connectServer:192.168.1.123:9000
+```
+
+**Response:** `OK` on success
+
+**Important Notes:**
+
+- Server must be in the `discover_list` from previous discovery
+- If server is not discovered, connection will fail
+- Device will switch audio source to Squeezelite when connected
+- Disconnection from current audio source may occur
 
 ### **LED and Button Controls**
 
-Set Status LED (Alternative Command):
+These endpoints control the physical interface elements of the WiiM device, including the status LED and touch button controls.
+
+#### **Status LED Control**
+
+**Endpoint:**
 
 ```
 GET /httpapi.asp?command=LED_SWITCH_SET:0
 ```
 
-- **Parameters**: `1` to enable, `0` to disable status LED
-- **Response**: `OK` on success
-- **Note**: Alternative to standard `setLED` command
+**Parameters:**
 
-Set Touch Button Controls:
+- `1`: Enable status LED (LED will show device status)
+- `0`: Disable status LED (LED will be off)
+
+**Response:** `OK` on success
+
+**Examples:**
+
+```
+# Disable status LED
+GET /httpapi.asp?command=LED_SWITCH_SET:0
+
+# Enable status LED
+GET /httpapi.asp?command=LED_SWITCH_SET:1
+```
+
+**Observations:**
+
+- This is an alternative to the standard `setLED` command
+- Status LED typically shows connection status, playback state, or error conditions
+- Disabling LED may be desired for bedroom/quiet environments
+- LED state persists across device reboots
+
+**Note:** Some devices may not have a status LED, in which case this command may have no effect or return an error.
+
+#### **Touch Button Controls**
+
+**Endpoint:**
 
 ```
 GET /httpapi.asp?command=Button_Enable_SET:1
 ```
 
-- **Parameters**: `1` to enable, `0` to disable touch controls
-- **Response**: `OK` on success
+**Parameters:**
+
+- `1`: Enable touch controls (buttons on device are active)
+- `0`: Disable touch controls (buttons on device are inactive)
+
+**Response:** `OK` on success
+
+**Examples:**
+
+```
+# Disable touch controls
+GET /httpapi.asp?command=Button_Enable_SET:0
+
+# Enable touch controls
+GET /httpapi.asp?command=Button_Enable_SET:1
+```
+
+**Use Cases:**
+
+- Disable touch controls to prevent accidental button presses
+- Enable/disable controls for child-proofing or public installations
+- Toggle controls based on automation rules (e.g., disable during sleep hours)
+
+**Important Notes:**
+
+- When disabled, physical buttons on the device will not respond
+- Remote control and API commands continue to work regardless of button state
+- Button state persists across device reboots
+- Some device models may not have touch controls (e.g., devices with only physical buttons)
 
 ### **Unofficial Endpoint Considerations**
 
