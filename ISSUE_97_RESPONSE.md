@@ -18,7 +18,9 @@ We've identified and fixed the root cause: there was a race condition at startup
 
 ## ❓ Issue #2: State Stays Idle When Playing (DLNA/Music Assistant)
 
-We need some clarification to help diagnose this:
+We need some clarification to help diagnose this. **Please create a new GitHub issue** for this problem so we can track it independently.
+
+**Questions:**
 
 1. **What exactly do you mean by "state"?**
    - Is the player showing as `idle` in Home Assistant's media player entity (player state: playing/paused/idle)?
@@ -30,22 +32,24 @@ We need some clarification to help diagnose this:
    - Or only when grouped with other speakers?
    - This helps us determine if it's a DLNA-specific issue or a multiroom issue.
 
-3. **UPnP Events**: Since we primarily track playback state via UPnP events (especially for Audio Pro devices which don't support HTTP playback state), can you check your logs for:
-   - "📡 Received UPnP NOTIFY" messages when playing DLNA
-   - What does the `TransportState` show in those events?
+3. **UPnP vs HTTP State**: We suspect UPnP events might be overwriting HTTP state. Can you check:
+   - Enable debug logging: `custom_components.wiim: debug`
+   - Look for "📡 Received UPnP NOTIFY" messages when playing DLNA
+   - What does the `TransportState` show in those events? (check the LastChange XML in debug logs)
    - Compare with Spotify - are UPnP events being received for both?
+   - **Key question**: Does the state briefly show "playing" after a restart, then switch to "idle"? (This would confirm UPnP is overwriting HTTP state)
 
 4. **HTTP API Test**: When playing DLNA, can you test the HTTP API directly in a browser:
    ```
    https://<device-ip>/httpapi.asp?command=getPlayerStatus
    ```
-   (or `http://` if HTTPS doesn't work)
+   (or `http://` if HTTPS doesn't work, or try `getStatusEx` for Audio Pro)
    - What does the `state`, `play_status`, or `status` field show?
    - Compare with Spotify - what's different?
 
 5. **Official App**: What does the official WiiM/LinkPlay app show for playback state when playing DLNA? Does it show "Playing" correctly?
 
-**Action**: Please create a **new GitHub issue** for this problem so we can track it independently. Include the answers to the questions above.
+**Action**: Please create a **new GitHub issue** for this problem and include the answers to the questions above.
 
 ---
 
@@ -99,9 +103,11 @@ If it's just one call during discovery that fails validation, that's expected an
 ## Summary
 
 - ✅ **Volume issue**: Fixed - please test
-- ❓ **State issue**: Need clarification - please create new issue
-- ❓ **Source issue**: Need information - please create new issue
-- ❓ **Router IP**: Need to confirm if it's a problem - please create new issue if needed
+- ❓ **State issue**: Need clarification - **please create new issue #99** (or next available)
+- ❓ **Source issue**: Need information - **please create new issue #100** (or next available)
+- ❓ **Router IP**: Need to confirm if it's a problem - **please create new issue #101** (or next available) if it's causing problems
+
+**Important**: We suspect the state issue might be caused by UPnP events overwriting HTTP state. Before we implement a fix, we need to confirm this is actually happening. The debug logging questions above will help us verify this theory.
 
 Thank you for your patience and detailed feedback! Creating separate issues will help us track and fix each problem independently.
 
