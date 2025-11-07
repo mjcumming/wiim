@@ -2,7 +2,7 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
-## [0.2.17] - 2025-01-28
+## [0.2.17] - 2025-11-07
 
 ### Fixed
 
@@ -13,7 +13,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Resolves issues #97 and #98 where devices appeared as `idle` when playing and volume showed as `Unavailable`
   - Improved exception handling to catch all error types including `WiiMConnectionError` with JSON parsing errors
 
-## [0.2.16] - 2025-01-28
+## [0.2.16] - 2025-11-06
 
 ### Fixed
 
@@ -22,7 +22,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Resolves Home Assistant frame helper warning about deprecated API usage
   - Ensures compatibility with current Home Assistant media source requirements
 
-## [0.2.15] - 2025-01-27
+## [0.2.15] - 2025-11-06
 
 ### Fixed
 
@@ -32,7 +32,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Falls back to reverse mapping from SOURCE_MAP if input_list is not available
   - Resolves issue #95 where users could select sources but the device wouldn't change
 
-## [0.2.14] - 2025-01-27
+## [0.2.14] - 2025-11-06
 
 ### Added
 
