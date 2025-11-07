@@ -10,10 +10,12 @@
 - **CRITICAL FINDING**: In `coordinator_polling.py:333-342`, when UPnP is enabled and has provided volume, we **remove volume from HTTP polling**
 - At startup, UPnP may not have provided volume yet, but we're already excluding it from HTTP polling
 - This creates a race condition: UPnP hasn't sent volume event yet, but HTTP polling is already disabled for volume
+- **Note**: For Audio Pro devices, HTTP volume API might not work anyway, but we should still poll at startup for all devices
 - Volume parsing in `api_parser.py:111-117` looks for `vol` field, but it's being removed before parsing
 
 **Code Location**: 
 - `custom_components/wiim/coordinator_polling.py:333-342` (removes volume when UPnP active)
+- `custom_components/wiim/coordinator_polling.py:868-890` (preserves UPnP volume)
 - `custom_components/wiim/data.py:1218-1233` (`should_use_upnp_volume()` check)
 - `custom_components/wiim/api_parser.py:110-117` (volume parsing)
 
@@ -25,15 +27,17 @@
    (or `http://` if device doesn't support HTTPS)
    - Check if `vol` field is present in the JSON response
    - Share the raw JSON response
+   - **Test at startup** (before any volume changes)
 
 2. **Check UPnP status**: Is UPnP eventing working? Check logs for:
    - "UPnP event subscriptions" messages
    - Any UPnP subscription failures
+   - When does first UPnP volume event arrive? (might be after HTTP polling already excluded it)
 
 **Potential Fix**:
-- Don't exclude HTTP volume until UPnP has **actually provided** volume data (not just subscribed)
+- **Always poll volume at startup** - don't exclude HTTP volume until UPnP has **actually provided** volume data (not just subscribed)
 - Add fallback: if UPnP volume is None, use HTTP volume
-- Fix the race condition at startup
+- Fix the race condition: poll HTTP volume initially, then switch to UPnP once it provides data
 
 ---
 
@@ -43,37 +47,55 @@
 
 **Key Question**: Why does Spotify work but DLNA doesn't? This suggests the API returns different data for different sources.
 
-**Root Cause Analysis**:
-- State detection in `data.py:722-760` relies on `play_state` field from HTTP API
-- If `play_state` is None or empty, defaults to IDLE
-- DLNA/Music Assistant may return `play_state` differently than Spotify
-- **Note**: User said "especially when grouped" - but this might be a red herring if it also happens when solo
+**Important Context**:
+- **We're mostly tracking state using UPnP events** (`upnp_eventer.py:236-239` parses `TransportState`)
+- **Audio Pro devices don't support HTTP API playback state** - they rely on UPnP
+- State detection in `data.py:722-760` reads from `status_model.play_state`, which comes from either:
+  - HTTP API (`api_parser.py:84-86`) - for WiiM devices
+  - UPnP events (`data.py:1254-1266`) - merged into status_model via `_merge_upnp_state_to_coordinator()`
+- **Clarification needed**: When user says "state", do they mean:
+  - **Player state** (playing/paused/idle)? 
+  - **Metadata state** (showing track info)?
+  - Both?
 
 **Code Location**:
-- `custom_components/wiim/data.py:722-760` (state detection)
-- `custom_components/wiim/api_parser.py:84-86` (play_state parsing)
-- `custom_components/wiim/group_media_player.py:166-176` (group state)
+- `custom_components/wiim/data.py:722-760` (state detection - reads from status_model)
+- `custom_components/wiim/data.py:1254-1266` (UPnP state → PlayerStatus conversion)
+- `custom_components/wiim/upnp_eventer.py:236-239` (UPnP TransportState parsing)
+- `custom_components/wiim/api_parser.py:84-86` (HTTP play_state parsing)
 
 **Questions for User**:
-1. **Test HTTP API directly**: When playing DLNA, check:
+1. **Clarify what "state" means**: 
+   - Is the player showing as `idle` in Home Assistant?
+   - Or is metadata (title/artist) not showing?
+   - Or both?
+
+2. **Test HTTP API directly**: When playing DLNA, check:
    ```
    https://<device-ip>/httpapi.asp?command=getPlayerStatus
    ```
    - What does the `state`, `play_status`, or `status` field show?
    - Compare with Spotify - what's different?
+   - **Note**: For Audio Pro, HTTP API might not have playback state
 
-2. **Check WiiM/LinkPlay app**: What does the official app show for state when playing DLNA?
+3. **Check UPnP events**: Enable debug logging and check:
+   - Are UPnP events being received? (look for "📡 Received UPnP NOTIFY" messages)
+   - What does `TransportState` show in UPnP events when playing DLNA?
+   - Compare with Spotify - what's different?
+
+4. **Check WiiM/LinkPlay app**: What does the official app show for state when playing DLNA?
    - Does it show "Playing" correctly?
    - This confirms if it's an API issue or our parsing issue
 
-3. **Test without grouping**: Does the issue occur when the speaker is NOT grouped?
+5. **Test without grouping**: Does the issue occur when the speaker is NOT grouped?
    - If it only happens when grouped, it's a multiroom issue
    - If it happens solo too, it's a DLNA source detection issue
 
 **Potential Fix**:
-- Check for alternative state indicators (position changes, metadata presence)
-- Add logging to see what `play_state` value DLNA actually returns
-- Consider using UPnP state for DLNA sources (we have UPnP integration)
+- For Audio Pro devices, rely entirely on UPnP for playback state (HTTP doesn't support it)
+- Check if UPnP `TransportState` is being parsed correctly for DLNA
+- Add logging to see what UPnP events contain when playing DLNA vs Spotify
+- Consider using position/duration changes as state indicators if TransportState is missing
 
 ---
 
@@ -125,15 +147,17 @@
 **Key Question**: We thought we were filtering this out - where is it coming from?
 
 **Root Cause Analysis**:
-- Likely in UPnP/SSDP discovery picking up router's UPnP services
-- Router might be advertising UPnP services that match our discovery filters
+- Likely in SSDP discovery (`config_flow.py:667-714`) picking up router's UPnP services
+- Router might be advertising UPnP services that match our SSDP filters in `manifest.json`
+- **Current validation**: `validate_wiim_device()` in `config_flow.py:96-184` should catch non-LinkPlay devices
+- But if router responds to `get_status()` with something that looks valid, it might pass validation
 - Could be in multiroom coordination (slave reporting wrong master IP)
-- Need to check if we're actually filtering router IPs
+- **Note**: We filter WSL2 IPs (`192.168.65.x`) in UPnP code, but not router IPs
 
 **Code Location**:
-- `custom_components/wiim/config_flow.py` (device discovery/validation)
-- `custom_components/wiim/upnp_client.py` (UPnP discovery)
-- `custom_components/wiim/upnp_eventer.py` (UPnP eventing)
+- `custom_components/wiim/config_flow.py:667-714` (SSDP discovery)
+- `custom_components/wiim/config_flow.py:96-184` (device validation)
+- `custom_components/wiim/upnp_client.py:201,246` (WSL2 IP filtering - but not router IPs)
 - `custom_components/wiim/coordinator_multiroom.py` (multiroom coordination)
 
 **Questions for User**:
@@ -146,12 +170,19 @@
 2. **What's the error message?**
    - What API call is being made to 192.168.178.1?
    - Is it a discovery attempt or an API call?
+   - Check logs for the full stack trace
+
+3. **Check SSDP discovery logs**:
+   - Look for "SSDP discovery from:" messages
+   - Does it show router IP in discovery?
+   - Does validation fail or pass?
 
 **Potential Fix**:
-- Add explicit router IP filtering in discovery (common router IPs: .1, .254, gateway IPs)
-- Validate discovered devices are actually LinkPlay devices (check for LinkPlay UUID/manufacturer)
+- Add explicit router IP filtering in `validate_wiim_device()` (common router IPs: .1, .254, gateway IPs)
+- Filter router IPs in SSDP discovery before validation
+- Validate discovered devices more strictly (check for LinkPlay UUID/manufacturer in response)
 - Add logging to track where router IP is coming from
-- Check if router is advertising UPnP services that match our SSDP filters
+- Check if router is advertising UPnP services that match our SSDP filters in manifest.json
 
 ---
 
