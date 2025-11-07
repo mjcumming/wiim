@@ -2,23 +2,23 @@
 
 Thank you for testing v0.2.17 and providing detailed feedback! I've addressed the volume issue and need some clarification on the other problems you reported.
 
-**Note**: I see from [issue #98](https://github.com/mjcumming/wiim/issues/98) that you mentioned grouping seems to work now with the new version - that's great! The state/source issues you're experiencing are what we're focusing on here.
+**Note**: I see from [issue #98](https://github.com/mjcumming/wiim/issues/98) that you mentioned grouping seems to work now with the new version - that's great! The state/source issues you're experiencing are what I'm focusing on here.
 
 ## ✅ Issue #1: Volume Level Missing Initially - FIXED
 
-I've identified and fixed the root cause: there was a race condition at startup where UPnP eventing hadn't sent the first volume event yet, but we were already excluding volume from HTTP polling.
+I've identified and fixed the root cause: there was a race condition at startup where UPnP eventing hadn't sent the first volume event yet, but the integration was already excluding volume from HTTP polling.
 
 **Fix**: The integration now always polls HTTP volume at startup, and only switches to UPnP volume once it has actually provided volume data (not just subscribed). This ensures volume is always available immediately.
 
-**Status**: Fixed in latest commit. Please test and let us know if the volume now appears correctly at startup.
+**Status**: Fixed in latest commit. Please test and let me know if the volume now appears correctly at startup.
 
-**Note**: I understand you've switched back to v0.1.28 due to the state/source issues. Once we get these resolved, you should be able to use the latest version with both grouping and state/source working correctly.
+**Note**: I understand you've switched back to v0.1.28 due to the state/source issues. Once I get these resolved, you should be able to use the latest version with both grouping and state/source working correctly.
 
 ---
 
 ## ❓ Issue #2: State Stays Idle When Playing (DLNA/Music Assistant)
 
-I need some clarification to help diagnose this. **Please create a new GitHub issue** for this problem so we can track it independently.
+I need some clarification to help diagnose this. **Please create a new GitHub issue** for this problem so I can track it independently.
 
 **Questions:**
 
@@ -30,7 +30,7 @@ I need some clarification to help diagnose this. **Please create a new GitHub is
 2. **When does this happen?**
    - Does it occur when the speaker is NOT grouped (solo)?
    - Or only when grouped with other speakers?
-   - This helps us determine if it's a DLNA-specific issue or a multiroom issue.
+   - This helps determine if it's a DLNA-specific issue or a multiroom issue.
 
 3. **UPnP vs HTTP State**: I suspect UPnP events might be overwriting HTTP state. Can you check:
    - Enable debug logging: `custom_components.wiim: debug`
@@ -55,7 +55,7 @@ I need some clarification to help diagnose this. **Please create a new GitHub is
 
 ## ❓ Issue #3: Source Missing for DLNA
 
-We need some information to help diagnose this:
+I need some information to help diagnose this:
 
 1. **HTTP API Test**: When playing DLNA, can you test the HTTP API directly in a browser:
    ```
@@ -73,7 +73,7 @@ We need some information to help diagnose this:
    - Is it always missing for DLNA, or only sometimes?
    - Does it work correctly for other sources (Spotify, Bluetooth)?
 
-**Action**: Please create a **new GitHub issue** for this problem so we can track it independently. Include the information above.
+**Action**: Please create a **new GitHub issue** for this problem so I can track it independently. Include the information above.
 
 ---
 
@@ -84,7 +84,7 @@ This might actually be expected behavior, but I need to confirm:
 **Expected Behavior**: During SSDP discovery, the integration checks ALL UPnP devices on your network to see if they're LinkPlay/WiiM devices. This means it will make ONE validation call to every UPnP device, including routers (if they advertise UPnP services that match our SSDP filters).
 
 **Questions**:
-1. **Is this just one call during initial discovery?** (This is expected - we check all UPnP devices)
+1. **Is this just one call during initial discovery?** (This is expected - the integration checks all UPnP devices)
 2. **Or is it repeated calls during normal operation?** (This would be a problem)
 3. **What's the exact error message?**
    - What API call is being made to 192.168.178.1?
@@ -109,7 +109,7 @@ If it's just one call during discovery that fails validation, that's expected an
 
 **Important**: I suspect the state issue might be caused by UPnP events overwriting HTTP state. Before I implement a fix, I need to confirm this is actually happening. The debug logging questions above will help verify this theory.
 
-Thank you for your patience and detailed feedback! Creating separate issues will help us track and fix each problem independently.
+Thank you for your patience and detailed feedback! Creating separate issues will help track and fix each problem independently.
 
 **P.S.**: I see you mentioned in issue #98 that grouping seems to work now - that's excellent! Once I get the state/source issues sorted out, you should be able to use the latest version with everything working properly. I appreciate you taking the time to test when you can (household harmony is important! 😊).
 
