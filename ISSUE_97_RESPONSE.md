@@ -23,16 +23,19 @@ I need some clarification to help diagnose this. **Please create a new GitHub is
 **Questions:**
 
 1. **What exactly do you mean by "state"?**
+
    - Is the player showing as `idle` in Home Assistant's media player entity (player state: playing/paused/idle)?
    - Or is the metadata (title/artist/album) not showing up (metadata state)?
    - Or both?
 
 2. **When does this happen?**
+
    - Does it occur when the speaker is NOT grouped (solo)?
    - Or only when grouped with other speakers?
    - This helps determine if it's a DLNA-specific issue or a multiroom issue.
 
 3. **UPnP vs HTTP State**: I suspect UPnP events might be overwriting HTTP state. Can you check:
+
    - Enable debug logging: `custom_components.wiim: debug`
    - Look for "📡 Received UPnP NOTIFY" messages when playing DLNA
    - What does the `TransportState` show in those events? (check the LastChange XML in debug logs)
@@ -40,10 +43,13 @@ I need some clarification to help diagnose this. **Please create a new GitHub is
    - **Key question**: Does the state briefly show "playing" after a restart, then switch to "idle"? (This would confirm UPnP is overwriting HTTP state)
 
 4. **HTTP API Test**: When playing DLNA, can you test the HTTP API directly in a browser:
+
    ```
    https://<device-ip>/httpapi.asp?command=getPlayerStatus
    ```
+
    (or `http://` if HTTPS doesn't work, or try `getStatusEx` for Audio Pro)
+
    - What does the `state`, `play_status`, or `status` field show?
    - Compare with Spotify - what's different?
 
@@ -58,14 +64,17 @@ I need some clarification to help diagnose this. **Please create a new GitHub is
 I need some information to help diagnose this:
 
 1. **HTTP API Test**: When playing DLNA, can you test the HTTP API directly in a browser:
+
    ```
    https://<device-ip>/httpapi.asp?command=getPlayerStatus
    ```
+
    - What does the `mode` field show? (should be "2" for DLNA per our MODE_MAP)
    - What does the `source` field show?
    - Share the raw JSON response if possible
 
 2. **Official App**: What does the official WiiM/LinkPlay app show for source when playing DLNA?
+
    - Does it show "DLNA" or "Network" or something else?
    - This confirms what the device actually reports
 
@@ -84,6 +93,7 @@ This might actually be expected behavior, but I need to confirm:
 **Expected Behavior**: During SSDP discovery, the integration checks ALL UPnP devices on your network to see if they're LinkPlay/WiiM devices. This means it will make ONE validation call to every UPnP device, including routers (if they advertise UPnP services that match our SSDP filters).
 
 **Questions**:
+
 1. **Is this just one call during initial discovery?** (This is expected - the integration checks all UPnP devices)
 2. **Or is it repeated calls during normal operation?** (This would be a problem)
 3. **What's the exact error message?**
@@ -112,4 +122,3 @@ If it's just one call during discovery that fails validation, that's expected an
 Thank you for your patience and detailed feedback! Creating separate issues will help track and fix each problem independently.
 
 **P.S.**: I see you mentioned in issue #98 that grouping seems to work now - that's excellent! Once I get the state/source issues sorted out, you should be able to use the latest version with everything working properly. I appreciate you taking the time to test when you can (household harmony is important! 😊).
-
