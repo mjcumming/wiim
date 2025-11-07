@@ -27,9 +27,11 @@
 - **v0.2.0+**: Relies on UPnP `TransportState` events merged into `status_model`
   - **We DO have HTTP fallback** if UPnP isn't working (documented in UPNP_TESTING.md)
   - **CRITICAL PROBLEM**: UPnP state is **actively overwriting** HTTP state via `_merge_upnp_state_to_coordinator()`
-  - When UPnP events arrive, they update `status_model` with UPnP state (including incorrect `play_status` for DLNA)
-  - Even if HTTP polling provides correct state, UPnP events arrive more frequently and **overwrite** it
-  - **Result**: State shows "idle" because UPnP is constantly providing wrong state and overwriting correct HTTP state
+  - HTTP polling creates a NEW `status_model` from HTTP response (doesn't preserve UPnP `play_state`)
+  - UPnP events read existing `status_model`, merge UPnP state (including `play_state`), and update `coordinator.data`
+  - **Race condition**: HTTP poll sets correct state → UPnP event overwrites with wrong state → next HTTP poll sets correct state → UPnP event overwrites again
+  - If UPnP events arrive more frequently than HTTP polls (15-30s), wrong state wins
+  - **Result**: State shows "idle" because UPnP is providing wrong state and overwriting correct HTTP state more frequently
   - **Additional issue**: HTTP polling frequency reduced (30s instead of 15s) when UPnP is healthy, making it even harder for HTTP to "win"
 
 ### 2. Source Detection
