@@ -727,6 +727,9 @@ class MediaCommandsMixin:
                     play_item = await media_source.async_resolve_media(hass, media_id, self.entity_id)  # type: ignore[attr-defined]
                     resolved_url = play_item.url
 
+                    # Ensure resolved_url is a string (play_item.url might be a URL object)
+                    resolved_url = str(resolved_url) if resolved_url is not None else ""
+
                     _LOGGER.debug("%s source resolved: %s -> %s", content_type, media_id, resolved_url)
 
                     # Validate that it's audio content

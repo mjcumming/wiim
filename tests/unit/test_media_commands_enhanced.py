@@ -13,6 +13,10 @@ def mock_media_player():
     """Create a mock media player with MediaCommandsMixin."""
     player = MediaCommandsMixin()
     player.hass = MagicMock()
+    # Mock hass.config properly for async_process_play_media_url
+    config_mock = MagicMock()
+    config_mock.internal_url = "http://localhost:8123"
+    player.hass.config = config_mock
     player.controller = MagicMock()
     player.speaker = MagicMock()
     player.entity_id = "media_player.test_wiim"
@@ -128,8 +132,11 @@ async def test_play_media_preset_unchanged(mock_media_player):
 @pytest.mark.asyncio
 async def test_play_media_controller_error_handling(mock_media_player, mock_resolved_media):
     """Test error handling when controller.play_url fails."""
-    with patch("homeassistant.components.media_source.async_resolve_media") as mock_resolve:
+    with patch("homeassistant.components.media_source.async_resolve_media") as mock_resolve, \
+         patch("custom_components.wiim.media_player_commands.async_process_play_media_url") as mock_process:
         mock_resolve.return_value = mock_resolved_media
+        # Mock async_process_play_media_url to just return the URL as-is
+        mock_process.return_value = "http://localhost:8123/api/media_source_proxy/file.mp3"
         mock_media_player.controller.play_url.side_effect = Exception("Playback failed")
 
         with pytest.raises(Exception, match="Playback failed"):
