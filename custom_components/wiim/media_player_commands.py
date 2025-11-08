@@ -20,6 +20,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState, MediaType
+from homeassistant.components.media_player.browse_media import async_process_play_media_url
 from homeassistant.exceptions import HomeAssistantError
 
 if TYPE_CHECKING:
@@ -260,7 +261,7 @@ class PlaybackCommandsMixin:
         self.hass.async_create_task(self.async_media_seek(position))  # type: ignore[attr-defined]
 
     async def async_media_play(self) -> None:
-        """Send play command."""
+        """Send play command. Uses resume() if paused to continue from current position."""
         import time
 
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
@@ -281,7 +282,12 @@ class PlaybackCommandsMixin:
 
         try:
             # 2. Send command to device
-            await controller.play()
+            # Use resume() if paused to continue from current position, otherwise use play()
+            if current_state == MediaPlayerState.PAUSED:
+                _LOGGER.debug("Device %s is paused, using resume to continue playback", speaker.name)
+                await controller.resume()
+            else:
+                await controller.play()
 
             # 3. Trigger immediate refresh to get updated state/metadata
             await speaker.coordinator.async_request_refresh()
@@ -316,6 +322,43 @@ class PlaybackCommandsMixin:
             self._optimistic_state_timestamp = None  # type: ignore[attr-defined]
             self.async_write_ha_state()  # type: ignore[attr-defined]
             raise
+
+    async def async_media_play_pause(self) -> None:
+        """Toggle play/pause media player. Uses resume() when resuming from pause."""
+        import time
+
+        controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+        speaker = self.speaker  # type: ignore[attr-defined]
+
+        current_state = self.state  # type: ignore[attr-defined]
+
+        if current_state == MediaPlayerState.PLAYING:
+            # Currently playing - pause it
+            await self.async_media_pause()
+        elif current_state == MediaPlayerState.PAUSED:
+            # Currently paused - resume from current position
+            _LOGGER.debug("Device %s is paused, resuming playback", speaker.name)
+            # 1. Optimistic update for immediate UI feedback
+            self._optimistic_state = MediaPlayerState.PLAYING  # type: ignore[attr-defined]
+            self._optimistic_state_timestamp = time.time()  # type: ignore[attr-defined]
+            self.async_write_ha_state()  # type: ignore[attr-defined]
+
+            try:
+                # 2. Send resume command to device
+                await controller.resume()
+
+                # 3. Trigger immediate refresh to get updated state/metadata
+                await speaker.coordinator.async_request_refresh()
+
+            except Exception:
+                # Clear optimistic state on error so real state shows
+                self._optimistic_state = None  # type: ignore[attr-defined]
+                self._optimistic_state_timestamp = None  # type: ignore[attr-defined]
+                self.async_write_ha_state()  # type: ignore[attr-defined]
+                raise
+        else:
+            # IDLE or other state - start playing
+            await self.async_media_play()
 
     async def async_media_stop(self) -> None:
         """Send stop command."""
@@ -693,8 +736,13 @@ class MediaCommandsMixin:
                             error_msg += " (TTS content should always be audio)"
                         raise HomeAssistantError(error_msg)
 
-                    # Play the resolved URL
-                    media_id = resolved_url
+                    # Process the resolved URL to convert relative URLs to absolute URLs
+                    # This is required for devices (like Audio Pro) that need absolute URLs
+                    processed_url = async_process_play_media_url(hass, resolved_url)
+                    _LOGGER.debug("%s source URL processed: %s -> %s", content_type, resolved_url, processed_url)
+
+                    # Play the processed URL
+                    media_id = processed_url
                     media_type = MediaType.URL
 
                     if is_tts_content:
@@ -722,6 +770,13 @@ class MediaCommandsMixin:
             elif media_type in [MediaType.URL, MediaType.MUSIC, "url"] or (
                 isinstance(media_type, str) and media_type.startswith("audio/")
             ):
+                # Process URL to convert relative URLs to absolute URLs
+                # This is required for devices (like Audio Pro) that need absolute URLs
+                processed_url = async_process_play_media_url(hass, media_id)
+                if processed_url != media_id:
+                    _LOGGER.debug("URL processed: %s -> %s", media_id, processed_url)
+                    media_id = processed_url
+
                 # If the URL matches a Quick Station entry, use its friendly name
                 station_title = await self._async_lookup_quick_station_title(media_id)  # type: ignore[attr-defined]
                 if station_title:
@@ -736,7 +791,7 @@ class MediaCommandsMixin:
                     self._optimistic_source = None  # type: ignore[attr-defined]
                     self.async_write_ha_state()  # type: ignore[attr-defined]
 
-                # Always send the URL to the device
+                # Always send the processed URL to the device
                 await controller.play_url(media_id)
 
                 # Let adaptive polling handle sync (no immediate refresh needed)
@@ -791,6 +846,7 @@ class MediaCommandsMixin:
         """Play TTS locally on this speaker."""
         speaker: Speaker = self.speaker  # type: ignore[attr-defined]
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+        hass = self.hass  # type: ignore[attr-defined]
 
         _LOGGER.debug("Playing local TTS on %s", speaker.name)
 
@@ -804,6 +860,13 @@ class MediaCommandsMixin:
             # Pause current playback if playing
             if self.state == MediaPlayerState.PLAYING:  # type: ignore[attr-defined]
                 await controller.pause()
+
+            # Process URL to convert relative URLs to absolute URLs
+            # This is required for devices (like Audio Pro) that need absolute URLs
+            processed_url = async_process_play_media_url(hass, media_id)
+            if processed_url != media_id:
+                _LOGGER.debug("TTS URL processed: %s -> %s", media_id, processed_url)
+                media_id = processed_url
 
             # Play TTS audio
             await controller.play_url(media_id)

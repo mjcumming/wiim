@@ -126,6 +126,130 @@ class TestMediaPlayerControls:
         media_player.controller.pause.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_async_media_play_when_paused_uses_resume(self, media_player):
+        """Test play command uses resume when device is paused."""
+        # Mock the controller methods that are called
+        media_player.controller = AsyncMock()
+        media_player.controller.resume = AsyncMock()
+        media_player.controller.play = AsyncMock()
+
+        # Override state property to return PAUSED
+        type(media_player).state = property(lambda self: MediaPlayerState.PAUSED)
+
+        # Mock speaker and coordinator
+        media_player.speaker = MagicMock()
+        media_player.speaker.coordinator = AsyncMock()
+        media_player.speaker.coordinator.async_request_refresh = AsyncMock()
+
+        # Mock required attributes
+        media_player._optimistic_state = None
+        media_player._optimistic_state_timestamp = None
+        media_player.async_write_ha_state = MagicMock()
+
+        await media_player.async_media_play()
+
+        # Should use resume, not play
+        media_player.controller.resume.assert_called_once()
+        media_player.controller.play.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_media_play_when_idle_uses_play(self, media_player):
+        """Test play command uses play when device is idle."""
+        # Mock the controller methods that are called
+        media_player.controller = AsyncMock()
+        media_player.controller.resume = AsyncMock()
+        media_player.controller.play = AsyncMock()
+
+        # Override state property to return IDLE
+        type(media_player).state = property(lambda self: MediaPlayerState.IDLE)
+
+        # Mock speaker and coordinator
+        media_player.speaker = MagicMock()
+        media_player.speaker.coordinator = AsyncMock()
+        media_player.speaker.coordinator.async_request_refresh = AsyncMock()
+
+        # Mock required attributes
+        media_player._optimistic_state = None
+        media_player._optimistic_state_timestamp = None
+        media_player.async_write_ha_state = MagicMock()
+
+        await media_player.async_media_play()
+
+        # Should use play, not resume
+        media_player.controller.play.assert_called_once()
+        media_player.controller.resume.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_media_play_pause_when_playing_pauses(self, media_player):
+        """Test play_pause command pauses when currently playing."""
+        # Mock the controller methods that are called
+        media_player.controller = AsyncMock()
+        media_player.controller.pause = AsyncMock()
+
+        # Override state property to return PLAYING
+        type(media_player).state = property(lambda self: MediaPlayerState.PLAYING)
+
+        # Mock required attributes
+        media_player._optimistic_state = None
+        media_player._optimistic_state_timestamp = None
+        media_player.async_write_ha_state = MagicMock()
+
+        await media_player.async_media_play_pause()
+
+        # Should call pause
+        media_player.controller.pause.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_media_play_pause_when_paused_resumes(self, media_player):
+        """Test play_pause command resumes when currently paused."""
+        # Mock the controller methods that are called
+        media_player.controller = AsyncMock()
+        media_player.controller.resume = AsyncMock()
+
+        # Override state property to return PAUSED
+        type(media_player).state = property(lambda self: MediaPlayerState.PAUSED)
+
+        # Mock speaker and coordinator
+        media_player.speaker = MagicMock()
+        media_player.speaker.coordinator = AsyncMock()
+        media_player.speaker.coordinator.async_request_refresh = AsyncMock()
+
+        # Mock required attributes
+        media_player._optimistic_state = None
+        media_player._optimistic_state_timestamp = None
+        media_player.async_write_ha_state = MagicMock()
+
+        await media_player.async_media_play_pause()
+
+        # Should call resume, not play
+        media_player.controller.resume.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_media_play_pause_when_idle_plays(self, media_player):
+        """Test play_pause command plays when currently idle."""
+        # Mock the controller methods that are called
+        media_player.controller = AsyncMock()
+        media_player.controller.play = AsyncMock()
+
+        # Override state property to return IDLE
+        type(media_player).state = property(lambda self: MediaPlayerState.IDLE)
+
+        # Mock speaker and coordinator
+        media_player.speaker = MagicMock()
+        media_player.speaker.coordinator = AsyncMock()
+        media_player.speaker.coordinator.async_request_refresh = AsyncMock()
+
+        # Mock required attributes
+        media_player._optimistic_state = None
+        media_player._optimistic_state_timestamp = None
+        media_player.async_write_ha_state = MagicMock()
+
+        await media_player.async_media_play_pause()
+
+        # Should call play
+        media_player.controller.play.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_async_media_stop(self, media_player):
         """Test stop command."""
         # Mock the controller methods that are called

@@ -198,15 +198,36 @@ class UpnpEventer:
             )
 
         # Parse LastChange XML (same as original)
+        changes = {}
         if "LastChange" in variables_dict:
-            changes = self._parse_last_change(
-                service_type, variables_dict["LastChange"]
+            changes.update(
+                self._parse_last_change(
+                    service_type, variables_dict["LastChange"]
+                )
             )
-        else:
-            changes = variables_dict
+
+        # Also handle individual variables (not just LastChange)
+        # This is important for metadata which may come as CurrentTrackMetaData
+        if service_type == "AVTransport":
+            # Extract metadata from CurrentTrackMetaData if present
+            if "CurrentTrackMetaData" in variables_dict:
+                metadata_changes = self._parse_didl_metadata(
+                    variables_dict["CurrentTrackMetaData"]
+                )
+                changes.update(metadata_changes)
+            # Also check AVTransportURIMetaData as fallback
+            elif "AVTransportURIMetaData" in variables_dict:
+                metadata_changes = self._parse_didl_metadata(
+                    variables_dict["AVTransportURIMetaData"]
+                )
+                changes.update(metadata_changes)
+
+            # Handle TrackSource to update source field
+            if "TrackSource" in variables_dict:
+                changes["source"] = variables_dict["TrackSource"]
 
         # Apply diff to state (same as original)
-        if self.state_manager.apply_diff(changes):
+        if changes and self.state_manager.apply_diff(changes):
             async_dispatcher_send(self.hass, f"wiim_state_updated_{self.device_uuid}")
 
     def _parse_last_change(
@@ -249,6 +270,16 @@ class UpnpEventer:
                                 changes["duration"] = self._parse_time_position(
                                     var_value
                                 )
+                            elif var_name == "CurrentTrackMetaData":
+                                # Parse DIDL-Lite metadata from LastChange XML
+                                metadata_changes = self._parse_didl_metadata(var_value)
+                                changes.update(metadata_changes)
+                            elif var_name == "AVTransportURIMetaData":
+                                # Parse DIDL-Lite metadata from LastChange XML
+                                metadata_changes = self._parse_didl_metadata(var_value)
+                                changes.update(metadata_changes)
+                            elif var_name == "TrackSource":
+                                changes["source"] = var_value
 
                     # Parse RenderingControl service variables
                     elif service_type == "RenderingControl":
@@ -312,6 +343,114 @@ class UpnpEventer:
             pass
 
         return None
+
+    def _parse_didl_metadata(self, didl_xml: str) -> dict[str, Any]:
+        """Parse DIDL-Lite XML to extract track metadata.
+
+        Extracts title, artist, album, and image_url from DIDL-Lite XML.
+        Handles both standard UPnP namespaces and LinkPlay-specific namespaces.
+
+        Args:
+            didl_xml: DIDL-Lite XML string (may be HTML-encoded)
+
+        Returns:
+            Dict with title, artist, album, image_url if found
+        """
+        changes = {}
+
+        if not didl_xml or didl_xml.strip() == "":
+            return changes
+
+        try:
+            from html import unescape
+            from xml.etree import ElementTree as ET
+
+            # Unescape HTML entities (e.g., &lt; becomes <)
+            didl_xml = unescape(didl_xml)
+
+            # Parse XML
+            root = ET.fromstring(didl_xml)
+
+            # Define namespaces (both standard and LinkPlay-specific)
+            namespaces = {
+                "dc": "http://purl.org/dc/elements/1.1/",
+                "upnp": "urn:schemas-upnp-org:metadata-1-0/upnp/",
+                "song": "www.linkplay.com/song/",
+                "": "urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/",
+            }
+
+            # Find item element (may be in root or nested)
+            item = root.find(".//item", namespaces)
+            if item is None:
+                # Try without namespace
+                item = root.find(".//item")
+
+            if item is None:
+                _LOGGER.debug("No item element found in DIDL-Lite XML - clearing metadata")
+                # Clear metadata when no item is found (playback stopped)
+                changes["title"] = None
+                changes["artist"] = None
+                changes["album"] = None
+                changes["image_url"] = None
+                return changes
+
+            # Extract title (dc:title)
+            title_elem = item.find("dc:title", namespaces)
+            if title_elem is None:
+                title_elem = item.find(".//{http://purl.org/dc/elements/1.1/}title")
+            if title_elem is not None and title_elem.text and title_elem.text.strip():
+                changes["title"] = title_elem.text.strip()
+            elif title_elem is not None:
+                # Element exists but is empty - clear it
+                changes["title"] = None
+
+            # Extract artist (upnp:artist)
+            artist_elem = item.find("upnp:artist", namespaces)
+            if artist_elem is None:
+                artist_elem = item.find(".//{urn:schemas-upnp-org:metadata-1-0/upnp/}artist")
+            if artist_elem is not None and artist_elem.text and artist_elem.text.strip():
+                changes["artist"] = artist_elem.text.strip()
+            elif artist_elem is not None:
+                # Element exists but is empty - clear it
+                changes["artist"] = None
+
+            # Extract album (upnp:album)
+            album_elem = item.find("upnp:album", namespaces)
+            if album_elem is None:
+                album_elem = item.find(".//{urn:schemas-upnp-org:metadata-1-0/upnp/}album")
+            if album_elem is not None and album_elem.text and album_elem.text.strip():
+                changes["album"] = album_elem.text.strip()
+            elif album_elem is not None:
+                # Element exists but is empty - clear it
+                changes["album"] = None
+
+            # Extract album art URI (upnp:albumArtURI)
+            art_elem = item.find("upnp:albumArtURI", namespaces)
+            if art_elem is None:
+                art_elem = item.find(".//{urn:schemas-upnp-org:metadata-1-0/upnp/}albumArtURI")
+            if art_elem is not None and art_elem.text and art_elem.text.strip() and art_elem.text.strip() != "un_known":
+                changes["image_url"] = art_elem.text.strip()
+            elif art_elem is not None:
+                # Element exists but is empty or "un_known" - clear it
+                changes["image_url"] = None
+
+            if any(v is not None for v in changes.values()):
+                _LOGGER.debug(
+                    "Extracted metadata from DIDL-Lite: title=%s, artist=%s, album=%s, image_url=%s",
+                    changes.get("title"),
+                    changes.get("artist"),
+                    changes.get("album"),
+                    changes.get("image_url"),
+                )
+            else:
+                _LOGGER.debug("DIDL-Lite XML contains empty metadata - clearing all fields")
+
+        except ET.ParseError as err:
+            _LOGGER.debug("Error parsing DIDL-Lite XML: %s (XML: %s)", err, didl_xml[:200])
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Error extracting metadata from DIDL-Lite: %s", err)
+
+        return changes
 
     def get_subscription_stats(self) -> dict[str, Any]:
         """Get subscription statistics for diagnostics (following DLNA DMR pattern - no health checking)."""

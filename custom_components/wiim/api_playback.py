@@ -25,6 +25,7 @@ from .const import (
     API_ENDPOINT_PLAY_PROMPT_URL,
     API_ENDPOINT_PLAY_URL,
     API_ENDPOINT_PREV,
+    API_ENDPOINT_RESUME,
     API_ENDPOINT_SEEK,
     API_ENDPOINT_SOURCE,
     API_ENDPOINT_STOP,
@@ -48,6 +49,10 @@ class PlaybackAPI:  # mix-in – must be left of base client in MRO
 
     async def pause(self) -> None:  # type: ignore[override]
         await self._request(API_ENDPOINT_PAUSE)  # type: ignore[attr-defined]
+
+    async def resume(self) -> None:  # type: ignore[override]
+        """Resume playback from paused state."""
+        await self._request(API_ENDPOINT_RESUME)  # type: ignore[attr-defined]
 
     async def stop(self) -> None:  # type: ignore[override]
         await self._request(API_ENDPOINT_STOP)  # type: ignore[attr-defined]

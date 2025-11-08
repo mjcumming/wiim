@@ -224,6 +224,36 @@ class MediaControllerCoreMixin:
             self._logger.error("Failed to pause playback: %s", err)
             raise HomeAssistantError(f"Failed to pause: {err}") from err
 
+    async def resume(self) -> None:
+        """Resume playback from paused state (master/slave aware)."""
+        try:
+            self._logger.debug(
+                "Resuming playback for %s (role=%s)",
+                self.speaker.name,
+                self.speaker.role,
+            )
+
+            # Implement master/slave logic - slaves should control master
+            if self.speaker.role == "slave" and self.speaker.coordinator_speaker:
+                target_speaker = self.speaker.coordinator_speaker
+                self._logger.debug(
+                    "Slave redirecting resume to master %s at %s",
+                    target_speaker.name,
+                    target_speaker.ip_address,
+                )
+                await target_speaker.coordinator.client.resume()
+            else:
+                self._logger.debug(
+                    "Sending resume to %s at %s",
+                    self.speaker.name,
+                    self.speaker.ip_address,
+                )
+                await self.speaker.coordinator.client.resume()
+
+        except Exception as err:
+            self._logger.error("Failed to resume playback: %s", err)
+            raise HomeAssistantError(f"Failed to resume: {err}") from err
+
     async def stop(self) -> None:
         """Stop playback."""
         try:

@@ -2,6 +2,20 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.19] - 2025-01-27
+
+### Fixed
+
+- **Resume Playback**: Fixed play command restarting tracks when paused by using resume() API endpoint
+  - Play button now properly resumes from current position when device is paused
+  - Added play/pause toggle support with proper resume functionality
+- **Audio Pro Volume State**: Fixed volume showing as unavailable on Audio Pro devices after UPnP subscription
+  - Requests initial UPnP state immediately after subscription for immediate volume availability
+  - Prevents volume appearing as "Unavailable" during startup
+- **Audio Pro URL Playback**: Fixed relative URL playback failures on Audio Pro devices
+  - Media source URLs now properly converted to absolute URLs for Audio Pro compatibility
+  - Applies to TTS, media sources, and direct URL playback
+
 ## [0.2.18] - 2025-01-27
 
 ### Fixed

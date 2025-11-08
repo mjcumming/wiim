@@ -1412,6 +1412,11 @@ class Speaker:
             )
             # Reset subscription failure flag on successful setup
             self._subscriptions_failed = False
+
+            # Request initial UPnP state immediately after subscription for all devices
+            # This ensures we have current volume/playback state right away instead of waiting for first event
+            # Critical for Audio Pro devices that don't provide volume in HTTP API, but beneficial for all devices
+            await self._request_initial_upnp_state()
         except UpnpResponseError as err:
             # Device rejected subscription - this is OK (DLNA pattern)
             subscription_duration = time.time() - subscription_start_time
@@ -1446,6 +1451,98 @@ class Speaker:
         entry.async_on_unload(self._cleanup_upnp_subscriptions)
 
         _LOGGER.info("UPnP subscriptions established for %s", self.name)
+
+    async def _request_initial_upnp_state(self) -> None:
+        """Request initial state from UPnP services immediately after subscription.
+
+        This ensures we have current volume, mute, and playback state right away
+        instead of waiting for the first spontaneous UPnP event. This is critical
+        for Audio Pro devices that don't provide volume in HTTP API, but beneficial
+        for all devices to ensure accurate startup state.
+
+        Requests:
+        - RenderingControl: GetVolume, GetMute (volume and mute state)
+        - AVTransport: GetPositionInfo (optional - playback state, position, metadata)
+        """
+        if not self._upnp_client or not self._upnp_state:
+            return
+
+        rendering_control = self._upnp_client.rendering_control
+        if not rendering_control:
+            _LOGGER.debug(
+                "RenderingControl service not available for %s - cannot request initial UPnP state",
+                self.name,
+            )
+            return
+
+        try:
+            _LOGGER.debug("Requesting initial UPnP state from RenderingControl for %s", self.name)
+
+            # GetVolume action: InstanceID=0, Channel=Master
+            # Standard UPnP RenderingControl action
+            volume_result = await self._upnp_client.async_call_action(
+                "RenderingControl",
+                "GetVolume",
+                arguments={"InstanceID": 0, "Channel": "Master"},
+            )
+
+            # GetMute action: InstanceID=0, Channel=Master
+            mute_result = await self._upnp_client.async_call_action(
+                "RenderingControl",
+                "GetMute",
+                arguments={"InstanceID": 0, "Channel": "Master"},
+            )
+
+            # Parse results and update UPnP state
+            # GetVolume returns: {"CurrentVolume": <0-100>}
+            # GetMute returns: {"CurrentMute": <0|1>}
+            volume_changes: dict[str, Any] = {}
+
+            if "CurrentVolume" in volume_result:
+                try:
+                    vol_int = int(volume_result["CurrentVolume"])
+                    # Convert 0-100 to 0.0-1.0 range
+                    volume_changes["volume"] = vol_int / 100.0
+                    _LOGGER.info(
+                        "✅ Initial UPnP volume state for %s: %d%% (from GetVolume action)",
+                        self.name,
+                        vol_int,
+                    )
+                except (ValueError, TypeError) as err:
+                    _LOGGER.debug("Invalid volume value from UPnP GetVolume: %s", err)
+
+            if "CurrentMute" in mute_result:
+                try:
+                    mute_val = mute_result["CurrentMute"]
+                    # Convert 0/1 to boolean
+                    volume_changes["muted"] = bool(int(mute_val))
+                    _LOGGER.info(
+                        "✅ Initial UPnP mute state for %s: %s (from GetMute action)",
+                        self.name,
+                        volume_changes["muted"],
+                    )
+                except (ValueError, TypeError) as err:
+                    _LOGGER.debug("Invalid mute value from UPnP GetMute: %s", err)
+
+            # Update UPnP state with initial values
+            if volume_changes:
+                self._upnp_state.apply_diff(volume_changes)
+                # Merge into coordinator so entities can read it immediately
+                self._merge_upnp_state_to_coordinator()
+                # Trigger entity update
+                async_dispatcher_send(self.hass, f"wiim_state_updated_{self.uuid}")
+                _LOGGER.info(
+                    "✅ Initial UPnP state merged for %s - volume should now be available",
+                    self.name,
+                )
+
+        except Exception as err:  # noqa: BLE001
+            # Non-fatal: if initial state request fails, we'll wait for first event
+            _LOGGER.debug(
+                "Could not request initial UPnP state for %s: %s (will wait for first event)",
+                self.name,
+                err,
+            )
 
     async def _cleanup_upnp_subscriptions(self) -> None:
         """Clean up UPnP subscriptions (Samsung/DLNA pattern)."""

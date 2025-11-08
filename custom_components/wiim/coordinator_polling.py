@@ -94,9 +94,11 @@ def _should_update_audio_output(coordinator) -> bool:
     """
     # Check if device supports audio output API before attempting to fetch
     capabilities = getattr(coordinator, "_capabilities", {})
+    # Default to False - only call API if explicitly supported
+    # This prevents failures on older Audio Pro devices that don't support this endpoint
     supports_audio_output = capabilities.get(
-        "supports_audio_output", True
-    )  # Default to True for backward compatibility
+        "supports_audio_output", False
+    )  # Default to False to avoid errors on unsupported devices
 
     if not supports_audio_output:
         # Device doesn't support audio output API - don't attempt to fetch
@@ -351,6 +353,19 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                         "UPnP subscribed but no volume data yet for %s - using HTTP volume",
                         coordinator.client.host,
                     )
+
+                # Solution #1: For Audio Pro devices, if UPnP is subscribed but no volume yet,
+                # this is expected (they don't provide volume in HTTP API).
+                # The initial UPnP state request should provide volume soon.
+                # Log a helpful message for Audio Pro devices to explain the delay.
+                if speaker:
+                    capabilities = getattr(coordinator, "_capabilities", {})
+                    is_legacy_device = capabilities.get("is_legacy_device", False)
+                    if is_legacy_device and speaker._upnp_eventer:
+                        _LOGGER.debug(
+                            "Audio Pro device %s: UPnP subscribed, waiting for initial volume state request",
+                            coordinator.client.host,
+                        )
         except Exception as err:
             # If speaker lookup fails, continue with normal polling (graceful fallback)
             if VERBOSE_DEBUG:

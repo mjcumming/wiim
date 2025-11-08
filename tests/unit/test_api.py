@@ -71,6 +71,20 @@ async def test_pause_command():
 
 
 @pytest.mark.asyncio
+async def test_resume_command():
+    """Test resume command."""
+    client = WiiMClient("192.168.1.100")
+
+    # Mock the _request method directly (async)
+    with patch.object(client, "_request", new_callable=AsyncMock, return_value={"raw": "OK"}) as mock_request:
+        await client.resume()  # Should not raise
+        mock_request.assert_called_once()
+        # Verify it calls the correct endpoint
+        mock_request.assert_called_with("/httpapi.asp?command=setPlayerCmd:resume")
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_set_volume_command():
     """Test set volume command."""
     client = WiiMClient("192.168.1.100")
