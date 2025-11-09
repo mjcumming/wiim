@@ -2,6 +2,31 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.23] - 2025-11-09
+
+### Changed
+
+- **UPnP Subscription Handling**: Refactored to follow DLNA DMR pattern from Home Assistant core
+
+  - Replaced pessimistic `_subscriptions_failed` flag with optimistic `check_available` flag
+  - Trusts `auto_resubscribe=True` to recover from temporary failures
+  - HTTP polling and UPnP now work cooperatively rather than one being authoritative
+  - Enhanced diagnostic logging and improved diagnostics to show `check_available` and `upnp_working` status
+
+- **UPnP Health Tracking**: Added health monitoring based on event arrival
+
+  - New `is_upnp_working()` method tracks recent events (within 5 minutes)
+  - Adaptive polling: 5 seconds when UPnP working, 1 second when playing without UPnP, 5 seconds when idle
+
+- **State Merging**: Simplified UPnP state merging logic
+  - Always merges UPnP state when available
+  - Audio Pro devices rely on UPnP for player state (HTTP doesn't provide it)
+  - Other devices use HTTP for state, UPnP for real-time optimization
+
+### Fixed
+
+- **Adaptive Polling**: Fixed test failure by properly mocking UPnP health check
+
 ## [0.2.22] - 2025-11-09
 
 ### Fixed

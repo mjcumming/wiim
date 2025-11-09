@@ -181,20 +181,28 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             has_sid_rcs = getattr(eventer, "_sid_rcs", None) is not None
             has_active_subscriptions = has_sid_avt or has_sid_rcs
 
-            # Subscriptions failed only if eventer exists but has no active subscriptions
-            # AND the failure flag is set (indicating setup failed or subscriptions were lost)
-            subscription_failed_flag = getattr(speaker, "_subscriptions_failed", False)
-            actual_subscription_failed = subscription_failed_flag and not has_active_subscriptions
+            # Check availability flag (DLNA DMR pattern)
+            check_available = (
+                getattr(eventer, "check_available", False)
+                or getattr(speaker, "check_upnp_available", False)
+            )
+            upnp_working = eventer.is_upnp_working() if hasattr(eventer, "is_upnp_working") else False
 
-            # Determine status based on active subscriptions (DLNA DMR pattern - no health checking)
+            # Determine status based on active subscriptions and UPnP health (DLNA DMR pattern)
             status = "Active" if has_active_subscriptions else "Not Active"
-            status_detail = "Receiving Events" if has_active_subscriptions else "Eventer Running but No Events"
+            if upnp_working:
+                status_detail = "Receiving Events"
+            elif has_active_subscriptions:
+                status_detail = "Subscribed but No Recent Events"
+            else:
+                status_detail = "Eventer Running but No Events"
 
             upnp_info = {
                 "status": status,
                 "status_detail": status_detail,
                 "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
-                "subscription_failed": actual_subscription_failed,
+                "check_available": check_available,
+                "upnp_working": upnp_working,
                 "event_count": getattr(eventer, "_event_count", 0),
                 "last_notify": getattr(eventer, "_last_notify_ts", None),
                 "subscription_start_time": getattr(eventer, "_subscription_start_time", None),
@@ -219,25 +227,21 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 }
         else:
             # No UPnP eventer - either setup never ran or failed completely
-            subscription_failed_flag = getattr(speaker, "_subscriptions_failed", False)
             has_upnp_client = hasattr(speaker, "_upnp_client") and speaker._upnp_client is not None
 
-            # Determine status: if subscription_failed is True, setup was attempted but failed
-            # If False and no client, setup likely never ran (coordinator error, etc.)
-            if subscription_failed_flag and has_upnp_client:
-                status_detail = "Subscription Failed (Falling back to HTTP polling)"
-            elif subscription_failed_flag and not has_upnp_client:
-                status_detail = "Client Creation Failed (Using HTTP polling)"
-            elif has_upnp_client:
-                status_detail = "Eventer Not Created (Unexpected state)"
+            # Determine status: if client exists but no eventer, setup was attempted but failed
+            # If no client, setup likely never ran (coordinator error, etc.)
+            if has_upnp_client:
+                status_detail = "Client Created but Subscription Failed (Using HTTP polling)"
             else:
-                status_detail = "Not Initialized (Likely disabled)"
+                status_detail = "Client Creation Failed (Using HTTP polling)"
 
             upnp_info = {
                 "status": "Not Active",
                 "status_detail": status_detail,
                 "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
-                "subscription_failed": subscription_failed_flag,
+                "check_available": False,
+                "upnp_working": False,
                 "event_count": 0,
                 "last_notify": None,
                 "has_upnp_client": has_upnp_client,

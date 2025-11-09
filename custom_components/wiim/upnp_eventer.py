@@ -44,12 +44,29 @@ class UpnpEventer:
         self.state_manager = state_manager
         self.device_uuid = device_uuid
 
-        # Event statistics (for diagnostics only - no health checking per DLNA DMR pattern)
+        # Event statistics (for diagnostics and UPnP health tracking)
         self._last_notify_ts: float | None = None
         self._event_count = 0
 
-        # Track subscription health (following DLNA DMR pattern)
-        self._subscriptions_failed: bool = False
+        # Track availability check (following DLNA DMR pattern)
+        # When empty state_variables detected, set this to trigger availability check
+        self.check_available: bool = False
+
+    def is_upnp_working(self, recent_threshold: float = 300.0) -> bool:
+        """Check if UPnP is actively working based on event arrival.
+
+        Args:
+            recent_threshold: Seconds since last event to consider UPnP "working" (default 5 minutes)
+
+        Returns:
+            True if UPnP has received events recently, False otherwise
+        """
+        if self._event_count == 0:
+            return False  # Never received any events
+        if self._last_notify_ts is None:
+            return False  # No timestamp available
+        time_since_last = time.time() - self._last_notify_ts
+        return time_since_last < recent_threshold
 
     async def start(
         self,
@@ -158,24 +175,107 @@ class UpnpEventer:
         # Handle empty state_variables (resubscription failure indication)
         # Reference: dlna_dmr/media_player.py:514-516
         if not state_variables:
-            if not self._subscriptions_failed:
-                # First time we detect failure - log warning and mark as failed
+            # Gather diagnostic information to understand WHY resubscription failed
+            service_id = getattr(service, "service_id", "Unknown")
+            service_type = getattr(service, "service_type", "Unknown")
+            callback_url = getattr(self.upnp_client.notify_server, "callback_url", "Unknown")
+            time_since_last_event = time.time() - self._last_notify_ts if self._last_notify_ts else None
+            event_count = self._event_count
+
+            # Try to get subscription information from DmrDevice if available
+            subscription_info = {}
+            try:
+                if hasattr(self.upnp_client, "_dmr_device") and self.upnp_client._dmr_device:
+                    dmr = self.upnp_client._dmr_device
+                    # Check if we can access subscription state
+                    if hasattr(dmr, "_subscriptions"):
+                        subscription_info["has_subscriptions_dict"] = True
+                        subscription_info["subscription_count"] = (
+                            len(dmr._subscriptions) if isinstance(dmr._subscriptions, dict) else 0
+                        )
+                    # Check event handler state
+                    if hasattr(dmr, "event_handler"):
+                        eh = dmr.event_handler
+                        if hasattr(eh, "_subscriptions"):
+                            subscription_info["event_handler_subscriptions"] = (
+                                len(eh._subscriptions) if isinstance(eh._subscriptions, dict) else 0
+                            )
+            except Exception as diag_err:
+                subscription_info["diagnostic_error"] = str(diag_err)
+
+            # Following DLNA DMR pattern: empty state_variables indicates resubscription issue
+            # Set check_available flag to trigger availability check in next poll
+            # Trust auto_resubscribe=True to recover - don't mark as failed
+            if not self.check_available:
+                # First time we detect this - log detailed warning with diagnostics
                 _LOGGER.warning(
-                    "⚠️  UPnP resubscription failed for %s (empty state_variables) - "
-                    "falling back to HTTP polling for state updates",
+                    "⚠️  UPnP resubscription issue for %s (empty state_variables) - "
+                    "will check device availability, trusting auto_resubscribe to recover",
                     self.upnp_client.host,
                 )
-                self._subscriptions_failed = True
-                # Signal that UPnP has failed so HTTP polling becomes authoritative
-                async_dispatcher_send(
-                    self.hass,
-                    f"wiim_upnp_subscriptions_failed_{self.device_uuid}",
+                _LOGGER.warning(
+                    "   📊 Diagnostic Information:",
                 )
-            else:
-                _LOGGER.debug(
-                    "UPnP resubscription still failing for %s (empty state_variables)",
-                    self.upnp_client.host,
+                _LOGGER.warning(
+                    "      Service: %s (%s)",
+                    service_id,
+                    service_type,
                 )
+                _LOGGER.warning(
+                    "      Callback URL: %s",
+                    callback_url,
+                )
+                _LOGGER.warning(
+                    "      Events received before issue: %d",
+                    event_count,
+                )
+                if time_since_last_event:
+                    _LOGGER.warning(
+                        "      Time since last event: %.1f seconds",
+                        time_since_last_event,
+                    )
+                else:
+                    _LOGGER.warning(
+                        "      Time since last event: No events received yet",
+                    )
+                if subscription_info:
+                    _LOGGER.warning(
+                        "      Subscription state: %s",
+                        subscription_info,
+                    )
+                _LOGGER.warning(
+                    "   💡 Possible causes:",
+                )
+                _LOGGER.warning(
+                    "      - Device may have reached subscription limit (multiple clients?)",
+                )
+                _LOGGER.warning(
+                    "      - Network connectivity issue preventing resubscription",
+                )
+                _LOGGER.warning(
+                    "      - Device firmware limitation with auto_resubscribe",
+                )
+                _LOGGER.warning(
+                    "      - Callback URL unreachable (check Docker/WSL networking)",
+                )
+
+            # Set check_available flag (DLNA DMR pattern)
+            self.check_available = True
+
+            # Also sync the speaker's check_available flag
+            try:
+                from .data_helpers import find_speaker_by_uuid
+
+                speaker = find_speaker_by_uuid(self.hass, self.device_uuid)
+                if speaker:
+                    speaker.check_upnp_available = True
+                    _LOGGER.debug(
+                        "Set check_upnp_available flag for %s",
+                        self.upnp_client.host,
+                    )
+            except Exception as err:
+                # Non-critical - flag sync failed
+                _LOGGER.debug("Could not sync speaker check_available flag: %s", err)
             return
 
         # Extract service type from service.service_id
@@ -195,14 +295,13 @@ class UpnpEventer:
         self._last_notify_ts = time.time()
         self._event_count += 1
 
-        # If we previously marked subscriptions as failed but now receiving events,
-        # subscriptions are working again (auto_resubscribe succeeded)
-        if self._subscriptions_failed:
-            _LOGGER.info(
-                "✅ UPnP subscriptions recovered for %s - receiving events again",
+        # Clear check_available flag when receiving events (device is available)
+        if self.check_available:
+            _LOGGER.debug(
+                "UPnP events resumed for %s - clearing availability check flag",
                 self.upnp_client.host,
             )
-            self._subscriptions_failed = False
+            self.check_available = False
 
         _LOGGER.info(
             "📡 Received UPnP NOTIFY #%d from %s: service=%s, variables=%s",
@@ -500,5 +599,6 @@ class UpnpEventer:
             "total_events": self._event_count,
             "last_notify_ts": self._last_notify_ts,
             "time_since_last": now - self._last_notify_ts if self._last_notify_ts is not None else None,
-            "subscriptions_failed": self._subscriptions_failed,
+            "check_available": self.check_available,
+            "upnp_working": self.is_upnp_working(),
         }

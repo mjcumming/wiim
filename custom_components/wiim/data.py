@@ -105,7 +105,7 @@ class Speaker:
         self._upnp_client: Any | None = None
         self._upnp_eventer: Any | None = None
         self._upnp_state: Any | None = None
-        self._subscriptions_failed: bool = False
+        self.check_upnp_available: bool = False  # DLNA DMR pattern: trigger availability check
         self._poll_timer: Any | None = None  # Fallback polling timer
 
         # HA integration
@@ -162,7 +162,6 @@ class Speaker:
                 err,
             )
             _LOGGER.debug("UPnP setup error details:", exc_info=True)
-            self._subscriptions_failed = True
 
         _LOGGER.info("Speaker setup complete for UUID: %s (Name: %s)", self.uuid, self.name)
 
@@ -1238,8 +1237,8 @@ class Speaker:
         """Check if UPnP volume events should be used instead of HTTP polling.
 
         Returns:
-            True if UPnP eventer exists and has provided volume data, False otherwise.
-            No health checking per DLNA DMR pattern - trust auto_resubscribe=True.
+            True if UPnP eventer exists and has provided volume data.
+            False otherwise (use HTTP polling or no volume available).
         """
         # Check if UPnP eventer exists (subscription succeeded)
         if not self._upnp_eventer:
@@ -1257,22 +1256,10 @@ class Speaker:
         This ensures entities can read UPnP state updates via status_model.
         Follows Home Assistant pattern: external events → update coordinator.data → entities read it.
 
-        Following DLNA DMR pattern: when UPnP subscriptions have failed, don't merge stale state.
-        HTTP polling is authoritative when UPnP fails.
+        Following DLNA DMR pattern: trust auto_resubscribe=True to handle renewals.
+        Always merge UPnP state when available - HTTP polling and UPnP work together.
         """
         if not self.coordinator or not self.coordinator.data or not self._upnp_state:
-            return
-
-        # Check if UPnP subscriptions have failed - if so, don't merge stale state
-        # HTTP polling will provide the correct state
-        upnp_failed = self._subscriptions_failed or (
-            self._upnp_eventer and getattr(self._upnp_eventer, "_subscriptions_failed", False)
-        )
-        if upnp_failed:
-            _LOGGER.debug(
-                "Skipping UPnP state merge for %s - subscriptions failed, HTTP polling is authoritative",
-                self.name,
-            )
             return
 
         # Get current status_model from coordinator
@@ -1444,11 +1431,6 @@ class Speaker:
                 self.name,
                 subscription_duration,
             )
-            # Reset subscription failure flag on successful setup
-            self._subscriptions_failed = False
-            # Also reset the eventer's internal flag (in case it was set before)
-            if self._upnp_eventer:
-                self._upnp_eventer._subscriptions_failed = False
 
             # Request initial UPnP state immediately after subscription for all devices
             # This ensures we have current volume/playback state right away instead of waiting for first event
@@ -1463,7 +1445,6 @@ class Speaker:
                 subscription_duration,
                 err,
             )
-            self._subscriptions_failed = True
             self._upnp_eventer = None
             return
         except Exception as err:  # noqa: BLE001
@@ -1480,7 +1461,6 @@ class Speaker:
                 err,
                 exc_info=True,
             )
-            self._subscriptions_failed = True
             self._upnp_eventer = None
             return
 

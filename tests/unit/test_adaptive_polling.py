@@ -24,18 +24,22 @@ def mock_coordinator():
 
 
 def test_adaptive_polling_playing_device():
-    """Test that adaptive polling returns 1 second when device is playing."""
+    """Test that adaptive polling returns 1 second when device is playing and UPnP not working."""
     mock_coordinator = MagicMock()
     # Set up the coordinator's time tracking attributes properly
     mock_coordinator._last_playing_time = None
-    # Mock capabilities for WiiM device (1 second when playing)
+    # Mock capabilities for WiiM device (1 second when playing, UPnP not working)
     mock_coordinator._capabilities = {"is_wiim_device": True, "is_legacy_device": False}
+    mock_coordinator.hass = MagicMock()
+    mock_coordinator.entry = MagicMock()
     status_model = PlayerStatus.model_validate({"status": "play", "play_state": "play", "vol": 50})
     role = "solo"
 
-    interval = _determine_adaptive_interval(mock_coordinator, status_model, role)
+    # Mock get_speaker_from_config_entry to return None (no UPnP eventer)
+    with patch("custom_components.wiim.data_helpers.get_speaker_from_config_entry", return_value=None):
+        interval = _determine_adaptive_interval(mock_coordinator, status_model, role)
 
-    assert interval == FAST_POLL_INTERVAL  # 1 second
+    assert interval == FAST_POLL_INTERVAL  # 1 second when UPnP not working
 
 
 def test_adaptive_polling_idle_device():
