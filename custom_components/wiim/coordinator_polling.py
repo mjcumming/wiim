@@ -326,44 +326,52 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         coordinator._player_status_working = True
 
         # Check if we should use UPnP volume instead of HTTP polling
-        # Only exclude HTTP volume if UPnP has actually provided volume data (not just subscribed)
-        # This fixes race condition at startup where UPnP hasn't sent first event yet
+        # For Audio Pro devices: HTTP API doesn't provide volume (no getPlayerStatus endpoint),
+        # so once UPnP is subscribed, we must exclude volume from HTTP polling immediately.
+        # For other devices: Only exclude HTTP volume if UPnP has actually provided volume data.
         status_raw_copy = status_raw.copy()  # Don't modify original dict
         try:
             from .data_helpers import get_speaker_from_config_entry
 
             speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
-            # Only exclude HTTP volume if UPnP has actually provided volume data
-            # This ensures we always have volume at startup, then switch to UPnP once it provides data
-            if speaker and speaker.should_use_upnp_volume():
-                # UPnP has provided volume data - exclude from HTTP polling to avoid conflicts
-                status_raw_copy.pop("vol", None)
-                status_raw_copy.pop("volume", None)
-                status_raw_copy.pop("volume_level", None)
-                if VERBOSE_DEBUG:
-                    _LOGGER.debug(
-                        "Using UPnP volume for %s - excluding volume from HTTP polling",
-                        coordinator.client.host,
-                    )
+            if not speaker:
+                # No speaker found, continue with normal polling
+                pass
             else:
-                # UPnP not active or hasn't provided volume yet - keep HTTP volume polling
-                # This ensures volume is available at startup before UPnP sends first event
-                if VERBOSE_DEBUG and speaker and speaker._upnp_eventer:
-                    _LOGGER.debug(
-                        "UPnP subscribed but no volume data yet for %s - using HTTP volume",
-                        coordinator.client.host,
-                    )
+                capabilities = getattr(coordinator, "_capabilities", {})
+                is_legacy_device = capabilities.get("is_legacy_device", False)
 
-                # Solution #1: For Audio Pro devices, if UPnP is subscribed but no volume yet,
-                # this is expected (they don't provide volume in HTTP API).
-                # The initial UPnP state request should provide volume soon.
-                # Log a helpful message for Audio Pro devices to explain the delay.
-                if speaker:
-                    capabilities = getattr(coordinator, "_capabilities", {})
-                    is_legacy_device = capabilities.get("is_legacy_device", False)
-                    if is_legacy_device and speaker._upnp_eventer:
+                # For Audio Pro devices: HTTP API doesn't provide volume, so once UPnP is subscribed,
+                # we must exclude volume from HTTP polling immediately (don't wait for UPnP to provide it).
+                # This prevents HTTP polling from setting volume to None.
+                if is_legacy_device and speaker._upnp_eventer:
+                    # Audio Pro device with UPnP subscribed - exclude volume from HTTP polling
+                    # HTTP will never provide volume for Audio Pro, so we must rely on UPnP
+                    status_raw_copy.pop("vol", None)
+                    status_raw_copy.pop("volume", None)
+                    status_raw_copy.pop("volume_level", None)
+                    if VERBOSE_DEBUG:
                         _LOGGER.debug(
-                            "Audio Pro device %s: UPnP subscribed, waiting for initial volume state request",
+                            "Audio Pro device %s: UPnP subscribed, excluding volume from HTTP polling",
+                            coordinator.client.host,
+                        )
+                elif speaker.should_use_upnp_volume():
+                    # Non-Audio Pro device: UPnP has provided volume data - exclude from HTTP polling to avoid conflicts
+                    status_raw_copy.pop("vol", None)
+                    status_raw_copy.pop("volume", None)
+                    status_raw_copy.pop("volume_level", None)
+                    if VERBOSE_DEBUG:
+                        _LOGGER.debug(
+                            "Using UPnP volume for %s - excluding volume from HTTP polling",
+                            coordinator.client.host,
+                        )
+                else:
+                    # UPnP not active or hasn't provided volume yet - keep HTTP volume polling
+                    # This ensures volume is available at startup before UPnP sends first event
+                    # (for non-Audio Pro devices)
+                    if VERBOSE_DEBUG and speaker._upnp_eventer:
+                        _LOGGER.debug(
+                            "UPnP subscribed but no volume data yet for %s - using HTTP volume",
                             coordinator.client.host,
                         )
         except Exception as err:
@@ -892,24 +900,45 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 eq_data = {}
 
         # Preserve UPnP volume/mute if UPnP is being used (don't overwrite with HTTP polling)
+        # For Audio Pro devices: Always preserve UPnP volume once UPnP is subscribed (HTTP doesn't provide it)
+        # For other devices: Only preserve if UPnP has actually provided volume data
         try:
             from .data_helpers import get_speaker_from_config_entry
 
             speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
-            if speaker and speaker.should_use_upnp_volume() and coordinator.data:
+            if speaker and coordinator.data:
+                capabilities = getattr(coordinator, "_capabilities", {})
+                is_legacy_device = capabilities.get("is_legacy_device", False)
+
                 # Get existing status_model with UPnP volume
                 existing_status = coordinator.data.get("status_model")
-                if isinstance(existing_status, PlayerStatus) and existing_status.volume is not None:
-                    # Preserve volume and mute from UPnP
-                    status_model.volume = existing_status.volume
-                    if existing_status.mute is not None:
-                        status_model.mute = existing_status.mute
-                    if VERBOSE_DEBUG:
-                        _LOGGER.debug(
-                            "Preserving UPnP volume %d for %s",
-                            existing_status.volume,
-                            coordinator.client.host,
-                        )
+
+                # For Audio Pro devices: If UPnP is subscribed, preserve any UPnP volume we have
+                # (even if None, don't let HTTP overwrite it since HTTP will never provide volume)
+                if is_legacy_device and speaker._upnp_eventer and isinstance(existing_status, PlayerStatus):
+                    # Audio Pro device with UPnP subscribed - preserve UPnP volume if available
+                    if existing_status.volume is not None:
+                        status_model.volume = existing_status.volume
+                        if existing_status.mute is not None:
+                            status_model.mute = existing_status.mute
+                        if VERBOSE_DEBUG:
+                            _LOGGER.debug(
+                                "Preserving UPnP volume %d for Audio Pro device %s",
+                                existing_status.volume,
+                                coordinator.client.host,
+                            )
+                elif speaker.should_use_upnp_volume() and isinstance(existing_status, PlayerStatus):
+                    # Non-Audio Pro device: UPnP has provided volume data - preserve it
+                    if existing_status.volume is not None:
+                        status_model.volume = existing_status.volume
+                        if existing_status.mute is not None:
+                            status_model.mute = existing_status.mute
+                        if VERBOSE_DEBUG:
+                            _LOGGER.debug(
+                                "Preserving UPnP volume %d for %s",
+                                existing_status.volume,
+                                coordinator.client.host,
+                            )
         except Exception as err:
             # Graceful fallback if speaker lookup fails
             if VERBOSE_DEBUG:

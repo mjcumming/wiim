@@ -451,7 +451,7 @@ class MediaControllerCoreMixin:
         """Select hardware output mode.
 
         Args:
-            output_mode: Output mode to select (Line Out, Optical Out, Coax Out, Bluetooth Out)
+            output_mode: Output mode to select (Line Out, Optical Out, Coax Out, Bluetooth Out, Headphone Out)
         """
         try:
             self._logger.info(
@@ -459,6 +459,32 @@ class MediaControllerCoreMixin:
                 output_mode,
                 self.speaker.name,
             )
+
+            # Special handling for Ultra Headphone Out (Issue #86)
+            # For Ultra: hardware=4 with source=0 = Headphone Out, source=1 = Bluetooth Out
+            model_lower = (self.speaker.model or "").lower()
+            if output_mode == "Headphone Out" and "ultra" in model_lower:
+                self._logger.info(
+                    "WiiM Media Controller: Setting Headphone Out for Ultra (hardware=4, source=0)"
+                )
+                # Set hardware mode to 4
+                await self.speaker.coordinator.client.set_audio_output_hardware_mode(4)
+                # Disconnect Bluetooth if active to set source=0 (headphones)
+                if self.speaker.is_bluetooth_output_active():
+                    self._logger.info(
+                        "WiiM Media Controller: Disconnecting Bluetooth to switch to Headphone Out"
+                    )
+                    try:
+                        await self.speaker.coordinator.client.disconnect_bluetooth_device()
+                    except Exception as bt_err:
+                        self._logger.warning(
+                            "WiiM Media Controller: Failed to disconnect Bluetooth (may still work): %s",
+                            bt_err,
+                        )
+                self._logger.info(
+                    "WiiM Media Controller: Successfully set Headphone Out mode (hardware=4)"
+                )
+                return
 
             # Map friendly output mode names to API values
             from .const import AUDIO_OUTPUT_MODES

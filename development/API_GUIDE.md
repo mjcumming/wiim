@@ -95,10 +95,10 @@ This matches user expectations and premium integration standards.
 
 These endpoints work on **all LinkPlay devices** and form the foundation of our integration:
 
-| Endpoint                  | Purpose             | Response                                    | Critical Notes                       |
-| ------------------------- | ------------------- | ------------------------------------------- | ------------------------------------ |
-| **`getPlayerStatus`**     | Core playback state | JSON with play/pause/stop, volume, position | **Most critical - always poll this** |
-| **`wlanGetConnectState`** | WiFi connection     | Plain text: OK/FAIL/PROCESS                 | Network diagnostics                  |
+| Endpoint                  | Purpose             | Response                                    | Critical Notes                                                                                   |
+| ------------------------- | ------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **`getPlayerStatus`**     | Core playback state | JSON with play/pause/stop, volume, position | **Most critical - always poll this** ⚠️ **Exception: Audio Pro MkII uses `getStatusEx` instead** |
+| **`wlanGetConnectState`** | WiFi connection     | Plain text: OK/FAIL/PROCESS                 | Network diagnostics                                                                              |
 
 ### **⚠️ WiiM-ENHANCED ENDPOINTS (Probe Required)**
 
@@ -409,6 +409,17 @@ async def async_join_group(self, speakers: list[Speaker]) -> None:
 - ✅ **Basic playback** - Core functions usually work
 - ❌ **Advanced features** - Often missing or non-standard
 
+### **Audio Pro MkII Devices** (A10 MkII, A15 MkII, A28, C10 MkII, etc.)
+
+- ✅ **HTTPS on port 4443** - Requires mutual TLS (mTLS) with client certificate
+- ✅ **`getStatusEx`** - Use this instead of `getPlayerStatus` (which doesn't work)
+- ✅ **Playback controls** - All `setPlayerCmd:*` commands work
+- ✅ **Multiroom** - Full multiroom support available
+- ❌ **`getPlayerStatus`** - Returns "unknown command" (use `getStatusEx`)
+- ❌ **`getMetaInfo`** - Not supported (no track metadata endpoint)
+- ❌ **`getPresetInfo`** - Not supported (no preset information)
+- ❌ **EQ commands** - All EQ endpoints return "unknown command"
+
 #### **Audio Pro Specific Considerations**
 
 Audio Pro devices have unique characteristics due to their generational evolution and require special handling in our integration:
@@ -427,8 +438,28 @@ Generation 1 devices (A10, A26, A36, C3, C5, C10 without MkII designation) are *
 **API Protocol Evolution:**
 
 - **Original Generation**: HTTP (port 80) - standard LinkPlay API
-- **MkII Generation**: HTTPS (port 443) - enhanced security, same commands
+- **MkII Generation**: HTTPS (port 4443) - enhanced security with mutual TLS (mTLS) authentication, requires client certificate
 - **W-Generation**: HTTPS (port 443) - latest features, backward compatible
+
+**🔐 Audio Pro MkII Security Requirements:**
+
+Audio Pro MkII devices (A10 MkII, A15 MkII, A28, C10 MkII, etc.) require **mutual TLS (mTLS) authentication** on port 4443:
+
+- **Port**: 4443 (primary), with fallback to 8443 and 443
+- **Client Certificate**: Required for authentication - LinkPlay client certificate must be presented during TLS handshake
+- **Certificate Source**: Certificate embedded in integration (originally from [LinkPlay-CLI project](https://github.com/ramikg/linkplay-cli))
+- **Connection Behavior**: Without proper client certificate, devices reject connections with TLS handshake failures
+
+**Example Connection Pattern:**
+
+```bash
+# Successful connection with client certificate
+curl -k --cert linkplay_client.pem "https://10.0.0.43:4443/httpapi.asp?command=getStatusEx"
+
+# Without certificate - fails with TLS handshake error
+curl -k "https://10.0.0.43:4443/httpapi.asp?command=getStatusEx"
+# Error: TLS connect error: error:0A000410:SSL routines::ssl/tls alert handshake failure
+```
 
 **Enhanced Integration Features:**
 
@@ -491,9 +522,48 @@ field_mappings = {
 - **Manual setup friendly**: Always allows IP-based configuration with clear guidance
 - **Generation-aware timeouts**: Optimized retry counts and timeouts per generation
 
+**🚨 Audio Pro MkII API Endpoint Differences:**
+
+Audio Pro MkII devices have **significant API endpoint differences** compared to WiiM devices:
+
+**❌ Unsupported Endpoints (Return "unknown command"):**
+
+- **`getPlayerStatus`** - Does NOT work on Audio Pro MkII
+- **`getMetaInfo`** - Does NOT work (no track metadata endpoint)
+- **`getPresetInfo`** - Does NOT work (no preset information endpoint)
+- **EQ Commands** - All EQ endpoints fail:
+  - `setEQOn` - Returns "unknown command"
+  - `setEQOff` - Returns "unknown command"
+  - `EQGetStat`, `EQGetBand`, `EQGetList`, `EQLoad` - All unsupported
+
+**✅ Working Endpoints:**
+
+- **`getStatusEx`** - Use this instead of `getPlayerStatus` for device status
+- **`setPlayerCmd:*`** - All playback commands work (play, pause, resume, next, prev, vol, mute, seek, stop)
+- **`wlanGetConnectState`** - WiFi connection status
+- **`getNewAudioOutputHardwareMode`** - Audio output mode status
+- **`multiroom:*`** - All multiroom commands work (getSlaveList, SlaveKickout, SlaveMask, SlaveUnMask, SlaveVolume, SlaveMute, Ungroup)
+- **`setPlayerCmd:switchmode:*`** - Source switching (wifi, bluetooth, phono/aux)
+- **`setDeviceName`** - Device name setting
+- **`setShutdown`** / **`getShutdown`** - Power management
+
+**Critical Implementation Note:**
+
+Our integration automatically uses `getStatusEx` instead of `getPlayerStatus` for Audio Pro MkII devices. The status endpoint is configured as:
+
+```python
+capabilities["status_endpoint"] = "/httpapi.asp?command=getStatusEx"
+capabilities["supports_player_status_ex"] = False  # getPlayerStatus not supported
+capabilities["supports_metadata"] = False  # getMetaInfo not supported
+capabilities["supports_eq"] = False  # EQ commands not supported
+capabilities["supports_presets"] = False  # getPresetInfo not supported
+```
+
 **Best Practices:**
 
-- **Always probe protocols**: Don't assume HTTP works (MkII+ devices use HTTPS)
+- **Always probe protocols**: Don't assume HTTP works (MkII+ devices use HTTPS on port 4443)
+- **Use getStatusEx**: Never call `getPlayerStatus` on Audio Pro MkII devices
+- **Expect missing features**: Metadata, presets, and EQ are not available on Audio Pro MkII
 - **Accept validation failures**: They're often cosmetic for Audio Pro devices
 - **Enable fallback modes**: Use manual setup when auto-discovery shows warnings
 - **Check device generation**: Logging shows which generation optimizations are active
@@ -1054,13 +1124,13 @@ async def async_set_native_value(self, value: float) -> None:
 
 ### **Status Queries**
 
-| Command       | Endpoint                        | Response Type | Notes                         |
-| ------------- | ------------------------------- | ------------- | ----------------------------- |
-| Player Status | `getPlayerStatus`               | JSON          | Universal - always works      |
-| Device Info   | `getStatusEx`                   | JSON          | WiiM enhanced - probe first   |
-| Metadata      | `getMetaInfo`                   | JSON          | Often missing - have fallback |
-| Audio Output  | `getNewAudioOutputHardwareMode` | JSON          | Hardware output status        |
-| Multiroom     | `multiroom:getSlaveList`        | JSON          | Only works on masters         |
+| Command       | Endpoint                        | Response Type | Notes                                                                                      |
+| ------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
+| Player Status | `getPlayerStatus`               | JSON          | Universal - always works ⚠️ **Audio Pro MkII: Use `getStatusEx` instead**                  |
+| Device Info   | `getStatusEx`                   | JSON          | WiiM enhanced - probe first ⚠️ **Audio Pro MkII: Required (getPlayerStatus doesn't work)** |
+| Metadata      | `getMetaInfo`                   | JSON          | Often missing - have fallback ⚠️ **Audio Pro MkII: Not supported**                         |
+| Audio Output  | `getNewAudioOutputHardwareMode` | JSON          | Hardware output status                                                                     |
+| Multiroom     | `multiroom:getSlaveList`        | JSON          | Only works on masters                                                                      |
 
 #### **Get Track Metadata**
 

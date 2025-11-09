@@ -132,9 +132,14 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
 
     @property
     def options(self) -> list[str]:
-        """Return a list of available options."""
+        """Return a list of available options.
+
+        For Ultra devices: Includes "Headphone Out" (only Ultra has headphone jack)
+        For all devices: Shows paired Bluetooth devices as individual options instead of generic "Bluetooth Out"
+        """
         try:
-            # Get standard selectable modes (excluding Bluetooth Out - we'll add device-specific options)
+            # Get standard selectable modes (includes "Headphone Out" for Ultra devices via get_output_mode_list())
+            # Note: "Bluetooth Out" is excluded here - we show individual paired Bluetooth devices instead
             standard_modes = self.speaker.get_output_mode_list()
 
             # Get any discovered modes from the device

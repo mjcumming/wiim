@@ -132,8 +132,10 @@ async def test_play_media_preset_unchanged(mock_media_player):
 @pytest.mark.asyncio
 async def test_play_media_controller_error_handling(mock_media_player, mock_resolved_media):
     """Test error handling when controller.play_url fails."""
-    with patch("homeassistant.components.media_source.async_resolve_media") as mock_resolve, \
-         patch("custom_components.wiim.media_player_commands.async_process_play_media_url") as mock_process:
+    with (
+        patch("homeassistant.components.media_source.async_resolve_media") as mock_resolve,
+        patch("custom_components.wiim.media_player_commands.async_process_play_media_url") as mock_process,
+    ):
         mock_resolve.return_value = mock_resolved_media
         # Mock async_process_play_media_url to just return the URL as-is
         mock_process.return_value = "http://localhost:8123/api/media_source_proxy/file.mp3"

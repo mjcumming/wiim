@@ -146,14 +146,14 @@ API_ENDPOINT_AUDIO_OUTPUT_SET = "/httpapi.asp?command=setAudioOutputHardwareMode
 # Audio Output Modes
 # Based on API documentation: 1=SPDIF, 2=AUX, 3=COAX
 # WiiM Amp has 4 options: Line Out, Optical Out, Coax Out, BT Out
-# Mode 0 likely = Line Out, Mode 4 likely = Bluetooth Out
-# Mode 0 for Ultra = Headphone Out (needs verification - see Issue #86)
+# For Ultra devices: hardware=4 with source=0 = Headphone Out, source=1 = Bluetooth Out (Issue #86)
 AUDIO_OUTPUT_MODES = {
-    "0": "Headphone Out",  # Headphone Out (Ultra only - mode value needs verification)
     "1": "Optical Out",  # SPDIF/Optical Out
     "2": "Line Out",  # AUX/Analog Out (shows as Line Out in WiiM app)
     "3": "Coax Out",  # Coaxial Out
-    "4": "Bluetooth Out",  # Bluetooth Out
+    "4": "Bluetooth Out",  # Bluetooth Out (default for non-Ultra devices)
+    # Note: For Ultra devices, hardware=4 is handled specially in get_current_output_mode()
+    # based on the source field: source=0 = Headphone Out, source=1 = Bluetooth Out
 }
 
 # Selectable output modes (hardware only - Bluetooth is firmware-controlled)

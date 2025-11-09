@@ -2,6 +2,16 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.20] - 2025-01-28
+
+### Fixed
+
+- **DLNA Source Detection**: Fixed missing source attribute during DLNA playback
+  - Improved mode-to-source mapping logic to handle cases where API returns mode but not source field
+  - Source is now correctly derived from mode value when source field is missing, None, or invalid
+  - Resolves issue #104 where DLNA playback (mode="2") was not showing correct source
+  - Added debug logging to trace mode-to-source mapping for troubleshooting
+
 ## [0.2.19] - 2025-01-27
 
 ### Fixed

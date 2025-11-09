@@ -1065,11 +1065,25 @@ class Speaker:
             from .const import AUDIO_OUTPUT_MODES
 
             hardware_mode = audio_output.get("hardware")
+            source_mode = audio_output.get("source")
 
             if hardware_mode is None:
                 return None
 
             mode_str = str(hardware_mode)
+
+            # Special handling for Ultra devices: hardware=4 can be either Headphone Out or Bluetooth Out
+            # Based on Issue #86: source=0 means Headphone Out, source=1 means Bluetooth Out
+            if mode_str == "4":
+                model_lower = (self.model or "").lower()
+                if "ultra" in model_lower:
+                    # For Ultra: hardware=4 with source=0 is Headphone Out, source=1 is Bluetooth Out
+                    if source_mode == "0":
+                        return "Headphone Out"
+                    elif source_mode == "1":
+                        return "Bluetooth Out"
+                    # Fallback to default if source is unexpected
+                    return AUDIO_OUTPUT_MODES.get(mode_str, f"Unknown ({hardware_mode})")
 
             # Return known mode or "Unknown" with the raw value
             result = AUDIO_OUTPUT_MODES.get(mode_str, f"Unknown ({hardware_mode})")
@@ -1093,13 +1107,18 @@ class Speaker:
             return None
 
     def get_output_mode_list(self) -> list[str]:
-        """Return list of selectable output modes."""
+        """Return list of selectable output modes.
+
+        Note: Only Ultra devices have a headphone jack, so "Headphone Out" is only added for Ultra.
+        Other devices will only show standard hardware outputs (Line Out, Optical Out, Coax Out).
+        """
         from .const import SELECTABLE_OUTPUT_MODES
 
         modes = SELECTABLE_OUTPUT_MODES.copy()
 
-        # Add Headphone Out for Ultra devices (Issue #86)
-        # Mode value (0) needs verification - user should test with headphones connected
+        # Add Headphone Out for Ultra devices only (Issue #86)
+        # Only Ultra has a headphone jack - other devices don't need this option
+        # For Ultra: hardware=4 with source=0 = Headphone Out, source=1 = Bluetooth Out
         model_lower = (self.model or "").lower()
         if "ultra" in model_lower:
             if "Headphone Out" not in modes:

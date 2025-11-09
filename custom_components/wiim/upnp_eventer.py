@@ -83,11 +83,7 @@ class UpnpEventer:
                 )
                 # Validate callback URL reachability
                 server_host = getattr(self.upnp_client.notify_server, "host", "unknown")
-                if (
-                    server_host.startswith("172.")
-                    or server_host.startswith("192.168.65")
-                    or server_host == "0.0.0.0"
-                ):
+                if server_host.startswith("172.") or server_host.startswith("192.168.65") or server_host == "0.0.0.0":
                     _LOGGER.error(
                         "   ⚠️  CRITICAL: Callback URL uses unreachable IP %s - devices on your LAN cannot reach this!",
                         server_host,
@@ -102,9 +98,7 @@ class UpnpEventer:
 
             # Reference pattern: Set callback and subscribe - auto_resubscribe handles everything
             self.upnp_client._dmr_device.on_event = self._on_event
-            await self.upnp_client._dmr_device.async_subscribe_services(
-                auto_resubscribe=True
-            )
+            await self.upnp_client._dmr_device.async_subscribe_services(auto_resubscribe=True)
 
             subscription_duration = time.time() - subscription_start_time
             _LOGGER.info(
@@ -192,34 +186,24 @@ class UpnpEventer:
             _LOGGER.debug(
                 "UPnP event LastChange XML for %s: %s",
                 self.upnp_client.host,
-                variables_dict.get("LastChange", "")[
-                    :500
-                ],  # First 500 chars to avoid huge logs
+                variables_dict.get("LastChange", "")[:500],  # First 500 chars to avoid huge logs
             )
 
         # Parse LastChange XML (same as original)
         changes = {}
         if "LastChange" in variables_dict:
-            changes.update(
-                self._parse_last_change(
-                    service_type, variables_dict["LastChange"]
-                )
-            )
+            changes.update(self._parse_last_change(service_type, variables_dict["LastChange"]))
 
         # Also handle individual variables (not just LastChange)
         # This is important for metadata which may come as CurrentTrackMetaData
         if service_type == "AVTransport":
             # Extract metadata from CurrentTrackMetaData if present
             if "CurrentTrackMetaData" in variables_dict:
-                metadata_changes = self._parse_didl_metadata(
-                    variables_dict["CurrentTrackMetaData"]
-                )
+                metadata_changes = self._parse_didl_metadata(variables_dict["CurrentTrackMetaData"])
                 changes.update(metadata_changes)
             # Also check AVTransportURIMetaData as fallback
             elif "AVTransportURIMetaData" in variables_dict:
-                metadata_changes = self._parse_didl_metadata(
-                    variables_dict["AVTransportURIMetaData"]
-                )
+                metadata_changes = self._parse_didl_metadata(variables_dict["AVTransportURIMetaData"])
                 changes.update(metadata_changes)
 
             # Handle TrackSource to update source field
@@ -255,21 +239,13 @@ class UpnpEventer:
                             var_value = var.get("val", "")
 
                             if var_name == "TransportState":
-                                changes["play_state"] = var_value.lower().replace(
-                                    "_", " "
-                                )
+                                changes["play_state"] = var_value.lower().replace("_", " ")
                             elif var_name == "AbsoluteTimePosition":
-                                changes["position"] = self._parse_time_position(
-                                    var_value
-                                )
+                                changes["position"] = self._parse_time_position(var_value)
                             elif var_name == "RelativeTimePosition":
-                                changes["position"] = self._parse_time_position(
-                                    var_value
-                                )
+                                changes["position"] = self._parse_time_position(var_value)
                             elif var_name == "CurrentTrackDuration":
-                                changes["duration"] = self._parse_time_position(
-                                    var_value
-                                )
+                                changes["duration"] = self._parse_time_position(var_value)
                             elif var_name == "CurrentTrackMetaData":
                                 # Parse DIDL-Lite metadata from LastChange XML
                                 metadata_changes = self._parse_didl_metadata(var_value)
@@ -458,7 +434,5 @@ class UpnpEventer:
         return {
             "total_events": self._event_count,
             "last_notify_ts": self._last_notify_ts,
-            "time_since_last": now - self._last_notify_ts
-            if self._last_notify_ts is not None
-            else None,
+            "time_since_last": now - self._last_notify_ts if self._last_notify_ts is not None else None,
         }

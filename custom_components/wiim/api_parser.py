@@ -275,12 +275,27 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
             _LOGGER.debug("Error processing artwork URL %s: %s", cover, e)
 
     # Source mapping from *mode* field.
-    if (mode_val := raw.get("mode")) is not None and "source" not in data:
-        if str(mode_val) == "99":
-            data["source"] = "multiroom"
-            data["_multiroom_mode"] = True
-        else:
-            data["source"] = MODE_MAP.get(str(mode_val), "unknown")
+    # Always derive source from mode if source is missing, None, empty, or invalid.
+    # This handles cases where the API returns mode but not source (e.g., DLNA mode="2").
+    # See: https://github.com/mjcumming/wiim/issues/104
+    if (mode_val := raw.get("mode")) is not None:
+        current_source = data.get("source")
+        # Only override if source is missing, None, empty, or invalid
+        if not current_source or current_source in ("unknown", "wifi", ""):
+            if str(mode_val) == "99":
+                data["source"] = "multiroom"
+                data["_multiroom_mode"] = True
+            else:
+                mapped_source = MODE_MAP.get(str(mode_val), "unknown")
+                # Only set if we have a valid mapping (not "unknown")
+                if mapped_source != "unknown":
+                    data["source"] = mapped_source
+                    _LOGGER.debug(
+                        "Mapped mode %s to source '%s' (previous source: %s)",
+                        mode_val,
+                        mapped_source,
+                        current_source or "missing",
+                    )
 
     # Vendor override (e.g. Amazon Music).
     vendor_val = raw.get("vendor") or raw.get("Vendor") or raw.get("app")
