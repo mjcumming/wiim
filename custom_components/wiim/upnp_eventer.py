@@ -228,13 +228,26 @@ class UpnpEventer:
         # Also handle individual variables (not just LastChange)
         # This is important for metadata which may come as CurrentTrackMetaData
         if service_type == "AVTransport":
+            # Check current playback state before processing metadata
+            # Only clear metadata if device is truly stopped/idle, not during transitions
+            current_play_state = self.state_manager.play_state
+            is_playing_or_transitioning = current_play_state and any(
+                state in str(current_play_state).lower() for state in ["play", "playing", "transitioning", "load"]
+            )
+
             # Extract metadata from CurrentTrackMetaData if present
             if "CurrentTrackMetaData" in variables_dict:
-                metadata_changes = self._parse_didl_metadata(variables_dict["CurrentTrackMetaData"])
+                metadata_changes = self._parse_didl_metadata(
+                    variables_dict["CurrentTrackMetaData"],
+                    allow_clear=not is_playing_or_transitioning,
+                )
                 changes.update(metadata_changes)
             # Also check AVTransportURIMetaData as fallback
             elif "AVTransportURIMetaData" in variables_dict:
-                metadata_changes = self._parse_didl_metadata(variables_dict["AVTransportURIMetaData"])
+                metadata_changes = self._parse_didl_metadata(
+                    variables_dict["AVTransportURIMetaData"],
+                    allow_clear=not is_playing_or_transitioning,
+                )
                 changes.update(metadata_changes)
 
             # Handle TrackSource to update source field
@@ -279,11 +292,27 @@ class UpnpEventer:
                                 changes["duration"] = self._parse_time_position(var_value)
                             elif var_name == "CurrentTrackMetaData":
                                 # Parse DIDL-Lite metadata from LastChange XML
-                                metadata_changes = self._parse_didl_metadata(var_value)
+                                # Check if device is playing/transitioning before clearing metadata
+                                current_play_state = changes.get("play_state") or self.state_manager.play_state
+                                is_playing_or_transitioning = current_play_state and any(
+                                    state in str(current_play_state).lower()
+                                    for state in ["play", "playing", "transitioning", "load"]
+                                )
+                                metadata_changes = self._parse_didl_metadata(
+                                    var_value, allow_clear=not is_playing_or_transitioning
+                                )
                                 changes.update(metadata_changes)
                             elif var_name == "AVTransportURIMetaData":
                                 # Parse DIDL-Lite metadata from LastChange XML
-                                metadata_changes = self._parse_didl_metadata(var_value)
+                                # Check if device is playing/transitioning before clearing metadata
+                                current_play_state = changes.get("play_state") or self.state_manager.play_state
+                                is_playing_or_transitioning = current_play_state and any(
+                                    state in str(current_play_state).lower()
+                                    for state in ["play", "playing", "transitioning", "load"]
+                                )
+                                metadata_changes = self._parse_didl_metadata(
+                                    var_value, allow_clear=not is_playing_or_transitioning
+                                )
                                 changes.update(metadata_changes)
                             elif var_name == "TrackSource":
                                 changes["source"] = var_value
@@ -351,7 +380,7 @@ class UpnpEventer:
 
         return None
 
-    def _parse_didl_metadata(self, didl_xml: str) -> dict[str, Any]:
+    def _parse_didl_metadata(self, didl_xml: str, allow_clear: bool = True) -> dict[str, Any]:
         """Parse DIDL-Lite XML to extract track metadata.
 
         Extracts title, artist, album, and image_url from DIDL-Lite XML.
@@ -359,6 +388,7 @@ class UpnpEventer:
 
         Args:
             didl_xml: DIDL-Lite XML string (may be HTML-encoded)
+            allow_clear: If False, don't clear metadata fields when empty (for transitions)
 
         Returns:
             Dict with title, artist, album, image_url if found
@@ -393,12 +423,16 @@ class UpnpEventer:
                 item = root.find(".//item")
 
             if item is None:
-                _LOGGER.debug("No item element found in DIDL-Lite XML - clearing metadata")
-                # Clear metadata when no item is found (playback stopped)
-                changes["title"] = None
-                changes["artist"] = None
-                changes["album"] = None
-                changes["image_url"] = None
+                _LOGGER.debug(
+                    "No item element found in DIDL-Lite XML - %s metadata",
+                    "clearing" if allow_clear else "preserving (device playing/transitioning)",
+                )
+                # Only clear metadata if explicitly allowed (device is stopped/idle)
+                if allow_clear:
+                    changes["title"] = None
+                    changes["artist"] = None
+                    changes["album"] = None
+                    changes["image_url"] = None
                 return changes
 
             # Extract title (dc:title)
@@ -407,8 +441,8 @@ class UpnpEventer:
                 title_elem = item.find(".//{http://purl.org/dc/elements/1.1/}title")
             if title_elem is not None and title_elem.text and title_elem.text.strip():
                 changes["title"] = title_elem.text.strip()
-            elif title_elem is not None:
-                # Element exists but is empty - clear it
+            elif title_elem is not None and allow_clear:
+                # Element exists but is empty - clear it only if allowed
                 changes["title"] = None
 
             # Extract artist (upnp:artist)
@@ -417,8 +451,8 @@ class UpnpEventer:
                 artist_elem = item.find(".//{urn:schemas-upnp-org:metadata-1-0/upnp/}artist")
             if artist_elem is not None and artist_elem.text and artist_elem.text.strip():
                 changes["artist"] = artist_elem.text.strip()
-            elif artist_elem is not None:
-                # Element exists but is empty - clear it
+            elif artist_elem is not None and allow_clear:
+                # Element exists but is empty - clear it only if allowed
                 changes["artist"] = None
 
             # Extract album (upnp:album)
@@ -427,8 +461,8 @@ class UpnpEventer:
                 album_elem = item.find(".//{urn:schemas-upnp-org:metadata-1-0/upnp/}album")
             if album_elem is not None and album_elem.text and album_elem.text.strip():
                 changes["album"] = album_elem.text.strip()
-            elif album_elem is not None:
-                # Element exists but is empty - clear it
+            elif album_elem is not None and allow_clear:
+                # Element exists but is empty - clear it only if allowed
                 changes["album"] = None
 
             # Extract album art URI (upnp:albumArtURI)
@@ -437,8 +471,8 @@ class UpnpEventer:
                 art_elem = item.find(".//{urn:schemas-upnp-org:metadata-1-0/upnp/}albumArtURI")
             if art_elem is not None and art_elem.text and art_elem.text.strip() and art_elem.text.strip() != "un_known":
                 changes["image_url"] = art_elem.text.strip()
-            elif art_elem is not None:
-                # Element exists but is empty or "un_known" - clear it
+            elif art_elem is not None and allow_clear:
+                # Element exists but is empty or "un_known" - clear it only if allowed
                 changes["image_url"] = None
 
             if any(v is not None for v in changes.values()):

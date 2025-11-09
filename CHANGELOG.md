@@ -2,6 +2,18 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.22] - 2025-11-07
+
+### Fixed
+
+- **Audio Pro Metadata Display**: Fixed metadata not showing when playing music via WiiM app on Audio Pro speakers
+
+  - Prevents empty metadata events from clearing existing metadata during track transitions
+  - Metadata is now preserved when device is playing/transitioning, only cleared when truly stopped/idle
+  - Fixes issue where metadata would disappear during track changes when playing from WiiM app
+  - Resolves issue #101 where Audio Pro speakers showed "Idle" state and no metadata when playing via WiiM app
+  - UPnP metadata events are now properly filtered to prevent premature clearing during playback
+
 ## [0.2.21] - 2025-11-09
 
 ### Fixed

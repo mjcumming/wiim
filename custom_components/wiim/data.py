@@ -1266,8 +1266,7 @@ class Speaker:
         # Check if UPnP subscriptions have failed - if so, don't merge stale state
         # HTTP polling will provide the correct state
         upnp_failed = self._subscriptions_failed or (
-            self._upnp_eventer
-            and getattr(self._upnp_eventer, "_subscriptions_failed", False)
+            self._upnp_eventer and getattr(self._upnp_eventer, "_subscriptions_failed", False)
         )
         if upnp_failed:
             _LOGGER.debug(
