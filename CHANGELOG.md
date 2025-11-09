@@ -2,11 +2,12 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
-## [0.2.20] - 2025-01-28
+## [0.2.20] - 2025-11-09
 
 ### Fixed
 
 - **DLNA Source Detection**: Fixed missing source attribute during DLNA playback
+
   - Improved mode-to-source mapping logic to handle cases where API returns mode but not source field
   - Source is now correctly derived from mode value when source field is missing, None, or invalid
   - Resolves issue #104 where DLNA playback (mode="2") was not showing correct source
@@ -25,7 +26,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Headphone Out option only appears for Ultra devices (only device with headphone jack)
   - Resolves issue #86 for proper Ultra device audio output mode handling
 
-## [0.2.19] - 2025-01-27
+## [0.2.19] - 2025-11-08
 
 ### Fixed
 
@@ -39,7 +40,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Media source URLs now properly converted to absolute URLs for Audio Pro compatibility
   - Applies to TTS, media sources, and direct URL playback
 
-## [0.2.18] - 2025-01-27
+## [0.2.18] - 2025-11-07
 
 ### Fixed
 
