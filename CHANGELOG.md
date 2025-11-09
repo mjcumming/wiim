@@ -12,6 +12,19 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Resolves issue #104 where DLNA playback (mode="2") was not showing correct source
   - Added debug logging to trace mode-to-source mapping for troubleshooting
 
+- **Audio Pro Volume State**: Improved volume handling for Audio Pro devices
+  - Audio Pro devices now exclude volume from HTTP polling immediately when UPnP is subscribed
+  - Prevents HTTP polling from setting volume to None on Audio Pro devices (which don't provide volume via HTTP API)
+  - Volume state now properly preserved from UPnP for Audio Pro devices
+
+### Added
+
+- **Ultra Headphone Out Support**: Added support for Headphone Out mode on WiiM Ultra devices
+  - Ultra devices can now select "Headphone Out" as an audio output mode (hardware=4, source=0)
+  - Automatically disconnects Bluetooth when switching to Headphone Out mode
+  - Headphone Out option only appears for Ultra devices (only device with headphone jack)
+  - Resolves issue #86 for proper Ultra device audio output mode handling
+
 ## [0.2.19] - 2025-01-27
 
 ### Fixed
