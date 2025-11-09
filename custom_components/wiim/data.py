@@ -1256,8 +1256,24 @@ class Speaker:
 
         This ensures entities can read UPnP state updates via status_model.
         Follows Home Assistant pattern: external events → update coordinator.data → entities read it.
+
+        Following DLNA DMR pattern: when UPnP subscriptions have failed, don't merge stale state.
+        HTTP polling is authoritative when UPnP fails.
         """
         if not self.coordinator or not self.coordinator.data or not self._upnp_state:
+            return
+
+        # Check if UPnP subscriptions have failed - if so, don't merge stale state
+        # HTTP polling will provide the correct state
+        upnp_failed = self._subscriptions_failed or (
+            self._upnp_eventer
+            and getattr(self._upnp_eventer, "_subscriptions_failed", False)
+        )
+        if upnp_failed:
+            _LOGGER.debug(
+                "Skipping UPnP state merge for %s - subscriptions failed, HTTP polling is authoritative",
+                self.name,
+            )
             return
 
         # Get current status_model from coordinator
@@ -1431,6 +1447,9 @@ class Speaker:
             )
             # Reset subscription failure flag on successful setup
             self._subscriptions_failed = False
+            # Also reset the eventer's internal flag (in case it was set before)
+            if self._upnp_eventer:
+                self._upnp_eventer._subscriptions_failed = False
 
             # Request initial UPnP state immediately after subscription for all devices
             # This ensures we have current volume/playback state right away instead of waiting for first event

@@ -2,6 +2,20 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.21] - 2025-11-09
+
+### Fixed
+
+- **UPnP Resubscription Failure Handling**: Fixed playback state remaining idle and metadata not updating when UPnP subscriptions fail
+
+  - Detects UPnP resubscription failures (empty state_variables) and marks subscriptions as failed
+  - HTTP polling now becomes authoritative when UPnP subscriptions fail, ensuring state updates correctly
+  - Prevents stale UPnP state from overwriting correct HTTP polling state
+  - Auto-recovers when UPnP subscriptions resume working
+  - Following DLNA DMR pattern from Home Assistant core for proper fallback behavior
+  - Resolves issue #103 where DLNA and Spotify sources showed idle state even when playing
+  - Fixes metadata (title/artist/album) not updating for DLNA and Spotify sources when UPnP fails
+
 ## [0.2.20] - 2025-11-09
 
 ### Fixed

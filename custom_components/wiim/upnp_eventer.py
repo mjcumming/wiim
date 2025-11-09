@@ -48,6 +48,9 @@ class UpnpEventer:
         self._last_notify_ts: float | None = None
         self._event_count = 0
 
+        # Track subscription health (following DLNA DMR pattern)
+        self._subscriptions_failed: bool = False
+
     async def start(
         self,
         callback_host: str | None = None,
@@ -147,13 +150,32 @@ class UpnpEventer:
         service: UpnpService,
         state_variables: Sequence[UpnpStateVariable],
     ) -> None:
-        """Handle UPnP events from DmrDevice (reference: dlna_dmr/media_player.py:510)."""
+        """Handle UPnP events from DmrDevice (reference: dlna_dmr/media_player.py:510).
+
+        Following DLNA DMR pattern: empty state_variables indicates resubscription failure.
+        We mark subscriptions as failed and signal fallback to HTTP polling.
+        """
         # Handle empty state_variables (resubscription failure indication)
+        # Reference: dlna_dmr/media_player.py:514-516
         if not state_variables:
-            _LOGGER.debug(
-                "Empty state_variables from %s - may indicate resubscription failure",
-                self.upnp_client.host,
-            )
+            if not self._subscriptions_failed:
+                # First time we detect failure - log warning and mark as failed
+                _LOGGER.warning(
+                    "⚠️  UPnP resubscription failed for %s (empty state_variables) - "
+                    "falling back to HTTP polling for state updates",
+                    self.upnp_client.host,
+                )
+                self._subscriptions_failed = True
+                # Signal that UPnP has failed so HTTP polling becomes authoritative
+                async_dispatcher_send(
+                    self.hass,
+                    f"wiim_upnp_subscriptions_failed_{self.device_uuid}",
+                )
+            else:
+                _LOGGER.debug(
+                    "UPnP resubscription still failing for %s (empty state_variables)",
+                    self.upnp_client.host,
+                )
             return
 
         # Extract service type from service.service_id
@@ -172,6 +194,15 @@ class UpnpEventer:
         # Track event statistics
         self._last_notify_ts = time.time()
         self._event_count += 1
+
+        # If we previously marked subscriptions as failed but now receiving events,
+        # subscriptions are working again (auto_resubscribe succeeded)
+        if self._subscriptions_failed:
+            _LOGGER.info(
+                "✅ UPnP subscriptions recovered for %s - receiving events again",
+                self.upnp_client.host,
+            )
+            self._subscriptions_failed = False
 
         _LOGGER.info(
             "📡 Received UPnP NOTIFY #%d from %s: service=%s, variables=%s",
@@ -435,4 +466,5 @@ class UpnpEventer:
             "total_events": self._event_count,
             "last_notify_ts": self._last_notify_ts,
             "time_since_last": now - self._last_notify_ts if self._last_notify_ts is not None else None,
+            "subscriptions_failed": self._subscriptions_failed,
         }

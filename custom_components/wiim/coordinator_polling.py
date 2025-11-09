@@ -900,6 +900,8 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 eq_data = {}
 
         # Preserve UPnP volume/mute if UPnP is being used (don't overwrite with HTTP polling)
+        # BUT: Only preserve if UPnP subscriptions are actually working (not failed)
+        # Following DLNA DMR pattern: when UPnP fails, HTTP polling becomes authoritative
         # For Audio Pro devices: Always preserve UPnP volume once UPnP is subscribed (HTTP doesn't provide it)
         # For other devices: Only preserve if UPnP has actually provided volume data
         try:
@@ -910,35 +912,49 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 capabilities = getattr(coordinator, "_capabilities", {})
                 is_legacy_device = capabilities.get("is_legacy_device", False)
 
-                # Get existing status_model with UPnP volume
-                existing_status = coordinator.data.get("status_model")
+                # Check if UPnP subscriptions have failed (either speaker flag or eventer flag)
+                upnp_failed = speaker._subscriptions_failed or (
+                    speaker._upnp_eventer and getattr(speaker._upnp_eventer, "_subscriptions_failed", False)
+                )
 
-                # For Audio Pro devices: If UPnP is subscribed, preserve any UPnP volume we have
-                # (even if None, don't let HTTP overwrite it since HTTP will never provide volume)
-                if is_legacy_device and speaker._upnp_eventer and isinstance(existing_status, PlayerStatus):
-                    # Audio Pro device with UPnP subscribed - preserve UPnP volume if available
-                    if existing_status.volume is not None:
-                        status_model.volume = existing_status.volume
-                        if existing_status.mute is not None:
-                            status_model.mute = existing_status.mute
-                        if VERBOSE_DEBUG:
-                            _LOGGER.debug(
-                                "Preserving UPnP volume %d for Audio Pro device %s",
-                                existing_status.volume,
-                                coordinator.client.host,
-                            )
-                elif speaker.should_use_upnp_volume() and isinstance(existing_status, PlayerStatus):
-                    # Non-Audio Pro device: UPnP has provided volume data - preserve it
-                    if existing_status.volume is not None:
-                        status_model.volume = existing_status.volume
-                        if existing_status.mute is not None:
-                            status_model.mute = existing_status.mute
-                        if VERBOSE_DEBUG:
-                            _LOGGER.debug(
-                                "Preserving UPnP volume %d for %s",
-                                existing_status.volume,
-                                coordinator.client.host,
-                            )
+                # If UPnP subscriptions have failed, HTTP polling is authoritative
+                # Don't preserve stale UPnP state - let HTTP polling state win
+                if upnp_failed:
+                    if VERBOSE_DEBUG:
+                        _LOGGER.debug(
+                            "UPnP subscriptions failed for %s - using HTTP polling state as authoritative",
+                            coordinator.client.host,
+                        )
+                else:
+                    # UPnP is working - preserve UPnP state where appropriate
+                    existing_status = coordinator.data.get("status_model")
+
+                    # For Audio Pro devices: If UPnP is subscribed, preserve any UPnP volume we have
+                    # (even if None, don't let HTTP overwrite it since HTTP will never provide volume)
+                    if is_legacy_device and speaker._upnp_eventer and isinstance(existing_status, PlayerStatus):
+                        # Audio Pro device with UPnP subscribed - preserve UPnP volume if available
+                        if existing_status.volume is not None:
+                            status_model.volume = existing_status.volume
+                            if existing_status.mute is not None:
+                                status_model.mute = existing_status.mute
+                            if VERBOSE_DEBUG:
+                                _LOGGER.debug(
+                                    "Preserving UPnP volume %d for Audio Pro device %s",
+                                    existing_status.volume,
+                                    coordinator.client.host,
+                                )
+                    elif speaker.should_use_upnp_volume() and isinstance(existing_status, PlayerStatus):
+                        # Non-Audio Pro device: UPnP has provided volume data - preserve it
+                        if existing_status.volume is not None:
+                            status_model.volume = existing_status.volume
+                            if existing_status.mute is not None:
+                                status_model.mute = existing_status.mute
+                            if VERBOSE_DEBUG:
+                                _LOGGER.debug(
+                                    "Preserving UPnP volume %d for %s",
+                                    existing_status.volume,
+                                    coordinator.client.host,
+                                )
         except Exception as err:
             # Graceful fallback if speaker lookup fails
             if VERBOSE_DEBUG:
