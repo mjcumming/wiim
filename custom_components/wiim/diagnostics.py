@@ -170,6 +170,79 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 "presets_supported": getattr(speaker.coordinator, "_presets_supported", None),
             }
 
+        # HTTP Polling Statistics
+        http_stats = {}
+        if speaker.coordinator:
+            import time
+
+            coordinator = speaker.coordinator
+            total = getattr(coordinator, "_http_poll_total", 0)
+            success = getattr(coordinator, "_http_poll_success", 0)
+            failure = getattr(coordinator, "_http_poll_failure", 0)
+            response_times = getattr(coordinator, "_http_response_times", [])
+
+            success_rate = (success / total * 100) if total > 0 else None
+            avg_response_time = sum(response_times) / len(response_times) if response_times else None
+            min_response_time = min(response_times) if response_times else None
+            max_response_time = max(response_times) if response_times else None
+
+            http_stats = {
+                "total_polls": total,
+                "successful_polls": success,
+                "failed_polls": failure,
+                "success_rate_percent": round(success_rate, 2) if success_rate is not None else None,
+                "avg_response_time_ms": round(avg_response_time, 2) if avg_response_time is not None else None,
+                "min_response_time_ms": round(min_response_time, 2) if min_response_time is not None else None,
+                "max_response_time_ms": round(max_response_time, 2) if max_response_time is not None else None,
+                "last_response_time_ms": round(coordinator._last_response_time, 2)
+                if coordinator._last_response_time is not None
+                else None,
+                "last_success_time": (
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._http_last_success_time))
+                    if getattr(coordinator, "_http_last_success_time", None)
+                    else None
+                ),
+                "last_failure_time": (
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._http_last_failure_time))
+                    if getattr(coordinator, "_http_last_failure_time", None)
+                    else None
+                ),
+                "current_interval_seconds": (
+                    coordinator.update_interval.total_seconds() if coordinator.update_interval else None
+                ),
+                "consecutive_failures": coordinator._backoff.consecutive_failures,
+            }
+
+        # Command Statistics
+        command_stats = {}
+        if speaker.coordinator:
+            import time
+
+            coordinator = speaker.coordinator
+            total = getattr(coordinator, "_command_total", 0)
+            success = getattr(coordinator, "_command_success", 0)
+            failure = getattr(coordinator, "_command_failure_total", 0)
+
+            success_rate = (success / total * 100) if total > 0 else None
+
+            command_stats = {
+                "total_commands": total,
+                "successful_commands": success,
+                "failed_commands": failure,
+                "success_rate_percent": round(success_rate, 2) if success_rate is not None else None,
+                "last_success_time": (
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._command_last_success_time))
+                    if getattr(coordinator, "_command_last_success_time", None)
+                    else None
+                ),
+                "last_failure_time": (
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._command_last_failure_time))
+                    if getattr(coordinator, "_command_last_failure_time", None)
+                    else None
+                ),
+                "recent_failures": getattr(coordinator, "_command_failure_count", 0),
+            }
+
         # UPnP status diagnostics
         # UPnP is always enabled (Samsung/DLNA pattern) - we always try subscriptions, gracefully fallback to polling
         upnp_info = {}
@@ -182,30 +255,47 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             has_active_subscriptions = has_sid_avt or has_sid_rcs
 
             # Check availability flag (DLNA DMR pattern)
-            check_available = (
-                getattr(eventer, "check_available", False)
-                or getattr(speaker, "check_upnp_available", False)
+            check_available = getattr(eventer, "check_available", False) or getattr(
+                speaker, "check_upnp_available", False
             )
-            upnp_working = eventer.is_upnp_working() if hasattr(eventer, "is_upnp_working") else False
 
-            # Determine status based on active subscriptions and UPnP health (DLNA DMR pattern)
+            # Determine status based on active subscriptions (DLNA DMR pattern)
+            # Note: We don't check "is UPnP working" because UPnP has no heartbeat/keepalive.
+            # Events only happen on state changes, so idle devices = no events (normal, not an error).
             status = "Active" if has_active_subscriptions else "Not Active"
-            if upnp_working:
-                status_detail = "Receiving Events"
-            elif has_active_subscriptions:
-                status_detail = "Subscribed but No Recent Events"
+            event_count = getattr(eventer, "_event_count", 0)
+            last_notify_ts = getattr(eventer, "_last_notify_ts", None)
+
+            if has_active_subscriptions:
+                if event_count > 0:
+                    status_detail = f"Subscribed, {event_count} events received"
+                else:
+                    status_detail = "Subscribed (no events yet - normal if device is idle)"
             else:
-                status_detail = "Eventer Running but No Events"
+                status_detail = "Not Subscribed"
+
+            # Calculate UPnP event arrival rates
+            import time
+
+            now = time.time()
+            subscription_age = None
+
+            if eventer._subscription_start_time:
+                subscription_age = int(now - eventer._subscription_start_time)
+
+            # Note: Event arrival rates would require tracking event timestamps in a list.
+            # For now, we show total events and time since last event.
 
             upnp_info = {
                 "status": status,
                 "status_detail": status_detail,
                 "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
                 "check_available": check_available,
-                "upnp_working": upnp_working,
-                "event_count": getattr(eventer, "_event_count", 0),
-                "last_notify": getattr(eventer, "_last_notify_ts", None),
+                "event_count": event_count,
+                "last_notify": last_notify_ts,
+                "time_since_last_event_seconds": (int(now - last_notify_ts) if last_notify_ts else None),
                 "subscription_start_time": getattr(eventer, "_subscription_start_time", None),
+                "subscription_age_seconds": subscription_age,
                 "subscription_expires_avt": getattr(eventer, "_sid_avt_expires", None),
                 "subscription_expires_rcs": getattr(eventer, "_sid_rcs_expires", None),
                 "has_sid_avt": has_sid_avt,
@@ -241,7 +331,8 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 "status_detail": status_detail,
                 "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
                 "check_available": False,
-                "upnp_working": False,
+                # Note: We don't report "upnp_working" because UPnP has no heartbeat.
+                # Events only happen on state changes, so we can't reliably detect if UPnP is working.
                 "event_count": 0,
                 "last_notify": None,
                 "has_upnp_client": has_upnp_client,
@@ -276,6 +367,8 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "media_info": media_info,
             "api_capabilities": api_capabilities,
             "upnp_status": upnp_info,
+            "http_polling_statistics": http_stats,
+            "command_statistics": command_stats,
             "api_status": async_redact_data(api_status, TO_REDACT),
             "model_data": model_data,
             "raw_coordinator_data": async_redact_data(raw_data, TO_REDACT),

@@ -32,10 +32,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _determine_adaptive_interval(coordinator, status_model: PlayerStatus, role: str) -> int:
-    """Enhanced adaptive polling with firmware awareness and UPnP health.
+    """Enhanced adaptive polling with firmware awareness.
 
     Returns:
-        Optimal polling interval based on device capabilities, state, and UPnP health
+        Optimal polling interval based on device capabilities and state.
+
+    Note: UPnP events supplement HTTP polling but don't replace it. We always
+    use fast HTTP polling when playing to ensure reliable state updates.
+    UPnP events provide instant updates on top of HTTP polling.
     """
     from .firmware_capabilities import get_optimal_polling_interval
 
@@ -45,20 +49,11 @@ def _determine_adaptive_interval(coordinator, status_model: PlayerStatus, role: 
     # Also handle common variations: "playing", "paused", "stopped"
     is_playing = play_state_str in ("play", "playing", "load")
 
-    # Check UPnP health: is it actively receiving events?
-    upnp_working = False
-    try:
-        from .data_helpers import get_speaker_from_config_entry
-
-        speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
-        if speaker and speaker._upnp_eventer:
-            # UPnP is working if we've received events recently (within 5 minutes)
-            upnp_working = speaker._upnp_eventer.is_upnp_working(recent_threshold=300.0)
-    except Exception:
-        # If we can't check, assume UPnP is not working (conservative)
-        pass
-
-    return get_optimal_polling_interval(capabilities, role, is_playing, upnp_working=upnp_working)
+    # Always use fast HTTP polling when playing, regardless of UPnP status.
+    # UPnP events supplement polling but don't replace it (following DLNA DMR pattern).
+    # We removed the is_upnp_working() check because UPnP has no heartbeat/keepalive,
+    # so we can't reliably detect if it's working (idle devices = no events = false negative).
+    return get_optimal_polling_interval(capabilities, role, is_playing, upnp_working=False)
 
 
 def _should_update_device_info(coordinator) -> bool:
@@ -1042,6 +1037,15 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 )
 
         coordinator._last_response_time = (time.perf_counter() - _start_time) * 1000.0
+
+        # Track response time for statistics (keep last 100)
+        if coordinator._last_response_time is not None:
+            if not hasattr(coordinator, "_http_response_times"):
+                coordinator._http_response_times = []
+            coordinator._http_response_times.append(coordinator._last_response_time)
+            if len(coordinator._http_response_times) > 100:
+                coordinator._http_response_times.pop(0)  # Keep only last 100
+
         if VERBOSE_DEBUG:
             _LOGGER.debug(
                 "=== OPTIMIZED UPDATE SUCCESS for %s (%.1fms total: %.1fms HTTP + %.1fms processing) ===",

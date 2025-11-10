@@ -79,7 +79,42 @@ async def _mirror_master_media(coordinator, status: PlayerStatus, metadata: dict
 
     _LOGGER.debug("Mirroring master media info for slave %s", coordinator.client.host)
 
-    from .data_helpers import find_speaker_by_ip, get_all_speakers
+    from .data_helpers import find_speaker_by_ip, get_all_speakers, get_speaker_from_config_entry
+
+    # CRITICAL: Verify device is actually still a slave before mirroring
+    # Check both the status data (most current) and speaker object (may be stale during polling)
+    # This prevents stale metadata from being displayed after unjoin
+    is_still_slave = False
+
+    # First check: status data (most current, from current poll)
+    if coordinator.data:
+        status_model = coordinator.data.get("status_model")
+        if isinstance(status_model, PlayerStatus):
+            status_dict = status_model.model_dump(exclude_none=True)
+            # If master_ip is present in status, device is still a slave
+            if status_dict.get("master_ip"):
+                is_still_slave = True
+
+    # Second check: speaker object role (may be stale during polling, but good fallback)
+    if not is_still_slave:
+        speaker = get_speaker_from_config_entry(coordinator.hass, coordinator.entry)
+        if speaker and speaker.role == "slave":
+            is_still_slave = True
+
+    if not is_still_slave:
+        _LOGGER.debug(
+            "Device %s is no longer a slave, clearing mirrored metadata",
+            coordinator.client.host,
+        )
+        # Clear any previously mirrored metadata since device is no longer a slave
+        status.title = None
+        status.artist = None
+        status.album = None
+        status.entity_picture = None
+        status.cover_url = None
+        # Clear metadata dict
+        metadata.clear()
+        return
 
     master_speaker = None
 

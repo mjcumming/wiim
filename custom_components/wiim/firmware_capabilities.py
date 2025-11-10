@@ -385,13 +385,15 @@ def get_led_command_format(device_info: DeviceInfo) -> str:
 def get_optimal_polling_interval(
     capabilities: dict[str, Any], role: str, is_playing: bool, upnp_working: bool = False
 ) -> int:
-    """Get optimal polling interval based on device capabilities and UPnP status.
+    """Get optimal polling interval based on device capabilities and state.
 
     Args:
         capabilities: Device capabilities
         role: Device role (master/slave/solo)
         is_playing: Whether device is currently playing
-        upnp_working: Whether UPnP eventing is working (reduces need for fast polling)
+        upnp_working: DEPRECATED - Always use fast polling when playing.
+            UPnP events supplement HTTP polling but don't replace it (following DLNA DMR pattern).
+            We can't reliably detect if UPnP is working because UPnP has no heartbeat/keepalive.
 
     Returns:
         Polling interval in seconds
@@ -406,14 +408,14 @@ def get_optimal_polling_interval(
             return 15  # 15 seconds for legacy devices when idle
     else:
         # Modern WiiM devices
+        # Always use fast HTTP polling when playing, regardless of UPnP status.
+        # UPnP events provide instant updates on top of HTTP polling (following DLNA DMR pattern).
+        # We removed the upnp_working check because UPnP has no heartbeat, so we can't
+        # reliably detect if it's working (idle devices = no events = false negative).
         if role == "slave":
             return 5  # 5 seconds for slaves
-        elif upnp_working:
-            # UPnP provides real-time position/state updates
-            # HTTP polling is just backup + non-UPnP data (EQ, grouping, etc)
-            return 5  # 5 seconds always when UPnP is handling position
         elif is_playing:
-            return 1  # 1 second for real-time updates (no UPnP)
+            return 1  # 1 second for real-time updates (always, regardless of UPnP)
         else:
             return 5  # 5 seconds when idle
 

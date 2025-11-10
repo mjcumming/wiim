@@ -2,6 +2,30 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.24] - 2025-11-10
+
+### Changed
+
+- **Join/Unjoin Flow**: Simplified group join and unjoin operations for better stability
+
+  - Virtual group master now enables/disables immediately (optimistic update)
+  - Slaves wait for device to confirm role before updating (prevents conflicts with polling)
+  - Removed retry logic and manual state manipulation - let device state flow naturally
+  - Metadata clears immediately on unjoin for instant UI feedback
+  - Eliminates flickering and state conflicts between optimistic updates and polling
+
+- **UPnP Health Checking**: Removed unreliable UPnP health detection
+  - Events only occur on state changes, making health detection unreliable
+  - Polling interval now always uses fast polling (1s) when playing, regardless of UPnP status
+  - UPnP events supplement HTTP polling but don't replace it (following DLNA DMR pattern)
+
+### Added
+
+- **Diagnostics Enhancements**: Added comprehensive statistics tracking
+  - HTTP polling statistics: total polls, success rate, response times, failure tracking
+  - Command statistics: total commands, success rate, failure tracking
+  - All statistics available in device diagnostics for troubleshooting
+
 ## [0.2.23] - 2025-11-09
 
 ### Changed

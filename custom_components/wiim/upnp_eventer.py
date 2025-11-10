@@ -53,13 +53,22 @@ class UpnpEventer:
         self.check_available: bool = False
 
     def is_upnp_working(self, recent_threshold: float = 300.0) -> bool:
-        """Check if UPnP is actively working based on event arrival.
+        """DEPRECATED: Check if UPnP is actively working based on event arrival.
+
+        WARNING: This method is fundamentally flawed and should not be used for decision-making.
+        UPnP has no heartbeat/keepalive mechanism - events only happen on state changes.
+        This means:
+        - Idle devices = no events = false negative (says "not working" when UPnP is fine)
+        - Old events = false positive (says "working" when events stopped arriving)
+
+        We cannot reliably detect if UPnP is working by checking event timestamps.
+        This method is kept for backwards compatibility but always returns unreliable results.
 
         Args:
             recent_threshold: Seconds since last event to consider UPnP "working" (default 5 minutes)
 
         Returns:
-            True if UPnP has received events recently, False otherwise
+            True if UPnP has received events recently, False otherwise (but both are unreliable)
         """
         if self._event_count == 0:
             return False  # Never received any events
@@ -593,12 +602,16 @@ class UpnpEventer:
         return changes
 
     def get_subscription_stats(self) -> dict[str, Any]:
-        """Get subscription statistics for diagnostics (following DLNA DMR pattern - no health checking)."""
+        """Get subscription statistics for diagnostics (following DLNA DMR pattern - no health checking).
+
+        Note: We don't report "upnp_working" because UPnP has no heartbeat/keepalive.
+        Events only happen on state changes, so we can't reliably detect if UPnP is working.
+        """
         now = time.time()
         return {
             "total_events": self._event_count,
             "last_notify_ts": self._last_notify_ts,
             "time_since_last": now - self._last_notify_ts if self._last_notify_ts is not None else None,
             "check_available": self.check_available,
-            "upnp_working": self.is_upnp_working(),
+            # Note: We don't report "upnp_working" - it's unreliable (no heartbeat in UPnP)
         }

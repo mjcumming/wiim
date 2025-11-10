@@ -130,6 +130,22 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._device_info_working: bool | None = None
         self._multiroom_working: bool | None = None
 
+        # ---------------- Statistics tracking ----------------
+        # HTTP polling statistics
+        self._http_poll_total: int = 0  # Total polls attempted
+        self._http_poll_success: int = 0  # Successful polls
+        self._http_poll_failure: int = 0  # Failed polls
+        self._http_response_times: list[float] = []  # Last 100 response times (ms)
+        self._http_last_success_time: float | None = None  # Timestamp of last success
+        self._http_last_failure_time: float | None = None  # Timestamp of last failure
+
+        # Command statistics
+        self._command_total: int = 0  # Total commands sent
+        self._command_success: int = 0  # Successful commands
+        self._command_failure_total: int = 0  # Total failed commands (not just recent)
+        self._command_last_success_time: float | None = None  # Timestamp of last success
+        self._command_last_failure_time: float | None = None  # Timestamp of last failure
+
         _LOGGER.info(
             "Coordinator initialized for %s with adaptive polling (1s when playing, 5s when idle)",
             client.host,
@@ -263,6 +279,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             self._backoff.record_success()
 
+            # Track HTTP polling success
+            self._http_poll_total += 1
+            self._http_poll_success += 1
+            self._http_last_success_time = _time.time()
+
             # Dynamically adjust polling interval based on the device's current state
             status_model = data.get("status_model")
             role = data.get("role")
@@ -285,6 +306,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return data
 
         except (WiiMError, aiohttp.ClientError) as err:
+            # Track HTTP polling failure
+            self._http_poll_total += 1
+            self._http_poll_failure += 1
+            self._http_last_failure_time = _time.time()
+
             # Handle firmware-specific errors
             from .firmware_capabilities import is_legacy_firmware_error
 
@@ -514,6 +540,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_command_failure = time.time()
         self._command_failure_count += 1
 
+        # Track command statistics
+        self._command_total += 1
+        self._command_failure_total += 1
+        self._command_last_failure_time = time.time()
+
         # Log for debugging (avoid noise from common issues)
         if self._command_failure_count <= 3:  # Only log first few failures
             _LOGGER.warning(
@@ -546,6 +577,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("Command succeeded for %s - clearing failure state", self.client.host)
             self._last_command_failure = None
             self._command_failure_count = 0
+
+        # Track command success
+        self._command_total += 1
+        self._command_success += 1
+        self._command_last_success_time = _time.time()
 
     def has_recent_command_failures(self) -> bool:
         """Check if there have been recent command failures."""

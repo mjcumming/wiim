@@ -100,6 +100,7 @@ class Speaker:
         self.role: str = "solo"
         self.group_members: list[Speaker] = []
         self.coordinator_speaker: Speaker | None = None
+        self._pending_unjoin: bool = False  # Flag to prevent polling from repopulating group_members during unjoin
 
         # UPnP components (Samsung/DLNA pattern)
         self._upnp_client: Any | None = None
@@ -330,6 +331,10 @@ class Speaker:
             master_uuid = device_info.get("master_uuid") or status.get("master_uuid")
             self._update_slave_group_state(master_uuid)
         else:
+            # Device confirmed solo role - clear pending unjoin flag
+            if self._pending_unjoin:
+                _LOGGER.debug("Device %s confirmed solo role - clearing pending unjoin flag", self.name)
+                self._pending_unjoin = False
             self._clear_group_state()
 
         # Update availability
@@ -353,6 +358,15 @@ class Speaker:
         slave_list = multiroom.get("slave_list", [])
         slaves_count = multiroom.get("slaves", 0)
         self.coordinator_speaker = None  # Masters don't have coordinators
+
+        # CRITICAL: If we're pending unjoin and group_members is empty, don't repopulate from device data
+        # This prevents virtual master from becoming available again before device confirms solo role
+        if self._pending_unjoin and len(self.group_members) == 0:
+            _LOGGER.debug(
+                "Master %s is pending unjoin - ignoring device multiroom data until solo role confirmed",
+                self.name,
+            )
+            return
 
         # Only log when group composition actually changes
         current_slave_ips = [m.ip_address for m in self.group_members if hasattr(m, "ip_address")]
@@ -641,23 +655,45 @@ class Speaker:
             for slave in slaves:
                 await slave.coordinator.client.join_slave(self.ip_address)
 
-            # 3. Trigger immediate refresh on all slaves for faster UI updates
+            # 3. CRITICAL: Immediately enable virtual master (optimistic update)
+            # Virtual master is a UI construct, so optimistic updates are safe
+            for slave in slaves:
+                if slave not in self.group_members:
+                    self.group_members.append(slave)
+            # Trigger immediate entity state update so virtual group master becomes available
+            self.async_write_entity_states()
+
+            # 4. Wait for device to process join command (0.5-1 second)
+            # Give device time to process before refreshing
+            import asyncio  # noqa: F401
+
             _LOGGER.debug(
-                "Triggering immediate refresh on %d slave devices for faster role detection",
+                "Waiting for devices to process join command before refreshing",
+            )
+            await asyncio.sleep(0.75)  # Wait for device to process
+
+            # 5. Refresh master and slaves to let device state flow through naturally
+            # Polling will detect roles and update state - no manual manipulation needed
+            _LOGGER.debug(
+                "Refreshing master %s to detect group state",
+                self.name,
+            )
+            await self.coordinator.async_refresh()
+
+            # Refresh slaves - they will detect slave role and update from master via polling
+            _LOGGER.debug(
+                "Refreshing %d slave devices to detect slave role",
                 len(slaves),
             )
             for slave in slaves:
                 try:
-                    await slave.coordinator.async_request_refresh()
+                    await slave.coordinator.async_refresh()
                 except Exception as refresh_err:
                     _LOGGER.warning(
-                        "Failed to trigger refresh on slave %s: %s",
+                        "Failed to refresh slave %s: %s",
                         slave.name,
                         refresh_err,
                     )
-
-            # 4. Also refresh master to update its group member list
-            await self.coordinator.async_request_refresh()
 
         except Exception as err:  # pragma: no cover – safety net
             _LOGGER.error("Failed to join group: %s", err)
@@ -672,40 +708,103 @@ class Speaker:
             if self.role == "master":
                 # Master dissolves group for everyone.
                 await self.coordinator.client.leave_group()
+                # CRITICAL: Immediately disable virtual master (optimistic update)
+                # Virtual master is a UI construct, so optimistic updates are safe
+                self.group_members.clear()
+                # Set pending unjoin flag to prevent polling from repopulating group_members
+                # until device confirms solo role
+                self._pending_unjoin = True
+                # Trigger immediate entity state update so virtual group master becomes unavailable
+                self.async_write_entity_states()
 
-                # Trigger refresh on all former slaves for faster UI updates
-                _LOGGER.debug(
-                    "Triggering immediate refresh on %d former slave devices",
-                    len(former_slaves),
-                )
+                # Immediately clear metadata on all former slaves
                 for slave in former_slaves:
-                    try:
-                        await slave.coordinator.async_request_refresh()
-                    except Exception as refresh_err:
-                        _LOGGER.warning(
-                            "Failed to trigger refresh on former slave %s: %s",
-                            slave.name,
-                            refresh_err,
-                        )
+                    # Clear coordinator_speaker reference
+                    if slave.coordinator_speaker == self:
+                        slave.coordinator_speaker = None
+                    # Clear metadata in slave's coordinator.data
+                    if slave.coordinator.data:
+                        status_model = slave.coordinator.data.get("status_model")
+                        if isinstance(status_model, PlayerStatus):
+                            status_model.title = None
+                            status_model.artist = None
+                            status_model.album = None
+                            status_model.entity_picture = None
+                            status_model.cover_url = None
+                        # Clear metadata dict
+                        metadata = slave.coordinator.data.get("metadata", {})
+                        metadata.clear()
+                    # Trigger immediate entity state update
+                    slave.async_write_entity_states()
 
             elif self.role == "slave" and self.coordinator_speaker:
                 # Ask master to kick us out.
                 await self.coordinator_speaker.coordinator.client.kick_slave(self.ip_address)
-
-                # Trigger refresh on former master to update its group member list
-                if former_master:
-                    try:
-                        await former_master.coordinator.async_request_refresh()
-                    except Exception as refresh_err:
-                        _LOGGER.warning(
-                            "Failed to trigger refresh on former master %s: %s",
-                            former_master.name,
-                            refresh_err,
-                        )
+                # CRITICAL: Immediately clear our coordinator_speaker reference
+                # This prevents us from finding the master in mirroring logic
+                self.coordinator_speaker = None
+                # Immediately clear metadata
+                if self.coordinator.data:
+                    status_model = self.coordinator.data.get("status_model")
+                    if isinstance(status_model, PlayerStatus):
+                        status_model.title = None
+                        status_model.artist = None
+                        status_model.album = None
+                        status_model.entity_picture = None
+                        status_model.cover_url = None
+                    # Clear metadata dict
+                    metadata = self.coordinator.data.get("metadata", {})
+                    metadata.clear()
+                # Trigger immediate entity state update to clear metadata
+                self.async_write_entity_states()
             # Solo => nothing to do.
 
-            # Always refresh self to detect new solo role immediately
-            await self.coordinator.async_request_refresh()
+            # Wait for device to process unjoin command (0.5-1 second)
+            # Give device time to process before refreshing
+            import asyncio  # noqa: F401
+
+            _LOGGER.debug(
+                "Waiting for devices to process unjoin command before refreshing",
+            )
+            await asyncio.sleep(0.75)  # Wait for device to process
+
+            # Refresh self to let device state flow through naturally
+            # Polling will detect solo role and update state - no manual manipulation needed
+            _LOGGER.debug(
+                "Refreshing %s to detect solo role",
+                self.name,
+            )
+            await self.coordinator.async_refresh()
+
+            # Refresh others to let their state update naturally
+            if former_slaves:
+                _LOGGER.debug(
+                    "Refreshing %d former slave devices to detect solo role",
+                    len(former_slaves),
+                )
+                for slave in former_slaves:
+                    try:
+                        await slave.coordinator.async_refresh()
+                    except Exception as refresh_err:
+                        _LOGGER.warning(
+                            "Failed to refresh former slave %s: %s",
+                            slave.name,
+                            refresh_err,
+                        )
+
+            if former_master:
+                _LOGGER.debug(
+                    "Refreshing former master %s to update group member list",
+                    former_master.name,
+                )
+                try:
+                    await former_master.coordinator.async_refresh()
+                except Exception as refresh_err:
+                    _LOGGER.warning(
+                        "Failed to refresh former master %s: %s",
+                        former_master.name,
+                        refresh_err,
+                    )
 
         except Exception as err:  # pragma: no cover
             _LOGGER.error("Failed to leave group: %s", err)
