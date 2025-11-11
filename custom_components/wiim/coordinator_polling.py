@@ -948,10 +948,57 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                                 existing_status.volume,
                                 coordinator.client.host,
                             )
+
+                # Preserve UPnP metadata and play_state when HTTP polling doesn't provide it
+                # This is critical for Audio Pro devices playing via WiiM app - HTTP API doesn't return metadata
+                # or play_state, but UPnP events do contain it (see GitHub issue #101)
+                if speaker._upnp_eventer and isinstance(existing_status, PlayerStatus):
+                    # Preserve play_state from UPnP if HTTP doesn't provide it
+                    # Audio Pro devices don't report play_state in HTTP API when playing via WiiM app
+                    if not status_model.play_state and existing_status.play_state:
+                        status_model.play_state = existing_status.play_state
+                        if VERBOSE_DEBUG:
+                            _LOGGER.debug(
+                                "Preserving UPnP play_state '%s' for %s (HTTP returned None)",
+                                existing_status.play_state,
+                                coordinator.client.host,
+                            )
+
+                    # Check if HTTP polling returned empty metadata
+                    http_has_metadata = bool(
+                        status_model.title or status_model.artist or status_model.album or status_model.entity_picture
+                    )
+                    # Check if UPnP has metadata
+                    upnp_has_metadata = bool(
+                        existing_status.title
+                        or existing_status.artist
+                        or existing_status.album
+                        or existing_status.entity_picture
+                    )
+
+                    # If HTTP doesn't have metadata but UPnP does, preserve UPnP metadata
+                    if not http_has_metadata and upnp_has_metadata:
+                        if existing_status.title:
+                            status_model.title = existing_status.title
+                        if existing_status.artist:
+                            status_model.artist = existing_status.artist
+                        if existing_status.album:
+                            status_model.album = existing_status.album
+                        if existing_status.entity_picture:
+                            status_model.entity_picture = existing_status.entity_picture
+                        if existing_status.cover_url:
+                            status_model.cover_url = existing_status.cover_url
+                        if VERBOSE_DEBUG:
+                            _LOGGER.debug(
+                                "Preserving UPnP metadata for %s: title=%s, artist=%s",
+                                coordinator.client.host,
+                                existing_status.title,
+                                existing_status.artist,
+                            )
         except Exception as err:
             # Graceful fallback if speaker lookup fails
             if VERBOSE_DEBUG:
-                _LOGGER.debug("Could not preserve UPnP volume: %s", err)
+                _LOGGER.debug("Could not preserve UPnP volume/metadata: %s", err)
 
         data: dict[str, Any] = {
             "status_model": status_model,

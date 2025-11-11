@@ -2,6 +2,17 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.25] - 2025-11-07
+
+### Fixed
+
+- **Audio Pro Metadata and Playback State**: Fixed Audio Pro devices showing "Idle" state and no metadata when playing via WiiM app
+  - HTTP polling now preserves UPnP metadata (title, artist, album, artwork) when HTTP API doesn't provide it
+  - HTTP polling now preserves UPnP playback state when HTTP API doesn't provide it
+  - Critical for Audio Pro devices playing via WiiM app - HTTP API doesn't return metadata or play_state, but UPnP events do contain it
+  - Follows same pattern as volume preservation for Audio Pro devices
+  - Resolves GitHub issue #101 where Audio Pro speakers showed "Idle" state and no metadata when playing via WiiM app
+
 ## [0.2.24] - 2025-11-10
 
 ### Changed
