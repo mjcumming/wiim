@@ -176,15 +176,17 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             import time
 
             coordinator = speaker.coordinator
-            total = getattr(coordinator, "_http_poll_total", 0)
-            success = getattr(coordinator, "_http_poll_success", 0)
-            failure = getattr(coordinator, "_http_poll_failure", 0)
+            total = int(getattr(coordinator, "_http_poll_total", 0) or 0)
+            success = int(getattr(coordinator, "_http_poll_success", 0) or 0)
+            failure = int(getattr(coordinator, "_http_poll_failure", 0) or 0)
             response_times = getattr(coordinator, "_http_response_times", [])
 
             success_rate = (success / total * 100) if total > 0 else None
-            avg_response_time = sum(response_times) / len(response_times) if response_times else None
-            min_response_time = min(response_times) if response_times else None
-            max_response_time = max(response_times) if response_times else None
+            avg_response_time = (
+                (sum(response_times) / len(response_times)) if response_times and len(response_times) > 0 else None
+            )
+            min_response_time = min(response_times) if response_times and len(response_times) > 0 else None
+            max_response_time = max(response_times) if response_times and len(response_times) > 0 else None
 
             http_stats = {
                 "total_polls": total,
@@ -219,9 +221,9 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             import time
 
             coordinator = speaker.coordinator
-            total = getattr(coordinator, "_command_total", 0)
-            success = getattr(coordinator, "_command_success", 0)
-            failure = getattr(coordinator, "_command_failure_total", 0)
+            total = int(getattr(coordinator, "_command_total", 0) or 0)
+            success = int(getattr(coordinator, "_command_success", 0) or 0)
+            failure = int(getattr(coordinator, "_command_failure_total", 0) or 0)
 
             success_rate = (success / total * 100) if total > 0 else None
 
@@ -263,7 +265,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             # Note: We don't check "is UPnP working" because UPnP has no heartbeat/keepalive.
             # Events only happen on state changes, so idle devices = no events (normal, not an error).
             status = "Active" if has_active_subscriptions else "Not Active"
-            event_count = getattr(eventer, "_event_count", 0)
+            event_count = int(getattr(eventer, "_event_count", 0) or 0)
             last_notify_ts = getattr(eventer, "_last_notify_ts", None)
 
             if has_active_subscriptions:
@@ -280,8 +282,12 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             now = time.time()
             subscription_age = None
 
-            if eventer._subscription_start_time:
-                subscription_age = int(now - eventer._subscription_start_time)
+            subscription_start_time = getattr(eventer, "_subscription_start_time", None)
+            if subscription_start_time:
+                try:
+                    subscription_age = int(now - float(subscription_start_time))
+                except (TypeError, ValueError):
+                    subscription_age = None
 
             # Note: Event arrival rates would require tracking event timestamps in a list.
             # For now, we show total events and time since last event.

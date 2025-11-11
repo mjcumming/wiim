@@ -109,11 +109,19 @@ async def test_multiroom_slave_fallback_to_group_search(mock_coordinator):
     metadata = {}
     role = "slave"
 
+    # Mock speaker with slave role so the check passes
+    mock_slave_speaker = MagicMock()
+    mock_slave_speaker.role = "slave"
+
     with (
         patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=None),
         patch(
             "custom_components.wiim.data_helpers.get_all_speakers",
             return_value=[mock_master_speaker, mock_other_speaker],
+        ),
+        patch(
+            "custom_components.wiim.data_helpers.get_speaker_from_config_entry",
+            return_value=mock_slave_speaker,
         ),
     ):
         await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
@@ -134,9 +142,17 @@ async def test_multiroom_slave_no_master_found(mock_coordinator):
     metadata = {}
     role = "slave"
 
+    # Mock speaker with slave role so the check passes
+    mock_slave_speaker = MagicMock()
+    mock_slave_speaker.role = "slave"
+
     with (
         patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=None),
         patch("custom_components.wiim.data_helpers.get_all_speakers", return_value=[]),
+        patch(
+            "custom_components.wiim.data_helpers.get_speaker_from_config_entry",
+            return_value=mock_slave_speaker,
+        ),
     ):
         await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
 
@@ -223,9 +239,17 @@ async def test_multiroom_exception_handling(mock_coordinator):
     metadata = {}
     role = "slave"
 
+    # Mock speaker with slave role so the check passes
+    mock_slave_speaker = MagicMock()
+    mock_slave_speaker.role = "slave"
+
     with (
         patch("custom_components.wiim.data_helpers.find_speaker_by_ip", return_value=None),
         patch("custom_components.wiim.data_helpers.get_all_speakers", return_value=[mock_master_speaker]),
+        patch(
+            "custom_components.wiim.data_helpers.get_speaker_from_config_entry",
+            return_value=mock_slave_speaker,
+        ),
     ):
         await resolve_multiroom_source_and_media(mock_coordinator, status, metadata, role)
 
