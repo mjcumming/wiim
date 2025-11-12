@@ -11,9 +11,6 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from .api import WiiMError
 from .models import DeviceInfo, PlayerStatus, PollingMetrics
 
-# Verbose debug toggle (mirrors coordinator.py)
-VERBOSE_DEBUG = False
-
 # Enhanced logging escalation thresholds (more balanced for production)
 # 1-2 failures: debug (likely transient network issues)
 # 3-4 failures: warning (device having connectivity problems)
@@ -137,12 +134,11 @@ def _check_and_clear_metadata_on_stop(coordinator, status_model: PlayerStatus) -
 
     # Only clear if we have stored metadata and playback has stopped
     if is_stopped and hasattr(coordinator, "_last_valid_metadata") and coordinator._last_valid_metadata:
-        if VERBOSE_DEBUG:
-            _LOGGER.debug(
-                "Clearing stored metadata for %s - playback stopped (state: %s)",
-                coordinator.client.host,
-                play_state,
-            )
+        _LOGGER.debug(
+            "Clearing stored metadata for %s - playback stopped (state: %s)",
+            coordinator.client.host,
+            play_state,
+        )
         coordinator._last_valid_metadata = None
 
 
@@ -160,39 +156,34 @@ async def _schedule_delayed_metadata_fetch(coordinator, status_model: PlayerStat
         """Delayed metadata fetch with 2-second delay."""
         try:
             await asyncio.sleep(2.0)  # Give WiiM time to process track changes
-            if VERBOSE_DEBUG:
-                _LOGGER.debug("Executing delayed metadata fetch for %s", coordinator.client.host)
+            _LOGGER.debug("Executing delayed metadata fetch for %s", coordinator.client.host)
             metadata_model = await coordinator._fetch_track_metadata(status_model)
 
             # Update coordinator data with the fetched metadata
             if coordinator.data and metadata_model:
                 coordinator.data["metadata_model"] = metadata_model
                 coordinator.data["metadata"] = metadata_model.model_dump(exclude_none=True)
-                if VERBOSE_DEBUG:
-                    _LOGGER.debug(
-                        "Updated coordinator data with delayed metadata for %s",
-                        coordinator.client.host,
-                    )
-        except asyncio.CancelledError:
-            if VERBOSE_DEBUG:
-                _LOGGER.debug("Delayed metadata fetch cancelled for %s", coordinator.client.host)
-        except Exception as e:
-            if VERBOSE_DEBUG:
                 _LOGGER.debug(
-                    "Delayed metadata fetch failed for %s: %s",
+                    "Updated coordinator data with delayed metadata for %s",
                     coordinator.client.host,
-                    e,
                 )
+        except asyncio.CancelledError:
+            _LOGGER.debug("Delayed metadata fetch cancelled for %s", coordinator.client.host)
+        except Exception as e:
+            _LOGGER.debug(
+                "Delayed metadata fetch failed for %s: %s",
+                coordinator.client.host,
+                e,
+            )
         finally:
             coordinator._metadata_fetch_task = None
 
     # Schedule the delayed fetch
     coordinator._metadata_fetch_task = asyncio.create_task(delayed_fetch())
-    if VERBOSE_DEBUG:
-        _LOGGER.debug(
-            "Scheduled delayed metadata fetch for %s (2s delay)",
-            coordinator.client.host,
-        )
+    _LOGGER.debug(
+        "Scheduled delayed metadata fetch for %s (2s delay)",
+        coordinator.client.host,
+    )
 
 
 def _track_changed(coordinator, status_model: PlayerStatus) -> bool:
@@ -227,23 +218,22 @@ def _track_changed(coordinator, status_model: PlayerStatus) -> bool:
             current_artwork,
         )
 
-        # Log specific change type for debugging (only in verbose mode to reduce log noise)
-        if VERBOSE_DEBUG:
-            if current_artwork != last_artwork:
-                _LOGGER.debug(
-                    "Artwork changed for %s: '%s' -> '%s'",
-                    coordinator.client.host,
-                    last_artwork or "None",
-                    current_artwork or "None",
-                )
-            else:
-                _LOGGER.debug(
-                    "Track/source changed for %s: %s - %s (%s)",
-                    coordinator.client.host,
-                    current_title,
-                    current_artist,
-                    current_source,
-                )
+        # Log specific change type for debugging
+        if current_artwork != last_artwork:
+            _LOGGER.debug(
+                "Artwork changed for %s: '%s' -> '%s'",
+                coordinator.client.host,
+                last_artwork or "None",
+                current_artwork or "None",
+            )
+        else:
+            _LOGGER.debug(
+                "Track/source changed for %s: %s - %s (%s)",
+                coordinator.client.host,
+                current_title,
+                current_artist,
+                current_source,
+            )
 
     return track_changed
 
@@ -316,8 +306,7 @@ async def async_update_data(coordinator) -> dict[str, Any]:
     - Presets: Startup only
     """
 
-    if VERBOSE_DEBUG:
-        _LOGGER.debug("=== OPTIMIZED COORDINATOR UPDATE START for %s ===", coordinator.client.host)
+    _LOGGER.debug("=== OPTIMIZED COORDINATOR UPDATE START for %s ===", coordinator.client.host)
     _start_time = time.perf_counter()
 
     # One-time startup calls
@@ -359,34 +348,31 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                     status_raw_copy.pop("vol", None)
                     status_raw_copy.pop("volume", None)
                     status_raw_copy.pop("volume_level", None)
-                    if VERBOSE_DEBUG:
-                        _LOGGER.debug(
-                            "Audio Pro device %s: UPnP subscribed, excluding volume from HTTP polling",
-                            coordinator.client.host,
-                        )
+                    _LOGGER.debug(
+                        "Audio Pro device %s: UPnP subscribed, excluding volume from HTTP polling",
+                        coordinator.client.host,
+                    )
                 elif speaker.should_use_upnp_volume():
                     # Non-Audio Pro device: UPnP has provided volume data - exclude from HTTP polling to avoid conflicts
                     status_raw_copy.pop("vol", None)
                     status_raw_copy.pop("volume", None)
                     status_raw_copy.pop("volume_level", None)
-                    if VERBOSE_DEBUG:
-                        _LOGGER.debug(
-                            "Using UPnP volume for %s - excluding volume from HTTP polling",
-                            coordinator.client.host,
-                        )
+                    _LOGGER.debug(
+                        "Using UPnP volume for %s - excluding volume from HTTP polling",
+                        coordinator.client.host,
+                    )
                 else:
                     # UPnP not active or hasn't provided volume yet - keep HTTP volume polling
                     # This ensures volume is available at startup before UPnP sends first event
                     # (for non-Audio Pro devices)
-                    if VERBOSE_DEBUG and speaker._upnp_eventer:
+                    if speaker._upnp_eventer:
                         _LOGGER.debug(
                             "UPnP subscribed but no volume data yet for %s - using HTTP volume",
                             coordinator.client.host,
                         )
         except Exception as err:
             # If speaker lookup fails, continue with normal polling (graceful fallback)
-            if VERBOSE_DEBUG:
-                _LOGGER.debug("Could not check UPnP volume status: %s", err)
+            _LOGGER.debug("Could not check UPnP volume status: %s", err)
 
         # Lightweight activity detection without full validation (avoids blocking event loop)
         # Extract minimal fields needed for activity detection from raw dict
@@ -427,12 +413,11 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Quick play state check for metadata clearing (lightweight)
         is_stopped = play_state_str in ("stop", "stopped", "idle", "")
         if is_stopped and hasattr(coordinator, "_last_valid_metadata") and coordinator._last_valid_metadata:
-            if VERBOSE_DEBUG:
-                _LOGGER.debug(
-                    "Clearing stored metadata for %s - playback stopped (state: %s)",
-                    coordinator.client.host,
-                    play_state_str,
-                )
+            _LOGGER.debug(
+                "Clearing stored metadata for %s - playback stopped (state: %s)",
+                coordinator.client.host,
+                play_state_str,
+            )
             coordinator._last_valid_metadata = None
 
         # ------------------------------------------------------------------
@@ -533,12 +518,11 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Execute fast HTTP calls in parallel
         results = []
         if fetch_tasks:
-            if VERBOSE_DEBUG:
-                _LOGGER.debug(
-                    "Fast-fetching %s in parallel for %s",
-                    ", ".join(task_names),
-                    coordinator.client.host,
-                )
+            _LOGGER.debug(
+                "Fast-fetching %s in parallel for %s",
+                ", ".join(task_names),
+                coordinator.client.host,
+            )
             results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
         # ------------------------------------------------------------------
@@ -685,11 +669,10 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             else:
                 # BT output not active, don't store pairing status
                 bt_pair_status_data = None
-                if VERBOSE_DEBUG:
-                    _LOGGER.debug(
-                        "Bluetooth output not active for %s, skipping pairing status",
-                        coordinator.client.host,
-                    )
+                _LOGGER.debug(
+                    "Bluetooth output not active for %s, skipping pairing status",
+                    coordinator.client.host,
+                )
             result_idx += 1
 
         # Process Bluetooth history result
@@ -931,24 +914,22 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                         status_model.volume = existing_status.volume
                         if existing_status.mute is not None:
                             status_model.mute = existing_status.mute
-                        if VERBOSE_DEBUG:
-                            _LOGGER.debug(
-                                "Preserving UPnP volume %d for Audio Pro device %s",
-                                existing_status.volume,
-                                coordinator.client.host,
-                            )
+                        _LOGGER.debug(
+                            "Preserving UPnP volume %d for Audio Pro device %s",
+                            existing_status.volume,
+                            coordinator.client.host,
+                        )
                 elif speaker.should_use_upnp_volume() and isinstance(existing_status, PlayerStatus):
                     # Non-Audio Pro device: UPnP has provided volume data - preserve it
                     if existing_status.volume is not None:
                         status_model.volume = existing_status.volume
                         if existing_status.mute is not None:
                             status_model.mute = existing_status.mute
-                        if VERBOSE_DEBUG:
-                            _LOGGER.debug(
-                                "Preserving UPnP volume %d for %s",
-                                existing_status.volume,
-                                coordinator.client.host,
-                            )
+                        _LOGGER.debug(
+                            "Preserving UPnP volume %d for %s",
+                            existing_status.volume,
+                            coordinator.client.host,
+                        )
 
                 # Preserve UPnP metadata and play_state when HTTP polling doesn't provide it
                 # This is critical for Audio Pro MkII devices - HTTP API doesn't return play_state
@@ -971,14 +952,13 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                         # it's likely a temporary issue, not a device limitation
                         if is_audio_pro_mkii or not capabilities.get("is_legacy_device", False):
                             status_model.play_state = existing_status.play_state
-                            if VERBOSE_DEBUG:
-                                _LOGGER.debug(
-                                    "Preserving UPnP play_state '%s' for %s (HTTP returned None, device=%s)",
-                                    existing_status.play_state,
-                                    coordinator.client.host,
-                                    "MkII" if is_audio_pro_mkii else "non-legacy",
-                                )
-                        elif VERBOSE_DEBUG:
+                            _LOGGER.debug(
+                                "Preserving UPnP play_state '%s' for %s (HTTP returned None, device=%s)",
+                                existing_status.play_state,
+                                coordinator.client.host,
+                                "MkII" if is_audio_pro_mkii else "non-legacy",
+                            )
+                        else:
                             _LOGGER.debug(
                                 "Not preserving UPnP play_state for original Audio Pro %s (HTTP should provide it)",
                                 coordinator.client.host,
@@ -1008,17 +988,15 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                             status_model.entity_picture = existing_status.entity_picture
                         if existing_status.cover_url:
                             status_model.cover_url = existing_status.cover_url
-                        if VERBOSE_DEBUG:
-                            _LOGGER.debug(
-                                "Preserving UPnP metadata for %s: title=%s, artist=%s",
-                                coordinator.client.host,
-                                existing_status.title,
-                                existing_status.artist,
-                            )
+                        _LOGGER.debug(
+                            "Preserving UPnP metadata for %s: title=%s, artist=%s",
+                            coordinator.client.host,
+                            existing_status.title,
+                            existing_status.artist,
+                        )
         except Exception as err:
             # Graceful fallback if speaker lookup fails
-            if VERBOSE_DEBUG:
-                _LOGGER.debug("Could not preserve UPnP volume/metadata: %s", err)
+            _LOGGER.debug("Could not preserve UPnP volume/metadata: %s", err)
 
         data: dict[str, Any] = {
             "status_model": status_model,
@@ -1057,11 +1035,10 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             device_model.uuid = getattr(coordinator.entry, "unique_id", None)
 
         # Update speaker object
-        if VERBOSE_DEBUG:
-            _LOGGER.debug(
-                "🎵 About to call _update_speaker_object with data keys: %s",
-                list(data.keys()) if data else "None",
-            )
+        _LOGGER.debug(
+            "🎵 About to call _update_speaker_object with data keys: %s",
+            list(data.keys()) if data else "None",
+        )
         await coordinator._update_speaker_object(data)
 
         # Success handling
@@ -1094,14 +1071,13 @@ async def async_update_data(coordinator) -> dict[str, Any]:
         # Apply adaptive polling interval
         if interval_changed:
             coordinator.update_interval = timedelta(seconds=new_interval)
-            if VERBOSE_DEBUG:
-                _LOGGER.debug(
-                    "%s: Switched to %s polling (%ds) - device is %s",
-                    coordinator.client.host,
-                    "fast" if new_interval == FAST_POLL_INTERVAL else "normal",
-                    new_interval,
-                    "playing" if new_interval == FAST_POLL_INTERVAL else "idle",
-                )
+            _LOGGER.debug(
+                "%s: Switched to %s polling (%ds) - device is %s",
+                coordinator.client.host,
+                "fast" if new_interval == FAST_POLL_INTERVAL else "normal",
+                new_interval,
+                "playing" if new_interval == FAST_POLL_INTERVAL else "idle",
+            )
 
         coordinator._last_response_time = (time.perf_counter() - _start_time) * 1000.0
 
@@ -1113,18 +1089,17 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             if len(coordinator._http_response_times) > 100:
                 coordinator._http_response_times.pop(0)  # Keep only last 100
 
-        if VERBOSE_DEBUG:
-            _LOGGER.debug(
-                "=== OPTIMIZED UPDATE SUCCESS for %s (%.1fms total: %.1fms HTTP + %.1fms processing) ===",
-                coordinator.client.host,
-                coordinator._last_response_time,
-                http_time,
-                heavy_time,
-            )
+        _LOGGER.debug(
+            "=== OPTIMIZED UPDATE SUCCESS for %s (%.1fms total: %.1fms HTTP + %.1fms processing) ===",
+            coordinator.client.host,
+            coordinator._last_response_time,
+            http_time,
+            heavy_time,
+        )
 
         total_time = (time.perf_counter() - _start_time) * 1000.0
 
-        if VERBOSE_DEBUG or total_time > 100:
+        if total_time > 100:
             _LOGGER.info(
                 "🚀 Coordinator update for %s: %0.1fms total (HTTP: %0.1fms, processing: %0.1fms) "
                 "| interval=%ds%s | role=%s | metadata=%s | multiroom=%s",
@@ -1213,12 +1188,11 @@ async def async_update_data(coordinator) -> dict[str, Any]:
             # This prevents the base coordinator from logging ERROR on every transient network issue
             # Only return cached data if we've had at least one successful update (coordinator.data exists)
             if coordinator.data:
-                if VERBOSE_DEBUG:
-                    _LOGGER.debug(
-                        "%s: Returning cached data after transient failure (attempt %d)",
-                        coordinator.client.host,
-                        failures,
-                    )
+                _LOGGER.debug(
+                    "%s: Returning cached data after transient failure (attempt %d)",
+                    coordinator.client.host,
+                    failures,
+                )
                 return coordinator.data
             else:
                 # No cached data available - must raise to indicate failure

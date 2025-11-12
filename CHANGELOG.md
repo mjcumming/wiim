@@ -2,6 +2,19 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.27] - 2025-11-12
+
+### Added
+
+- **Enhanced Debug Logging**: Added debug logging for HTTP API responses, mode-to-source mapping, and UPnP state merge decisions
+
+### Fixed
+
+- **UPnP State Merging**: Fixed stale UPnP state overwriting valid HTTP state when subscriptions fail
+  - Only merges critical fields (play_state, source) when UPnP is healthy
+  - Validates artwork URLs before merging
+- **Audio Pro HTTP Play State**: Fixed incorrect assumption - original Audio Pro devices DO provide HTTP play_state (only MkII requires UPnP)
+
 ## [0.2.26] - 2025-11-12
 
 ### Fixed

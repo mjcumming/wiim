@@ -1379,6 +1379,17 @@ class Speaker:
         # check_upnp_available = True means subscriptions are failing (empty state_variables detected)
         upnp_healthy = not self.check_upnp_available
 
+        # Log UPnP state merge decision (following HA pattern: log state merge decisions)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "UPnP state merge for %s: check_upnp_available=%s, upnp_healthy=%s, upnp_play_state=%s, upnp_source=%s",
+                self.name,
+                self.check_upnp_available,
+                upnp_healthy,
+                getattr(self._upnp_state, "play_state", None),
+                getattr(self._upnp_state, "source", None),
+            )
+
         # Map UPnP state fields to PlayerStatus model fields
         updates: dict[str, Any] = {}
 
@@ -1403,12 +1414,39 @@ class Speaker:
                         updates["play_status"] = "stop"
                     else:
                         updates["play_status"] = "idle"
+                    if _LOGGER.isEnabledFor(logging.DEBUG):
+                        _LOGGER.debug(
+                            "Merging UPnP play_state '%s' -> '%s' for %s (HTTP play_state: %s)",
+                            self._upnp_state.play_state,
+                            updates["play_status"],
+                            self.name,
+                            current_status.play_state,
+                        )
+                elif _LOGGER.isEnabledFor(logging.DEBUG):
+                    _LOGGER.debug(
+                        "Skipping UPnP play_state merge for %s: HTTP already has play_state '%s'",
+                        self.name,
+                        current_status.play_state,
+                    )
 
             # source: Only merge if UPnP is healthy and HTTP doesn't provide it
             if self._upnp_state.source is not None:
                 http_has_source = current_status.source is not None and current_status.source not in ("unknown", "")
                 if not http_has_source:
                     updates["mode"] = self._upnp_state.source
+                    if _LOGGER.isEnabledFor(logging.DEBUG):
+                        _LOGGER.debug(
+                            "Merging UPnP source '%s' for %s (HTTP source: %s)",
+                            self._upnp_state.source,
+                            self.name,
+                            current_status.source,
+                        )
+                elif _LOGGER.isEnabledFor(logging.DEBUG):
+                    _LOGGER.debug(
+                        "Skipping UPnP source merge for %s: HTTP already has source '%s'",
+                        self.name,
+                        current_status.source,
+                    )
         else:
             # UPnP subscriptions are failing - don't merge critical fields
             # Log debug message to help diagnose issues

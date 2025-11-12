@@ -928,3 +928,201 @@ class MediaPlayerController(
 - Cross-device volume coordination
 
 This guidance ensures AI development assistants understand the current sophisticated architecture and can contribute effectively to the codebase.
+
+## Logging Guidelines - Home Assistant Compliance
+
+### Core Logging Principles
+
+The integration follows **Home Assistant's standard logging patterns** for consistency, performance, and user experience.
+
+#### 1. Logger Naming
+
+✅ **Correct Pattern**:
+
+```python
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+```
+
+Each module uses its own logger based on module name, following HA's standard pattern.
+
+#### 2. Lazy Logging (Performance)
+
+✅ **Correct Pattern** (avoids string formatting when logging disabled):
+
+```python
+_LOGGER.debug("Processing data for %s: %s", device_name, data)
+```
+
+❌ **Avoid** (always formats string, even when DEBUG disabled):
+
+```python
+_LOGGER.debug(f"Processing data for {device_name}: {data}")  # BAD
+```
+
+#### 3. Conditional Expensive Logging
+
+For expensive operations (large dicts, complex formatting), check if DEBUG is enabled first:
+
+✅ **Correct Pattern**:
+
+```python
+if _LOGGER.isEnabledFor(logging.DEBUG):
+    _LOGGER.debug("Full HTTP response: %s", large_dict)
+```
+
+This prevents expensive operations when DEBUG logging is disabled.
+
+**Example from `coordinator.py`**:
+
+```python
+# Log full result if DEBUG is enabled, otherwise just keys
+if _LOGGER.isEnabledFor(logging.DEBUG):
+    _LOGGER.debug("Player status result for %s: %s", self.client.host, result)
+else:
+    _LOGGER.debug("Player status result for %s (keys=%s)", self.client.host, list(result.keys()))
+```
+
+#### 4. Log Levels
+
+Use appropriate log levels following HA conventions:
+
+- **DEBUG**: Detailed diagnostic information (raw API responses, state transitions, internal decisions)
+- **INFO**: Significant events (device connection, state changes, user actions)
+- **WARNING**: Recoverable issues (fallback to polling, retry attempts, deprecated features)
+- **ERROR**: Unrecoverable errors (API failures, configuration issues)
+
+#### 5. Raw HTTP Response Logging
+
+Log raw HTTP responses for debugging API issues:
+
+✅ **Correct Pattern** (from `api_base.py`):
+
+```python
+raw = await self._request(endpoint)
+if _LOGGER.isEnabledFor(logging.DEBUG):
+    _LOGGER.debug(
+        "HTTP response from %s for %s: %s",
+        endpoint,
+        self.host,
+        raw,
+    )
+```
+
+This provides visibility into raw API data before parsing/validation.
+
+#### 6. Logging When Operations Are Skipped
+
+Log both success AND skip cases for debugging:
+
+✅ **Correct Pattern** (from `api_parser.py`):
+
+```python
+if (mode_val := raw.get("mode")) is not None:
+    current_source = data.get("source")
+    if not current_source or current_source in ("unknown", "wifi", ""):
+        # ... mapping logic ...
+        _LOGGER.debug("Mapped mode %s to source '%s'", mode_val, mapped_source)
+    else:
+        _LOGGER.debug(
+            "Skipping mode-to-source mapping: mode=%s, source already set to '%s'",
+            mode_val,
+            current_source,
+        )
+```
+
+This helps diagnose why operations didn't execute as expected.
+
+#### 7. State Merge Decision Logging
+
+Log state merging decisions with context:
+
+✅ **Correct Pattern** (from `data.py`):
+
+```python
+upnp_healthy = not self.check_upnp_available
+_LOGGER.debug(
+    "UPnP state merge for %s: check_upnp_available=%s, upnp_healthy=%s, upnp_play_state=%s",
+    self.name,
+    self.check_upnp_available,
+    upnp_healthy,
+    upnp_state.play_state if upnp_state else None,
+)
+```
+
+This provides visibility into state merging logic and UPnP health status.
+
+#### 8. Message Format Guidelines
+
+Follow HA's message format conventions:
+
+- ✅ No periods at end of messages
+- ✅ No integration names/domains in messages (logger name provides context)
+- ✅ No sensitive data (passwords, tokens, etc.)
+- ✅ Use descriptive variable names in format strings
+
+#### 9. What NOT to Do
+
+❌ **Avoid Custom Verbosity Flags**:
+
+```python
+# BAD - Don't create custom flags
+VERBOSE_DEBUG = False
+if VERBOSE_DEBUG:
+    _LOGGER.debug("...")
+```
+
+✅ **Use Standard HA Logging Configuration**:
+Users control verbosity via HA's standard logging configuration (logger.yaml or Developer Tools → Services → `logger.set_level`).
+
+#### 10. Performance Considerations
+
+- **Lazy logging**: Always use format strings, not f-strings
+- **Conditional expensive logging**: Check `isEnabledFor(logging.DEBUG)` before expensive operations
+- **Appropriate log levels**: Don't log at DEBUG in hot paths unless necessary
+
+### Logging Examples in Codebase
+
+**Raw HTTP Response Logging** (`api_base.py`):
+
+```python
+raw = await self._request(endpoint)
+if _LOGGER.isEnabledFor(logging.DEBUG):
+    _LOGGER.debug("HTTP response from %s for %s: %s", endpoint, self.host, raw)
+```
+
+**Operation Skip Logging** (`api_parser.py`):
+
+```python
+_LOGGER.debug(
+    "Skipping mode-to-source mapping: mode=%s, source already set to '%s'",
+    mode_val,
+    current_source,
+)
+```
+
+**State Merge Logging** (`data.py`):
+
+```python
+_LOGGER.debug(
+    "UPnP state merge for %s: check_upnp_available=%s, merging play_state=%s",
+    self.name,
+    self.check_upnp_available,
+    upnp_state.play_state if upnp_state else None,
+)
+```
+
+### Summary
+
+✅ **We follow HA logging patterns**:
+
+- Module-specific loggers via `logging.getLogger(__name__)`
+- Lazy logging with format strings
+- Appropriate log levels (DEBUG/INFO/WARNING/ERROR)
+- Conditional expensive logging with `isEnabledFor()`
+- Raw HTTP response logging for debugging
+- Skip case logging for troubleshooting
+- No custom verbosity flags
+
+All logging is user-configurable via Home Assistant's standard logging configuration.

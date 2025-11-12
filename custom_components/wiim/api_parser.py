@@ -296,6 +296,20 @@ def parse_player_status(raw: dict[str, Any], last_track: str | None = None) -> t
                         mapped_source,
                         current_source or "missing",
                     )
+                else:
+                    _LOGGER.debug(
+                        "Mode %s has no mapping in MODE_MAP, keeping source '%s'",
+                        mode_val,
+                        current_source or "missing",
+                    )
+        else:
+            # Source already set to something other than unknown/wifi/empty
+            # Log why mapping was skipped (following HA pattern: log both success and skip cases)
+            _LOGGER.debug(
+                "Skipping mode-to-source mapping: mode=%s, source already set to '%s'",
+                mode_val,
+                current_source,
+            )
 
     # Vendor override (e.g. Amazon Music).
     vendor_val = raw.get("vendor") or raw.get("Vendor") or raw.get("app")

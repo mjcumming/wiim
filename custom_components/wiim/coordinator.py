@@ -17,10 +17,6 @@ from .models import DeviceInfo, PlayerStatus
 
 _LOGGER = logging.getLogger(__name__)
 
-# Toggle to True if you really need full payloads in the log.
-# When False (default) large dicts are truncated to a list of top-level keys
-# which is usually enough for troubleshooting without spamming the log.
-VERBOSE_DEBUG = False
 
 # Enhanced logging escalation thresholds (more balanced for production)
 # 1-2 failures: debug (likely transient network issues)
@@ -210,7 +206,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             model = await _endpoints.fetch_player_status(self.client)
             result: dict[str, Any] = model.model_dump(exclude_none=True)
 
-            if VERBOSE_DEBUG:
+            # Log full result if DEBUG is enabled, otherwise just keys (following HA patterns)
+            if _LOGGER.isEnabledFor(logging.DEBUG):
                 _LOGGER.debug("Player status result for %s: %s", self.client.host, result)
             else:
                 _LOGGER.debug(
