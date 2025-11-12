@@ -349,9 +349,10 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                 capabilities = getattr(coordinator, "_capabilities", {})
                 is_legacy_device = capabilities.get("is_legacy_device", False)
 
-                # For Audio Pro devices: HTTP API doesn't provide player state (no getPlayerStatus),
+                # For Audio Pro devices: HTTP API doesn't provide volume (no getPlayerStatus for volume),
                 # so once UPnP is subscribed, we must exclude volume from HTTP polling immediately.
                 # This prevents HTTP polling from setting volume to None.
+                # Note: Original Audio Pro devices DO provide HTTP play_state, only MkII doesn't.
                 if is_legacy_device and speaker._upnp_eventer:
                     # Audio Pro device with UPnP subscribed - exclude volume from HTTP polling
                     # HTTP will never provide volume for Audio Pro, so we must rely on UPnP
@@ -950,17 +951,36 @@ async def async_update_data(coordinator) -> dict[str, Any]:
                             )
 
                 # Preserve UPnP metadata and play_state when HTTP polling doesn't provide it
-                # This is critical for Audio Pro devices playing via WiiM app - HTTP API doesn't return metadata
-                # or play_state, but UPnP events do contain it (see GitHub issue #101)
+                # This is critical for Audio Pro MkII devices - HTTP API doesn't return play_state
+                # Original Audio Pro devices DO provide HTTP play_state, so we trust HTTP when available
                 if speaker._upnp_eventer and isinstance(existing_status, PlayerStatus):
-                    # Preserve play_state from UPnP if HTTP doesn't provide it
-                    # Audio Pro devices don't report play_state in HTTP API when playing via WiiM app
-                    if not status_model.play_state and existing_status.play_state:
-                        status_model.play_state = existing_status.play_state
-                        if VERBOSE_DEBUG:
+                    # Check device generation to determine if HTTP provides play_state
+                    audio_pro_generation = capabilities.get("audio_pro_generation", "unknown")
+                    is_audio_pro_mkii = audio_pro_generation == "mkii"
+
+                    # Only preserve UPnP play_state if:
+                    # 1. HTTP doesn't provide play_state (None or empty)
+                    # 2. UPnP is healthy (check_upnp_available = False)
+                    # 3. For Audio Pro: only MkII needs this (original Audio Pro provides HTTP play_state)
+                    http_has_play_state = status_model.play_state is not None and status_model.play_state != "idle"
+                    upnp_healthy = not getattr(speaker, "check_upnp_available", False)
+
+                    if not http_has_play_state and existing_status.play_state and upnp_healthy:
+                        # For Audio Pro devices: only preserve UPnP play_state for MkII
+                        # Original Audio Pro devices provide HTTP play_state, so if HTTP is None,
+                        # it's likely a temporary issue, not a device limitation
+                        if is_audio_pro_mkii or not capabilities.get("is_legacy_device", False):
+                            status_model.play_state = existing_status.play_state
+                            if VERBOSE_DEBUG:
+                                _LOGGER.debug(
+                                    "Preserving UPnP play_state '%s' for %s (HTTP returned None, device=%s)",
+                                    existing_status.play_state,
+                                    coordinator.client.host,
+                                    "MkII" if is_audio_pro_mkii else "non-legacy",
+                                )
+                        elif VERBOSE_DEBUG:
                             _LOGGER.debug(
-                                "Preserving UPnP play_state '%s' for %s (HTTP returned None)",
-                                existing_status.play_state,
+                                "Not preserving UPnP play_state for original Audio Pro %s (HTTP should provide it)",
                                 coordinator.client.host,
                             )
 

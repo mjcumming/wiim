@@ -351,8 +351,20 @@ class MediaControllerCoreMixin:
                     )
                     friendly_normalized = friendly_name.strip().lower()
 
+                    # Normalize both for comparison (handle hyphens, underscores, spaces)
+                    # This allows matching "Line In" with "Line-in", "line_in", etc.
+                    api_normalized = api_source.lower().replace("-", "_").replace(" ", "_")
+                    source_normalized_clean = source_normalized.replace("-", "_").replace(" ", "_")
+                    friendly_normalized_clean = friendly_normalized.replace("-", "_").replace(" ", "_")
+
                     # Check if this API source matches the user's selection
-                    if source == friendly_name or source_normalized == friendly_normalized:
+                    # Try multiple matching strategies to handle format variations
+                    if (
+                        source == friendly_name
+                        or source_normalized == friendly_normalized
+                        or api_normalized == source_normalized_clean
+                        or api_normalized == friendly_normalized_clean
+                    ):
                         wiim_source = api_source.lower()  # Use the exact API source name
                         self._logger.debug(
                             "Found API source match: '%s' -> '%s' (from input_list)",
@@ -362,34 +374,60 @@ class MediaControllerCoreMixin:
                         break
 
             # If not found in input_list, try reverse mapping from SOURCE_MAP
+            # Prefer hyphen format when multiple variants exist (works better for Arylic and most devices)
             if wiim_source is None:
                 source_normalized = source.strip().lower()
+                matching_variants = []
                 for internal_id, friendly_name in SOURCE_MAP.items():
                     friendly_normalized = friendly_name.strip().lower()
                     if source == friendly_name or source_normalized == friendly_normalized:
-                        wiim_source = internal_id
-                        self._logger.debug(
-                            "Found source mapping: '%s' -> '%s' (internal_id: '%s')",
-                            source,
-                            friendly_name,
-                            internal_id,
-                        )
-                        break
+                        matching_variants.append(internal_id)
+
+                # If multiple variants found, prefer hyphen format (works for Arylic and most devices)
+                if matching_variants:
+                    # Sort to prefer hyphen format, then underscore, then space
+                    matching_variants.sort(key=lambda x: (0 if "-" in x else 1 if "_" in x else 2))
+                    wiim_source = matching_variants[0]
+                    self._logger.debug(
+                        "Found source mapping: '%s' -> '%s' (internal_id: '%s', %d variants available)",
+                        source,
+                        SOURCE_MAP.get(wiim_source, source),
+                        wiim_source,
+                        len(matching_variants),
+                    )
 
             # If still no mapping found, try to convert friendly name format to internal ID format
-            # Convert spaces to underscores and lowercase (e.g., "Line In" -> "line_in")
+            # Convert spaces to underscores/hyphens and lowercase (e.g., "Line In" -> "line_in" or "line-in")
             if wiim_source is None:
-                # First check if it's already an internal ID (has underscore or is lowercase single word)
-                if "_" in source or (source.islower() and " " not in source):
+                # First check if it's already an internal ID (has underscore, hyphen, or is lowercase single word)
+                if "_" in source or "-" in source or (source.islower() and " " not in source):
                     wiim_source = source.lower()
                     self._logger.debug("Source '%s' appears to be internal ID, using as-is: '%s'", source, wiim_source)
                 else:
                     # Convert friendly name format to internal ID format
-                    # "Line In" -> "line_in", "Line In 2" -> "line_in_2"
-                    wiim_source = source.lower().replace(" ", "_")
-                    self._logger.debug(
-                        "No mapping found for '%s', converted to internal format: '%s'", source, wiim_source
-                    )
+                    # Try hyphen format first (some devices like Arylic prefer this)
+                    # "Line In" -> "line-in", "Line In 2" -> "line-in-2"
+                    source_hyphen = source.lower().replace(" ", "-")
+                    # Also try underscore format for compatibility
+                    source_underscore = source.lower().replace(" ", "_")
+
+                    # Prefer hyphen format (more common in device APIs like Arylic)
+                    # But try both if input_list exists to see which one matches
+                    if hasattr(self.speaker, "input_list") and self.speaker.input_list:
+                        # Check if either format exists in input_list
+                        for api_source in self.speaker.input_list:
+                            api_lower = api_source.lower()
+                            if api_lower == source_hyphen or api_lower == source_underscore:
+                                wiim_source = api_source.lower()  # Use exact format from device
+                                self._logger.debug("Matched '%s' to input_list entry '%s'", source, wiim_source)
+                                break
+
+                    # If no input_list match, default to hyphen format (works for Arylic and most devices)
+                    if wiim_source is None:
+                        wiim_source = source_hyphen
+                        self._logger.debug(
+                            "No mapping found for '%s', converted to hyphen format: '%s'", source, wiim_source
+                        )
 
             if wiim_source is None:
                 raise ValueError(f"Could not map source '{source}' to a valid WiiM source ID")

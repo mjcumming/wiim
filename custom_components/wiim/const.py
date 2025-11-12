@@ -244,6 +244,7 @@ SOURCE_MAP = {
     "wifi": "Network",  # Generic network connection - fallback only
     "ethernet": "Network",  # Generic network connection - fallback only
     "line_in": "Line In",
+    "line-in": "Line In",  # Hyphen variant for devices that use it (e.g., Arylic)
     "bluetooth": "Bluetooth",
     "optical": "Optical",
     "coaxial": "Coaxial",
@@ -253,9 +254,15 @@ SOURCE_MAP = {
     "dlna": "DLNA",  # Show actual service name
     "spotify": "Spotify",  # Show actual service name
     "spotify connect": "Spotify Connect",  # Show actual service name
+    "spotify-connect": "Spotify Connect",  # Hyphen variant for devices that use it
+    "spotify_connect": "Spotify Connect",  # Underscore variant for devices that use it
     "tidal": "Tidal",  # Show actual service name
     "amazon": "Amazon Music",  # Show actual service name
+    "amazon music": "Amazon Music",  # Space variant
+    "amazon-music": "Amazon Music",  # Hyphen variant
     "apple_music": "Apple Music",  # Show actual service name
+    "apple music": "Apple Music",  # Space variant
+    "apple-music": "Apple Music",  # Hyphen variant
     "qobuz": "Qobuz",  # Show actual service name
     "deezer": "Deezer",  # Show actual service name
     "usb": "USB",
@@ -263,9 +270,13 @@ SOURCE_MAP = {
     "idle": "Idle",
     "multiroom": "Multiroom",
     "usb dac": "USB DAC",
+    "usb-dac": "USB DAC",  # Hyphen variant for devices that use it
+    "usb_dac": "USB DAC",  # Underscore variant for devices that use it
     "line in 2": "Line In 2",
+    "line-in-2": "Line In 2",  # Hyphen variant for devices that use it
     "phono": "Phono",
     "phono_in": "Phono",  # Alternative API name
+    "phono-in": "Phono",  # Hyphen variant for devices that use it
     # Handle "Following [name]" sources from slaves
     "following": "Following",  # Partial match for slave sources
 }

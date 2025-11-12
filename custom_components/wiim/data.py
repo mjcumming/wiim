@@ -1356,7 +1356,14 @@ class Speaker:
         Follows Home Assistant pattern: external events → update coordinator.data → entities read it.
 
         Following DLNA DMR pattern: trust auto_resubscribe=True to handle renewals.
-        Always merge UPnP state when available - HTTP polling and UPnP work together.
+        When UPnP subscriptions are healthy (check_upnp_available = False), merge UPnP state.
+        When UPnP subscriptions are failing (check_upnp_available = True), don't trust UPnP
+        for critical fields (play_state, source) to avoid overwriting valid HTTP state with stale data.
+
+        Field priority rules:
+        - play_state/source: Only merge from UPnP if check_upnp_available = False AND HTTP doesn't provide it
+        - metadata: Merge from UPnP when healthy, validate artwork URLs
+        - volume/mute: Merge from UPnP when healthy for real-time updates
         """
         if not self.coordinator or not self.coordinator.data or not self._upnp_state:
             return
@@ -1368,52 +1375,96 @@ class Speaker:
             # (coordinator polling will fill it in, but UPnP can update it earlier)
             current_status = PlayerStatus(play_status="idle")
 
+        # Check if UPnP subscriptions are healthy
+        # check_upnp_available = True means subscriptions are failing (empty state_variables detected)
+        upnp_healthy = not self.check_upnp_available
+
         # Map UPnP state fields to PlayerStatus model fields
         updates: dict[str, Any] = {}
 
-        # play_state: Convert UPnP format to PlayerStatus format
-        # UPnP: "playing", "paused playback", "stopped"
-        # PlayerStatus: "play", "pause", "stop", "idle"
-        if self._upnp_state.play_state is not None:
-            upnp_play_state = self._upnp_state.play_state.lower().strip()
-            if "play" in upnp_play_state and "pause" not in upnp_play_state:
-                updates["play_status"] = "play"
-            elif "pause" in upnp_play_state:
-                updates["play_status"] = "pause"
-            elif "stop" in upnp_play_state or "idle" in upnp_play_state:
-                updates["play_status"] = "stop"
-            else:
-                updates["play_status"] = "idle"
+        # CRITICAL FIELDS (play_state, source): Only merge if UPnP is healthy
+        # When check_upnp_available = True, UPnP subscriptions are failing and state may be stale
+        # Don't overwrite valid HTTP state with stale UPnP state
+        if upnp_healthy:
+            # play_state: Convert UPnP format to PlayerStatus format
+            # UPnP: "playing", "paused playback", "stopped"
+            # PlayerStatus: "play", "pause", "stop", "idle"
+            # Only merge if HTTP doesn't already provide play_state (HTTP is authoritative when available)
+            if self._upnp_state.play_state is not None:
+                # Check if HTTP already has play_state - if so, don't overwrite with UPnP
+                http_has_play_state = current_status.play_state is not None and current_status.play_state != "idle"
+                if not http_has_play_state:
+                    upnp_play_state = self._upnp_state.play_state.lower().strip()
+                    if "play" in upnp_play_state and "pause" not in upnp_play_state:
+                        updates["play_status"] = "play"
+                    elif "pause" in upnp_play_state:
+                        updates["play_status"] = "pause"
+                    elif "stop" in upnp_play_state or "idle" in upnp_play_state:
+                        updates["play_status"] = "stop"
+                    else:
+                        updates["play_status"] = "idle"
 
-        # volume: Convert float 0-1 to int 0-100
-        if self._upnp_state.volume is not None:
-            updates["vol"] = int(self._upnp_state.volume * 100)
+            # source: Only merge if UPnP is healthy and HTTP doesn't provide it
+            if self._upnp_state.source is not None:
+                http_has_source = current_status.source is not None and current_status.source not in ("unknown", "")
+                if not http_has_source:
+                    updates["mode"] = self._upnp_state.source
+        else:
+            # UPnP subscriptions are failing - don't merge critical fields
+            # Log debug message to help diagnose issues
+            _LOGGER.debug(
+                "Skipping UPnP play_state/source merge for %s (check_upnp_available=True, subscriptions failing)",
+                self.name,
+            )
 
-        # muted: Direct mapping (bool → bool)
-        if self._upnp_state.muted is not None:
-            updates["mute"] = self._upnp_state.muted
+        # VOLUME/MUTE: Merge from UPnP when healthy for real-time updates
+        # HTTP polling may not provide these for some devices, so UPnP is valuable
+        if upnp_healthy:
+            # volume: Convert float 0-1 to int 0-100
+            if self._upnp_state.volume is not None:
+                updates["vol"] = int(self._upnp_state.volume * 100)
 
-        # position: Direct mapping (int seconds → int seconds)
+            # muted: Direct mapping (bool → bool)
+            if self._upnp_state.muted is not None:
+                updates["mute"] = self._upnp_state.muted
+
+        # POSITION/DURATION: Always merge when available (real-time updates)
         if self._upnp_state.position is not None:
             updates["position"] = self._upnp_state.position
 
-        # duration: Direct mapping (int seconds → int seconds)
         if self._upnp_state.duration is not None:
             updates["duration"] = self._upnp_state.duration
 
-        # Media metadata: Direct mapping
-        if self._upnp_state.title is not None:
-            updates["Title"] = self._upnp_state.title
-        if self._upnp_state.artist is not None:
-            updates["Artist"] = self._upnp_state.artist
-        if self._upnp_state.album is not None:
-            updates["Album"] = self._upnp_state.album
-        if self._upnp_state.image_url is not None:
-            updates["cover_url"] = self._upnp_state.image_url
+        # MEDIA METADATA: Merge from UPnP when healthy, validate artwork URLs
+        if upnp_healthy:
+            if self._upnp_state.title is not None:
+                updates["Title"] = self._upnp_state.title
+            if self._upnp_state.artist is not None:
+                updates["Artist"] = self._upnp_state.artist
+            if self._upnp_state.album is not None:
+                updates["Album"] = self._upnp_state.album
 
-        # source: Direct mapping
-        if self._upnp_state.source is not None:
-            updates["mode"] = self._upnp_state.source
+            # Artwork URL: Validate before merging (filter invalid values like "un_known")
+            if self._upnp_state.image_url is not None:
+                image_url = str(self._upnp_state.image_url).strip()
+                # Filter out invalid artwork URLs
+                invalid_values = ("un_known", "unknow", "unknown", "none", "")
+                if image_url and image_url not in invalid_values:
+                    # Basic URL validation - must look like a URL
+                    if "http" in image_url.lower() or image_url.startswith("/"):
+                        updates["cover_url"] = image_url
+                    else:
+                        _LOGGER.debug(
+                            "Skipping invalid UPnP artwork URL for %s: '%s'",
+                            self.name,
+                            image_url,
+                        )
+                else:
+                    _LOGGER.debug(
+                        "Skipping invalid UPnP artwork URL for %s (filtered value: '%s')",
+                        self.name,
+                        image_url,
+                    )
 
         # Apply updates to status_model if we have any
         if updates:

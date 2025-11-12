@@ -2,6 +2,13 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.26] - 2025-11-12
+
+### Fixed
+
+- **Legacy Audio Pro Playback State**: Fixed original Audio Pro devices incorrectly preserving UPnP play_state when HTTP API provides it
+- **Arylic Source Selection**: Fixed source selection for Arylic devices by properly handling hyphen format variants (e.g., "line-in")
+
 ## [0.2.25] - 2025-11-07
 
 ### Fixed
