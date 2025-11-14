@@ -153,9 +153,7 @@ class TestBluetoothAPI:
         status_tests = [(0, "Not started"), (1, "Initializing"), (2, "Scanning"), (3, "Complete"), (-1, "Unknown")]
 
         for status_code, expected_status in status_tests:
-            with patch.object(
-                client, "_request", new_callable=AsyncMock, return_value={"scan_status": status_code}
-            ):
+            with patch.object(client, "_request", new_callable=AsyncMock, return_value={"scan_status": status_code}):
                 result = await client.get_last_bluetooth_scan_status()
                 assert result == expected_status
 

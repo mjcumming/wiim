@@ -75,9 +75,7 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
 
                 # Skip devices without MAC address (invalid entries)
                 if not mac:
-                    _LOGGER.debug(
-                        "Skipping Bluetooth device without MAC address: %s", device
-                    )
+                    _LOGGER.debug("Skipping Bluetooth device without MAC address: %s", device)
                     continue
 
                 normalized_device = {
@@ -113,9 +111,7 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
     # Helper methods
     # ------------------------------------------------------------------
 
-    async def scan_for_bluetooth_devices(
-        self, duration: int = 3
-    ) -> list[dict[str, Any]]:  # type: ignore[override]
+    async def scan_for_bluetooth_devices(self, duration: int = 3) -> list[dict[str, Any]]:  # type: ignore[override]
         """Perform a complete Bluetooth device scan and return results.
 
         Args:
@@ -132,14 +128,10 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
         try:
             await self.clear_bluetooth_discovery_result()
         except WiiMError as err:
-            _LOGGER.debug(
-                "Failed to clear previous scan results (may not be supported): %s", err
-            )
+            _LOGGER.debug("Failed to clear previous scan results (may not be supported): %s", err)
 
         # Start the scan
-        _LOGGER.info(
-            "Starting Bluetooth discovery scan (duration: %d seconds)", duration
-        )
+        _LOGGER.info("Starting Bluetooth discovery scan (duration: %d seconds)", duration)
         await self.start_bluetooth_discovery(duration)
 
         # Wait for scan to complete (with timeout)
@@ -191,9 +183,7 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
                         # Wait until we've been scanning for at least the duration to ensure all devices are discovered
                         if attempt >= duration:
                             devices = result.get("bt_device", [])
-                            device_count = (
-                                len(devices) if isinstance(devices, list) else 0
-                            )
+                            device_count = len(devices) if isinstance(devices, list) else 0
                             _LOGGER.info(
                                 "✅ Bluetooth scan completed: status=%s (final), found %d devices after %d seconds",
                                 status_name,
@@ -203,10 +193,7 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
                             if device_count > 0:
                                 _LOGGER.debug(
                                     "Device list: %s",
-                                    [
-                                        f"{d.get('name', 'Unknown')} ({d.get('mac', 'N/A')})"
-                                        for d in devices
-                                    ],
+                                    [f"{d.get('name', 'Unknown')} ({d.get('mac', 'N/A')})" for d in devices],
                                 )
                             return devices if isinstance(devices, list) else []
                         else:
@@ -230,10 +217,7 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
                         if device_count > 0:
                             _LOGGER.debug(
                                 "Device list: %s",
-                                [
-                                    f"{d.get('name', 'Unknown')} ({d.get('mac', 'N/A')})"
-                                    for d in devices
-                                ],
+                                [f"{d.get('name', 'Unknown')} ({d.get('mac', 'N/A')})" for d in devices],
                             )
                         return devices if isinstance(devices, list) else []
                     else:
@@ -245,15 +229,11 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
                 elif scan_status == 0:  # Not started (scan failed)
                     if scan_started:
                         # Scan started but then failed
-                        _LOGGER.warning(
-                            "Bluetooth scan failed: status=Not started (0) after scan had started"
-                        )
+                        _LOGGER.warning("Bluetooth scan failed: status=Not started (0) after scan had started")
                         return []
                     # Otherwise, scan might not have started yet, continue waiting
             except WiiMError as err:
-                _LOGGER.debug(
-                    "Error checking scan status (attempt %d): %s", attempt + 1, err
-                )
+                _LOGGER.debug("Error checking scan status (attempt %d): %s", attempt + 1, err)
 
             await asyncio.sleep(1)  # Wait 1 second before checking again
 
@@ -325,9 +305,7 @@ class BluetoothAPI:  # mixin – must appear *before* the base client in MRO
         import re
 
         if not re.match(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$", mac_normalized):
-            raise ValueError(
-                f"Invalid MAC address format: {mac_address}. Expected format: AA:BB:CC:DD:EE:FF"
-            )
+            raise ValueError(f"Invalid MAC address format: {mac_address}. Expected format: AA:BB:CC:DD:EE:FF")
 
         await self._request(f"{API_ENDPOINT_CONNECT_BT_A2DP}{mac_normalized}")  # type: ignore[attr-defined]
 

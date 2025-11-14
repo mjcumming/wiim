@@ -2,6 +2,16 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.2.28] - 2025-11-13
+
+### Fixed
+
+- **Scene Restoration with EQ Presets**: Fixed scene restoration failing when restoring media player state with EQ presets on devices that don't support EQ or return invalid JSON responses
+  - `async_select_sound_mode` now checks if EQ is supported before attempting to set it
+  - Gracefully handles empty/invalid JSON responses for EQ commands (similar to reboot commands)
+  - Scene restoration continues even if EQ preset setting fails, allowing other attributes to be restored
+  - Resolves GitHub issue #108 where scene restoration failed with "Invalid JSON response" error on UP2STREAM_PRO_V3 devices
+
 ## [0.2.27] - 2025-11-12
 
 ### Added

@@ -400,6 +400,13 @@ class WiiMClient:
                             if "reboot" in endpoint.lower():
                                 _LOGGER.debug("Reboot command sent successfully (empty response expected)")
                                 return {"raw": "OK"}
+                            # Handle empty responses for EQ commands on unsupported devices
+                            elif "eqload" in endpoint.lower():
+                                _LOGGER.debug(
+                                    "EQ preset command returned empty response (device may not support EQ): %s",
+                                    endpoint,
+                                )
+                                return {"raw": "OK", "eq_unsupported": True}
                             else:
                                 _LOGGER.debug("Empty response from device for %s", endpoint)
                                 return {"raw": ""}
@@ -418,11 +425,22 @@ class WiiMClient:
                                     json_err,
                                 )
                                 return {"raw": "OK"}
-                            else:
-                                # Re-raise for other commands
-                                raise WiiMConnectionError(
-                                    f"Invalid JSON response from {self._endpoint}{endpoint}: {json_err}"
-                                ) from json_err
+                            # Handle empty/invalid responses for EQ commands on unsupported devices
+                            # Some LinkPlay devices (e.g., UP2STREAM_PRO_V3) return empty or invalid JSON
+                            elif "eqload" in endpoint.lower():
+                                # Check if response is empty or just whitespace (common for unsupported EQ)
+                                if not text.strip() or "expecting value" in str(json_err).lower():
+                                    _LOGGER.debug(
+                                        "EQ preset command returned empty/invalid response (device may not support EQ): %s",
+                                        endpoint,
+                                    )
+                                    # Return a success-like response to avoid breaking scene restoration
+                                    # The caller should check _eq_supported before calling
+                                    return {"raw": "OK", "eq_unsupported": True}
+                            # Re-raise for other commands or non-empty EQ errors
+                            raise WiiMConnectionError(
+                                f"Invalid JSON response from {self._endpoint}{endpoint}: {json_err}"
+                            ) from json_err
 
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Established endpoint %s failed: %s", self._endpoint, err)
@@ -655,12 +673,25 @@ class WiiMClient:
                             try:
                                 return json.loads(text)
                             except json.JSONDecodeError as json_err:
+                                # Some commands return non-JSON responses (reboot, some EQ commands on unsupported devices)
                                 if "reboot" in path.lower():
                                     _LOGGER.debug(
                                         "Reboot command sent successfully (parsing error expected): %s",
                                         json_err,
                                     )
                                     return {"raw": "OK"}
+                                # Handle empty/invalid responses for EQ commands on unsupported devices
+                                # Some LinkPlay devices (e.g., UP2STREAM_PRO_V3) return empty or invalid JSON
+                                if "eqload" in path.lower():
+                                    # Check if response is empty or just whitespace (common for unsupported EQ)
+                                    if not text.strip() or "expecting value" in str(json_err).lower():
+                                        _LOGGER.debug(
+                                            "EQ preset command returned empty/invalid response (device may not support EQ): %s",
+                                            path,
+                                        )
+                                        # Return a success-like response to avoid breaking scene restoration
+                                        # The caller should check _eq_supported before calling
+                                        return {"raw": "OK", "eq_unsupported": True}
                                 # Provide context on invalid JSON
                                 device_info = {}
                                 try:

@@ -464,8 +464,26 @@ class SourceCommandsMixin:
             raise
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
-        """Select sound mode."""
+        """Select sound mode.
+
+        Handles scene restoration gracefully - if EQ is not supported or fails,
+        log a warning but don't fail the entire scene restoration.
+        """
         controller: MediaPlayerController = self.controller  # type: ignore[attr-defined]
+        speaker = self.speaker  # type: ignore[attr-defined]
+
+        # Check if EQ is supported before attempting to set it
+        coordinator = getattr(speaker, "coordinator", None)
+        if coordinator is not None:
+            eq_supported = getattr(coordinator, "_eq_supported", None)
+            if eq_supported is False:
+                _LOGGER.warning(
+                    "Cannot set sound mode '%s' on %s: EQ is not supported by this device. "
+                    "Scene restoration will continue without EQ preset.",
+                    sound_mode,
+                    speaker.name,
+                )
+                return  # Don't fail scene restoration if EQ is not supported
 
         try:
             # EQ changes don't have direct UI state, just refresh quickly
@@ -473,8 +491,16 @@ class SourceCommandsMixin:
 
             # Let adaptive polling handle sync (no immediate refresh needed)
 
-        except Exception:
-            raise
+        except Exception as err:
+            # For scene restoration, we want to be resilient - log warning but don't fail
+            # This allows scenes to restore even if EQ preset setting fails
+            _LOGGER.warning(
+                "Failed to set sound mode '%s' on %s: %s. Scene restoration will continue without EQ preset.",
+                sound_mode,
+                speaker.name,
+                err,
+            )
+            # Don't raise - allow scene restoration to continue
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Enable/disable shuffle mode."""

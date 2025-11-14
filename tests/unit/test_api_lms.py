@@ -76,18 +76,14 @@ class TestLMSAPI:
         client = WiiMClient("192.168.1.100")
 
         # Test enabled
-        with patch.object(
-            client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"auto_connect": 1}
-        ):
+        with patch.object(client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"auto_connect": 1}):
             result = await client.is_auto_connect_enabled()
             assert result is True
             await client.close()
 
         # Test disabled
         client = WiiMClient("192.168.1.100")
-        with patch.object(
-            client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"auto_connect": 0}
-        ):
+        with patch.object(client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"auto_connect": 0}):
             result = await client.is_auto_connect_enabled()
             assert result is False
             await client.close()
@@ -155,9 +151,7 @@ class TestLMSAPI:
 
         # Test empty list
         client = WiiMClient("192.168.1.100")
-        with patch.object(
-            client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"discover_list": []}
-        ):
+        with patch.object(client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"discover_list": []}):
             result = await client.get_discovered_servers()
             assert result == []
             await client.close()
@@ -205,9 +199,7 @@ class TestLMSAPI:
         client = WiiMClient("192.168.1.100")
 
         # Test connected
-        with patch.object(
-            client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"state": "connected"}
-        ):
+        with patch.object(client, "get_squeezelite_state", new_callable=AsyncMock, return_value={"state": "connected"}):
             result = await client.is_connected_to_lms()
             assert result is True
             await client.close()
@@ -277,15 +269,9 @@ class TestLMSAPI:
             patch.object(
                 client, "get_squeezelite_state", new_callable=AsyncMock, return_value=mock_state
             ) as mock_state,
-            patch.object(
-                client, "get_connection_state", new_callable=AsyncMock, return_value="Connected"
-            ),
-            patch.object(
-                client, "is_auto_connect_enabled", new_callable=AsyncMock, return_value=True
-            ),
-            patch.object(
-                client, "get_discovered_servers", new_callable=AsyncMock, return_value=["192.168.1.4:3483"]
-            ),
+            patch.object(client, "get_connection_state", new_callable=AsyncMock, return_value="Connected"),
+            patch.object(client, "is_auto_connect_enabled", new_callable=AsyncMock, return_value=True),
+            patch.object(client, "get_discovered_servers", new_callable=AsyncMock, return_value=["192.168.1.4:3483"]),
             patch.object(client, "is_connected_to_lms", new_callable=AsyncMock, return_value=True),
         ):
             result = await client.get_lms_status()

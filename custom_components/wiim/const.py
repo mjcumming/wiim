@@ -33,7 +33,7 @@ DOMAIN = "wiim"
 
 # Integration metadata
 NAME = "WiiM"
-VERSION = "0.2.24"
+VERSION = "0.2.28"
 ATTRIBUTION = "Integration created by Michael Cumming @mjcumming"
 
 # Dispatcher signals

@@ -155,9 +155,7 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
         """Return if the button is available (not scanning)."""
         # Disable button during scan to prevent multiple simultaneous scans
         scan_status = self.speaker.get_bluetooth_scan_status()
-        is_scanning = (
-            scan_status in ("Scanning", "Initializing") or self._scan_in_progress
-        )
+        is_scanning = scan_status in ("Scanning", "Initializing") or self._scan_in_progress
         return not is_scanning
 
     async def async_press(self) -> None:
@@ -186,9 +184,7 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
             self.async_write_ha_state()
 
             # Perform the scan (10 seconds for better device discovery)
-            devices = await self.speaker.coordinator.client.scan_for_bluetooth_devices(
-                duration=10
-            )
+            devices = await self.speaker.coordinator.client.scan_for_bluetooth_devices(duration=10)
 
             # Log detailed scan results
             _LOGGER.info(
@@ -217,9 +213,7 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
                 "Storing %d Bluetooth devices for %s: %s",
                 len(devices),
                 self.speaker.name,
-                [f"{d.get('name', 'Unknown')} ({d.get('mac', 'N/A')})" for d in devices]
-                if devices
-                else "none",
+                [f"{d.get('name', 'Unknown')} ({d.get('mac', 'N/A')})" for d in devices] if devices else "none",
             )
             self.speaker.set_bluetooth_devices(devices, "Complete")
 
@@ -241,9 +235,7 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
             )
 
         except Exception as err:
-            _LOGGER.error(
-                "Failed to scan Bluetooth devices for %s: %s", self.speaker.name, err
-            )
+            _LOGGER.error("Failed to scan Bluetooth devices for %s: %s", self.speaker.name, err)
             self.speaker.set_bluetooth_devices([], "Failed")
             raise
         finally:

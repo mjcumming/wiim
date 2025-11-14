@@ -154,9 +154,7 @@ class TestAudioSettingsAPI:
         """Test SPDIF sample rate integer conversion."""
         client = WiiMClient("192.168.1.100")
 
-        with patch.object(
-            client, "get_spdif_sample_rate", new_callable=AsyncMock, return_value="96000"
-        ):
+        with patch.object(client, "get_spdif_sample_rate", new_callable=AsyncMock, return_value="96000"):
             result = await client.get_spdif_sample_rate_int()
             assert result == 96000
             await client.close()
@@ -166,9 +164,7 @@ class TestAudioSettingsAPI:
         """Test SPDIF sample rate with invalid string."""
         client = WiiMClient("192.168.1.100")
 
-        with patch.object(
-            client, "get_spdif_sample_rate", new_callable=AsyncMock, return_value="invalid"
-        ):
+        with patch.object(client, "get_spdif_sample_rate", new_callable=AsyncMock, return_value="invalid"):
             result = await client.get_spdif_sample_rate_int()
             assert result == 0
             await client.close()
@@ -179,9 +175,7 @@ class TestAudioSettingsAPI:
         client = WiiMClient("192.168.1.100")
 
         # Test active (rate > 0)
-        with patch.object(
-            client, "get_spdif_sample_rate_int", new_callable=AsyncMock, return_value=48000
-        ):
+        with patch.object(client, "get_spdif_sample_rate_int", new_callable=AsyncMock, return_value=48000):
             result = await client.is_spdif_output_active()
             assert result is True
             await client.close()
