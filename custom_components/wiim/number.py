@@ -73,7 +73,7 @@ class WiiMChannelBalance(WiimEntity, NumberEntity):
         """
         try:
             _LOGGER.info("Setting channel balance to %s for %s", value, self.speaker.name)
-            await self.speaker.coordinator.client.set_channel_balance(value)
+            await self.speaker.coordinator.player.client.set_channel_balance(value)
 
             # Update optimistic state
             self._balance = value

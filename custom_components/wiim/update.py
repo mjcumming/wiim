@@ -53,15 +53,17 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
 
     @property
     def installed_version(self) -> str | None:  # type: ignore[override]
+        """Return currently installed firmware version."""
         if self.speaker.device_model is None:
             return None
-        return getattr(self.speaker.device_model, "firmware", None)
+        return self.speaker.device_model.firmware
 
     @property
     def latest_version(self) -> str | None:  # type: ignore[override]
+        """Return latest available firmware version."""
         if self.speaker.device_model is None:
             return None
-        version = getattr(self.speaker.device_model, "latest_version", None)
+        version = self.speaker.device_model.latest_version
         # Ignore '0', 0, empty, or '-' as valid versions
         if not version or str(version).strip() in {"0", "-", ""}:
             return None
@@ -84,25 +86,25 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
         if self.speaker.device_model is None:
             return attrs
 
+        device = self.speaker.device_model
+
         # Show current firmware clearly
-        if firmware := getattr(self.speaker.device_model, "firmware", None):
-            attrs["current_firmware"] = str(firmware)
+        if device.firmware:
+            attrs["current_firmware"] = str(device.firmware)
 
         # Show update status
-        version_update = getattr(self.speaker.device_model, "version_update", None)
-        if version_update:
-            attrs["update_flag"] = str(version_update)
+        if device.version_update:
+            attrs["update_flag"] = str(device.version_update)
             # "0" or None = no update, "1" = update available
-            attrs["update_ready"] = str(version_update) == "1"
+            attrs["update_ready"] = str(device.version_update) == "1"
 
         # Show latest version info
-        if latest := getattr(self.speaker.device_model, "latest_version", None):
-            if str(latest).strip() not in {"0", "-", ""}:
-                attrs["latest_firmware"] = str(latest)
+        if device.latest_version and str(device.latest_version).strip() not in {"0", "-", ""}:
+            attrs["latest_firmware"] = str(device.latest_version)
 
         # Additional version components
-        if release := getattr(self.speaker.device_model, "release", None):
-            attrs["release_info"] = str(release)
+        if device.release_date:
+            attrs["release_info"] = str(device.release_date)
 
         return {k: v for k, v in attrs.items() if v is not None}
 
@@ -113,7 +115,7 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
         _LOGGER.info("User requested firmware install on %s (version=%s)", self.speaker.name, version)
 
         try:
-            await self.speaker.coordinator.client.reboot()
+            await self.speaker.coordinator.player.client.reboot()
             _LOGGER.info("Reboot command sent to %s – speaker will install firmware if staged.", self.speaker.name)
         except Exception as err:  # pragma: no cover – network errors
             _LOGGER.error("Failed to trigger firmware install on %s: %s", self.speaker.name, err)

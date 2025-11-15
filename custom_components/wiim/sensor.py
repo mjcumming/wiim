@@ -59,11 +59,8 @@ async def async_setup_entry(
                 supports_audio_output,
             )
     else:
-        # Fallback: create sensor if capabilities not available (assume supported for backwards compatibility)
-        _LOGGER.warning(
-            "Capabilities not available for %s - creating Bluetooth output sensor as fallback", speaker.name
-        )
-        entities.append(WiiMBluetoothOutputSensor(speaker))
+        if capabilities is None:
+            return []
 
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))
@@ -129,33 +126,43 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return group-related information."""
+        # Read directly from coordinator data
+        multiroom = self.coordinator.data.get("multiroom", {}) if self.coordinator.data else {}
+        slave_list = multiroom.get("slave_list", [])
+        is_coordinator = self.speaker.role == "master" and len(slave_list) > 0
+        group_members_count = len(slave_list)
+
         attrs = {
-            "is_group_coordinator": self.speaker.is_group_coordinator,
-            "group_members_count": len(self.speaker.group_members),
+            "is_group_coordinator": is_coordinator,
+            "group_members_count": group_members_count,
         }
 
         # Only log attrs when they change to reduce log spam
-        current_attrs = (
-            self.speaker.is_group_coordinator,
-            len(self.speaker.group_members),
-        )
+        current_attrs = (is_coordinator, group_members_count)
         if not hasattr(self, "_last_logged_attrs"):
             self._last_logged_attrs = None
         if self._last_logged_attrs != current_attrs:
+            member_names = [
+                slave.get("name", "Unknown") if isinstance(slave, dict) else str(slave) for slave in slave_list
+            ]
             _LOGGER.info(
                 "🎯 ROLE SENSOR ATTRS CHANGED for %s: is_coordinator=%s, group_count=%s, members=%s",
                 self.speaker.name,
-                self.speaker.is_group_coordinator,
-                len(self.speaker.group_members),
-                [m.name for m in self.speaker.group_members],
+                is_coordinator,
+                group_members_count,
+                member_names,
             )
             self._last_logged_attrs = current_attrs
 
-        if self.speaker.coordinator_speaker:
-            attrs["coordinator_name"] = self.speaker.coordinator_speaker.name
+        # Get coordinator name from multiroom data if slave
+        if self.speaker.role == "slave" and multiroom.get("master_name"):
+            attrs["coordinator_name"] = multiroom.get("master_name")
 
-        if len(self.speaker.group_members) > 1:
-            attrs["group_member_names"] = [member.name for member in self.speaker.group_members]
+        if group_members_count > 1:
+            member_names = [
+                slave.get("name", "Unknown") if isinstance(slave, dict) else str(slave) for slave in slave_list
+            ]
+            attrs["group_member_names"] = member_names
 
         return attrs
 
@@ -180,7 +187,6 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
         self._attr_unique_id = f"{speaker.uuid}_diagnostic"
         self._attr_name = "Device Status"  # HA will prefix device name automatically
 
-    # Force Home Assistant to treat this as non-numeric regardless of legacy
     # registry values that might still carry a device class or unit.
 
     @property
@@ -198,12 +204,48 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
     # -------------------------- Helpers --------------------------
 
     def _status(self) -> dict[str, Any]:
-        """Return *status* payload as a plain dict extracted from the PlayerStatus model."""
-
-        if self.speaker.status_model is None:
+        """Return *status* payload as a plain dict from Player properties."""
+        if not self.coordinator.data:
             return {}
 
-        return self.speaker.status_model.model_dump(exclude_none=True)
+        # Build status dict from Player properties in coordinator.data
+        data = self.coordinator.data
+        status_dict: dict[str, Any] = {}
+
+        # Map Player properties to status dict format
+        if data.get("play_state") is not None:
+            status_dict["play_status"] = data.get("play_state")
+        if data.get("volume_level") is not None:
+            # Convert back to 0-100 for status dict (Player provides 0-1)
+            status_dict["vol"] = int(data.get("volume_level", 0) * 100)
+        if data.get("is_muted") is not None:
+            status_dict["mute"] = data.get("is_muted")
+        if data.get("source") is not None:
+            status_dict["source"] = data.get("source")
+        if data.get("media_position") is not None:
+            status_dict["position"] = data.get("media_position")
+        if data.get("media_duration") is not None:
+            status_dict["duration"] = data.get("media_duration")
+        if data.get("media_title") is not None:
+            status_dict["Title"] = data.get("media_title")
+        if data.get("media_artist") is not None:
+            status_dict["Artist"] = data.get("media_artist")
+        if data.get("media_album") is not None:
+            status_dict["Album"] = data.get("media_album")
+        if data.get("media_image_url") is not None:
+            status_dict["entity_picture"] = data.get("media_image_url")
+            status_dict["cover_url"] = data.get("media_image_url")
+        if data.get("eq_preset") is not None:
+            status_dict["eq"] = data.get("eq_preset")
+        if data.get("wifi_rssi") is not None:
+            status_dict["RSSI"] = data.get("wifi_rssi")
+            status_dict["wifi_rssi"] = data.get("wifi_rssi")
+        if data.get("shuffle") is not None:
+            status_dict["shuffle"] = data.get("shuffle")
+        if data.get("repeat") is not None:
+            status_dict["repeat"] = data.get("repeat")
+
+        return status_dict
 
     def _device_info(self) -> dict[str, Any]:
         """Return *device_info* payload as a plain dict extracted from the DeviceInfo model."""
@@ -221,15 +263,14 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self) -> str:
         """Return Wi-Fi RSSI in dBm (negative integer)."""
-        status = self._status()
-        rssi = status.get("wifi_rssi") or status.get("RSSI")
-
-        # If we have a usable RSSI value → show Wi-Fi strength
-        if rssi not in (None, "", "unknown", "unknow"):
-            try:
-                return f"Wi-Fi {int(rssi)} dBm"
-            except (TypeError, ValueError):
-                pass  # fall through to generic state
+        # Use Player property (pywiim 0.24+)
+        if self.coordinator.data:
+            rssi = self.coordinator.data.get("wifi_rssi")
+            if rssi is not None:
+                try:
+                    return f"Wi-Fi {int(rssi)} dBm"
+                except (TypeError, ValueError):
+                    pass
 
         # No RSSI → show basic connectivity status
         # Check for recent command failures for more specific status
@@ -335,7 +376,6 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
             if firmware and str(firmware).strip() not in {"", "0", "-", "unknown"}:
                 return str(firmware)
 
-        # Fallback: speaker.firmware property
         if self.speaker.firmware and str(self.speaker.firmware).strip() not in {"", "0", "-", "unknown"}:
             return str(self.speaker.firmware)
 
@@ -427,7 +467,11 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self):
         """Return the current input source (can be selectable or non-selectable)."""
-        return self.speaker.get_current_source()
+        # Read directly from coordinator data
+        # Use Player property from coordinator.data
+        if self.coordinator.data:
+            return self.coordinator.data.get("source")
+        return None
 
 
 # ------------------- Bluetooth Output Sensor -------------------
@@ -457,7 +501,10 @@ class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
                 # Device communication is failing - return "unavailable" to indicate device issue
                 return "unavailable"
 
-            return "on" if self.speaker.is_bluetooth_output_active() else "off"
+            # Read directly from coordinator data
+            audio_output = self.coordinator.data.get("audio_output", {}) if self.coordinator.data else {}
+            bt_active = audio_output.get("source") == "1"
+            return "on" if bt_active else "off"
         except Exception:
             # Return "unknown" if we can't determine the status
             # This prevents the entity from becoming unavailable
@@ -468,9 +515,11 @@ class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
         try:
+            # Read directly from coordinator data
+            audio_output = self.coordinator.data.get("audio_output", {}) if self.coordinator.data else {}
             return {
-                "hardware_output_mode": self.speaker.get_hardware_output_mode(),
-                "audio_cast_active": self.speaker.is_audio_cast_active(),
+                "hardware_output_mode": audio_output.get("mode", "Unknown"),
+                "audio_cast_active": audio_output.get("cast_active", False),
             }
         except Exception:
             # Return minimal attributes if we can't get the full information

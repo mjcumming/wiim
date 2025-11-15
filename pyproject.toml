@@ -54,9 +54,7 @@ ignore_errors = true
 module = "stubs.*"
 ignore_errors = true
 
-[[tool.mypy.overrides]]
-module = "custom_components.wiim.api"
-ignore_errors = true
+# Removed: custom_components.wiim.api no longer exists (using pywiim now)
 
 [[tool.mypy.overrides]]
 module = "custom_components.wiim.coordinator"

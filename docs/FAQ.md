@@ -9,7 +9,7 @@ Quick answers to frequently asked questions.
 All WiiM and LinkPlay-based devices:
 
 - **WiiM**: Mini, Pro, Pro Plus, Amp, Ultra
-- **LinkPlay Partners**: Arylic, Audio Pro, DOSS, Dayton Audio, iEast, and many more
+- **LinkPlay Partners**: Arylic, DOSS, Dayton Audio, iEast, and many more
 
 ### Do I need the WiiM Home app?
 
@@ -181,38 +181,6 @@ data:
 ```
 
 ## Troubleshooting Questions
-
-### Why do some Audio Pro devices fail validation?
-
-Audio Pro devices use different API protocols depending on generation:
-
-| Audio Pro Generation | Models                            | Protocol    | Integration Behavior     |
-| -------------------- | --------------------------------- | ----------- | ------------------------ |
-| **Original**         | C3, C5, Drumfire                  | HTTP (80)   | ✅ Auto-discovery works  |
-| **MkII**             | A10 MkII, A15 MkII, A28, C10 MkII | HTTPS (443) | ⚠️ May need manual setup |
-| **W-Series**         | A15 W, A28 W, A38 W, A48 W        | HTTPS (443) | ⚠️ May need manual setup |
-
-**What's happening:**
-
-- MkII and newer devices moved from HTTP to HTTPS for enhanced security
-- Integration tries multiple protocols automatically (HTTP/HTTPS on various ports)
-- Auto-discovery may show "validation failed" but devices still work
-
-**Solution:**
-
-1. **Try auto-discovery first** - it often works despite the warning messages
-2. **If auto-discovery fails**: Use manual setup
-   - **Settings → Devices & Services → Add Integration → WiiM Audio**
-   - Select **"Enter IP manually"** and enter device IP
-   - Integration automatically detects and uses correct protocol
-
-**Result:**
-
-- All features work normally (play, volume, multiroom, EQ, etc.)
-- Enhanced security with HTTPS communication
-- Same user experience regardless of generation
-
-**Note:** These validation failures are cosmetic - the integration is designed to handle Audio Pro's different API implementations gracefully.
 
 ### What do error messages mean?
 

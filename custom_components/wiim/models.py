@@ -3,7 +3,7 @@
 - Only fields currently used by the coordinator/business logic are included.
 - Additional keys can be added incrementally as needed.
 - Field aliases match the WiiM API payload keys for seamless parsing.
-- Models are designed for forward compatibility and robust validation.
+- Models for pywiim data structures.
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ class MultiroomInfo(BaseModel):
 
 
 class TrackMetadata(_WiimBase):
-    """Normalized track metadata returned by coordinator_metadata helper."""
+    """Normalized track metadata model for integration use."""
 
     title: str | None = None
     artist: str | None = None

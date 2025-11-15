@@ -14,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN, EQ_PRESET_MAP
+from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
@@ -76,7 +76,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         """
         try:
             _LOGGER.info("Enabling equalizer for %s", self.speaker.name)
-            await self.speaker.coordinator.client.set_eq_enabled(True)
+            await self.speaker.coordinator.player.client.set_eq_enabled(True)
             await self._async_execute_command_with_refresh("equalizer_on")
 
         except Exception as err:
@@ -91,7 +91,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         """
         try:
             _LOGGER.info("Disabling equalizer for %s", self.speaker.name)
-            await self.speaker.coordinator.client.set_eq_enabled(False)
+            await self.speaker.coordinator.player.client.set_eq_enabled(False)
             await self._async_execute_command_with_refresh("equalizer_off")
 
         except Exception as err:
@@ -108,10 +108,24 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         polling_info = self.speaker.coordinator.data.get("polling", {})
         api_capabilities = polling_info.get("api_capabilities", {})
 
+        # Get available presets from pywiim (if provided)
+        available_presets = []
+        if isinstance(eq_info, dict):
+            # Try to get presets from eq_info dict (pywiim may provide this)
+            available_presets = eq_info.get("available_presets", eq_info.get("presets", []))
+
+        # Fallback: try to get from Player if available
+        if not available_presets:
+            player = self.speaker.coordinator.data.get("player")
+            if player:
+                available_presets = getattr(player, "available_eq_presets", None) or []
+                if not isinstance(available_presets, list):
+                    available_presets = []
+
         attrs = {
             "eq_supported": api_capabilities.get("eq_supported", False),
-            "current_preset": eq_info.get("eq_preset"),
-            "available_presets": list(EQ_PRESET_MAP.keys()),
+            "current_preset": eq_info.get("eq_preset") if isinstance(eq_info, dict) else None,
+            "available_presets": available_presets,
         }
 
         return attrs

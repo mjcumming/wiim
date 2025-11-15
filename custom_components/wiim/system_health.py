@@ -47,7 +47,7 @@ async def _check_device_health(speaker) -> str:
     """Check health of a specific device."""
     try:
         # Quick API test
-        await speaker.coordinator.client.get_device_info()
+        await speaker.coordinator.player.client.get_device_info()
         polling_interval = speaker.coordinator.update_interval.total_seconds()
         return f"OK (polling: {polling_interval}s)"
     except Exception as err:

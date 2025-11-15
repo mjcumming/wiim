@@ -9,7 +9,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.wiim.api import WiiMConnectionError
+from pywiim.exceptions import WiiMConnectionError
 from custom_components.wiim.const import DOMAIN
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
@@ -38,7 +38,7 @@ class TestIntegrationSetup:
         entry.add_to_hass(hass)
 
         with patch(
-            "custom_components.wiim.api.WiiMClient.get_device_info",
+            "pywiim.WiiMClient.get_device_info",
             side_effect=Exception("Connection error"),
         ):
             await hass.config_entries.async_setup(entry.entry_id)

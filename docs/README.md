@@ -24,7 +24,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 ## 🛠️ Supported Devices
 
 - **WiiM**: Mini, Pro, Pro Plus, Amp, Ultra
-- **LinkPlay Compatible**: Arylic, Audio Pro, Dayton Audio, DOSS, and many more
+- **LinkPlay Compatible**: Arylic, Dayton Audio, DOSS, and many more
 - **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
 
 ## 📦 Installation

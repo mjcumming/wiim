@@ -128,27 +128,23 @@ def bypass_get_data_fixture(hass):
 
     with (
         patch(
-            "custom_components.wiim.api.WiiMClient.get_status",
+            "pywiim.WiiMClient.get_player_status",
             return_value=mock_status,  # Use merged status instead of original
         ),
         patch(
-            "custom_components.wiim.api.WiiMClient.get_device_info",
+            "pywiim.WiiMClient.get_device_info",
             return_value=MOCK_DEVICE_DATA,
         ),
         patch(
-            "custom_components.wiim.api.WiiMClient.get_player_status",
-            return_value=mock_status,  # Use merged status instead of original
-        ),
-        patch(
-            "custom_components.wiim.api.WiiMClient.get_multiroom_status",
+            "pywiim.WiiMClient.get_multiroom_status",
             return_value={"slaves": 0},
         ),
         patch(
-            "custom_components.wiim.api.WiiMClient.reboot",
+            "pywiim.WiiMClient.reboot",
             return_value=True,
         ),
         patch(
-            "custom_components.wiim.api.WiiMClient.sync_time",
+            "pywiim.WiiMClient.sync_time",
             return_value=True,
         ),
         patch(
@@ -166,11 +162,11 @@ def error_get_data_fixture():
     """Simulate error when retrieving data from API."""
     with (
         patch(
-            "custom_components.wiim.api.WiiMClient.get_status",
+            "pywiim.WiiMClient.get_player_status",
             side_effect=Exception,
         ),
         patch(
-            "custom_components.wiim.api.WiiMClient.get_device_info",
+            "pywiim.WiiMClient.get_device_info",
             side_effect=Exception,
         ),
     ):

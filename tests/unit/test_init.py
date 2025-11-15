@@ -28,7 +28,7 @@ async def test_setup_entry_connection_error(hass: HomeAssistant) -> None:
     entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.wiim.api.WiiMClient.get_device_info",
+        "pywiim.WiiMClient.get_device_info",
         side_effect=Exception("Connection error"),
     ):
         await hass.config_entries.async_setup(entry.entry_id)

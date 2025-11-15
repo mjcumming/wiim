@@ -1,52 +1,16 @@
 """Test WiiM coordinator with comprehensive coverage of refactored architecture."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pywiim.exceptions import WiiMError
 
 from custom_components.wiim import DOMAIN
-from custom_components.wiim.api import WiiMError
 from custom_components.wiim.coordinator import WiiMCoordinator
-from custom_components.wiim.models import DeviceInfo, EQInfo, PlayerStatus, PollingMetrics, TrackMetadata
+from custom_components.wiim.models import DeviceInfo, PlayerStatus
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE
-
-
-@pytest.fixture
-def mock_coordinator_data():
-    """Create properly structured coordinator data for testing."""
-    return {
-        "status_model": PlayerStatus.model_validate(MOCK_STATUS_RESPONSE),
-        "device_model": DeviceInfo.model_validate(MOCK_DEVICE_DATA),
-        "multiroom": {"slave_count": 0, "slaves": []},
-        "metadata_model": TrackMetadata.model_validate({"title": "Test Track", "artist": "Test Artist"}),
-        "metadata": {"title": "Test Track", "artist": "Test Artist"},
-        "eq_model": EQInfo.model_validate({"eq_enabled": False, "eq_preset": "flat"}),
-        "eq": {"eq_enabled": False, "eq_preset": "flat"},
-        "presets": [],
-        "role": "solo",
-        "polling_metrics": PollingMetrics.model_validate(
-            {
-                "interval": 5.0,
-                "is_playing": False,
-                "api_capabilities": {
-                    "statusex_supported": True,
-                    "metadata_supported": False,
-                    "eq_supported": False,
-                },
-            }
-        ),
-        "polling": {
-            "interval": 5.0,
-            "is_playing": False,
-            "api_capabilities": {
-                "statusex_supported": True,
-                "metadata_supported": False,
-                "eq_supported": False,
-            },
-        },
-    }
 
 
 async def test_coordinator_initialization(hass: HomeAssistant, mock_wiim_client) -> None:
@@ -59,173 +23,176 @@ async def test_coordinator_initialization(hass: HomeAssistant, mock_wiim_client)
     assert coordinator.name == "WiiM 192.168.1.100"
     assert coordinator.client == mock_wiim_client
     assert coordinator.client.host == "192.168.1.100"
-    assert coordinator._backoff is not None
-    assert coordinator._eq_supported is None  # Not yet tested
-    assert coordinator._metadata_supported is None  # Not yet tested
+    assert coordinator._polling_strategy is not None
+    assert coordinator._track_detector is not None
 
 
-async def test_coordinator_update_success(hass: HomeAssistant, mock_wiim_client, mock_coordinator_data) -> None:
-    """Test successful coordinator update with new architecture."""
+async def test_coordinator_update_success(hass: HomeAssistant, mock_wiim_client) -> None:
+    """Test successful coordinator update with pywiim client methods."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
+    mock_wiim_client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    mock_wiim_client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
+    mock_wiim_client.get_multiroom_status = AsyncMock(return_value={})
+    mock_wiim_client.get_meta_info = AsyncMock(return_value=None)
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
-    # Mock all the polling endpoints used by the new architecture
-    with patch("custom_components.wiim.coordinator_polling.async_update_data", return_value=mock_coordinator_data):
-        try:
-            await coordinator.async_refresh()
+    try:
+        await coordinator.async_refresh()
 
-            assert coordinator.last_update_success is True
-            assert coordinator.data is not None
+        assert coordinator.last_update_success is True
+        assert coordinator.data is not None
 
-            # Verify the new data structure
-            assert "status_model" in coordinator.data
-            assert "device_model" in coordinator.data
-            assert "multiroom" in coordinator.data
-            assert "metadata_model" in coordinator.data
-            assert "eq_model" in coordinator.data
-            assert "role" in coordinator.data
-            assert "polling_metrics" in coordinator.data
+        # Verify the data structure
+        assert "status_model" in coordinator.data
+        assert "device_model" in coordinator.data
+        assert "multiroom" in coordinator.data
+        assert "role" in coordinator.data
 
-            # Verify models are properly typed
-            assert isinstance(coordinator.data["status_model"], PlayerStatus)
-            assert isinstance(coordinator.data["device_model"], DeviceInfo)
-            assert isinstance(coordinator.data["metadata_model"], TrackMetadata)
-            assert isinstance(coordinator.data["eq_model"], EQInfo)
-            assert isinstance(coordinator.data["polling_metrics"], PollingMetrics)
+        # Verify models are properly typed
+        assert isinstance(coordinator.data["status_model"], PlayerStatus)
+        assert isinstance(coordinator.data["device_model"], DeviceInfo)
+        assert coordinator.data["role"] == "solo"
 
-        finally:
-            await coordinator.async_shutdown()
+        # Verify pywiim client methods were called
+        mock_wiim_client.get_player_status.assert_called_once()
+
+    finally:
+        await coordinator.async_shutdown()
 
 
 async def test_coordinator_update_failure(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator update failure with proper error handling."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
+    mock_wiim_client.get_player_status = AsyncMock(side_effect=WiiMError("Connection error"))
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
-    # Mock polling to fail
-    with patch(
-        "custom_components.wiim.coordinator_polling.async_update_data", side_effect=WiiMError("Connection error")
-    ):
-        try:
-            await coordinator.async_refresh()
-            assert coordinator.last_update_success is False
-            # The backoff failures are recorded in the polling module, not directly accessible in our mock
+    try:
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success is False
 
-        finally:
-            await coordinator.async_shutdown()
+    finally:
+        await coordinator.async_shutdown()
 
 
-async def test_coordinator_partial_update_failure(hass: HomeAssistant, mock_wiim_client, mock_coordinator_data) -> None:
+async def test_coordinator_partial_update_failure(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator handling partial update failures."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
+    mock_wiim_client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    # Device info fails, but status succeeds
+    mock_wiim_client.get_device_info = AsyncMock(side_effect=WiiMError("Device info failed"))
+    mock_wiim_client.get_multiroom_status = AsyncMock(return_value={})
+    mock_wiim_client.get_meta_info = AsyncMock(return_value=None)
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
-    # Mock successful update
-    with patch("custom_components.wiim.coordinator_polling.async_update_data", return_value=mock_coordinator_data):
-        try:
-            await coordinator.async_refresh()
-            assert coordinator.data is not None
-            assert "status_model" in coordinator.data
+    try:
+        await coordinator.async_refresh()
+        assert coordinator.data is not None
+        assert "status_model" in coordinator.data
+        # Device model should be None when fetch fails
+        assert coordinator.data.get("device_model") is None
 
-        finally:
-            await coordinator.async_shutdown()
+    finally:
+        await coordinator.async_shutdown()
 
 
-async def test_coordinator_device_properties(hass: HomeAssistant, mock_wiim_client, mock_coordinator_data) -> None:
-    """Test coordinator device property access."""
+async def test_coordinator_device_data(hass: HomeAssistant, mock_wiim_client) -> None:
+    """Test coordinator device data access."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
+    mock_wiim_client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    mock_wiim_client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
+    mock_wiim_client.get_multiroom_status = AsyncMock(return_value={})
+    mock_wiim_client.get_meta_info = AsyncMock(return_value=None)
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
-    with patch("custom_components.wiim.coordinator_polling.async_update_data", return_value=mock_coordinator_data):
-        try:
-            await coordinator.async_refresh()
+    try:
+        await coordinator.async_refresh()
 
-            # Test device properties
-            assert coordinator.device_uuid == MOCK_DEVICE_DATA["uuid"]
-            assert coordinator.device_name == MOCK_DEVICE_DATA["DeviceName"]
+        # Test device data is stored correctly
+        assert coordinator.data is not None
+        assert coordinator.data["device_model"] is not None
+        assert coordinator.data["device_model"].uuid == MOCK_DEVICE_DATA["uuid"]
+        assert coordinator.data["device_model"].name == MOCK_DEVICE_DATA["DeviceName"]
 
-        finally:
-            await coordinator.async_shutdown()
+    finally:
+        await coordinator.async_shutdown()
 
 
-async def test_coordinator_command_tracking(hass: HomeAssistant, mock_wiim_client) -> None:
-    """Test coordinator command success/failure tracking."""
+async def test_coordinator_client_access(hass: HomeAssistant, mock_wiim_client) -> None:
+    """Test coordinator provides access to pywiim client."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
     try:
-        # Test command failure recording
-        coordinator.record_command_failure("play", Exception("Test error"))
-        assert coordinator.has_recent_command_failures() is True
-        assert coordinator._command_failure_count == 1
-
-        # Test command success clearing failures
-        coordinator.clear_command_failures()
-        assert coordinator.has_recent_command_failures() is False
-        assert coordinator._command_failure_count == 0
+        # Coordinator should provide access to pywiim client for entity control
+        assert coordinator.client == mock_wiim_client
+        assert coordinator.client.host == "192.168.1.100"
 
     finally:
         await coordinator.async_shutdown()
 
 
-async def test_coordinator_role_detection(hass: HomeAssistant, mock_wiim_client, mock_coordinator_data) -> None:
+async def test_coordinator_role_detection(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator role detection functionality."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
+    mock_wiim_client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    mock_wiim_client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
+    mock_wiim_client.get_multiroom_status = AsyncMock(return_value={})
+    mock_wiim_client.get_meta_info = AsyncMock(return_value=None)
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
-    with patch("custom_components.wiim.coordinator_polling.async_update_data", return_value=mock_coordinator_data):
-        try:
-            await coordinator.async_refresh()
+    try:
+        await coordinator.async_refresh()
 
-            # Test role detection
-            assert coordinator.get_current_role() == "solo"
-            assert coordinator.is_wiim_master is False
-            assert coordinator.is_wiim_slave is False
+        # Test role detection - solo device
+        assert coordinator.data["role"] == "solo"
 
-        finally:
-            await coordinator.async_shutdown()
+    finally:
+        await coordinator.async_shutdown()
 
 
-async def test_coordinator_group_management(hass: HomeAssistant, mock_wiim_client, mock_coordinator_data) -> None:
+async def test_coordinator_group_management(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator group management functionality."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
+    mock_wiim_client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    mock_wiim_client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
+    # Master device with slaves
+    mock_wiim_client.get_multiroom_status = AsyncMock(return_value={"slaves": 1, "slave_list": []})
+    mock_wiim_client.get_meta_info = AsyncMock(return_value=None)
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
-    # Test master role
-    master_data = mock_coordinator_data.copy()
-    master_data["role"] = "master"
-    master_data["multiroom"] = {"slave_count": 1, "slaves": [{"ip": "192.168.1.101", "name": "Slave"}]}
+    try:
+        await coordinator.async_refresh()
 
-    with patch("custom_components.wiim.coordinator_polling.async_update_data", return_value=master_data):
-        try:
-            await coordinator.async_refresh()
+        # Test master role detection
+        assert coordinator.data["role"] == "master"
+        assert coordinator.data["multiroom"].get("slaves") == 1
 
-            assert coordinator.get_current_role() == "master"
-            assert coordinator.is_wiim_master is True
-            assert coordinator.has_slaves() is True
-
-        finally:
-            await coordinator.async_shutdown()
+    finally:
+        await coordinator.async_shutdown()
 
 
-async def test_coordinator_listeners(hass: HomeAssistant, mock_wiim_client, mock_coordinator_data) -> None:
+async def test_coordinator_listeners(hass: HomeAssistant, mock_wiim_client) -> None:
     """Test coordinator listener functionality."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
+    mock_wiim_client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+    mock_wiim_client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
+    mock_wiim_client.get_multiroom_status = AsyncMock(return_value={})
+    mock_wiim_client.get_meta_info = AsyncMock(return_value=None)
 
     coordinator = WiiMCoordinator(hass, mock_wiim_client)
 
@@ -237,17 +204,16 @@ async def test_coordinator_listeners(hass: HomeAssistant, mock_wiim_client, mock
 
     coordinator.async_add_listener(mock_listener)
 
-    with patch("custom_components.wiim.coordinator_polling.async_update_data", return_value=mock_coordinator_data):
-        try:
-            await coordinator.async_refresh()
-            assert listener_called is True
+    try:
+        await coordinator.async_refresh()
+        assert listener_called is True
 
-        finally:
-            await coordinator.async_shutdown()
+    finally:
+        await coordinator.async_shutdown()
 
 
-async def test_coordinator_error_recovery(hass: HomeAssistant, mock_wiim_client, mock_coordinator_data) -> None:
-    """Test coordinator error recovery with backoff."""
+async def test_coordinator_error_recovery(hass: HomeAssistant, mock_wiim_client) -> None:
+    """Test coordinator error recovery."""
     mock_wiim_client.host = "192.168.1.100"
     mock_wiim_client._host = "192.168.1.100"
 
@@ -255,23 +221,24 @@ async def test_coordinator_error_recovery(hass: HomeAssistant, mock_wiim_client,
 
     try:
         # First update fails
-        with patch(
-            "custom_components.wiim.coordinator_polling.async_update_data", side_effect=WiiMError("Connection error")
-        ):
-            await coordinator.async_refresh()
-            assert coordinator.last_update_success is False
+        mock_wiim_client.get_player_status = AsyncMock(side_effect=WiiMError("Connection error"))
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success is False
 
         # Second update succeeds
-        with patch("custom_components.wiim.coordinator_polling.async_update_data", return_value=mock_coordinator_data):
-            await coordinator.async_refresh()
-            assert coordinator.last_update_success is True
+        mock_wiim_client.get_player_status = AsyncMock(return_value=MOCK_STATUS_RESPONSE)
+        mock_wiim_client.get_device_info = AsyncMock(return_value=MOCK_DEVICE_DATA)
+        mock_wiim_client.get_multiroom_status = AsyncMock(return_value={})
+        mock_wiim_client.get_meta_info = AsyncMock(return_value=None)
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success is True
 
     finally:
         await coordinator.async_shutdown()
 
 
 @pytest.mark.skip(reason="Skipped due to HA background thread issue - functionality covered by other tests")
-async def test_coordinator_with_integration(hass: HomeAssistant, bypass_get_data) -> None:
+async def test_coordinator_with_integration(hass: HomeAssistant, bypass_get_data) -> None:  # noqa: ARG001
     """Test coordinator working with full integration."""
     entry = MockConfigEntry(
         domain=DOMAIN,

@@ -66,7 +66,10 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                     else None
                 ),
                 "data_keys": list(speaker.coordinator.data.keys()) if speaker.coordinator.data else [],
-                "client_host": speaker.coordinator.client.host,
+                "client_host": speaker.coordinator.player.client.host,
+                "capabilities": async_redact_data(speaker.coordinator._capabilities, TO_REDACT)
+                if hasattr(speaker.coordinator, "_capabilities")
+                else {},
             }
 
         # Integration overview
@@ -88,7 +91,9 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 "firmware": speaker.firmware,
                 "role": speaker.role,
                 "available": speaker.available,
-                "group_members_count": len(speaker.group_members),
+                "group_members_count": len(speaker.coordinator.data.get("multiroom", {}).get("slave_list", []))
+                if speaker.coordinator.data
+                else 0,
             },
         }
 
@@ -115,11 +120,13 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
 
         # Get API client status
         api_status = {}
-        if speaker.coordinator and speaker.coordinator.client:
+        coordinator = speaker.coordinator
+        if coordinator and coordinator.client:
             api_status = {
-                "host": speaker.coordinator.client.host,
-                "timeout": getattr(speaker.coordinator.client, "timeout", "unknown"),
-                "client_type": str(type(speaker.coordinator.client)),
+                "host": coordinator.player.client.host,
+                "port": getattr(coordinator.player.client, "port", None),
+                "timeout": getattr(coordinator.client, "timeout", "unknown"),
+                "client_type": str(type(coordinator.client).__name__),
             }
 
         # Device-specific information
@@ -134,234 +141,129 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "mac_address": async_redact_data({"mac": speaker.mac_address}, ["mac"]) if speaker.mac_address else None,
         }
 
-        # Group information
+        # Group information - read directly from coordinator data
+        multiroom = speaker.coordinator.data.get("multiroom", {}) if speaker.coordinator.data else {}
+        slave_list = multiroom.get("slave_list", [])
+        is_coordinator = speaker.role == "master" and len(slave_list) > 0
         group_info = {
             "role": speaker.role,
-            "is_group_coordinator": speaker.is_group_coordinator,
-            "group_members_count": len(speaker.group_members),
-            "group_member_names": [m.name for m in speaker.group_members],
-            "coordinator_name": speaker.coordinator_speaker.name if speaker.coordinator_speaker else None,
+            "is_group_coordinator": is_coordinator,
+            "group_members_count": len(slave_list),
+            "group_member_names": [
+                slave.get("name", "Unknown") if isinstance(slave, dict) else str(slave) for slave in slave_list
+            ],
+            "coordinator_name": multiroom.get("master_name") if speaker.role == "slave" else None,
         }
 
-        # Media state
+        # Media state - read from coordinator data (Player properties)
+        data = speaker.coordinator.data or {}
         media_info = {
-            "playback_state": speaker.get_playback_state(),
-            "volume_level": speaker.get_volume_level(),
-            "is_muted": speaker.is_volume_muted(),
-            "current_source": speaker.get_current_source(),
-            "media_title": speaker.get_media_title(),
-            "media_artist": speaker.get_media_artist(),
-            "media_album": speaker.get_media_album(),
-            "media_duration": speaker.get_media_duration(),
-            "media_position": speaker.get_media_position(),
-            "media_image_url": speaker.get_media_image_url(),
-            "shuffle_state": speaker.get_shuffle_state(),
-            "repeat_mode": speaker.get_repeat_mode(),
-            "sound_mode": speaker.get_sound_mode(),
+            "playback_state": data.get("play_state"),
+            "volume_level": data.get("volume_level"),
+            "is_muted": data.get("is_muted"),
+            "current_source": data.get("source"),
+            "media_title": data.get("media_title"),
+            "media_artist": data.get("media_artist"),
+            "media_album": data.get("media_album"),
+            "media_duration": data.get("media_duration"),
+            "media_position": data.get("media_position"),
+            "media_image_url": data.get("media_image_url"),
+            "shuffle_state": data.get("shuffle"),
+            "repeat_mode": data.get("repeat"),
+            "sound_mode": data.get("eq_preset"),
         }
 
-        # API capability diagnostics (simple flags only)
+        # API capability diagnostics (from coordinator capabilities)
         api_capabilities = {}
-        if speaker.coordinator:
+        if coordinator and hasattr(coordinator, "_capabilities"):
+            caps = coordinator._capabilities
             api_capabilities = {
-                "metadata_supported": getattr(speaker.coordinator, "_metadata_supported", None),
-                "statusex_supported": getattr(speaker.coordinator, "_statusex_supported", None),
-                "eq_supported": getattr(speaker.coordinator, "_eq_supported", None),
-                "presets_supported": getattr(speaker.coordinator, "_presets_supported", None),
+                "metadata_supported": caps.get("metadata", None),
+                "supports_eq": caps.get("supports_eq", None),
+                "supports_audio_output": caps.get("supports_audio_output", None),
+                "device_type": caps.get("device_type", None),
             }
 
         # HTTP Polling Statistics
+        # Note: pywiim handles polling internally - we only show coordinator-level info
         http_stats = {}
-        if speaker.coordinator:
-            import time
-
-            coordinator = speaker.coordinator
-            total = int(getattr(coordinator, "_http_poll_total", 0) or 0)
-            success = int(getattr(coordinator, "_http_poll_success", 0) or 0)
-            failure = int(getattr(coordinator, "_http_poll_failure", 0) or 0)
-            response_times = getattr(coordinator, "_http_response_times", [])
-
-            success_rate = (success / total * 100) if total > 0 else None
-            avg_response_time = (
-                (sum(response_times) / len(response_times)) if response_times and len(response_times) > 0 else None
-            )
-            min_response_time = min(response_times) if response_times and len(response_times) > 0 else None
-            max_response_time = max(response_times) if response_times and len(response_times) > 0 else None
-
+        if coordinator:
             http_stats = {
-                "total_polls": total,
-                "successful_polls": success,
-                "failed_polls": failure,
-                "success_rate_percent": round(success_rate, 2) if success_rate is not None else None,
-                "avg_response_time_ms": round(avg_response_time, 2) if avg_response_time is not None else None,
-                "min_response_time_ms": round(min_response_time, 2) if min_response_time is not None else None,
-                "max_response_time_ms": round(max_response_time, 2) if max_response_time is not None else None,
-                "last_response_time_ms": round(coordinator._last_response_time, 2)
-                if coordinator._last_response_time is not None
-                else None,
-                "last_success_time": (
-                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._http_last_success_time))
-                    if getattr(coordinator, "_http_last_success_time", None)
-                    else None
-                ),
-                "last_failure_time": (
-                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._http_last_failure_time))
-                    if getattr(coordinator, "_http_last_failure_time", None)
-                    else None
-                ),
                 "current_interval_seconds": (
                     coordinator.update_interval.total_seconds() if coordinator.update_interval else None
                 ),
-                "consecutive_failures": coordinator._backoff.consecutive_failures,
+                "last_update_success": coordinator.last_update_success,
+                "note": "Detailed polling statistics are handled internally by pywiim library",
             }
 
         # Command Statistics
-        command_stats = {}
-        if speaker.coordinator:
-            import time
-
-            coordinator = speaker.coordinator
-            total = int(getattr(coordinator, "_command_total", 0) or 0)
-            success = int(getattr(coordinator, "_command_success", 0) or 0)
-            failure = int(getattr(coordinator, "_command_failure_total", 0) or 0)
-
-            success_rate = (success / total * 100) if total > 0 else None
-
-            command_stats = {
-                "total_commands": total,
-                "successful_commands": success,
-                "failed_commands": failure,
-                "success_rate_percent": round(success_rate, 2) if success_rate is not None else None,
-                "last_success_time": (
-                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._command_last_success_time))
-                    if getattr(coordinator, "_command_last_success_time", None)
-                    else None
-                ),
-                "last_failure_time": (
-                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(coordinator._command_last_failure_time))
-                    if getattr(coordinator, "_command_last_failure_time", None)
-                    else None
-                ),
-                "recent_failures": getattr(coordinator, "_command_failure_count", 0),
-            }
+        # Note: pywiim handles command execution internally - no statistics tracked at coordinator level
+        command_stats = {
+            "note": "Command statistics are handled internally by pywiim library",
+        }
 
         # UPnP status diagnostics
-        # UPnP is always enabled (Samsung/DLNA pattern) - we always try subscriptions, gracefully fallback to polling
+        # Note: UPnP is used for queue management only, not event subscriptions
         upnp_info = {}
-        if hasattr(speaker, "_upnp_eventer") and speaker._upnp_eventer:
-            eventer = speaker._upnp_eventer
+        if coordinator:
+            has_upnp_client = coordinator.upnp_client is not None
+            has_player = coordinator.player is not None
+            upnp_setup_attempted = getattr(coordinator, "_upnp_setup_attempted", False)
 
-            # Check if subscriptions actually exist (have SIDs)
-            has_sid_avt = getattr(eventer, "_sid_avt", None) is not None
-            has_sid_rcs = getattr(eventer, "_sid_rcs", None) is not None
-            has_active_subscriptions = has_sid_avt or has_sid_rcs
-
-            # Check availability flag (DLNA DMR pattern)
-            check_available = getattr(eventer, "check_available", False) or getattr(
-                speaker, "check_upnp_available", False
-            )
-
-            # Determine status based on active subscriptions (DLNA DMR pattern)
-            # Note: We don't check "is UPnP working" because UPnP has no heartbeat/keepalive.
-            # Events only happen on state changes, so idle devices = no events (normal, not an error).
-            status = "Active" if has_active_subscriptions else "Not Active"
-            event_count = int(getattr(eventer, "_event_count", 0) or 0)
-            last_notify_ts = getattr(eventer, "_last_notify_ts", None)
-
-            if has_active_subscriptions:
-                if event_count > 0:
-                    status_detail = f"Subscribed, {event_count} events received"
-                else:
-                    status_detail = "Subscribed (no events yet - normal if device is idle)"
+            if has_upnp_client:
+                status = "Active"
+                status_detail = "UPnP client available (queue management enabled)"
+            elif upnp_setup_attempted:
+                status = "Not Active"
+                status_detail = "UPnP setup attempted but failed (queue management unavailable)"
             else:
-                status_detail = "Not Subscribed"
-
-            # Calculate UPnP event arrival rates
-            import time
-
-            now = time.time()
-            subscription_age = None
-
-            subscription_start_time = getattr(eventer, "_subscription_start_time", None)
-            if subscription_start_time:
-                try:
-                    subscription_age = int(now - float(subscription_start_time))
-                except (TypeError, ValueError):
-                    subscription_age = None
-
-            # Note: Event arrival rates would require tracking event timestamps in a list.
-            # For now, we show total events and time since last event.
+                status = "Not Active"
+                status_detail = "UPnP setup not attempted (queue management unavailable)"
 
             upnp_info = {
                 "status": status,
                 "status_detail": status_detail,
-                "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
-                "check_available": check_available,
-                "event_count": event_count,
-                "last_notify": last_notify_ts,
-                "time_since_last_event_seconds": (int(now - last_notify_ts) if last_notify_ts else None),
-                "subscription_start_time": getattr(eventer, "_subscription_start_time", None),
-                "subscription_age_seconds": subscription_age,
-                "subscription_expires_avt": getattr(eventer, "_sid_avt_expires", None),
-                "subscription_expires_rcs": getattr(eventer, "_sid_rcs_expires", None),
-                "has_sid_avt": has_sid_avt,
-                "has_sid_rcs": has_sid_rcs,
-                "retry_count": getattr(eventer, "_retry_count", 0),
+                "has_upnp_client": has_upnp_client,
+                "has_player": has_player,
+                "upnp_setup_attempted": upnp_setup_attempted,
+                "note": "UPnP is used for queue management only. Event subscriptions are not implemented.",
             }
 
             # Add UPnP client info if available
-            if hasattr(speaker, "_upnp_client") and speaker._upnp_client:
+            if has_upnp_client and coordinator.upnp_client:
+                upnp_client = coordinator.upnp_client
                 upnp_info["upnp_client"] = {
-                    "has_dmr_device": hasattr(speaker._upnp_client, "_dmr_device")
-                    and speaker._upnp_client._dmr_device is not None,
-                    "has_notify_server": hasattr(speaker._upnp_client, "_notify_server")
-                    and speaker._upnp_client._notify_server is not None,
-                    "description_url": speaker._upnp_client.description_url,
-                    "callback_url": getattr(speaker._upnp_client._notify_server, "callback_url", None)
-                    if hasattr(speaker._upnp_client, "_notify_server") and speaker._upnp_client._notify_server
-                    else None,
-                }
-        else:
-            # No UPnP eventer - either setup never ran or failed completely
-            has_upnp_client = hasattr(speaker, "_upnp_client") and speaker._upnp_client is not None
-
-            # Determine status: if client exists but no eventer, setup was attempted but failed
-            # If no client, setup likely never ran (coordinator error, etc.)
-            if has_upnp_client:
-                status_detail = "Client Created but Subscription Failed (Using HTTP polling)"
-            else:
-                status_detail = "Client Creation Failed (Using HTTP polling)"
-
-            upnp_info = {
-                "status": "Not Active",
-                "status_detail": status_detail,
-                "enabled": True,  # Always enabled - follows Samsung/DLNA pattern
-                "check_available": False,
-                # Note: We don't report "upnp_working" because UPnP has no heartbeat.
-                # Events only happen on state changes, so we can't reliably detect if UPnP is working.
-                "event_count": 0,
-                "last_notify": None,
-                "has_upnp_client": has_upnp_client,
-                "has_upnp_eventer": False,
-                "fallback_mode": "HTTP Polling",
-            }
-
-            # Add client info even if eventer failed
-            if has_upnp_client:
-                upnp_info["upnp_client"] = {
-                    "has_dmr_device": hasattr(speaker._upnp_client, "_dmr_device")
-                    and speaker._upnp_client._dmr_device is not None,
-                    "has_notify_server": hasattr(speaker._upnp_client, "_notify_server")
-                    and speaker._upnp_client._notify_server is not None,
-                    "description_url": speaker._upnp_client.description_url,
+                    "description_url": getattr(upnp_client, "description_url", None),
+                    "host": getattr(upnp_client, "host", None),
                 }
 
-        # Model data (Pydantic models)
+        # Model data (from Player and DeviceInfo)
         model_data = {}
-        if speaker.status_model:
-            model_data["status_model"] = async_redact_data(
-                speaker.status_model.model_dump(exclude_none=True), TO_REDACT
-            )
+        # Build status dict from Player properties (no longer using status_model)
+        data = speaker.coordinator.data or {}
+        if data:
+            status_dict = {
+                "play_status": data.get("play_state"),
+                "vol": int(data.get("volume_level", 0) * 100) if data.get("volume_level") is not None else None,
+                "mute": data.get("is_muted"),
+                "source": data.get("source"),
+                "position": data.get("media_position"),
+                "duration": data.get("media_duration"),
+                "Title": data.get("media_title"),
+                "Artist": data.get("media_artist"),
+                "Album": data.get("media_album"),
+                "entity_picture": data.get("media_image_url"),
+                "cover_url": data.get("media_image_url"),
+                "eq": data.get("eq_preset"),
+                "RSSI": data.get("wifi_rssi"),
+                "wifi_rssi": data.get("wifi_rssi"),
+                "shuffle": data.get("shuffle"),
+                "repeat": data.get("repeat"),
+            }
+            # Remove None values
+            status_dict = {k: v for k, v in status_dict.items() if v is not None}
+            if status_dict:
+                model_data["player_status"] = async_redact_data(status_dict, TO_REDACT)
         if speaker.device_model:
             model_data["device_model"] = async_redact_data(
                 speaker.device_model.model_dump(exclude_none=True), TO_REDACT
