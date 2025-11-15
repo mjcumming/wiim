@@ -1,5 +1,8 @@
 """Provide info to system health."""
 
+from __future__ import annotations
+
+from importlib import metadata
 from typing import Any
 
 from homeassistant.components import system_health
@@ -33,6 +36,13 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
         first_speaker = speakers[0]
         first_device_health = await _check_device_health(first_speaker)
 
+    # Get pywiim version
+    pywiim_version = "unknown"
+    try:
+        pywiim_version = metadata.version("pywiim")
+    except metadata.PackageNotFoundError:
+        pass
+
     return {
         "configured_devices": len(entries),
         "reachable_devices": f"{reachable_count}/{len(speakers)}",
@@ -40,6 +50,7 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
         "multiroom_slaves": len(slaves),
         "first_device_api": first_device_health,  # This will be async
         "integration_version": "2.0.0",  # Your current version
+        "pywiim_version": pywiim_version,
     }
 
 

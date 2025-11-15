@@ -97,7 +97,11 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def _is_eq_supported(self) -> bool:
         """Check if device supports EQ - query from pywiim."""
         if hasattr(self.coordinator, "_capabilities") and self.coordinator._capabilities:
-            return bool(self.coordinator._capabilities.get("eq_supported", False))
+            # Check both possible capability keys for compatibility
+            return bool(
+                self.coordinator._capabilities.get("supports_eq", False)
+                or self.coordinator._capabilities.get("eq_supported", False)
+            )
         return False
 
     def _has_queue_support(self) -> bool:
@@ -230,8 +234,15 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def source_list(self) -> list[str]:
         """Return list of available sources from Player."""
         # Use input_list from Player (provided by pywiim)
-        if self.speaker.input_list:
-            return [s.title() for s in self.speaker.input_list]
+        input_list = self.speaker.input_list
+        if not input_list and self.coordinator.data:
+            # Fallback: try to get directly from player object
+            player = self.coordinator.data.get("player")
+            if player and player.device_info and player.device_info.input_list:
+                input_list = player.device_info.input_list
+
+        if input_list:
+            return [s.title() for s in input_list]
         # Return empty list if pywiim hasn't provided input_list yet
         return []
 
@@ -316,10 +327,24 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 return str(image_url)
         return f"data:{LOGO_CONTENT_TYPE};base64,{LOGO_BASE64}"
 
+    @property
+    def media_image_remotely_accessible(self) -> bool:
+        """Return True if the image URL is remotely accessible."""
+        if self.coordinator.data:
+            image_url = self.coordinator.data.get("media_image_url")
+            if image_url:
+                # Check if it's a remote HTTP/HTTPS URL
+                url_str = str(image_url).lower()
+                return url_str.startswith(("http://", "https://"))
+        # Data URIs are not remotely accessible
+        return False
+
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
         """Return media image bytes from Player."""
+        # If there's a real media_image_url, let the base class handle fetching it
         if self.coordinator.data and self.coordinator.data.get("media_image_url"):
-            return None, None
+            return await super().async_get_media_image()
+        # Otherwise, return the logo
         try:
             logo_bytes = base64.b64decode(LOGO_BASE64)
             return logo_bytes, LOGO_CONTENT_TYPE
@@ -405,22 +430,30 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not self.coordinator.data:
             return None
 
+        # Get role from player (most up-to-date)
+        role = self.speaker.role
+
+        # If solo, return None (not in a group)
+        if role == "solo":
+            return None
+
+        # Only master should show group members in HA UI
+        # Slaves should return None (they're part of the group but don't show it)
+        if role != "master":
+            return None
+
         multiroom = self.coordinator.data.get("multiroom", {})
         slave_list = multiroom.get("slave_list", [])
-
-        # If solo, return None
-        if self.speaker.role == "solo":
-            return None
 
         # Build list of entity IDs
         entity_registry = er.async_get(self.hass)
         entity_ids = []
 
-        # Include self
+        # Include self (master)
         if self.entity_id:
             entity_ids.append(self.entity_id)
 
-        # Include slaves
+        # Include all slaves
         for slave in slave_list:
             if isinstance(slave, dict):
                 slave_uuid = slave.get("uuid") or slave.get("mac")
@@ -429,11 +462,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
             if slave_uuid:
                 # Find entity ID for this slave
-                entry = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, slave_uuid)
-                if entry:
-                    entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, slave_uuid)
-                    if entity_id:
-                        entity_ids.append(entity_id)
+                entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, slave_uuid)
+                if entity_id:
+                    entity_ids.append(entity_id)
 
         return entity_ids if entity_ids else None
 
@@ -468,20 +499,45 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             if not speakers_to_join:
                 raise HomeAssistantError("No valid speakers to join")
 
+            _LOGGER.info("Joining %d speakers to group with master %s", len(speakers_to_join), self.speaker.name)
+
             # Create group - pass through to pywiim
             master_ip = self.speaker.ip_address
             await self.coordinator.player.client.create_group()
 
             # Join slaves - pass through to pywiim
             for speaker in speakers_to_join:
+                _LOGGER.debug("Joining slave %s to master %s", speaker.name, self.speaker.name)
                 await speaker.coordinator.player.client.join_slave(master_ip)
 
-            # Refresh coordinators
+            # Force immediate refresh of multiroom state for all affected coordinators
+            # This ensures the role and group_members are updated immediately
+            await self.coordinator.async_force_multiroom_refresh()
+            for speaker in speakers_to_join:
+                await speaker.coordinator.async_force_multiroom_refresh()
+
+            # Write state immediately to update UI
+            self.async_write_ha_state()
+            for speaker in speakers_to_join:
+                # Find and update the entity for each speaker
+                entity_registry = er.async_get(self.hass)
+                entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, speaker.uuid)
+                if entity_id:
+                    # Get the entity and write its state
+                    entity = self.hass.states.get(entity_id)
+                    if entity:
+                        # Trigger state update via coordinator listener
+                        speaker.coordinator.async_update_listeners()
+
+            # Also trigger a full refresh to ensure all data is up-to-date
             await self.coordinator.async_request_refresh()
             for speaker in speakers_to_join:
                 await speaker.coordinator.async_request_refresh()
 
+            _LOGGER.info("Group join completed for %s with %d slaves", self.speaker.name, len(speakers_to_join))
+
         except Exception as err:
+            _LOGGER.error("Failed to join group: %s", err, exc_info=True)
             raise HomeAssistantError(f"Failed to join group: {err}") from err
 
     def unjoin_player(self) -> None:
@@ -493,9 +549,78 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     async def async_unjoin_player(self) -> None:
         """Leave the current group."""
         try:
+            _LOGGER.info("Unjoining %s from group", self.speaker.name)
+
+            # Get master info before unjoining (for refreshing master coordinator)
+            # Store current role and group info before leaving
+            current_role = self.speaker.role
+            master_uuid = None
+            slave_uuids = []
+            if self.coordinator.data:
+                multiroom = self.coordinator.data.get("multiroom", {})
+                # If we're a slave, master_uuid will be in multiroom data
+                if current_role == "slave":
+                    master_uuid = multiroom.get("master_uuid")
+                # If we're a master, get all slaves to refresh them
+                elif current_role == "master":
+                    slave_list = multiroom.get("slave_list", [])
+                    # Store slave UUIDs for refreshing after unjoin
+                    for slave in slave_list:
+                        if isinstance(slave, dict):
+                            slave_uuid = slave.get("uuid") or slave.get("mac")
+                        else:
+                            slave_uuid = str(slave)
+                        if slave_uuid:
+                            slave_uuids.append(slave_uuid)
+
+            # Leave group - pass through to pywiim
             await self.coordinator.player.client.leave_group()
+
+            # Force immediate refresh of multiroom state
+            # This ensures the role is updated immediately
+            await self.coordinator.async_force_multiroom_refresh()
+
+            # Write state immediately to update UI
+            self.async_write_ha_state()
+
+            # If we were a slave, refresh the master coordinator
+            # (the master needs to update its slave_list)
+            if master_uuid and master_uuid != self.speaker.uuid:
+                master_speaker = find_speaker_by_uuid(self.hass, master_uuid)
+                if master_speaker:
+                    _LOGGER.debug("Refreshing master %s after slave %s left", master_speaker.name, self.speaker.name)
+                    await master_speaker.coordinator.async_force_multiroom_refresh()
+                    # Update master entity state
+                    entity_registry = er.async_get(self.hass)
+                    master_entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, master_uuid)
+                    if master_entity_id:
+                        master_speaker.coordinator.async_update_listeners()
+                    await master_speaker.coordinator.async_request_refresh()
+
+            # If we were a master, refresh all slave coordinators
+            # (they need to update their role from slave to solo)
+            if current_role == "master" and slave_uuids:
+                for slave_uuid in slave_uuids:
+                    slave_speaker = find_speaker_by_uuid(self.hass, slave_uuid)
+                    if slave_speaker:
+                        _LOGGER.debug(
+                            "Refreshing slave %s after master %s left group", slave_speaker.name, self.speaker.name
+                        )
+                        await slave_speaker.coordinator.async_force_multiroom_refresh()
+                        # Update slave entity state
+                        entity_registry = er.async_get(self.hass)
+                        slave_entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, slave_uuid)
+                        if slave_entity_id:
+                            slave_speaker.coordinator.async_update_listeners()
+                        await slave_speaker.coordinator.async_request_refresh()
+
+            # Also trigger a full refresh to ensure all data is up-to-date
             await self.coordinator.async_request_refresh()
+
+            _LOGGER.info("Unjoin completed for %s", self.speaker.name)
+
         except Exception as err:
+            _LOGGER.error("Failed to unjoin: %s", err, exc_info=True)
             raise HomeAssistantError(f"Failed to unjoin: {err}") from err
 
     # ===== SHUFFLE & REPEAT =====
@@ -561,7 +686,28 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Return list of available sound modes (EQ presets) from pywiim."""
         if not self._is_eq_supported():
             return None
-        # Presets come from pywiim/device - return None as list is device-specific
+
+        # Try to get available presets from eq_info dict (pywiim may provide this)
+        available_presets = []
+        if self.coordinator.data:
+            eq_info = self.coordinator.data.get("eq")
+            if isinstance(eq_info, dict):
+                # Try to get presets from eq_info dict (pywiim may provide this)
+                available_presets = eq_info.get("available_presets", eq_info.get("presets", []))
+
+        # Fallback: try to get from Player if available
+        if not available_presets:
+            player = self.coordinator.data.get("player") if self.coordinator.data else None
+            if player:
+                available_presets = getattr(player, "available_eq_presets", None) or []
+                if not isinstance(available_presets, list):
+                    available_presets = []
+
+        # Return list of preset names (convert to strings and title case for display)
+        if available_presets:
+            return [str(preset).title() for preset in available_presets]
+
+        # If no presets found, return None (Home Assistant will hide the selector)
         return None
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
@@ -570,7 +716,29 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError("EQ is not supported on this device")
 
         try:
-            await self.coordinator.player.client.set_eq_preset(sound_mode)
+            # Normalize to lowercase (pywiim typically expects lowercase preset names)
+            # but first try to match against available presets to get the exact name
+            sound_mode_normalized = sound_mode.lower()
+
+            # Try to find exact match in available presets (case-insensitive)
+            if self.coordinator.data:
+                eq_info = self.coordinator.data.get("eq")
+                available_presets = []
+                if isinstance(eq_info, dict):
+                    available_presets = eq_info.get("available_presets", eq_info.get("presets", []))
+
+                if not available_presets:
+                    player = self.coordinator.data.get("player")
+                    if player:
+                        available_presets = getattr(player, "available_eq_presets", None) or []
+
+                # Find case-insensitive match
+                for preset in available_presets:
+                    if str(preset).lower() == sound_mode_normalized:
+                        sound_mode_normalized = str(preset)  # Use exact preset name from device
+                        break
+
+            await self.coordinator.player.client.set_eq_preset(sound_mode_normalized)
             await self.coordinator.async_request_refresh()
         except Exception as err:
             raise HomeAssistantError(f"Failed to select sound mode: {err}") from err

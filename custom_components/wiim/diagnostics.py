@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from importlib import metadata
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -13,6 +14,15 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from .data import get_all_speakers, get_speaker_from_config_entry
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_pywiim_version() -> str:
+    """Get pywiim package version."""
+    try:
+        return metadata.version("pywiim")
+    except metadata.PackageNotFoundError:
+        return "unknown"
+
 
 # Sensitive data to redact from diagnostics
 TO_REDACT = [
@@ -78,6 +88,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "available_speakers": sum(1 for s in all_speakers if s.available),
             "roles": {role: sum(1 for s in all_speakers if s.role == role) for role in ["solo", "master", "slave"]},
             "models": list({s.model for s in all_speakers if s.model}),
+            "pywiim_version": _get_pywiim_version(),
         }
 
         return {

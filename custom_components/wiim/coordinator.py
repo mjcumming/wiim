@@ -78,6 +78,15 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Use pywiim's PollingStrategy for conditional fetching
             should_fetch_device_info = self._polling_strategy.should_fetch_device_info(self._last_device_info_check)
+            # Force device_info fetch if input_list is missing (needed for source selection)
+            if not should_fetch_device_info:
+                player_has_input_list = (
+                    self.player.device_info
+                    and hasattr(self.player.device_info, "input_list")
+                    and self.player.device_info.input_list
+                )
+                if not player_has_input_list:
+                    should_fetch_device_info = True
             should_fetch_multiroom = self._polling_strategy.should_fetch_multiroom(
                 self._last_multiroom_check, is_playing
             )
@@ -168,6 +177,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             role = self.player.role if self.player.group else "solo"
 
             # Fetch metadata if needed (depends on track_changed, so must be after refresh)
+            # Note: pywiim's Player.refresh() should handle updating media_image_url
+            # We fetch metadata separately for additional info (audio quality, etc.)
             metadata = {}
             if should_fetch_metadata and track_changed:
                 try:
@@ -193,6 +204,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if audio_output is None and self.data:
                 audio_output = self.data.get("audio_output")
 
+            # Extract eq_preset from eq_info if available (more reliable than Player object)
+            eq_preset = None
+            if isinstance(eq_info, dict):
+                eq_preset = eq_info.get("eq_preset") or eq_info.get("eq")
+            # Fallback to Player object if not in eq_info
+            if eq_preset is None:
+                eq_preset = getattr(self.player, "eq_preset", None)
+
             # Assemble data for Home Assistant (use Player properties)
             data: dict[str, Any] = {
                 # Player object for entity access
@@ -204,14 +223,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "media_title": self.player.media_title,
                 "media_artist": self.player.media_artist,
                 "media_album": self.player.media_album,
-                "media_image_url": self.player.media_image_url,
+                "media_image_url": self.player.media_image_url,  # pywiim handles this via Player.refresh()
                 "media_position": self.player.media_position,
                 "media_duration": self.player.media_duration,
                 "source": self.player.source,
                 # Additional Player properties (from pywiim 0.24+)
                 "shuffle": getattr(self.player, "shuffle", None),
                 "repeat": getattr(self.player, "repeat", None),
-                "eq_preset": getattr(self.player, "eq_preset", None),
+                "eq_preset": eq_preset,  # Use extracted value from eq_info if available
                 "wifi_rssi": getattr(self.player, "wifi_rssi", None),
                 "role": role,
                 # Additional data from conditional fetching
@@ -281,3 +300,52 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             # UPnP is optional - don't fail if it's not available
             self.upnp_client = None
+
+    async def async_force_multiroom_refresh(self) -> None:
+        """Force an immediate refresh of player state and multiroom status.
+
+        This is used after join/unjoin operations to ensure the group state
+        is updated immediately.
+        """
+        try:
+            # Force refresh of player state first (updates group/role)
+            await self.player.refresh()
+
+            # Force multiroom status fetch by resetting the check time
+            self._last_multiroom_check = 0.0
+
+            # Fetch multiroom status immediately
+            try:
+                multiroom_info = await self.player.client.get_multiroom_status()
+                self._last_multiroom_check = time.time()
+
+                # Update coordinator data with new multiroom info
+                if self.data:
+                    # Get current role from player (which should now be updated)
+                    role = self.player.role if self.player.group else "solo"
+
+                    # Create updated data dict
+                    updated_data = self.data.copy()
+                    updated_data["multiroom"] = multiroom_info or {}
+                    updated_data["role"] = role
+
+                    # Also update player reference in case it changed
+                    updated_data["player"] = self.player
+
+                    # Use async_set_updated_data to properly notify all listeners
+                    self.async_set_updated_data(updated_data)
+                else:
+                    # If no data yet, trigger a full refresh
+                    await self.async_request_refresh()
+            except Exception as err:
+                _LOGGER.warning("Failed to fetch multiroom status after group operation: %s", err)
+                # Even if multiroom fetch fails, update role from player
+                if self.data:
+                    role = self.player.role if self.player.group else "solo"
+                    updated_data = self.data.copy()
+                    updated_data["role"] = role
+                    updated_data["player"] = self.player
+                    self.async_set_updated_data(updated_data)
+
+        except Exception as err:
+            _LOGGER.warning("Failed to force multiroom refresh: %s", err)

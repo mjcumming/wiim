@@ -283,6 +283,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
 
     # Create client - pywiim handles capability detection
+    # Note: We pass Home Assistant's managed session to pywiim, but pywiim may create
+    # additional internal sessions for temporary operations (e.g., getting master name)
+    # that aren't properly closed. This results in "Unclosed client session" warnings
+    # which are harmless but should be fixed in pywiim itself.
     capabilities = {}
     try:
         temp_client = WiiMClient(
