@@ -18,6 +18,7 @@ from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -76,7 +77,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         """
         try:
             _LOGGER.info("Enabling equalizer for %s", self.speaker.name)
-            await self.speaker.coordinator.player.client.set_eq_enabled(True)
+            await self.speaker.coordinator.player.set_eq_enabled(True)
             await self._async_execute_command_with_refresh("equalizer_on")
 
         except Exception as err:
@@ -91,7 +92,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         """
         try:
             _LOGGER.info("Disabling equalizer for %s", self.speaker.name)
-            await self.speaker.coordinator.player.client.set_eq_enabled(False)
+            await self.speaker.coordinator.player.set_eq_enabled(False)
             await self._async_execute_command_with_refresh("equalizer_off")
 
         except Exception as err:

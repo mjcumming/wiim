@@ -77,7 +77,7 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
         """
         try:
             _LOGGER.info("Initiating reboot for %s", self.speaker.name)
-            await self.speaker.coordinator.player.client.reboot()
+            await self.speaker.coordinator.player.reboot()
             _LOGGER.info("Reboot command sent successfully to %s", self.speaker.name)
             await self._async_execute_command_with_refresh("reboot")
 
@@ -121,7 +121,7 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
         """
         try:
             _LOGGER.info("Synchronizing time for %s", self.speaker.name)
-            await self.speaker.coordinator.player.client.sync_time()
+            await self.speaker.coordinator.player.sync_time()
             await self._async_execute_command_with_refresh("sync_time")
 
         except Exception as err:
@@ -189,7 +189,7 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
             self.async_write_ha_state()
 
             # Perform the scan (10 seconds for better device discovery) - pywiim handles this
-            devices = await self.speaker.coordinator.player.client.scan_for_bluetooth_devices(duration=10)
+            devices = await self.speaker.coordinator.player.scan_for_bluetooth_devices(duration=10)
 
             # Log detailed scan results
             _LOGGER.info(

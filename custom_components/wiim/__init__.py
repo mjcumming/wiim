@@ -254,8 +254,18 @@ async def _sync_time_service(hass: HomeAssistant, call):
     _LOGGER.error("No WiiM device found for entity %s", entity_id)
 
 
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    """Set up the WiiM integration domain."""
+    _LOGGER.info("WiiM integration async_setup called")
+    # Initialize domain data structure
+    hass.data.setdefault(DOMAIN, {})
+    _LOGGER.info("WiiM integration async_setup completed")
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
+    _LOGGER.info("WiiM async_setup_entry called for entry: %s (host: %s)", entry.entry_id, entry.data.get("host"))
 
     # Register global services if this is the first entry
     if DOMAIN not in hass.data:

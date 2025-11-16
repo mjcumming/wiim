@@ -88,11 +88,11 @@ class WiiMLEDLight(WiimEntity, LightEntity):
             brightness_255,
         )
         try:
-            await self.speaker.coordinator.player.client.set_led(True)
+            await self.speaker.coordinator.player.set_led(True)
             # Only send brightness command when different from 100 % to
             # avoid unnecessary round-trip on most devices.
             if brightness_pct != 100:
-                await self.speaker.coordinator.player.client.set_led_brightness(brightness_pct)
+                await self.speaker.coordinator.player.set_led_brightness(brightness_pct)
         except Exception as err:
             _LOGGER.error("Failed to turn on LED for %s: %s", self.speaker.name, err)
             raise
@@ -108,7 +108,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:  # type: ignore[override]
         """Turn LED off."""
         try:
-            await self.speaker.coordinator.player.client.set_led(False)
+            await self.speaker.coordinator.player.set_led(False)
         except Exception as err:
             _LOGGER.error("Failed to turn off LED for %s: %s", self.speaker.name, err)
             raise
@@ -129,8 +129,8 @@ class WiiMLEDLight(WiimEntity, LightEntity):
 
         try:
             # Ensure LED is on when setting brightness (matches device behaviour)
-            await self.speaker.coordinator.player.client.set_led(True)
-            await self.speaker.coordinator.player.client.set_led_brightness(brightness_pct)
+            await self.speaker.coordinator.player.set_led(True)
+            await self.speaker.coordinator.player.set_led_brightness(brightness_pct)
         except Exception as err:
             _LOGGER.error("Failed to set LED brightness for %s: %s", self.speaker.name, err)
             raise

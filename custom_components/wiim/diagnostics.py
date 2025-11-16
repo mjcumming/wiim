@@ -76,7 +76,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                     else None
                 ),
                 "data_keys": list(speaker.coordinator.data.keys()) if speaker.coordinator.data else [],
-                "client_host": speaker.coordinator.player.client.host,
+                "client_host": speaker.coordinator.player.host,
                 "capabilities": async_redact_data(speaker.coordinator._capabilities, TO_REDACT)
                 if hasattr(speaker.coordinator, "_capabilities")
                 else {},
@@ -132,12 +132,13 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         # Get API client status
         api_status = {}
         coordinator = speaker.coordinator
-        if coordinator and coordinator.client:
+        if coordinator:
+            player = coordinator.player
             api_status = {
-                "host": coordinator.player.client.host,
-                "port": getattr(coordinator.player.client, "port", None),
-                "timeout": getattr(coordinator.client, "timeout", "unknown"),
-                "client_type": str(type(coordinator.client).__name__),
+                "host": player.host,
+                "port": player.port,
+                "timeout": player.timeout,
+                "connection_type": player.connection_type,
             }
 
         # Device-specific information

@@ -208,7 +208,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                 async def _refresh_and_update():
                     try:
                         # Fetch fresh BT history
-                        fresh_history = await self.speaker.coordinator.player.client.get_bluetooth_history()
+                        fresh_history = await self.speaker.coordinator.player.get_bluetooth_history()
                         _LOGGER.info(
                             "Bluetooth history updated for %s: %d devices found",
                             self.speaker.name,
@@ -276,10 +276,10 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
 
                 try:
                     # Connect to the device
-                    await self.speaker.coordinator.player.client.connect_bluetooth_device(mac_address)
+                    await self.speaker.coordinator.player.connect_bluetooth_device(mac_address)
 
                     # Set output mode to Bluetooth Out
-                    await self.speaker.coordinator.player.client.set_audio_output_hardware_mode(4)  # Bluetooth mode
+                    await self.speaker.coordinator.player.set_audio_output_mode(4)  # Bluetooth mode
 
                     _LOGGER.info(
                         "Successfully connected to Bluetooth device %s and set output mode to Bluetooth",
@@ -303,7 +303,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                             # Map output mode to hardware mode value
                             mode_map = {"Line Out": 0, "Optical Out": 1, "Coax Out": 2, "Bluetooth Out": 4}
                             hardware_mode = mode_map.get(previous_output_mode, 0)
-                            await self.speaker.coordinator.player.client.set_audio_output_hardware_mode(hardware_mode)
+                            await self.speaker.coordinator.player.set_audio_output_mode(hardware_mode)
                             _LOGGER.info(
                                 "Reverted output mode to %s after Bluetooth connection failure",
                                 previous_output_mode,
@@ -317,7 +317,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                     else:
                         # If no previous mode or it was already Bluetooth, default to Line Out
                         try:
-                            await self.speaker.coordinator.player.client.set_audio_output_hardware_mode(0)  # Line Out
+                            await self.speaker.coordinator.player.set_audio_output_mode(0)  # Line Out
                             _LOGGER.info(
                                 "Reverted output mode to Line Out (default) after Bluetooth connection failure"
                             )
@@ -338,7 +338,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             mode_map = {"Line Out": 0, "Optical Out": 1, "Coax Out": 2, "Bluetooth Out": 4, "Headphone Out": 4}
             hardware_mode = mode_map.get(option, 0)
             _LOGGER.info("WiiM Output Mode Select: Setting hardware mode %d for '%s'", hardware_mode, option)
-            await self.speaker.coordinator.player.client.set_audio_output_hardware_mode(hardware_mode)
+            await self.speaker.coordinator.player.set_audio_output_mode(hardware_mode)
             _LOGGER.info(
                 "WiiM Output Mode Select: Successfully set output mode to '%s'",
                 option,
@@ -415,7 +415,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
         # Load Bluetooth history (previously paired devices) on startup
         try:
             _LOGGER.debug("Loading Bluetooth history for %s", self.speaker.name)
-            history = await self.speaker.coordinator.player.client.get_bluetooth_history()
+            history = await self.speaker.coordinator.player.get_bluetooth_history()
             if history:
                 _LOGGER.info(
                     "Loaded %d previously paired Bluetooth devices for %s",
@@ -594,7 +594,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
             if option == "None":
                 # Disconnect
                 _LOGGER.info("Disconnecting Bluetooth device for %s", self.speaker.name)
-                await self.speaker.coordinator.player.client.disconnect_bluetooth_device()
+                await self.speaker.coordinator.player.disconnect_bluetooth_device()
                 self._connected_device_mac = None
                 _LOGGER.info(
                     "Successfully disconnected Bluetooth device for %s",
@@ -661,7 +661,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                     mac_address,
                 )
                 try:
-                    await self.speaker.coordinator.player.client.connect_bluetooth_device(mac_address)
+                    await self.speaker.coordinator.player.connect_bluetooth_device(mac_address)
                     _LOGGER.info(
                         "connect_bluetooth_device API call completed successfully for %s",
                         mac_address,
@@ -688,7 +688,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                 for attempt in range(6):  # Try for up to 3 seconds (6 attempts × 0.5s)
                     await asyncio.sleep(0.5)  # Give device time to complete pairing
                     try:
-                        pair_status = await self.speaker.coordinator.player.client.get_bluetooth_pair_status()
+                        pair_status = await self.speaker.coordinator.player.get_bluetooth_pair_status()
                         if pair_status and pair_status.get("result", 0) != 0:
                             pairing_verified = True
                             pair_status_result = pair_status.get("result")
@@ -721,7 +721,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
 
                 # Optionally switch output mode to Bluetooth
                 try:
-                    await self.speaker.coordinator.player.client.set_audio_output_hardware_mode(4)  # Bluetooth mode
+                    await self.speaker.coordinator.player.set_audio_output_mode(4)  # Bluetooth mode
                     _LOGGER.info("Switched output mode to Bluetooth for %s", self.speaker.name)
                 except Exception as err:
                     _LOGGER.warning(

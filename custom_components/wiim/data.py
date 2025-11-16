@@ -43,7 +43,7 @@ class Speaker:
         self.hass = hass
         self.coordinator = coordinator
         self.config_entry = config_entry
-        self._uuid: str = self.config_entry.unique_id or self.coordinator.player.client.host
+        self._uuid: str = self.config_entry.unique_id or self.coordinator.player.host
         self.device_info: HADeviceInfo | None = None
 
     async def async_setup(self, entry: ConfigEntry) -> None:
@@ -85,7 +85,7 @@ class Speaker:
     @property
     def ip_address(self) -> str:
         """Return IP address."""
-        return self.coordinator.player.client.host
+        return self.coordinator.player.host
 
     @property
     def mac_address(self) -> str | None:
@@ -96,13 +96,12 @@ class Speaker:
         return None
 
     @property
-    def role(self) -> str:
-        """Return role from Player."""
-        if self.coordinator.data:
-            player = self.coordinator.data.get("player")
-            if player:
-                return player.role if player.group else "solo"
-        return "solo"
+    def role(self) -> str | None:
+        """Return role reported by pywiim Player."""
+        player = getattr(self.coordinator, "player", None)
+        if player:
+            return player.role
+        return None
 
     @property
     def available(self) -> bool:
