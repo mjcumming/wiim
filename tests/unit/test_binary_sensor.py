@@ -182,7 +182,7 @@ class TestBinarySensorPlatformSetup:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
 
-        with patch("custom_components.wiim.data_helpers.get_speaker_from_config_entry", return_value=speaker):
+        with patch("custom_components.wiim.data.get_speaker_from_config_entry", return_value=speaker):
             # Mock entry data without network monitoring enabled
             hass.data = {
                 "wiim": {
@@ -216,7 +216,7 @@ class TestBinarySensorPlatformSetup:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
 
-        with patch("custom_components.wiim.data_helpers.get_speaker_from_config_entry", return_value=speaker):
+        with patch("custom_components.wiim.data.get_speaker_from_config_entry", return_value=speaker):
             # Mock entry data with no options
             hass.data = {"wiim": {"test-entry": {"entry": MagicMock(options={}), "speaker": speaker}}}
 
@@ -247,7 +247,7 @@ class TestBinarySensorPlatformSetup:
         speaker.name = "Test WiiM"
 
         # Mock the direct data access pattern used in the code
-        with patch("custom_components.wiim.data_helpers.get_speaker_from_config_entry", return_value=speaker):
+        with patch("custom_components.wiim.data.get_speaker_from_config_entry", return_value=speaker):
             # Mock entry data with network monitoring enabled (direct access)
             hass.data = {
                 "wiim": {

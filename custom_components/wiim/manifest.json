@@ -9,7 +9,7 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
   "quality_scale": "silver",
-  "requirements": ["pywiim>=1.0.37"],
+  "requirements": ["pywiim>=1.0.57"],
   "ssdp": [
     {
       "manufacturer": "WiiM",

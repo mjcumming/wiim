@@ -6,6 +6,8 @@ This file only contains Home Assistant integration constants.
 
 from __future__ import annotations
 
+from homeassistant.const import CONF_HOST  # noqa: F401
+
 DOMAIN = "wiim"
 
 # HA-specific config option keys (not from pywiim)

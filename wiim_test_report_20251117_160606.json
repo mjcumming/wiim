@@ -1,0 +1,167 @@
+{
+  "timestamp": "2025-11-17T16:06:06.713870",
+  "ha_url": "http://localhost:8123",
+  "devices_tested": 3,
+  "total_tests": 15,
+  "passed_tests": 8,
+  "success_rate": 0.5333333333333333,
+  "duration_seconds": 43.905242,
+  "results": {
+    "media_player.main_floor_speakers": {
+      "device_name": "Main Floor Speakers",
+      "model": "WiiM_Pro_with_gc4a",
+      "tests": [
+        {
+          "test": "Device Availability",
+          "passed": true,
+          "details": {
+            "state": "idle",
+            "available": true
+          }
+        },
+        {
+          "test": "Device Information",
+          "passed": true,
+          "details": {
+            "attributes": {
+              "device_model": "WiiM_Pro_with_gc4a",
+              "firmware_version": "Linkplay.4.8.731953",
+              "ip_address": "192.168.1.68",
+              "mac_address": "54:78:C9:D6:4A:EE"
+            },
+            "missing": []
+          }
+        },
+        {
+          "test": "Volume Control",
+          "passed": true,
+          "details": {
+            "original_volume": 0.39,
+            "test_volume": 0.35,
+            "actual_volume": 0.39,
+            "tolerance": 0.05
+          }
+        },
+        {
+          "test": "Mute Control",
+          "passed": false,
+          "details": {
+            "muted": false
+          }
+        },
+        {
+          "test": "Source Selection",
+          "passed": false,
+          "details": {
+            "test_source": "Bluetooth",
+            "actual_source": null
+          }
+        }
+      ]
+    },
+    "media_player.outdoor": {
+      "device_name": "Outdoor",
+      "model": "WiiM_Pro_with_gc4a",
+      "tests": [
+        {
+          "test": "Device Availability",
+          "passed": true,
+          "details": {
+            "state": "idle",
+            "available": true
+          }
+        },
+        {
+          "test": "Device Information",
+          "passed": true,
+          "details": {
+            "attributes": {
+              "device_model": "WiiM_Pro_with_gc4a",
+              "firmware_version": "Linkplay.4.8.731953",
+              "ip_address": "192.168.1.115",
+              "mac_address": "9C:B8:B4:13:24:A8"
+            },
+            "missing": []
+          }
+        },
+        {
+          "test": "Volume Control",
+          "passed": true,
+          "details": {
+            "original_volume": 0.0,
+            "test_volume": 0.35,
+            "actual_volume": 0.35,
+            "tolerance": 0.05
+          }
+        },
+        {
+          "test": "Mute Control",
+          "passed": false,
+          "details": {
+            "muted": false
+          }
+        },
+        {
+          "test": "Source Selection",
+          "passed": false,
+          "details": {
+            "test_source": "Bluetooth",
+            "actual_source": null
+          }
+        }
+      ]
+    },
+    "media_player.master_bedroom": {
+      "device_name": "Master Bedroom",
+      "model": "WiiM_Pro_with_gc4a",
+      "tests": [
+        {
+          "test": "Device Availability",
+          "passed": true,
+          "details": {
+            "state": "idle",
+            "available": true
+          }
+        },
+        {
+          "test": "Device Information",
+          "passed": true,
+          "details": {
+            "attributes": {
+              "device_model": "WiiM_Pro_with_gc4a",
+              "firmware_version": "Linkplay.4.8.731953",
+              "ip_address": "192.168.1.116",
+              "mac_address": "C0:F5:35:DF:96:EB"
+            },
+            "missing": []
+          }
+        },
+        {
+          "test": "Volume Control",
+          "passed": false,
+          "details": {
+            "original_volume": 0.01,
+            "test_volume": 0.35,
+            "actual_volume": 0.01,
+            "tolerance": 0.05
+          }
+        },
+        {
+          "test": "Mute Control",
+          "passed": false,
+          "details": {
+            "muted": false
+          }
+        },
+        {
+          "test": "Source Selection",
+          "passed": false,
+          "details": {
+            "test_source": "Bluetooth",
+            "actual_source": "AirPlay"
+          }
+        }
+      ]
+    }
+  }
+}

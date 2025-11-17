@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
-import ipaddress
 import logging
-import ssl
 from collections.abc import Awaitable
-from typing import Any
-from urllib.parse import urlparse
-
-import aiohttp
-from aiohttp.client_exceptions import ClientConnectorCertificateError
 from contextlib import suppress
+from typing import Any
+
 from homeassistant.components import media_source
 from homeassistant.components.media_player import (
     ATTR_MEDIA_ENQUEUE,
@@ -34,7 +30,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.network import async_process_play_media_url
+from homeassistant.components.media_player.browse_media import async_process_play_media_url
 from pywiim.exceptions import WiiMError
 
 from .const import DOMAIN
@@ -291,82 +287,58 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str]:
-        """Return list of available sources from Player - filtered to only selectable sources.
+        """Return list of available sources from Player.
 
-        Only shows sources that are in input_list (actually selectable) and properly
-        capitalizes them for display (Amazon, USB, etc.).
+        Uses available_sources from pywiim which should filter to only selectable sources.
         """
         if not self.coordinator.data:
             return []
 
-        # Get the list of actually selectable sources from device_info.input_list
-        # This is the authoritative list of sources that can be selected
-        input_list = self.speaker.input_list
-        if not input_list:
-            # Fallback to available_sources if input_list not available yet
-            available_sources = self.coordinator.data.get("available_sources")
-            if available_sources:
-                # Still capitalize even if we don't have input_list for filtering
-                return [_capitalize_source_name(str(s)) for s in available_sources]
-            return []
-
-        # Filter available_sources to only include sources in input_list (selectable sources)
+        # Get available_sources from pywiim
         available_sources = self.coordinator.data.get("available_sources")
-        if not available_sources:
-            # If no available_sources, use input_list directly (but normalize to lowercase for matching)
-            input_list_lower = [s.lower() for s in input_list]
-            return [_capitalize_source_name(s) for s in input_list_lower]
+        if available_sources:
+            return [_capitalize_source_name(str(s)) for s in available_sources]
 
-        # Create a set of lowercase input_list sources for fast lookup
-        input_list_lower = {s.lower() for s in input_list}
+        # Fallback to input_list if available_sources not available
+        input_list = self.speaker.input_list
+        if input_list:
+            return [_capitalize_source_name(str(s)) for s in input_list]
 
-        # Filter and capitalize: only include sources that are in input_list
-        selectable_sources = []
-        for source in available_sources:
-            source_str = str(source).lower()
-            if source_str in input_list_lower:
-                # Find the exact input_list entry to preserve device's exact capitalization
-                # for the mapping, but use our capitalization for display
-                selectable_sources.append(_capitalize_source_name(source_str))
-
-        return selectable_sources
+        return []
 
     async def async_select_source(self, source: str) -> None:
         """Select input source.
 
         Maps the display name (e.g., "Amazon", "USB") back to the device's
-        expected source name (e.g., "amazon", "usb") using input_list.
+        expected source name (e.g., "amazon", "usb") using available_sources or input_list.
         """
-        # Get the device's input_list to find the exact source name
-        input_list = self.speaker.input_list
-        if not input_list:
-            # Fallback: try using the source as-is (lowercase it for consistency)
-            device_source = source.lower()
-        else:
-            # Map display name back to device source name
-            # Compare case-insensitively and find the exact match from input_list
-            source_lower = source.lower()
-            device_source = None
+        source_lower = source.lower()
+        device_source = None
 
-            for input_source in input_list:
-                if input_source.lower() == source_lower:
-                    device_source = input_source  # Use device's exact capitalization
-                    break
+        # Try available_sources first (smart detection by pywiim)
+        if self.coordinator.data:
+            available_sources = self.coordinator.data.get("available_sources")
+            if available_sources:
+                # Create a mapping of lowercase to original
+                available_sources_map = {str(s).lower(): str(s) for s in available_sources}
+                device_source = available_sources_map.get(source_lower)
 
-            # If no exact match found, try to find a close match
-            if device_source is None:
-                # Check if any input_list entry matches when both are lowercased
-                input_list_lower = {s.lower(): s for s in input_list}
-                device_source = input_list_lower.get(source_lower)
+        # Fallback to input_list if not found in available_sources
+        if device_source is None:
+            input_list = self.speaker.input_list
+            if input_list:
+                # Create a mapping of lowercase to original
+                input_list_map = {s.lower(): s for s in input_list}
+                device_source = input_list_map.get(source_lower)
 
-            # Final fallback: use lowercase version of display name
-            if device_source is None:
-                device_source = source_lower
-                _LOGGER.warning(
-                    "Source '%s' not found in input_list, using lowercase version: '%s'",
-                    source,
-                    device_source,
-                )
+        # Final fallback: use lowercase version of display name
+        if device_source is None:
+            device_source = source_lower
+            _LOGGER.warning(
+                "Source '%s' not found in available_sources or input_list, using lowercase version: '%s'",
+                source,
+                device_source,
+            )
 
         try:
             await self.coordinator.player.set_source(device_source)
@@ -438,7 +410,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         return False
 
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
-        """Return media image bytes from Player."""
+        """Return image bytes and content type of current playing media.
+
+        Uses pywiim's fetch_cover_art() method which:
+        - Handles SSL certificates for HTTPS URLs automatically
+        - Caches images (1 hour TTL, max 10 images per player)
+        - Gracefully handles expired URLs
+        - More reliable than passing URLs to HA directly
+        """
         if not self.coordinator.data:
             # Return logo if no data
             try:
@@ -447,124 +426,26 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             except (binascii.Error, ValueError):
                 return None, None
 
-        image_url = self.coordinator.data.get("media_image_url")
-        if not image_url:
-            # Return logo if no image URL
+        player = self.coordinator.data.get("player")
+        if not player:
+            # Return logo if no player
             try:
                 logo_bytes = base64.b64decode(LOGO_BASE64)
                 return logo_bytes, LOGO_CONTENT_TYPE
             except (binascii.Error, ValueError):
                 return None, None
 
-        # Parse URL to check if it's HTTPS to a local IP
+        # Use pywiim's fetch_cover_art() - it handles HTTPS/SSL automatically
+        result = await player.fetch_cover_art()
+        if result:
+            return result  # (image_bytes, content_type)
+
+        # Fall back to logo if fetch failed
         try:
-            parsed = urlparse(str(image_url))
-            is_https = parsed.scheme == "https"
-            hostname = parsed.hostname
-
-            # Check if hostname is a local IP address
-            is_local_ip = False
-            if hostname:
-                try:
-                    ip = ipaddress.ip_address(hostname)
-                    is_local_ip = ip.is_private or ip.is_loopback
-                except ValueError:
-                    # Not an IP address, might be a hostname
-                    pass
-
-            # If HTTPS to local IP, fetch with SSL verification disabled
-            # (WiiM devices use self-signed certificates)
-            if is_https and is_local_ip:
-                _LOGGER.debug("Fetching cover art from local HTTPS URL with SSL verification disabled: %s", image_url)
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
-
-                connector = aiohttp.TCPConnector(ssl=ssl_context)
-                try:
-                    async with aiohttp.ClientSession(connector=connector) as custom_session:
-                        async with custom_session.get(
-                            str(image_url), timeout=aiohttp.ClientTimeout(total=10)
-                        ) as response:
-                            if response.status == 200:
-                                content = await response.read()
-                                content_type = response.headers.get("Content-Type", "image/jpeg")
-                                return content, content_type
-                            else:
-                                _LOGGER.warning("Failed to fetch cover art: HTTP %d", response.status)
-                except Exception as err:
-                    _LOGGER.warning("Error fetching cover art from %s: %s", image_url, err)
-                finally:
-                    # Connector is closed automatically when session closes, but explicitly close to be safe
-                    if not connector.closed:
-                        await connector.close()
-                # Fall back to logo on error
-                try:
-                    logo_bytes = base64.b64decode(LOGO_BASE64)
-                    return logo_bytes, LOGO_CONTENT_TYPE
-                except (binascii.Error, ValueError):
-                    return None, None
-            else:
-                # For HTTP or non-local HTTPS, use base class (normal SSL verification)
-                # But catch SSL certificate errors in case it's actually a local IP with self-signed cert
-                try:
-                    return await super().async_get_media_image()
-                except (ClientConnectorCertificateError, ssl.SSLError) as ssl_err:
-                    # If base class fails with SSL error, check if it's a local IP and retry with SSL disabled
-                    _LOGGER.debug("Base class SSL error for %s, checking if local IP: %s", image_url, ssl_err)
-                    # Only retry if it's HTTPS and a local IP
-                    if is_https and hostname:
-                        try:
-                            ip = ipaddress.ip_address(hostname)
-                            if ip.is_private or ip.is_loopback:
-                                # It's a local IP, retry with SSL verification disabled
-                                _LOGGER.debug(
-                                    "Retrying fetch for local HTTPS URL with SSL verification disabled: %s",
-                                    image_url,
-                                )
-                                ssl_context = ssl.create_default_context()
-                                ssl_context.check_hostname = False
-                                ssl_context.verify_mode = ssl.CERT_NONE
-
-                                connector = aiohttp.TCPConnector(ssl=ssl_context)
-                                try:
-                                    async with aiohttp.ClientSession(connector=connector) as custom_session:
-                                        async with custom_session.get(
-                                            str(image_url), timeout=aiohttp.ClientTimeout(total=10)
-                                        ) as response:
-                                            if response.status == 200:
-                                                content = await response.read()
-                                                content_type = response.headers.get("Content-Type", "image/jpeg")
-                                                return content, content_type
-                                            else:
-                                                _LOGGER.warning("Failed to fetch cover art: HTTP %d", response.status)
-                                except Exception as fetch_err:
-                                    _LOGGER.warning("Error fetching cover art from %s: %s", image_url, fetch_err)
-                                finally:
-                                    if not connector.closed:
-                                        await connector.close()
-                        except ValueError:
-                            # Not an IP address
-                            pass
-                    # Fall back to logo on SSL error
-                    _LOGGER.warning(
-                        "SSL certificate error fetching cover art from %s (self-signed certificate): %s",
-                        image_url,
-                        ssl_err,
-                    )
-                    try:
-                        logo_bytes = base64.b64decode(LOGO_BASE64)
-                        return logo_bytes, LOGO_CONTENT_TYPE
-                    except (binascii.Error, ValueError):
-                        return None, None
-        except Exception as err:
-            _LOGGER.warning("Error parsing image URL %s: %s", image_url, err)
-            # Fall back to logo
-            try:
-                logo_bytes = base64.b64decode(LOGO_BASE64)
-                return logo_bytes, LOGO_CONTENT_TYPE
-            except (binascii.Error, ValueError):
-                return None, None
+            logo_bytes = base64.b64decode(LOGO_BASE64)
+            return logo_bytes, LOGO_CONTENT_TYPE
+        except (binascii.Error, ValueError):
+            return None, None
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         """Play media from URL or preset with optional queue management."""
@@ -754,17 +635,69 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         raise NotImplementedError("Use async_join_players instead")
 
     async def async_join_players(self, group_members: list[str]) -> None:
-        """Join other players to form a group using pywiim's group operations."""
-        if not group_members:
-            raise HomeAssistantError("No players specified to join")
+        """Join/unjoin players to match the requested group configuration.
 
+        This method handles both adding and removing players from the group by
+        comparing the current group state with the requested state.
+        """
         entity_registry = er.async_get(self.hass)
         master_player = self.coordinator.player
         if master_player is None:
             raise HomeAssistantError("Master player is not ready")
 
+        # Normalize: ensure self is included in group_members (self is always the master)
+        current_entity_id = self.entity_id
+        if current_entity_id not in group_members:
+            group_members = [current_entity_id] + group_members
+
+        # Get current group members
+        current_group = set(self.group_members or [])
+        requested_group = set(group_members)
+
+        # Determine which players to add and which to remove
+        to_add = requested_group - current_group
+        to_remove = current_group - requested_group
+
+        # Remove players that are no longer in the group (deselected in UI)
+        # Collect speakers to unjoin
+        unjoined_speakers: list[Speaker] = []
+        unjoin_tasks = []
+        for entity_id in to_remove:
+            if entity_id == current_entity_id:
+                # Don't unjoin self (master)
+                continue
+
+            entity_entry = entity_registry.async_get(entity_id)
+            if not entity_entry:
+                _LOGGER.warning("Entity %s not found when unjoining from group", entity_id)
+                continue
+
+            speaker = find_speaker_by_uuid(self.hass, entity_entry.unique_id)
+            if not speaker or not speaker.coordinator.player:
+                _LOGGER.warning("Speaker not available for entity %s", entity_id)
+                continue
+
+            unjoined_speakers.append(speaker)
+            unjoin_tasks.append(speaker.coordinator.player.leave_group())
+
+        # Execute all unjoin operations in parallel
+        if unjoin_tasks:
+            unjoin_results = await asyncio.gather(*unjoin_tasks, return_exceptions=True)
+            for speaker, result in zip(unjoined_speakers, unjoin_results, strict=True):
+                if isinstance(result, Exception):
+                    _LOGGER.error("Failed to remove %s from group: %s", speaker.name, result)
+                else:
+                    _LOGGER.debug("Unjoined %s from group", speaker.name)
+
+        # Add players that are newly selected
+        # Collect speakers to join
         joined_speakers: list[Speaker] = []
-        for entity_id in group_members:
+        join_tasks = []
+        for entity_id in to_add:
+            if entity_id == current_entity_id:
+                # Skip self (already the master)
+                continue
+
             entity_entry = entity_registry.async_get(entity_id)
             if not entity_entry:
                 _LOGGER.warning("Entity %s not found when joining group", entity_id)
@@ -775,18 +708,26 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 _LOGGER.warning("Speaker not available for entity %s", entity_id)
                 continue
 
-            try:
-                await speaker.coordinator.player.join_group(master_player)
-                joined_speakers.append(speaker)
-            except WiiMError as err:
-                raise HomeAssistantError(f"Failed to add {speaker.name} to group: {err}") from err
+            joined_speakers.append(speaker)
+            join_tasks.append(speaker.coordinator.player.join_group(master_player))
 
-        if not joined_speakers:
-            raise HomeAssistantError("No valid speakers were available to join the group")
+        # Execute all join operations in parallel
+        if join_tasks:
+            join_results = await asyncio.gather(*join_tasks, return_exceptions=True)
+            for speaker, result in zip(joined_speakers, join_results, strict=True):
+                if isinstance(result, Exception):
+                    raise HomeAssistantError(f"Failed to add {speaker.name} to group: {result}") from result
+                _LOGGER.debug("Joined %s to group", speaker.name)
 
-        await self.coordinator.async_force_multiroom_refresh()
-        for speaker in joined_speakers:
-            await speaker.coordinator.async_force_multiroom_refresh()
+        # Refresh all affected speakers in parallel
+        refresh_tasks = [self.coordinator.async_force_multiroom_refresh()]
+        for speaker in joined_speakers + unjoined_speakers:
+            refresh_tasks.append(speaker.coordinator.async_force_multiroom_refresh())
+
+        if len(refresh_tasks) > 1:  # More than just master
+            await asyncio.gather(*refresh_tasks, return_exceptions=True)
+        else:
+            await self.coordinator.async_force_multiroom_refresh()
 
     def unjoin_player(self) -> None:
         """Leave the current group (sync version - not used)."""
@@ -799,6 +740,20 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         player = self.coordinator.player
         if player is None:
             raise HomeAssistantError("Player is not ready")
+
+        # Check if player is actually in a group before trying to leave
+        # Use the same logic as group_members property to determine if in a group
+        if not self.coordinator.data:
+            raise HomeAssistantError("Player is not in a group")
+
+        player_obj = self.coordinator.data.get("player")
+        if not player_obj or not player_obj.group:
+            raise HomeAssistantError("Player is not in a group")
+
+        # Check role - if solo, not in a group
+        role = getattr(player_obj, "role", None)
+        if role == "solo":
+            raise HomeAssistantError("Player is not in a group")
 
         try:
             await player.leave_group()
