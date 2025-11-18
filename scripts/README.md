@@ -1,339 +1,274 @@
-# WiiM Integration Test Scripts
+# WiiM Integration Scripts
 
-## Real Device Testing
+This directory contains utility scripts for development, testing, and releasing the WiiM integration.
 
-### test-real-devices.py
+## Release Script
 
-Automated test suite for testing real WiiM devices in a running Home Assistant instance.
+### `release.sh` - Automated Release Process
 
-#### Features
+Comprehensive release script that handles the entire release workflow:
 
-- ✅ Discovers all WiiM devices automatically
-- ✅ Tests volume control
-- ✅ Tests mute/unmute
-- ✅ Tests source selection
-- ✅ Tests device information
-- ✅ Colored output with pass/fail indicators
-- ✅ Generates JSON test reports
-- ✅ Exit codes for CI/CD integration
+**Features:**
 
-#### Usage
+- ✅ Runs linting checks (ruff + flake8)
+- ✅ Runs test suite
+- ✅ Updates version in `manifest.json`
+- ✅ Updates `CHANGELOG.md`
+- ✅ Creates git commit and tag
+- ✅ Pushes to GitHub with tags
 
-##### 1. Get Access Token
-
-Create a long-lived access token in Home Assistant:
-
-1. Go to your Home Assistant profile
-2. Scroll to "Long-Lived Access Tokens"
-3. Click "Create Token"
-4. Copy the token
-
-##### 2. Run Tests
-
-**Option A: Using environment variable (recommended)**
+**Usage:**
 
 ```bash
-export HA_TOKEN="your_long_lived_access_token_here"
-python scripts/test-real-devices.py http://homeassistant.local:8123
+# Interactive mode (will prompt for version)
+./scripts/release.sh
+
+# Specify version directly
+./scripts/release.sh 0.3.1
+
+# Run from repository root
+./scripts/release.sh 1.0.0
 ```
 
-**Option B: Using command line**
+**Process Flow:**
+
+1. **Linting** - Runs ruff and flake8 checks
+   - Offers auto-fix if errors found
+2. **Testing** - Runs full test suite
+   - Must pass before continuing
+3. **Versioning** - Updates manifest.json
+   - Validates semantic versioning format
+4. **Changelog** - Prompts to update CHANGELOG.md
+   - Adds version header with date
+5. **Git Operations** - Commits, tags, and pushes
+   - Interactive confirmation for each step
+
+**Requirements:**
+
+- Python 3.13+
+- ruff, flake8, pytest installed
+- Git configured and authenticated
+
+---
+
+## Testing Scripts
+
+### `test-complete-suite.py` - Comprehensive Device Testing
+
+Complete integration test suite for real WiiM devices.
+
+**Usage:**
 
 ```bash
-python scripts/test-real-devices.py http://homeassistant.local:8123 --token YOUR_TOKEN
+export HA_TOKEN="your_long_lived_access_token"
+python scripts/test-complete-suite.py http://localhost:8123
 ```
 
-**Option C: Test local instance**
+**Tests:**
+
+- Volume control, mute, TTS
+- Device information retrieval
+- Multiroom grouping
+- EQ/shuffle/repeat (requires active playback)
+
+### `test-real-devices.py` - Basic Device Tests
+
+Quick 5-test validation of core functionality.
+
+**Usage:**
 
 ```bash
-python scripts/test-real-devices.py http://localhost:8123 --token YOUR_TOKEN
+export HA_TOKEN="your_token"
+python scripts/test-real-devices.py http://localhost:8123
 ```
 
-#### Example Output
+### `test-advanced-features.py` - Advanced Feature Tests
 
-```
-================================================================================
-                      WiiM Real Device Test Suite
-================================================================================
+Extended test suite for advanced features including EQ, shuffle/repeat, presets, audio output, URL playback, sleep timer, and alarms.
 
-Home Assistant: http://homeassistant.local:8123
-Start Time: 2025-11-17 15:30:00
-
-ℹ️  Checking Home Assistant connection...
-✅ Connected to Home Assistant
-ℹ️  Version: 2025.11.2
-
-================================================================================
-                            Device Discovery
-================================================================================
-
-ℹ️  Searching for WiiM devices...
-✅ Found 3 WiiM device(s)
-
-Device 1:
-  Entity ID:    media_player.living_room_wiim
-  Name:         Living Room WiiM
-  Model:        WiiM Pro Plus
-  Firmware:     4.8.618780
-  IP Address:   192.168.1.100
-  State:        playing
-  Available:    True
-
-Device 2:
-  Entity ID:    media_player.kitchen_wiim
-  Name:         Kitchen WiiM
-  Model:        WiiM Mini
-  Firmware:     4.8.618780
-  IP Address:   192.168.1.101
-  State:        idle
-  Available:    True
-
---------------------------------------------------------------------------------
-                    Testing: Living Room WiiM
---------------------------------------------------------------------------------
-
-Test: Device Availability
-✅ Device is available
-
-Test: Device Information
-  ✓ device_model: WiiM Pro Plus
-  ✓ firmware_version: 4.8.618780
-  ✓ ip_address: 192.168.1.100
-  ✓ mac_address: AA:BB:CC:DD:EE:01
-✅ All device information present
-
-Test: Volume Control
-  Original volume: 45%
-  Setting volume to 35%...
-  New volume: 35%
-✅ Volume control works
-
-Test: Mute Control
-  Muting device...
-✅ Mute control works
-
-Test: Source Selection
-  Available sources: USB, Bluetooth, AirPlay, Spotify
-  Current source: Spotify
-  Switching to: USB
-  New source: USB
-✅ Source selection works
-
-Device Test Summary:
-  5/5 tests passed
-
-================================================================================
-                         Test Suite Summary
-================================================================================
-
-Living Room WiiM: 5/5 tests passed
-Kitchen WiiM: 5/5 tests passed
-Bedroom WiiM: 5/5 tests passed
-
-Overall Results:
-  Devices Tested:   3
-  Total Tests:      15
-  Tests Passed:     15
-  Success Rate:     100.0%
-  Duration:         45.2s
-
-✅ Test report saved to: wiim_test_report_20251117_153045.json
-```
-
-#### Test Report
-
-The script generates a JSON report with detailed results:
-
-```json
-{
-  "timestamp": "2025-11-17T15:30:00",
-  "ha_url": "http://homeassistant.local:8123",
-  "devices_tested": 3,
-  "total_tests": 15,
-  "passed_tests": 15,
-  "success_rate": 1.0,
-  "duration_seconds": 45.2,
-  "results": {
-    "media_player.living_room_wiim": {
-      "device_name": "Living Room WiiM",
-      "model": "WiiM Pro Plus",
-      "tests": [
-        {
-          "test": "Device Availability",
-          "passed": true,
-          "details": { "state": "playing", "available": true }
-        },
-        {
-          "test": "Volume Control",
-          "passed": true,
-          "details": {
-            "original_volume": 0.45,
-            "test_volume": 0.35,
-            "actual_volume": 0.35,
-            "tolerance": 0.05
-          }
-        }
-      ]
-    }
-  }
-}
-```
-
-#### CI/CD Integration
-
-The script uses exit codes for automation:
-
-- `0` - All tests passed (100% success rate)
-- `1` - Some tests failed or errors occurred
-- `130` - Interrupted by user (Ctrl+C)
-
-**GitHub Actions Example:**
-
-```yaml
-name: Test WiiM Integration
-
-on:
-  schedule:
-    - cron: "0 */6 * * *" # Every 6 hours
-  workflow_dispatch:
-
-jobs:
-  test-real-devices:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: pip install requests
-
-      - name: Run device tests
-        env:
-          HA_TOKEN: ${{ secrets.HA_TOKEN }}
-        run: |
-          python scripts/test-real-devices.py \
-            http://homeassistant.local:8123
-
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-report
-          path: wiim_test_report_*.json
-```
-
-#### Continuous Testing
-
-**Run tests every hour:**
+**Usage:**
 
 ```bash
-# Create cron job
-(crontab -l 2>/dev/null; echo "0 * * * * cd /workspaces/wiim && HA_TOKEN='YOUR_TOKEN' python scripts/test-real-devices.py http://homeassistant.local:8123 >> /var/log/wiim-tests.log 2>&1") | crontab -
+export HA_TOKEN="your_token"
+python scripts/test-advanced-features.py http://localhost:8123
 ```
 
-**Or use systemd timer:**
+**Tests:**
 
-```ini
-# /etc/systemd/system/wiim-test.service
-[Unit]
-Description=WiiM Device Test Suite
+- EQ control (preset selection)
+- Shuffle and repeat modes
+- Preset playback
+- URL/stream playback
+- Audio output mode selection
+- **Sleep timer** (set and clear) - WiiM devices only
+- **Alarm management** (create, update, multiple slots) - WiiM devices only
+- Multiroom grouping (if multiple devices available)
+- TTS announcements
 
-[Service]
-Type=oneshot
-Environment="HA_TOKEN=your_token_here"
-ExecStart=/usr/bin/python3 /workspaces/wiim/scripts/test-real-devices.py http://homeassistant.local:8123
-```
+---
 
-```ini
-# /etc/systemd/system/wiim-test.timer
-[Unit]
-Description=Run WiiM tests hourly
+## Development Scripts
 
-[Timer]
-OnCalendar=hourly
-Persistent=true
+### `pre_commit_check.sh` - Pre-Commit Validation
 
-[Install]
-WantedBy=timers.target
-```
+Runs before git commits to ensure code quality.
 
-Enable:
+**Checks:**
+
+- Syntax validation
+- Import verification
+- Linting (ruff/flake8)
+- Quick test run
+
+**Usage:**
 
 ```bash
-sudo systemctl enable --now wiim-test.timer
+./scripts/pre_commit_check.sh
 ```
 
-#### Troubleshooting
+### `pre_run_check.sh` - Pre-Run Validation
 
-**No devices found:**
+Quick checks before starting Home Assistant.
 
-- Verify WiiM integration is configured in HA
-- Check that devices are powered on and connected
-- Verify network connectivity
+**Checks:**
 
-**Authentication error:**
+- Python syntax
+- Import errors
+- Basic linting
 
-- Verify your access token is valid
-- Check token hasn't expired
-- Ensure token has admin permissions
-
-**Connection timeout:**
-
-- Check Home Assistant is running
-- Verify firewall allows connections
-- Test with `curl -H "Authorization: Bearer TOKEN" http://homeassistant.local:8123/api/`
-
-#### Advanced Usage
-
-**Test specific device types:**
-
-Modify the `discover_devices()` method to filter:
-
-```python
-# Only test WiiM Pro Plus devices
-wiim_devices = [
-    state for state in all_states
-    if state.get('attributes', {}).get('device_model') == 'WiiM Pro Plus'
-]
-```
-
-**Add custom tests:**
-
-Extend the `WiiMRealDeviceTestSuite` class:
-
-```python
-def test_preset_playback(self, device: Dict[str, Any]) -> Dict[str, Any]:
-    """Test preset playback."""
-    entity_id = device['entity_id']
-
-    # Play preset 1
-    self.call_service('wiim', 'play_preset', entity_id, preset=1)
-    time.sleep(3)
-
-    state = self.get_state(entity_id)
-    is_playing = state['state'] == 'playing'
-
-    return {
-        'test': 'Preset Playback',
-        'passed': is_playing,
-        'details': {'preset': 1, 'state': state['state']}
-    }
-```
-
-#### Performance Testing
-
-Monitor test duration over time to detect performance degradation:
+**Usage:**
 
 ```bash
-# Extract duration from reports
-jq '.duration_seconds' wiim_test_report_*.json | \
-  awk '{sum+=$1; n++} END {print "Avg:", sum/n, "s"}'
+make pre-run
+# or directly:
+./scripts/pre_run_check.sh
 ```
 
-## Other Scripts
+### `setup.sh` - Development Environment Setup
 
-(Add documentation for other scripts here)
+Sets up development environment with all dependencies.
+
+**Usage:**
+
+```bash
+./scripts/setup.sh
+```
+
+---
+
+## Makefile Targets
+
+Convenience targets for common operations:
+
+```bash
+# Release workflow
+make release          # Full release: lint + test + build
+
+# Development
+make pre-run          # Quick checks before running HA
+make pre-commit       # Pre-commit validation
+make dev-check        # Development checks (lint + quick test)
+
+# Testing
+make test             # Full test suite with coverage
+make test-quick       # Quick test without coverage
+
+# Code quality
+make lint             # Run all linting checks
+make format           # Auto-format code
+make check-all        # Run all quality checks
+
+# Build
+make clean            # Clean build artifacts
+make build            # Build integration package
+```
+
+---
+
+## Release Checklist
+
+1. **Update code**
+
+   ```bash
+   # Make your changes
+   git add .
+   git commit -m "Your changes"
+   ```
+
+2. **Run release script**
+
+   ```bash
+   ./scripts/release.sh 0.3.1
+   ```
+
+3. **Verify release**
+
+   - Check GitHub for tag
+   - Create GitHub release
+   - Verify HACS can see new version
+
+4. **Test with HACS**
+   - Install in test HA instance
+   - Verify functionality
+
+---
+
+## Troubleshooting
+
+**Linting fails:**
+
+```bash
+# Auto-fix most issues
+python -m ruff check custom_components/wiim/ --fix
+python -m ruff format custom_components/wiim/
+
+# Check remaining issues
+make lint
+```
+
+**Tests fail:**
+
+```bash
+# Run verbose to see details
+pytest tests/ -v
+
+# Run specific test
+pytest tests/unit/test_config_flow.py -v
+```
+
+**Import errors:**
+
+```bash
+# Verify pywiim is installed
+pip install pywiim>=1.0.57
+
+# Check Python version
+python --version  # Should be 3.13+
+```
+
+---
+
+## Development Workflow
+
+**Daily development:**
+
+```bash
+# Before starting work
+make pre-run
+
+# During development
+make dev-check  # Quick validation
+
+# Before committing
+./scripts/pre_commit_check.sh
+```
+
+**Preparing release:**
+
+```bash
+# Full validation
+make check-all
+
+# Create release
+./scripts/release.sh X.Y.Z
+```

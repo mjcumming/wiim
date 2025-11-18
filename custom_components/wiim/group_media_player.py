@@ -6,6 +6,7 @@ unified control for the entire multiroom group.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
@@ -283,6 +284,30 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         if self.coordinator.data:
             return self.coordinator.data.get("media_image_url")
         return None
+
+    @property
+    def media_image_hash(self) -> str | None:
+        """Return hash value for media image.
+
+        Home Assistant uses this hash to detect when the image changes and needs
+        to be refreshed. We include track information (title, artist, album) in
+        the hash so it changes when the track changes, even if the URL is the same.
+        This ensures cover art updates properly when tracks change.
+        """
+        if not self.available or not self.coordinator.data:
+            return None
+
+        # Build a unique identifier from track info + URL
+        # This ensures the hash changes when the track changes
+        title = self.coordinator.data.get("media_title") or ""
+        artist = self.coordinator.data.get("media_artist") or ""
+        album = self.coordinator.data.get("media_album") or ""
+        image_url = self.coordinator.data.get("media_image_url") or ""
+
+        # Create hash from track info + URL
+        # This will change when track changes, triggering image refresh
+        hash_input = f"{title}|{artist}|{album}|{image_url}"
+        return hashlib.sha256(hash_input.encode("utf-8")).hexdigest()[:16]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

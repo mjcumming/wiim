@@ -106,12 +106,12 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 if is_first_load or not player_has_input_list:
                     should_fetch_device_info = True
-                    _LOGGER.debug(
-                        "Forcing device_info fetch for %s (first_load=%s, has_input_list=%s)",
-                        self.player.host,
-                        is_first_load,
-                        bool(player_has_input_list),
-                    )
+                    # Only log if this is unusual (not first load but missing input_list)
+                    if not is_first_load and not player_has_input_list:
+                        _LOGGER.debug(
+                            "Forcing device_info fetch for %s (missing input_list)",
+                            self.player.host,
+                        )
             should_fetch_multiroom = self._polling_strategy.should_fetch_multiroom(
                 self._last_multiroom_check,
                 now,
@@ -263,7 +263,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Update polling interval using pywiim's PollingStrategy
             optimal_interval = self._polling_strategy.get_optimal_interval(role, is_playing)
-            if self.update_interval.total_seconds() != optimal_interval:
+            current_interval = self.update_interval.total_seconds() if self.update_interval else 5.0
+            if current_interval != optimal_interval:
                 self.update_interval = timedelta(seconds=optimal_interval)
 
             # Preserve existing EQ and audio_output if not fetched (needed for UI buttons)
@@ -325,6 +326,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Add available_sources from Player (smart detection) - per HA_INTEGRATION_GUIDE.md
             available_sources = getattr(self.player, "available_sources", None)
             if available_sources is not None:
+                # Only log source data if it changed (for troubleshooting)
+                if not hasattr(self, "_last_sources") or self._last_sources != available_sources:
+                    self._last_sources = available_sources
+                    _LOGGER.debug(
+                        "Source list changed for %s: %s",
+                        self.player.host,
+                        available_sources,
+                    )
                 data["available_sources"] = available_sources
             elif self.data and self.data.get("available_sources") is not None:
                 # Preserve existing available_sources even if not available this cycle

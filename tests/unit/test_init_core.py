@@ -5,9 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from custom_components.wiim.const import DOMAIN

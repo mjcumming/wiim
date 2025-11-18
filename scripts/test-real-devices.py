@@ -10,7 +10,8 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any
+
 import requests
 
 
@@ -30,7 +31,7 @@ class Colors:
 class WiiMRealDeviceTestSuite:
     """Automated test suite for real WiiM devices."""
 
-    def __init__(self, ha_url: str, token: Optional[str] = None):
+    def __init__(self, ha_url: str, token: str | None = None):
         self.ha_url = ha_url.rstrip("/")
         self.token = token or os.getenv("HA_TOKEN")
 
@@ -75,7 +76,7 @@ class WiiMRealDeviceTestSuite:
             response = requests.get(f"{self.ha_url}/api/", headers=self.headers, timeout=5)
             if response.status_code == 200:
                 data = response.json()
-                self.print_success(f"Connected to Home Assistant")
+                self.print_success("Connected to Home Assistant")
                 self.print_info(f"Version: {data.get('version', 'Unknown')}")
                 return True
             else:
@@ -88,7 +89,7 @@ class WiiMRealDeviceTestSuite:
             self.print_failure(f"Connection error: {e}")
             return False
 
-    def discover_devices(self) -> List[Dict[str, Any]]:
+    def discover_devices(self) -> list[dict[str, Any]]:
         """Discover all WiiM devices."""
         self.print_header("Device Discovery")
         self.print_info("Searching for WiiM devices...")
@@ -144,7 +145,7 @@ class WiiMRealDeviceTestSuite:
             print(f"    {Colors.RED}Service call failed: {e}{Colors.RESET}")
             return False
 
-    def get_state(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    def get_state(self, entity_id: str) -> dict[str, Any] | None:
         """Get entity state."""
         try:
             url = f"{self.ha_url}/api/states/{entity_id}"
@@ -165,10 +166,10 @@ class WiiMRealDeviceTestSuite:
             time.sleep(0.5)
         return False
 
-    def test_device_availability(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_device_availability(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test if device is available."""
-        entity_id = device["entity_id"]
-        attrs = device.get("attributes", {})
+        device["entity_id"]
+        device.get("attributes", {})
 
         print(f"\n{Colors.BOLD}Test: Device Availability{Colors.RESET}")
 
@@ -187,7 +188,7 @@ class WiiMRealDeviceTestSuite:
 
         return result
 
-    def test_volume_control(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_volume_control(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test volume control."""
         entity_id = device["entity_id"]
 
@@ -240,7 +241,7 @@ class WiiMRealDeviceTestSuite:
 
         return result
 
-    def test_mute_control(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_mute_control(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test mute control."""
         entity_id = device["entity_id"]
 
@@ -268,7 +269,7 @@ class WiiMRealDeviceTestSuite:
 
         return result
 
-    def test_source_selection(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_source_selection(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test source selection."""
         entity_id = device["entity_id"]
         attrs = device.get("attributes", {})
@@ -317,7 +318,7 @@ class WiiMRealDeviceTestSuite:
 
         return result
 
-    def test_device_info(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_device_info(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test device information completeness."""
         attrs = device.get("attributes", {})
 
@@ -350,7 +351,7 @@ class WiiMRealDeviceTestSuite:
 
         return result
 
-    def test_device(self, device: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def test_device(self, device: dict[str, Any]) -> list[dict[str, Any]]:
         """Run all tests on a device."""
         entity_id = device["entity_id"]
         attrs = device.get("attributes", {})
@@ -381,7 +382,7 @@ class WiiMRealDeviceTestSuite:
 
         return results
 
-    def run_all_tests(self) -> Dict[str, Any]:
+    def run_all_tests(self) -> dict[str, Any]:
         """Run complete test suite."""
         self.start_time = datetime.now()
 
@@ -417,7 +418,7 @@ class WiiMRealDeviceTestSuite:
         total_tests = 0
         passed_tests = 0
 
-        for entity_id, data in all_results.items():
+        for _entity_id, data in all_results.items():
             device_name = data["device_name"]
             tests = data["tests"]
             device_passed = sum(1 for t in tests if t["passed"] is True)

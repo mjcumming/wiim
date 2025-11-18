@@ -1,0 +1,26 @@
+[MASTER]
+# Add stubs directory to Python path for type checking
+init-hook='import sys; from pathlib import Path; stubs_path = Path(__file__).resolve().parent / "stubs"; sys.path.insert(0, str(stubs_path)) if stubs_path.exists() else None'
+
+[MESSAGES CONTROL]
+# Disable import errors for Home Assistant modules (not available in dev environment)
+# These are false positives - Home Assistant is only available when running inside HA
+disable=
+    import-error,
+    no-name-in-module,
+    no-member,
+    broad-except,
+    unused-argument,
+    protected-access,
+    condition-evals-to-constant
+
+[TYPECHECK]
+# Ignore missing imports for Home Assistant (only available in HA runtime)
+ignored-modules=homeassistant,homeassistant.*,pywiim,pywiim.*
+
+# Ignore missing members for Home Assistant classes
+ignored-classes=HomeAssistant,ConfigEntry,HomeAssistantError
+
+[FORMAT]
+max-line-length=120
+

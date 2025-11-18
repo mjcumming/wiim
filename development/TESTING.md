@@ -30,14 +30,19 @@ This document outlines the testing strategy and best practices for the WiiM Home
 ```
 tests/
   unit/
-    test_api.py
-    test_coordinator.py
+    test_coordinator_core.py
+    test_coordinator_multiroom.py
     test_media_player.py
     test_config_flow.py
+    test_sensor.py
+    test_switch_core.py
+    test_select.py
+    test_number.py
+    test_button.py
   integration/
-    test_init.py
-    test_services.py
-    test_groups.py
+    test_init_integration.py
+    test_services_core.py
+    test_discovery_flows.py
 ```
 
 ## Running Tests
@@ -77,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
+        with: { python-version: "3.12" }
       - run: pip install -r requirements-dev.txt
       - run: pre-commit run --all-files
       - run: pytest
@@ -91,4 +96,4 @@ jobs:
 4. Use realistic test data
 5. Maintain test coverage
 6. Document test scenarios
-7. Keep tests focused and isolated 
+7. Keep tests focused and isolated

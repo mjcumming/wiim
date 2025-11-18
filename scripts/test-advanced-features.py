@@ -10,7 +10,8 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any
+
 import requests
 
 
@@ -66,7 +67,7 @@ class WiiMAdvancedTestSuite:
             print(f"    {Colors.RED}Service call failed: {e}{Colors.RESET}")
             return False
 
-    def get_state(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    def get_state(self, entity_id: str) -> dict[str, Any] | None:
         """Get entity state."""
         try:
             url = f"{self.ha_url}/api/states/{entity_id}"
@@ -77,7 +78,7 @@ class WiiMAdvancedTestSuite:
             print(f"    {Colors.RED}Failed to get state: {e}{Colors.RESET}")
             return None
 
-    def discover_devices(self) -> List[Dict[str, Any]]:
+    def discover_devices(self) -> list[dict[str, Any]]:
         """Discover WiiM devices."""
         self.print_header("Device Discovery")
 
@@ -95,7 +96,7 @@ class WiiMAdvancedTestSuite:
         self.devices = wiim_devices
         return wiim_devices
 
-    def test_eq_control(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_eq_control(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test EQ preset selection."""
         entity_id = device["entity_id"]
         attrs = device.get("attributes", {})
@@ -117,7 +118,7 @@ class WiiMAdvancedTestSuite:
         print(f"  Switching to: {test_eq}")
 
         # Call service
-        success = self.call_service("media_player", "select_sound_mode", entity_id, sound_mode=test_eq)
+        self.call_service("media_player", "select_sound_mode", entity_id, sound_mode=test_eq)
         time.sleep(4)  # Wait for state update
 
         # Verify
@@ -150,7 +151,7 @@ class WiiMAdvancedTestSuite:
 
         return result
 
-    def test_shuffle_repeat(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_shuffle_repeat(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test shuffle and repeat control."""
         entity_id = device["entity_id"]
         attrs = device.get("attributes", {})
@@ -165,18 +166,18 @@ class WiiMAdvancedTestSuite:
 
         # Test shuffle
         print("  Setting shuffle: ON")
-        shuffle_success = self.call_service("media_player", "shuffle_set", entity_id, shuffle=True)
+        self.call_service("media_player", "shuffle_set", entity_id, shuffle=True)
         time.sleep(4)
 
         state = self.get_state(entity_id)
         new_shuffle = state.get("attributes", {}).get("shuffle", False)
-        shuffle_works = new_shuffle == True
+        shuffle_works = bool(new_shuffle)
 
         print(f"  New shuffle: {new_shuffle}")
 
         # Test repeat
         print("  Setting repeat: one")
-        repeat_success = self.call_service("media_player", "repeat_set", entity_id, repeat="one")
+        self.call_service("media_player", "repeat_set", entity_id, repeat="one")
         time.sleep(4)
 
         state = self.get_state(entity_id)
@@ -202,7 +203,7 @@ class WiiMAdvancedTestSuite:
 
         return result
 
-    def test_multiroom_grouping(self, devices: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def test_multiroom_grouping(self, devices: list[dict[str, Any]]) -> dict[str, Any]:
         """Test multiroom join/unjoin."""
         print(f"\n{Colors.BOLD}Test: Multiroom Grouping{Colors.RESET}")
 
@@ -221,7 +222,7 @@ class WiiMAdvancedTestSuite:
 
         # Test JOIN
         print("\n  Creating group...")
-        join_success = self.call_service("media_player", "join", master, group_members=[slave])
+        self.call_service("media_player", "join", master, group_members=[slave])
         time.sleep(6)  # Group formation takes longer
 
         # Verify group
@@ -238,7 +239,7 @@ class WiiMAdvancedTestSuite:
 
         # Test UNJOIN
         print("\n  Ungrouping...")
-        unjoin_success = self.call_service("media_player", "unjoin", slave)
+        self.call_service("media_player", "unjoin", slave)
         time.sleep(6)
 
         # Verify ungrouped
@@ -266,7 +267,7 @@ class WiiMAdvancedTestSuite:
 
         return result
 
-    def test_tts(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_tts(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test TTS (Text-to-Speech) functionality."""
         entity_id = device["entity_id"]
 
@@ -274,7 +275,7 @@ class WiiMAdvancedTestSuite:
 
         # Store original volume
         state = self.get_state(entity_id)
-        original_volume = state.get("attributes", {}).get("volume_level", 0.3)
+        state.get("attributes", {}).get("volume_level", 0.3)
 
         # Play TTS announcement
         print("  Playing TTS announcement...")
@@ -322,7 +323,7 @@ class WiiMAdvancedTestSuite:
 
         return result
 
-    def test_preset_playback(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_preset_playback(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test preset playback."""
         entity_id = device["entity_id"]
 
@@ -360,10 +361,10 @@ class WiiMAdvancedTestSuite:
 
         return result
 
-    def test_audio_output_mode(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_audio_output_mode(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test audio output mode selection."""
         entity_id = device["entity_id"]
-        device_name = device["attributes"].get("friendly_name")
+        device["attributes"].get("friendly_name")
 
         print(f"\n{Colors.BOLD}Test: Audio Output Mode{Colors.RESET}")
 
@@ -392,7 +393,7 @@ class WiiMAdvancedTestSuite:
         print(f"  Switching to: {test_mode}")
 
         # Call service
-        success = self.call_service("select", "select_option", output_entity, option=test_mode)
+        self.call_service("select", "select_option", output_entity, option=test_mode)
         time.sleep(4)
 
         # Verify
@@ -420,7 +421,7 @@ class WiiMAdvancedTestSuite:
 
         return result
 
-    def test_url_playback(self, device: Dict[str, Any]) -> Dict[str, Any]:
+    def test_url_playback(self, device: dict[str, Any]) -> dict[str, Any]:
         """Test URL playback."""
         entity_id = device["entity_id"]
 
@@ -428,9 +429,9 @@ class WiiMAdvancedTestSuite:
 
         # Play internet radio
         test_url = "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two"
-        print(f"  Playing: BBC Radio 2")
+        print("  Playing: BBC Radio 2")
 
-        success = self.call_service("wiim", "play_url", entity_id, url=test_url)
+        self.call_service("wiim", "play_url", entity_id, url=test_url)
         time.sleep(6)  # URL loading takes time
 
         # Check if playing
@@ -459,6 +460,172 @@ class WiiMAdvancedTestSuite:
 
         return result
 
+    def test_sleep_timer(self, device: dict[str, Any]) -> dict[str, Any]:
+        """Test sleep timer functionality."""
+        entity_id = device["entity_id"]
+
+        print(f"\n{Colors.BOLD}Test: Sleep Timer{Colors.RESET}")
+        self.print_info("Testing sleep timer on WiiM device (WiiM devices only)")
+
+        # Test 1: Set sleep timer (30 minutes = 1800 seconds)
+        print("  Setting sleep timer to 30 minutes (1800 seconds)...")
+        success = self.call_service("wiim", "set_sleep_timer", entity_id, sleep_time=1800)
+
+        if not success:
+            return {
+                "test": "Sleep Timer",
+                "passed": False,
+                "details": {"error": "Failed to set sleep timer", "note": "May not be supported on this device"},
+            }
+
+        time.sleep(2)  # Wait for device to process
+
+        # Test 2: Clear sleep timer
+        print("  Clearing sleep timer...")
+        clear_success = self.call_service("wiim", "clear_sleep_timer", entity_id)
+
+        if not clear_success:
+            return {
+                "test": "Sleep Timer",
+                "passed": False,
+                "details": {"error": "Failed to clear sleep timer"},
+            }
+
+        time.sleep(1)
+
+        # Test 3: Set a short timer (1 minute) for verification
+        print("  Setting short timer (60 seconds) for verification...")
+        short_timer_success = self.call_service("wiim", "set_sleep_timer", entity_id, sleep_time=60)
+
+        if not short_timer_success:
+            return {
+                "test": "Sleep Timer",
+                "passed": False,
+                "details": {"error": "Failed to set short timer"},
+            }
+
+        time.sleep(1)
+
+        # Clear it again
+        self.call_service("wiim", "clear_sleep_timer", entity_id)
+        time.sleep(1)
+
+        result = {
+            "test": "Sleep Timer",
+            "passed": success and clear_success and short_timer_success,
+            "details": {
+                "set_timer": success,
+                "clear_timer": clear_success,
+                "short_timer": short_timer_success,
+                "note": "Sleep timer functionality verified (WiiM devices only)",
+            },
+        }
+
+        if result["passed"]:
+            self.print_success("Sleep timer works correctly")
+        else:
+            self.print_warning("Sleep timer test had issues (may not be supported on this device)")
+
+        return result
+
+    def test_alarm_management(self, device: dict[str, Any]) -> dict[str, Any]:
+        """Test alarm management functionality."""
+        entity_id = device["entity_id"]
+
+        print(f"\n{Colors.BOLD}Test: Alarm Management{Colors.RESET}")
+        self.print_info("Testing alarm management on WiiM device (WiiM devices only, 3 slots: 0-2)")
+
+        # Test 1: Create a new alarm (slot 0)
+        print("  Creating alarm in slot 0 (7:00 AM UTC, daily)...")
+        create_success = self.call_service(
+            "wiim",
+            "update_alarm",
+            entity_id,
+            alarm_id=0,
+            time="07:00:00",
+            trigger="daily",
+            operation="playback",
+        )
+
+        if not create_success:
+            return {
+                "test": "Alarm Management",
+                "passed": False,
+                "details": {
+                    "error": "Failed to create alarm",
+                    "note": "May not be supported on this device or alarm slot may be in use",
+                },
+            }
+
+        time.sleep(2)
+
+        # Test 2: Update existing alarm (change time only)
+        print("  Updating alarm time to 8:00 AM UTC...")
+        update_success = self.call_service(
+            "wiim",
+            "update_alarm",
+            entity_id,
+            alarm_id=0,
+            time="08:00:00",
+        )
+
+        if not update_success:
+            return {
+                "test": "Alarm Management",
+                "passed": False,
+                "details": {"error": "Failed to update alarm"},
+            }
+
+        time.sleep(2)
+
+        # Test 3: Create alarm in different slot (slot 1)
+        print("  Creating alarm in slot 1 (9:00 AM UTC, daily)...")
+        create_slot1_success = self.call_service(
+            "wiim",
+            "update_alarm",
+            entity_id,
+            alarm_id=1,
+            time="09:00:00",
+            trigger="daily",
+            operation="playback",
+        )
+
+        time.sleep(2)
+
+        # Test 4: Test with HHMMSS format (no colons)
+        print("  Testing HHMMSS format (no colons)...")
+        format_success = self.call_service(
+            "wiim",
+            "update_alarm",
+            entity_id,
+            alarm_id=2,
+            time="100000",  # 10:00:00 in HHMMSS format
+            trigger="daily",
+            operation="playback",
+        )
+
+        time.sleep(2)
+
+        result = {
+            "test": "Alarm Management",
+            "passed": create_success and update_success,
+            "details": {
+                "create_alarm": create_success,
+                "update_alarm": update_success,
+                "create_slot1": create_slot1_success,
+                "hhmmss_format": format_success,
+                "note": "Alarm management verified (WiiM devices only). Alarms remain on device.",
+            },
+        }
+
+        if result["passed"]:
+            self.print_success("Alarm management works correctly")
+            self.print_info("Note: Created alarms remain on device - you may want to delete them manually")
+        else:
+            self.print_warning("Alarm management test had issues (may not be supported on this device)")
+
+        return result
+
     def run_advanced_tests(self):
         """Run all advanced feature tests."""
         self.print_header("WiiM Advanced Features Test Suite")
@@ -484,6 +651,8 @@ class WiiMAdvancedTestSuite:
             results.append(self.test_preset_playback(device))
             results.append(self.test_url_playback(device))
             results.append(self.test_audio_output_mode(device))
+            results.append(self.test_sleep_timer(device))
+            results.append(self.test_alarm_management(device))
 
             # Summary for this device
             passed = sum(1 for r in results if r["passed"] is True)
@@ -517,7 +686,7 @@ class WiiMAdvancedTestSuite:
         total_tests = 0
         passed_tests = 0
 
-        for entity_id, data in all_results.items():
+        for _entity_id, data in all_results.items():
             device_name = data["device_name"]
             tests = data["tests"]
             device_passed = sum(1 for t in tests if t["passed"] is True)

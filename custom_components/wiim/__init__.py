@@ -58,6 +58,7 @@ from .const import (
 )
 from .coordinator import WiiMCoordinator
 from .data import Speaker
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -259,6 +260,27 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     _LOGGER.info("WiiM integration async_setup called")
     # Initialize domain data structure
     hass.data.setdefault(DOMAIN, {})
+
+    # Register services here (only once, even if called multiple times)
+    if not hass.services.has_service(DOMAIN, "reboot_device"):
+        from .services import async_setup_services
+
+        # Register global services (using hass.services.async_register like Sonos)
+        hass.services.async_register(
+            DOMAIN,
+            "reboot_device",
+            _reboot_device_service,
+        )
+        hass.services.async_register(
+            DOMAIN,
+            "sync_time",
+            _sync_time_service,
+        )
+
+        # Register platform entity services (sleep timer and alarms)
+        await async_setup_services(hass)
+        _LOGGER.info("WiiM services registered")
+
     _LOGGER.info("WiiM integration async_setup completed")
     return True
 
@@ -267,27 +289,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
     _LOGGER.info("WiiM async_setup_entry called for entry: %s (host: %s)", entry.entry_id, entry.data.get("host"))
 
-    # Register global services if this is the first entry
+    # Initialize domain data structure
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
-        # Register global services
-        async_register_admin_service(
-            hass,
+    # Ensure services are registered (fallback if async_setup wasn't called)
+    # This ensures services work even when reloading config entries
+    if not hass.services.has_service(DOMAIN, "reboot_device"):
+        from .services import async_setup_services
+
+        # Register global services (using hass.services.async_register like Sonos)
+        hass.services.async_register(
             DOMAIN,
             "reboot_device",
             _reboot_device_service,
         )
-        async_register_admin_service(
-            hass,
+        hass.services.async_register(
             DOMAIN,
             "sync_time",
             _sync_time_service,
         )
 
-    # Simplified v2.0.0 architecture: no custom registry, just use HA config entries
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
+        # Register platform entity services (sleep timer and alarms)
+        await async_setup_services(hass)
+        _LOGGER.info("WiiM services registered in async_setup_entry (fallback)")
 
     # Create client and coordinator with firmware capabilities
     session = async_get_clientsession(hass)

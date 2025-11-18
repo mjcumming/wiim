@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import hashlib
 import logging
 from collections.abc import Awaitable
 from contextlib import suppress
@@ -18,6 +19,7 @@ from homeassistant.components.media_player import (
     MediaPlayerEnqueue,
     MediaPlayerEntity,
 )
+from homeassistant.components.media_player.browse_media import async_process_play_media_url
 from homeassistant.components.media_player.const import (
     MediaClass,
     MediaPlayerEntityFeature,
@@ -30,8 +32,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.components.media_player.browse_media import async_process_play_media_url
-from pywiim.exceptions import WiiMError
+from pywiim.exceptions import WiiMError, WiiMResponseError
 
 from .const import DOMAIN
 from .data import Speaker, find_speaker_by_uuid, get_speaker_from_config_entry
@@ -297,12 +298,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Get available_sources from pywiim
         available_sources = self.coordinator.data.get("available_sources")
         if available_sources:
-            return [_capitalize_source_name(str(s)) for s in available_sources]
+            capitalized = [_capitalize_source_name(str(s)) for s in available_sources]
+            return capitalized
 
         # Fallback to input_list if available_sources not available
         input_list = self.speaker.input_list
         if input_list:
-            return [_capitalize_source_name(str(s)) for s in input_list]
+            capitalized = [_capitalize_source_name(str(s)) for s in input_list]
+            return capitalized
 
         return []
 
@@ -408,6 +411,30 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 return url_str.startswith(("http://", "https://"))
         # Data URIs are not remotely accessible
         return False
+
+    @property
+    def media_image_hash(self) -> str | None:
+        """Return hash value for media image.
+
+        Home Assistant uses this hash to detect when the image changes and needs
+        to be refreshed. We include track information (title, artist, album) in
+        the hash so it changes when the track changes, even if the URL is the same.
+        This ensures cover art updates properly when tracks change.
+        """
+        if not self.coordinator.data:
+            return None
+
+        # Build a unique identifier from track info + URL
+        # This ensures the hash changes when the track changes
+        title = self.coordinator.data.get("media_title") or ""
+        artist = self.coordinator.data.get("media_artist") or ""
+        album = self.coordinator.data.get("media_album") or ""
+        image_url = self.coordinator.data.get("media_image_url") or ""
+
+        # Create hash from track info + URL
+        # This will change when track changes, triggering image refresh
+        hash_input = f"{title}|{artist}|{album}|{image_url}"
+        return hashlib.sha256(hash_input.encode("utf-8")).hexdigest()[:16]
 
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
         """Return image bytes and content type of current playing media.
@@ -816,14 +843,28 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def sound_mode(self) -> str | None:
-        """Return current sound mode (EQ preset) from Player."""
+        """Return current sound mode (EQ preset) from Player.
+
+        Returns the preset in the same format as sound_mode_list (title case)
+        so Home Assistant can properly match and display the current selection.
+        """
         if not self._is_eq_supported():
             return None
 
         if self.coordinator.data:
             eq_preset = self.coordinator.data.get("eq_preset")
             if eq_preset:
-                return str(eq_preset)
+                # Format to match sound_mode_list (title case) for proper dropdown display
+                preset_str = str(eq_preset)
+                # Try to find exact match in available presets first
+                eq_presets = self.coordinator.data.get("eq_presets")
+                if eq_presets and isinstance(eq_presets, list):
+                    for preset in eq_presets:
+                        if str(preset).lower() == preset_str.lower():
+                            # Return in title case to match sound_mode_list format
+                            return str(preset).title()
+                # Fallback: apply title case to raw preset
+                return preset_str.title()
         return None
 
     @property
@@ -874,6 +915,183 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.async_request_refresh()
         except Exception as err:
             raise HomeAssistantError(f"Failed to select sound mode: {err}") from err
+
+    # ===== SLEEP TIMER & ALARMS =====
+
+    async def set_sleep_timer(self, sleep_time: int) -> None:
+        """Set the sleep timer on the player."""
+        try:
+            await self.coordinator.player.set_sleep_timer(sleep_time)
+            await self.coordinator.async_request_refresh()
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to set sleep timer: {err}") from err
+
+    async def clear_sleep_timer(self) -> None:
+        """Clear the sleep timer on the player."""
+        try:
+            await self.coordinator.player.cancel_sleep_timer()
+            await self.coordinator.async_request_refresh()
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to clear sleep timer: {err}") from err
+
+    async def set_alarm(
+        self,
+        alarm_id: int,
+        time: str | None = None,
+        trigger: str | None = None,
+        operation: str | None = None,
+    ) -> None:
+        """Set or update an alarm on the player.
+
+        Args:
+            alarm_id: Alarm slot ID (0-2)
+            time: Alarm time in UTC format (HHMMSS, e.g., "070000" for 7:00 AM)
+            trigger: Alarm trigger type (e.g., "daily", "2" for ALARM_TRIGGER_DAILY)
+            operation: Alarm operation type (e.g., "playback", "1" for ALARM_OP_PLAYBACK)
+        """
+        try:
+            from pywiim import ALARM_OP_PLAYBACK, ALARM_TRIGGER_DAILY
+
+            # Get existing alarm if it exists
+            try:
+                existing_alarm = await self.coordinator.player.get_alarm(alarm_id)
+            except Exception:
+                existing_alarm = None
+
+            # Parse trigger - accept string names or numeric values
+            trigger_value = None
+            if trigger is not None:
+                trigger_lower = trigger.lower()
+                if trigger_lower == "daily":
+                    trigger_value = ALARM_TRIGGER_DAILY
+                elif trigger.isdigit():
+                    trigger_value = int(trigger)
+                else:
+                    # Try to find matching constant
+                    try:
+                        from pywiim import ALARM_TRIGGER_ONCE
+
+                        if trigger_lower == "once":
+                            trigger_value = ALARM_TRIGGER_ONCE
+                    except ImportError:
+                        pass
+                    if trigger_value is None:
+                        raise HomeAssistantError(f"Unknown trigger type: {trigger}")
+            elif existing_alarm:
+                # Use existing trigger if not provided
+                trigger_value = getattr(existing_alarm, "trigger", ALARM_TRIGGER_DAILY)
+            else:
+                # Default to daily if creating new alarm
+                trigger_value = ALARM_TRIGGER_DAILY
+
+            # Parse operation - accept string names or numeric values
+            operation_value = None
+            if operation is not None:
+                operation_lower = operation.lower()
+                if operation_lower == "playback":
+                    operation_value = ALARM_OP_PLAYBACK
+                elif operation.isdigit():
+                    operation_value = int(operation)
+                else:
+                    raise HomeAssistantError(f"Unknown operation type: {operation}")
+            elif existing_alarm:
+                # Use existing operation if not provided
+                operation_value = getattr(existing_alarm, "operation", ALARM_OP_PLAYBACK)
+            else:
+                # Default to playback if creating new alarm
+                operation_value = ALARM_OP_PLAYBACK
+
+            # Parse time - convert HH:MM:SS or HHMMSS format to HHMMSS
+            time_str = None
+            if time is not None:
+                # Remove colons if present
+                time_str = time.replace(":", "")
+                # Validate format (should be 6 digits)
+                if not time_str.isdigit() or len(time_str) != 6:
+                    raise HomeAssistantError(
+                        f"Invalid time format: {time}. Expected HH:MM:SS or HHMMSS (e.g., '07:00:00' or '070000')"
+                    )
+            elif existing_alarm:
+                # Use existing time if not provided
+                existing_time = getattr(existing_alarm, "time", None)
+                if existing_time:
+                    # Convert existing time to string format if needed
+                    if isinstance(existing_time, str):
+                        time_str = existing_time.replace(":", "")
+                    else:
+                        raise HomeAssistantError("Cannot update alarm: time format not supported")
+            else:
+                raise HomeAssistantError("Time is required when creating a new alarm")
+
+            # Set the alarm
+            # Workaround: Device firmware requires both day and url parameters for daily alarms
+            # (even though API docs say they're optional). Device returns "OK" (text) instead of JSON.
+            # We call the client directly to build the correct command format and handle "OK" response.
+            # Hardcode endpoint to avoid import issues
+            API_ENDPOINT_SET_ALARM = "/httpapi.asp?command=setAlarmClock:"
+
+            # Build command parts - device requires format: setAlarmClock:n:trig:op:time:day:url
+            # For daily alarms (trigger=2), both day and url must be present (even if empty)
+            cmd_parts = [str(alarm_id), str(trigger_value), str(operation_value), time_str]
+
+            if trigger_value == ALARM_TRIGGER_DAILY:
+                # Device firmware quirk: requires both day and url parameters (empty strings)
+                # Format: setAlarmClock:0:2:1:070000:: (double colon for empty day and url)
+                cmd_parts.append("")  # Empty day
+                cmd_parts.append("")  # Empty url
+
+            # Build endpoint and call client directly
+            command = ":".join(cmd_parts)
+            endpoint = f"{API_ENDPOINT_SET_ALARM}{command}"
+
+            try:
+                # pywiim's _request handles "OK" responses and returns {"raw": "OK"}
+                # But if it doesn't recognize setAlarmClock as an OK-returning endpoint,
+                # it may raise WiiMResponseError. We catch and handle that.
+                response = await self.coordinator.client._request(endpoint)
+
+                # Check if we got the "OK" response
+                if isinstance(response, dict) and response.get("raw") in ("OK", "ok", ""):
+                    _LOGGER.debug("Alarm %d set successfully (device returned 'OK')", alarm_id)
+                    await self.coordinator.async_request_refresh()
+                    return
+
+            except WiiMResponseError as err:
+                # pywiim may raise an error if it tries to parse "OK" as JSON
+                # (setAlarmClock is not in the list of OK-returning endpoints in pywiim)
+                # Verify by getting the alarm to confirm it was actually set
+                error_str = str(err)
+                if "Expecting value" in error_str or "Invalid JSON" in error_str:
+                    try:
+                        _ = await self.coordinator.player.get_alarm(alarm_id)  # Verify alarm was set
+                        _LOGGER.debug(
+                            "Alarm %d set successfully (device returned 'OK', verified via get_alarm)",
+                            alarm_id,
+                        )
+                        await self.coordinator.async_request_refresh()
+                        return
+                    except Exception:
+                        # If we can't get the alarm, the error might be real
+                        pass
+                # Re-raise as WiiMError so outer handler can process it
+                raise WiiMError(str(err)) from err
+        except WiiMError as err:
+            # Workaround: Some WiiM devices return "OK" (text) instead of JSON for alarm commands
+            error_str = str(err)
+            if "Expecting value" in error_str or "Invalid JSON" in error_str:
+                # Device returned "OK" - verify by getting the alarm
+                try:
+                    _ = await self.coordinator.player.get_alarm(alarm_id)  # Verify alarm was set
+                    _LOGGER.debug("Alarm %d set successfully (device returned 'OK' instead of JSON)", alarm_id)
+                    await self.coordinator.async_request_refresh()
+                    return
+                except Exception as verify_err:
+                    _LOGGER.debug("Could not verify alarm was set: %s", verify_err)
+            raise HomeAssistantError(f"Failed to set alarm: {err}") from err
+        except HomeAssistantError:
+            raise
+        except Exception as err:
+            raise HomeAssistantError(f"Failed to set alarm: {err}") from err
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

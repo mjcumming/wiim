@@ -205,3 +205,17 @@ tmp_cache
 
 # Will be created from script/split_tests.py
 pytest_buckets.txt
+
+# Test reports and temporary documentation
+wiim_*_test_*.json
+*_test_report_*.json
+coverage.json
+TESTING.*.md
+TEST.*.md
+FINAL.*.md
+DIAGNOSIS.*.md
+*RESULTS*.md
+.env.testing
+wiim_*_test_*.json
+wiim_*_report_*.json
+scripts/test.config

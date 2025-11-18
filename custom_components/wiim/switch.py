@@ -18,7 +18,6 @@ from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
-
 _LOGGER = logging.getLogger(__name__)
 
 

@@ -2,6 +2,8 @@
 
 Comprehensive guide covering all features, configuration, and usage patterns for the WiiM Audio integration.
 
+> **Note:** This integration is built on the [`pywiim`](https://github.com/mjcumming/pywiim) library, which handles all device communication. The integration acts as a thin wrapper between Home Assistant and `pywiim`, providing a seamless experience while maintaining clean separation of concerns.
+
 ## 🎵 Core Features
 
 ### Media Player Controls
@@ -258,6 +260,50 @@ service: wiim.sync_time
 target:
   entity_id: media_player.living_room
 ```
+
+**`wiim.set_sleep_timer`** - Set sleep timer (WiiM devices only)
+
+```yaml
+service: wiim.set_sleep_timer
+target:
+  entity_id: media_player.living_room
+data:
+  sleep_time: 1800 # 30 minutes in seconds (0-7200)
+```
+
+**`wiim.clear_sleep_timer`** - Clear sleep timer (WiiM devices only)
+
+```yaml
+service: wiim.clear_sleep_timer
+target:
+  entity_id: media_player.living_room
+```
+
+**`wiim.update_alarm`** - Set or update alarm (WiiM devices only)
+
+WiiM devices support 3 alarm slots (0-2). Alarm times must be in UTC format.
+
+```yaml
+# Create a new daily alarm at 7:00 AM UTC
+service: wiim.update_alarm
+target:
+  entity_id: media_player.living_room
+data:
+  alarm_id: 0
+  time: "07:00:00"  # UTC time (HH:MM:SS or HHMMSS format)
+  trigger: "daily"  # or "2" for ALARM_TRIGGER_DAILY
+  operation: "playback"  # or "1" for ALARM_OP_PLAYBACK
+
+# Update existing alarm (only change time)
+service: wiim.update_alarm
+target:
+  entity_id: media_player.living_room
+data:
+  alarm_id: 0
+  time: "08:00:00"  # New time
+```
+
+**Note**: Alarm times are in UTC. Convert your local time to UTC when setting alarms. For example, 7:00 AM EST (UTC-5) would be `12:00:00` in UTC.
 
 ### Standard Media Player Services
 

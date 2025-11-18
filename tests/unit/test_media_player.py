@@ -476,6 +476,124 @@ class TestMediaPlayerState:
         assert media_player.device_info == mock_device_info
 
 
+class TestSleepTimerAndAlarms:
+    """Test sleep timer and alarm methods."""
+
+    @pytest.fixture
+    def media_player(self, wiim_speaker, hass):
+        """Create a WiiM media player entity with proper hass setup."""
+        from custom_components.wiim.media_player import WiiMMediaPlayer
+
+        player = WiiMMediaPlayer(wiim_speaker)
+        player.hass = hass
+        player.entity_id = "media_player.test_wiim"
+        return player
+
+    @pytest.mark.asyncio
+    async def test_set_sleep_timer(self, media_player, wiim_speaker):
+        """Test set_sleep_timer method."""
+        # Mock the player's set_sleep_timer method
+        media_player.coordinator.player.set_sleep_timer = AsyncMock()
+        media_player.coordinator.async_request_refresh = AsyncMock()
+
+        await media_player.set_sleep_timer(1800)
+
+        media_player.coordinator.player.set_sleep_timer.assert_called_once_with(1800)
+        media_player.coordinator.async_request_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_clear_sleep_timer(self, media_player, wiim_speaker):
+        """Test clear_sleep_timer method."""
+        # Mock the player's cancel_sleep_timer method
+        media_player.coordinator.player.cancel_sleep_timer = AsyncMock()
+        media_player.coordinator.async_request_refresh = AsyncMock()
+
+        await media_player.clear_sleep_timer()
+
+        media_player.coordinator.player.cancel_sleep_timer.assert_called_once()
+        media_player.coordinator.async_request_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_set_alarm_new(self, media_player, wiim_speaker):
+        """Test set_alarm method for new alarm."""
+        from pywiim.exceptions import WiiMError
+
+        # Mock the player's alarm methods
+        media_player.coordinator.player.get_alarm = AsyncMock(side_effect=WiiMError("Not found"))
+        media_player.coordinator.player.set_alarm = AsyncMock()
+        media_player.coordinator.async_request_refresh = AsyncMock()
+
+        await media_player.set_alarm(
+            alarm_id=0,
+            time="07:00:00",
+            trigger="daily",
+            operation="playback",
+        )
+
+        # Verify set_alarm was called with correct parameters
+        media_player.coordinator.player.set_alarm.assert_called_once()
+        call_args = media_player.coordinator.player.set_alarm.call_args
+        assert call_args.kwargs["alarm_id"] == 0
+        assert call_args.kwargs["time"] == "070000"  # Colons removed
+        assert call_args.kwargs["trigger"] == 2  # ALARM_TRIGGER_DAILY
+        assert call_args.kwargs["operation"] == 1  # ALARM_OP_PLAYBACK
+        media_player.coordinator.async_request_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_set_alarm_update_existing(self, media_player, wiim_speaker):
+        """Test set_alarm method for updating existing alarm."""
+        # Mock existing alarm
+        mock_alarm = MagicMock()
+        mock_alarm.trigger = 2  # ALARM_TRIGGER_DAILY
+        mock_alarm.operation = 1  # ALARM_OP_PLAYBACK
+        mock_alarm.time = "080000"
+
+        media_player.coordinator.player.get_alarm = AsyncMock(return_value=mock_alarm)
+        media_player.coordinator.player.set_alarm = AsyncMock()
+        media_player.coordinator.async_request_refresh = AsyncMock()
+
+        # Update only the time
+        await media_player.set_alarm(
+            alarm_id=0,
+            time="09:00:00",
+        )
+
+        # Verify set_alarm was called with existing trigger/operation and new time
+        media_player.coordinator.player.set_alarm.assert_called_once()
+        call_args = media_player.coordinator.player.set_alarm.call_args
+        assert call_args.kwargs["alarm_id"] == 0
+        assert call_args.kwargs["time"] == "090000"
+        assert call_args.kwargs["trigger"] == 2  # From existing alarm
+        assert call_args.kwargs["operation"] == 1  # From existing alarm
+
+    @pytest.mark.asyncio
+    async def test_set_alarm_invalid_time_format(self, media_player, wiim_speaker):
+        """Test set_alarm method with invalid time format."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        media_player.coordinator.player.get_alarm = AsyncMock(side_effect=Exception("Not found"))
+
+        with pytest.raises(HomeAssistantError, match="Invalid time format"):
+            await media_player.set_alarm(
+                alarm_id=0,
+                time="25:00:00",  # Invalid hour
+            )
+
+    @pytest.mark.asyncio
+    async def test_set_alarm_missing_time_for_new(self, media_player, wiim_speaker):
+        """Test set_alarm method requires time for new alarms."""
+        from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
+
+        media_player.coordinator.player.get_alarm = AsyncMock(side_effect=WiiMError("Not found"))
+
+        with pytest.raises(HomeAssistantError, match="Time is required"):
+            await media_player.set_alarm(
+                alarm_id=0,
+                # No time provided
+            )
+
+
 class TestMediaPlayerSetup:
     """Test media player platform setup."""
 

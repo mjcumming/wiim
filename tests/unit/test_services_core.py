@@ -31,6 +31,9 @@ class TestServiceRegistration:
         # Services should be registered
         assert hass.services.has_service(DOMAIN, "reboot_device")
         assert hass.services.has_service(DOMAIN, "sync_time")
+        # Platform entity services (sleep timer and alarms)
+        # These are registered via async_register_platform_entity_service
+        # and are available on media_player entities, not as domain services
 
     @pytest.mark.asyncio
     async def test_services_not_duplicated_on_second_entry(self, hass: HomeAssistant, bypass_get_data) -> None:
@@ -264,3 +267,177 @@ class TestSyncTimeService:
                 {"entity_id": entity_id},
                 blocking=True,
             )
+
+
+class TestSleepTimerAndAlarmServices:
+    """Test sleep timer and alarm platform entity services."""
+
+    @pytest.mark.asyncio
+    async def test_set_sleep_timer_service(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test set_sleep_timer platform entity service."""
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Create a media player entity
+        entity_registry = er.async_get(hass)
+        device_registry = dr.async_get(hass)
+
+        device = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, MOCK_DEVICE_DATA["uuid"])},
+        )
+
+        entity_id = "media_player.wiim_mini"
+        entity_registry.async_get_or_create(
+            "media_player",
+            DOMAIN,
+            f"{MOCK_DEVICE_DATA['uuid']}_media_player",
+            suggested_object_id="wiim_mini",
+            device_id=device.id,
+        )
+
+        # Set entity state
+        hass.states.async_set(entity_id, "idle")
+
+        # Mock the player's set_sleep_timer method
+        speaker = hass.data[DOMAIN][entry.entry_id]["speaker"]
+        speaker.coordinator.player.set_sleep_timer = AsyncMock()
+        speaker.coordinator.async_request_refresh = AsyncMock()
+
+        # Call the service
+        await hass.services.async_call(
+            DOMAIN,
+            "set_sleep_timer",
+            {"entity_id": entity_id, "sleep_time": 1800},
+            blocking=True,
+        )
+
+        # Verify set_sleep_timer was called
+        speaker.coordinator.player.set_sleep_timer.assert_called_once_with(1800)
+        speaker.coordinator.async_request_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_clear_sleep_timer_service(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test clear_sleep_timer platform entity service."""
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Create a media player entity
+        entity_registry = er.async_get(hass)
+        device_registry = dr.async_get(hass)
+
+        device = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, MOCK_DEVICE_DATA["uuid"])},
+        )
+
+        entity_id = "media_player.wiim_mini"
+        entity_registry.async_get_or_create(
+            "media_player",
+            DOMAIN,
+            f"{MOCK_DEVICE_DATA['uuid']}_media_player",
+            suggested_object_id="wiim_mini",
+            device_id=device.id,
+        )
+
+        # Set entity state
+        hass.states.async_set(entity_id, "idle")
+
+        # Mock the player's cancel_sleep_timer method
+        speaker = hass.data[DOMAIN][entry.entry_id]["speaker"]
+        speaker.coordinator.player.cancel_sleep_timer = AsyncMock()
+        speaker.coordinator.async_request_refresh = AsyncMock()
+
+        # Call the service
+        await hass.services.async_call(
+            DOMAIN,
+            "clear_sleep_timer",
+            {"entity_id": entity_id},
+            blocking=True,
+        )
+
+        # Verify cancel_sleep_timer was called
+        speaker.coordinator.player.cancel_sleep_timer.assert_called_once()
+        speaker.coordinator.async_request_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_alarm_service(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test update_alarm platform entity service."""
+        from pywiim.exceptions import WiiMError
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Create a media player entity
+        entity_registry = er.async_get(hass)
+        device_registry = dr.async_get(hass)
+
+        device = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, MOCK_DEVICE_DATA["uuid"])},
+        )
+
+        entity_id = "media_player.wiim_mini"
+        entity_registry.async_get_or_create(
+            "media_player",
+            DOMAIN,
+            f"{MOCK_DEVICE_DATA['uuid']}_media_player",
+            suggested_object_id="wiim_mini",
+            device_id=device.id,
+        )
+
+        # Set entity state
+        hass.states.async_set(entity_id, "idle")
+
+        # Mock the player's alarm methods
+        speaker = hass.data[DOMAIN][entry.entry_id]["speaker"]
+        speaker.coordinator.player.get_alarm = AsyncMock(side_effect=WiiMError("Not found"))
+        speaker.coordinator.player.set_alarm = AsyncMock()
+        speaker.coordinator.async_request_refresh = AsyncMock()
+
+        # Call the service
+        await hass.services.async_call(
+            DOMAIN,
+            "update_alarm",
+            {
+                "entity_id": entity_id,
+                "alarm_id": 0,
+                "time": "07:00:00",
+                "trigger": "daily",
+                "operation": "playback",
+            },
+            blocking=True,
+        )
+
+        # Verify set_alarm was called
+        speaker.coordinator.player.set_alarm.assert_called_once()
+        call_args = speaker.coordinator.player.set_alarm.call_args
+        assert call_args.kwargs["alarm_id"] == 0
+        assert call_args.kwargs["time"] == "070000"  # Colons removed
+        speaker.coordinator.async_request_refresh.assert_called_once()

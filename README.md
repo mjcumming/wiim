@@ -7,17 +7,25 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
 [![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
+[![Home Assistant](https://img.shields.io/badge/home%20assistant-2024.12.0+-blue.svg)](https://www.home-assistant.io/)
+[![Maintenance](https://img.shields.io/maintenance/yes/2025.svg)](https://github.com/mjcumming/wiim)
+[![Quality Scale](https://img.shields.io/badge/quality%20scale-silver-brightgreen.svg)](https://www.home-assistant.io/docs/quality_scale/)
+[![Project Status](https://img.shields.io/badge/project%20status-active-success.svg)](https://github.com/mjcumming/wiim)
+[![CI](https://img.shields.io/github/actions/workflow/status/mjcumming/wiim/tests.yaml?branch=main&label=CI)](https://github.com/mjcumming/wiim/actions/workflows/tests.yaml)
+[![Codecov](https://img.shields.io/codecov/c/github/mjcumming/wiim)](https://codecov.io/gh/mjcumming/wiim)
+[![GitHub Issues](https://img.shields.io/github/issues/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/pulls)
 
 > ⭐ **Love this integration?** Please star us on GitHub if you use this integration! It helps others discover the project and shows your support for the development effort.
 
-Transform your WiiM and LinkPlay speakers into powerful Home Assistant media players with full multiroom support. No additional dependencies required.
+Transform your WiiM and LinkPlay speakers into powerful Home Assistant media players with full multiroom support. Built on the robust [`pywiim`](https://github.com/mjcumming/pywiim) library for reliable device communication.
 
 ## Why Choose This Integration?
 
 - **🏠 Native Integration** - Built entirely within Home Assistant's framework
 - **🎵 Complete Media Control** - Full transport controls, volume, sources, presets
 - **🔗 True Multiroom** - Uses Home Assistant's native grouping for reliable sync
-- **⚡ Zero Dependencies** - No external Python packages needed
+- **⚡ Powered by pywiim** - Built on the incredible [`pywiim`](https://github.com/mjcumming/pywiim) library for robust device communication
 - **🚀 Auto-Discovery** - Finds speakers automatically on your network
 - **📱 Universal Compatibility** - Works with all Home Assistant dashboards and voice assistants
 - **⚡ Hybrid State Updates** - Uses UPnP events for real-time updates + HTTP polling for reliability
@@ -144,12 +152,15 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 ## Advanced Services
 
-| Service              | Description                             |
-| -------------------- | --------------------------------------- |
-| `wiim.play_preset`   | Play hardware preset (device dependent) |
-| `wiim.play_url`      | Play audio from URL                     |
-| `wiim.set_eq`        | Set equalizer presets or custom values  |
-| `wiim.reboot_device` | Reboot device                           |
+| Service                  | Description                             |
+| ------------------------ | --------------------------------------- |
+| `wiim.play_preset`       | Play hardware preset (device dependent) |
+| `wiim.play_url`          | Play audio from URL                     |
+| `wiim.set_eq`            | Set equalizer presets or custom values  |
+| `wiim.reboot_device`     | Reboot device                           |
+| `wiim.set_sleep_timer`   | Set sleep timer (WiiM devices only)     |
+| `wiim.clear_sleep_timer` | Clear sleep timer (WiiM devices only)   |
+| `wiim.update_alarm`      | Set or update alarm (WiiM devices only) |
 
 ### Unofficial API Services
 
@@ -261,7 +272,8 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines:
 
 This integration builds upon excellent work from:
 
-- [python-linkplay](https://github.com/Velleman/python-linkplay) - Comprehensive LinkPlay library
+- **[pywiim](https://github.com/mjcumming/pywiim)** - The incredible Python library powering this integration's device communication
+- [python-linkplay](https://github.com/Velleman/python-linkplay) - Comprehensive LinkPlay library (inspiration for pywiim)
 - [LinkPlay HA Integration](https://github.com/nagyrobi/home-assistant-custom-components-linkplay) - Original LinkPlay integration
 
 ## License

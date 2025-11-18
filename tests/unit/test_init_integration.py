@@ -8,8 +8,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from pywiim.exceptions import WiiMConnectionError
+
 from custom_components.wiim.const import DOMAIN
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
