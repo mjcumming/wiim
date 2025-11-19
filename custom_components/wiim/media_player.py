@@ -28,7 +28,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMResponseError, WiiMTimeoutError
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import DOMAIN
 from .data import Speaker, find_speaker_by_ip, find_speaker_by_uuid, get_speaker_from_config_entry
@@ -36,6 +36,9 @@ from .entity import WiimEntity
 from .group_media_player import WiiMGroupMediaPlayer
 
 _LOGGER = logging.getLogger(__name__)
+
+# Streaming sources that don't support next/previous track
+STREAMING_SOURCES = ["wifi", "webradio", "iheartradio", "pandora", "tunein"]
 
 
 def _is_connection_error(err: Exception) -> bool:
@@ -150,6 +153,13 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Return the name of the entity."""
         return self.speaker.name
 
+    def _is_streaming_source(self) -> bool:
+        """Check if current source is a streaming source (radio/web stream)."""
+        player = self._get_player()
+        if not player or not player.source:
+            return False
+        return str(player.source).lower() in STREAMING_SOURCES
+
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
         """Flag media player features supported by WiiM."""
@@ -160,14 +170,17 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
-            | MediaPlayerEntityFeature.NEXT_TRACK
-            | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.SELECT_SOURCE
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.BROWSE_MEDIA
             | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
             | MediaPlayerEntityFeature.CLEAR_PLAYLIST
         )
+
+        # Exclude next/previous track for streaming sources (radio/web streams)
+        if not self._is_streaming_source():
+            features |= MediaPlayerEntityFeature.NEXT_TRACK
+            features |= MediaPlayerEntityFeature.PREVIOUS_TRACK
 
         # Always include grouping feature so players appear in join dialog
         # Slaves can be joined by masters, but cannot initiate joins themselves
@@ -340,12 +353,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not player:
             raise HomeAssistantError("Player is not available")
 
-        # Streaming sources that don't respond well to stop()
-        STREAMING_SOURCES = ["wifi", "webradio", "iheartradio", "pandora", "tunein"]
-
         try:
             # Use pause for web streams (stop doesn't work reliably)
-            if player.source and str(player.source).lower() in STREAMING_SOURCES:
+            if self._is_streaming_source():
                 await player.pause()
             else:
                 await player.stop()
@@ -969,14 +979,17 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not player:
             raise HomeAssistantError("Player is not ready")
 
-        # Check if player is actually in a group before trying to leave
-        if not player.group:
-            raise HomeAssistantError("Player is not in a group")
-
-        # Check role - if solo, not in a group
         role = player.role
+
+        # Masters shouldn't unjoin - they disband the entire group
+        # Only slaves can leave a group
+        if role == "master":
+            raise HomeAssistantError("Master cannot unjoin. To disband group, remove all slaves instead.")
+
+        # If not in a group, operation is complete (idempotent)
+        # This handles both solo players and race conditions where group was just disbanded
         if role == "solo":
-            raise HomeAssistantError("Player is not in a group")
+            return
 
         try:
             await player.leave_group()
@@ -1244,67 +1257,30 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             else:
                 raise HomeAssistantError("Time is required when creating a new alarm")
 
-            # Set the alarm
-            # Workaround: Device firmware requires both day and url parameters for daily alarms
-            # (even though API docs say they're optional). Device returns "OK" (text) instead of JSON.
-            # We call the client directly to build the correct command format and handle "OK" response.
-            # Hardcode endpoint to avoid import issues
-            API_ENDPOINT_SET_ALARM = "/httpapi.asp?command=setAlarmClock:"
-
-            # Build command parts - device requires format: setAlarmClock:n:trig:op:time:day:url
-            # For daily alarms (trigger=2), both day and url must be present (even if empty)
-            cmd_parts = [str(alarm_id), str(trigger_value), str(operation_value), time_str]
-
+            # Set the alarm using the player object
+            # For daily alarms, pass empty strings for day and url parameters
+            # (device firmware requires them even though they're optional in the API)
             if trigger_value == ALARM_TRIGGER_DAILY:
-                # Device firmware quirk: requires both day and url parameters (empty strings)
-                # Format: setAlarmClock:0:2:1:070000:: (double colon for empty day and url)
-                cmd_parts.append("")  # Empty day
-                cmd_parts.append("")  # Empty url
+                await self.coordinator.player.set_alarm(
+                    alarm_id=alarm_id,
+                    trigger=trigger_value,
+                    operation=operation_value,
+                    time=time_str,
+                    day="",
+                    url="",
+                )
+            else:
+                await self.coordinator.player.set_alarm(
+                    alarm_id=alarm_id,
+                    trigger=trigger_value,
+                    operation=operation_value,
+                    time=time_str,
+                )
 
-            # Build endpoint and call client directly
-            command = ":".join(cmd_parts)
-            endpoint = f"{API_ENDPOINT_SET_ALARM}{command}"
+            _LOGGER.debug("Alarm %d set successfully", alarm_id)
+            return
 
-            try:
-                # pywiim's _request handles "OK" responses and returns {"raw": "OK"}
-                # But if it doesn't recognize setAlarmClock as an OK-returning endpoint,
-                # it may raise WiiMResponseError. We catch and handle that.
-                response = await self.coordinator.client._request(endpoint)
-
-                # Check if we got the "OK" response
-                if isinstance(response, dict) and response.get("raw") in ("OK", "ok", ""):
-                    _LOGGER.debug("Alarm %d set successfully (device returned 'OK')", alarm_id)
-                    return
-
-            except WiiMResponseError as err:
-                # pywiim may raise an error if it tries to parse "OK" as JSON
-                # (setAlarmClock is not in the list of OK-returning endpoints in pywiim)
-                # Verify by getting the alarm to confirm it was actually set
-                error_str = str(err)
-                if "Expecting value" in error_str or "Invalid JSON" in error_str:
-                    try:
-                        _ = await self.coordinator.player.get_alarm(alarm_id)  # Verify alarm was set
-                        _LOGGER.debug(
-                            "Alarm %d set successfully (device returned 'OK', verified via get_alarm)",
-                            alarm_id,
-                        )
-                        return
-                    except Exception:
-                        # If we can't get the alarm, the error might be real
-                        pass
-                # Re-raise as WiiMError so outer handler can process it
-                raise WiiMError(str(err)) from err
         except WiiMError as err:
-            # Workaround: Some WiiM devices return "OK" (text) instead of JSON for alarm commands
-            error_str = str(err)
-            if "Expecting value" in error_str or "Invalid JSON" in error_str:
-                # Device returned "OK" - verify by getting the alarm
-                try:
-                    _ = await self.coordinator.player.get_alarm(alarm_id)  # Verify alarm was set
-                    _LOGGER.debug("Alarm %d set successfully (device returned 'OK' instead of JSON)", alarm_id)
-                    return
-                except Exception as verify_err:
-                    _LOGGER.debug("Could not verify alarm was set: %s", verify_err)
             raise HomeAssistantError(f"Failed to set alarm: {err}") from err
         except HomeAssistantError:
             raise
