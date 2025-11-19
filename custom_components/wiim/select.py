@@ -285,9 +285,6 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                         "Successfully connected to Bluetooth device %s and set output mode to Bluetooth",
                         device_name,
                     )
-
-                    # Refresh coordinator to get updated status
-                    await self.coordinator.async_request_refresh()
                 except Exception as bt_err:
                     # Bluetooth connection failed - revert to previous output mode
                     _LOGGER.error(
@@ -327,8 +324,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                                 revert_err,
                             )
 
-                    # Refresh coordinator and re-raise the original exception
-                    await self.coordinator.async_request_refresh()
+                    # Re-raise the original exception
                     raise
 
                 return
@@ -711,13 +707,6 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
                         "Connection may still succeed - check device status.",
                         mac_address,
                     )
-
-                # Refresh coordinator data to get updated Bluetooth status
-                _LOGGER.info(
-                    "Requesting coordinator refresh after Bluetooth connection for %s",
-                    self.speaker.name,
-                )
-                await self.coordinator.async_request_refresh()
 
                 # Optionally switch output mode to Bluetooth
                 try:

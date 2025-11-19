@@ -18,17 +18,22 @@
 
 > ⭐ **Love this integration?** Please star us on GitHub if you use this integration! It helps others discover the project and shows your support for the development effort.
 
-Transform your WiiM and LinkPlay speakers into powerful Home Assistant media players with full multiroom support. Built on the robust [`pywiim`](https://github.com/mjcumming/pywiim) library for reliable device communication.
+Transform your WiiM and LinkPlay speakers into powerful Home Assistant media players with full multiroom support. Built on the brand new, fully async [`pywiim`](https://github.com/mjcumming/pywiim) library we wrote for reliable, high-performance device communication.
 
 ## Why Choose This Integration?
 
-- **🏠 Native Integration** - Built entirely within Home Assistant's framework
-- **🎵 Complete Media Control** - Full transport controls, volume, sources, presets
-- **🔗 True Multiroom** - Uses Home Assistant's native grouping for reliable sync
-- **⚡ Powered by pywiim** - Built on the incredible [`pywiim`](https://github.com/mjcumming/pywiim) library for robust device communication
-- **🚀 Auto-Discovery** - Finds speakers automatically on your network
-- **📱 Universal Compatibility** - Works with all Home Assistant dashboards and voice assistants
-- **⚡ Hybrid State Updates** - Uses UPnP events for real-time updates + HTTP polling for reliability
+- **🏠 Native Integration** - Built entirely within Home Assistant's framework with full platform support
+- **🎵 Complete Media Control** - Full transport controls, volume, sources, presets, TTS, and media browsing
+- **🔗 True Multiroom** - Uses Home Assistant's native grouping for reliable synchronized playback
+- **⚡ Powered by pywiim** - Built on the brand new, fully async [`pywiim`](https://github.com/mjcumming/pywiim) library we wrote for robust, high-performance device communication
+- **🚀 Auto-Discovery** - Finds speakers automatically via UPnP/SSDP/Zeroconf
+- **📱 Universal Compatibility** - Works with all Home Assistant dashboards, voice assistants, and media sources
+- **⚡ Hybrid State Updates** - UPnP events for real-time updates + HTTP polling for reliability
+- **🎛️ Advanced Audio** - 10-band EQ, audio quality sensors, output mode control, and format support
+- **⏰ Timer & Alarms** - Sleep timer and alarm management for WiiM devices
+- **📊 Rich Diagnostics** - Comprehensive statistics, health monitoring, and troubleshooting tools
+- **🔄 Scene Support** - Full scene restoration including EQ presets and playback state
+- **🎯 Smart Features** - Optimistic UI updates, adaptive polling, and intelligent source detection
 
 ## Supported Devices
 
@@ -53,18 +58,69 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ## Key Features
 
-| Feature               | Description                                                                   |
-| --------------------- | ----------------------------------------------------------------------------- |
-| **Media Control**     | Play, pause, stop, next/previous, seek                                        |
-| **Volume Control**    | Individual and synchronized group volume                                      |
-| **Smart Sources**     | Detects streaming services (Spotify, Amazon Music, etc.)                      |
-| **Audio Output**      | Control hardware output modes (Line Out, Optical, Coax, Bluetooth)            |
-| **Multiroom Groups**  | Synchronized playback across speaker groups                                   |
-| **Quick Stations**    | Custom radio station list in Browse Media                                     |
-| **EQ Control**        | 10-band equalizer with presets                                                |
-| **Presets**           | Hardware preset buttons (device dependent, up to 20)                          |
-| **Auto-Discovery**    | Finds speakers automatically via UPnP/Zeroconf                                |
-| **Real-Time Updates** | UPnP event subscriptions for instant state changes with HTTP polling fallback |
+### 🎵 Media Playback & Control
+
+| Feature              | Description                                                                       |
+| -------------------- | --------------------------------------------------------------------------------- |
+| **Media Control**    | Play, pause, stop, next/previous, seek with resume support                        |
+| **Volume Control**   | Individual and synchronized group volume with debouncing                          |
+| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, Apple Music, etc.)             |
+| **Media Browser**    | Browse Home Assistant media sources, DLNA servers, and custom radio stations      |
+| **TTS Support**      | Full Text-to-Speech integration for all TTS engines (Google, Amazon, Azure, etc.) |
+| **Shuffle & Repeat** | Toggle shuffle and repeat modes for playlists                                     |
+| **Presets**          | Hardware preset buttons (device dependent, up to 20)                              |
+| **URL Playback**     | Play audio from any URL (radio streams, files, playlists)                         |
+
+### 🎛️ Audio Enhancement
+
+| Feature            | Description                                                                   |
+| ------------------ | ----------------------------------------------------------------------------- |
+| **EQ Control**     | 10-band equalizer with 24 presets (Flat, Rock, Jazz, Classical, Pop, etc.)    |
+| **Custom EQ**      | Fine-tune each of 10 frequency bands (-12dB to +12dB)                         |
+| **Audio Output**   | Control hardware output modes (Line Out, Optical, Coax, Bluetooth, Headphone) |
+| **Audio Quality**  | Real-time sensors for sample rate, bit depth, and bit rate                    |
+| **Format Support** | Lossless (FLAC, WAV, ALAC up to 24-bit/192kHz) and compressed formats         |
+
+### 🏠 Multiroom & Grouping
+
+| Feature                | Description                                                     |
+| ---------------------- | --------------------------------------------------------------- |
+| **Multiroom Groups**   | Synchronized playback across speaker groups with perfect timing |
+| **Group Coordinators** | Virtual entities for unified group control                      |
+| **Role Detection**     | Automatic master/slave/solo role detection with sensors         |
+| **Group Volume**       | Synchronized volume control across all group members            |
+| **Smart Grouping**     | Uses Home Assistant's native grouping for reliable sync         |
+
+### ⏰ Timer & Alarm Features (WiiM Devices)
+
+| Feature              | Description                                                       |
+| -------------------- | ----------------------------------------------------------------- |
+| **Sleep Timer**      | Set sleep timer (0-7200 seconds) to automatically turn off device |
+| **Alarm Management** | Create and manage up to 3 alarms with daily/weekly schedules      |
+| **Alarm Control**    | Full alarm creation, update, and deletion via services            |
+
+### 📊 Sensors & Diagnostics
+
+| Feature               | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| **Role Sensor**       | Shows current multiroom role (Master/Slave/Solo) |
+| **Input Sensor**      | Current audio input source                       |
+| **Audio Quality**     | Sample rate, bit depth, and bit rate sensors     |
+| **Diagnostic Sensor** | Comprehensive device health and statistics       |
+| **Firmware Sensor**   | Device firmware version tracking                 |
+| **Bluetooth Status**  | Bluetooth output and connected device status     |
+
+### 🔧 Advanced Features
+
+| Feature                  | Description                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| **Auto-Discovery**       | Finds speakers automatically via UPnP/SSDP/Zeroconf                           |
+| **Real-Time Updates**    | UPnP event subscriptions for instant state changes with HTTP polling fallback |
+| **Scene Support**        | Full scene restoration including EQ presets and playback state                |
+| **Optimistic Updates**   | Immediate UI feedback for all controls                                        |
+| **Enhanced Diagnostics** | Comprehensive device diagnostics with statistics and health monitoring        |
+| **Protocol Fallback**    | Automatic HTTP/HTTPS protocol detection with multi-port fallback              |
+| **Audio Pro Support**    | Full support for Audio Pro MkII with mTLS client certificate authentication   |
 
 ## How It Works
 
@@ -136,31 +192,84 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 ### Automation Examples
 
 ```yaml
-# Morning radio
-- service: media_player.play_media
-  target: media_player.kitchen
-  data:
-    media_content_type: url
-    media_content_id: "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two"
+# Morning radio with TTS announcement
+- alias: "Morning Routine"
+  trigger:
+    platform: time
+    at: "07:00:00"
+  action:
+    - service: tts.google_translate_say
+      target:
+        entity_id: media_player.kitchen
+      data:
+        message: "Good morning! Starting your favorite radio station."
+    - service: media_player.play_media
+      target:
+        entity_id: media_player.kitchen
+      data:
+        media_content_type: url
+        media_content_id: "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two"
 
 # Play preset button
 - service: wiim.play_preset
-  target: media_player.living_room
+  target:
+    entity_id: media_player.living_room
   data:
     preset: 1
+
+# Set sleep timer before bed
+- alias: "Bedtime Sleep Timer"
+  trigger:
+    platform: time
+    at: "22:30:00"
+  action:
+    - service: wiim.set_sleep_timer
+      target:
+        entity_id: media_player.bedroom
+      data:
+        sleep_time: 3600 # 1 hour
+
+# Create morning alarm
+- service: wiim.update_alarm
+  target:
+    entity_id: media_player.bedroom
+  data:
+    alarm_id: 0
+    time: "07:00:00" # UTC time
+    trigger: "daily"
+    operation: "playback"
+
+# Set EQ for different music types
+- alias: "Rock Music EQ"
+  trigger:
+    platform: state
+    entity_id: media_player.living_room
+    attribute: source
+    to: "Spotify"
+  action:
+    - service: wiim.set_eq
+      target:
+        entity_id: media_player.living_room
+      data:
+        preset: "rock"
 ```
 
-## Advanced Services
+## Services & Platforms
 
-| Service                  | Description                             |
-| ------------------------ | --------------------------------------- |
-| `wiim.play_preset`       | Play hardware preset (device dependent) |
-| `wiim.play_url`          | Play audio from URL                     |
-| `wiim.set_eq`            | Set equalizer presets or custom values  |
-| `wiim.reboot_device`     | Reboot device                           |
-| `wiim.set_sleep_timer`   | Set sleep timer (WiiM devices only)     |
-| `wiim.clear_sleep_timer` | Clear sleep timer (WiiM devices only)   |
-| `wiim.update_alarm`      | Set or update alarm (WiiM devices only) |
+### Official Services
+
+| Service                  | Description                                         |
+| ------------------------ | --------------------------------------------------- |
+| `wiim.play_preset`       | Play hardware preset (device dependent, up to 20)   |
+| `wiim.play_url`          | Play audio from URL (radio streams, files)          |
+| `wiim.play_playlist`     | Play M3U playlist from URL                          |
+| `wiim.set_eq`            | Set equalizer presets or custom 10-band values      |
+| `wiim.play_notification` | Play notification sound from URL                    |
+| `wiim.reboot_device`     | Reboot device                                       |
+| `wiim.sync_time`         | Synchronize device time with Home Assistant         |
+| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds, WiiM devices only) |
+| `wiim.clear_sleep_timer` | Clear sleep timer (WiiM devices only)               |
+| `wiim.update_alarm`      | Create/update alarm (3 slots, WiiM devices only)    |
 
 ### Unofficial API Services
 
@@ -228,6 +337,47 @@ entities:
     secondary_info: "{{ states('media_player.living_room_speaker').attributes.source }}"
 ```
 
+## Platforms & Entities
+
+The integration creates multiple entity types for comprehensive control:
+
+### Media Player
+
+- Main media player entity with full transport controls
+- Group coordinator entities for multiroom groups
+- Browse media support for all Home Assistant media sources
+
+### Sensors
+
+- **Multiroom Role** - Current role (Master/Slave/Solo)
+- **Input Source** - Current audio input
+- **Audio Quality** - Sample rate, bit depth, bit rate (when available)
+- **Firmware Version** - Device firmware tracking
+- **Bluetooth Status** - Bluetooth output and connected device
+- **Diagnostic** - Comprehensive device health and statistics
+
+### Select Entities
+
+- **Audio Output Mode** - Line Out, Optical, Coax, Bluetooth, Headphone (device dependent)
+- **EQ Preset** - 24 equalizer presets
+- **Sound Mode** - Audio processing modes
+
+### Buttons
+
+- **Sync Time** - Synchronize device clock
+- **Reboot Device** - Restart device
+- **Clear Sleep Timer** - Clear active sleep timer
+
+### Switches
+
+- **Mute** - Toggle mute state
+- **Shuffle** - Toggle shuffle mode
+- **Repeat** - Toggle repeat mode
+
+### Lights (Device Dependent)
+
+- **Status LED** - Control device LED indicators
+
 ## Diagnostics & Troubleshooting
 
 When experiencing issues, you can download comprehensive diagnostic information to help with troubleshooting:
@@ -240,8 +390,11 @@ The diagnostics include:
 - Device information (model, firmware, network status)
 - Multiroom group configuration and roles
 - Media playback state and current sources
-- API polling status and error tracking
+- **HTTP polling statistics** (total polls, success rate, response times)
+- **Command statistics** (total commands, success rate, failure tracking)
+- UPnP subscription status and health
 - EQ settings and sound modes
+- Audio output configuration
 
 **All sensitive data (IP addresses, MAC addresses, network names) is automatically redacted.**
 
@@ -272,7 +425,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines:
 
 This integration builds upon excellent work from:
 
-- **[pywiim](https://github.com/mjcumming/pywiim)** - The incredible Python library powering this integration's device communication
+- **[pywiim](https://github.com/mjcumming/pywiim)** - The brand new, fully async Python library we wrote that powers this integration's device communication
 - [python-linkplay](https://github.com/Velleman/python-linkplay) - Comprehensive LinkPlay library (inspiration for pywiim)
 - [LinkPlay HA Integration](https://github.com/nagyrobi/home-assistant-custom-components-linkplay) - Original LinkPlay integration
 

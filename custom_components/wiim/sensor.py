@@ -205,45 +205,51 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 
     def _status(self) -> dict[str, Any]:
         """Return *status* payload as a plain dict from Player properties."""
+        # Read directly from Player object (always up-to-date via pywiim)
         if not self.coordinator.data:
             return {}
+        player = self.coordinator.data.get("player")
+        if not player:
+            return {}
 
-        # Build status dict from Player properties in coordinator.data
-        data = self.coordinator.data
         status_dict: dict[str, Any] = {}
 
         # Map Player properties to status dict format
-        if data.get("play_state") is not None:
-            status_dict["play_status"] = data.get("play_state")
-        if data.get("volume_level") is not None:
+        if player.play_state is not None:
+            status_dict["play_status"] = player.play_state
+        if player.volume_level is not None:
             # Convert back to 0-100 for status dict (Player provides 0-1)
-            status_dict["vol"] = int(data.get("volume_level", 0) * 100)
-        if data.get("is_muted") is not None:
-            status_dict["mute"] = data.get("is_muted")
-        if data.get("source") is not None:
-            status_dict["source"] = data.get("source")
-        if data.get("media_position") is not None:
-            status_dict["position"] = data.get("media_position")
-        if data.get("media_duration") is not None:
-            status_dict["duration"] = data.get("media_duration")
-        if data.get("media_title") is not None:
-            status_dict["Title"] = data.get("media_title")
-        if data.get("media_artist") is not None:
-            status_dict["Artist"] = data.get("media_artist")
-        if data.get("media_album") is not None:
-            status_dict["Album"] = data.get("media_album")
-        if data.get("media_image_url") is not None:
-            status_dict["entity_picture"] = data.get("media_image_url")
-            status_dict["cover_url"] = data.get("media_image_url")
-        if data.get("eq_preset") is not None:
-            status_dict["eq"] = data.get("eq_preset")
-        if data.get("wifi_rssi") is not None:
-            status_dict["RSSI"] = data.get("wifi_rssi")
-            status_dict["wifi_rssi"] = data.get("wifi_rssi")
-        if data.get("shuffle") is not None:
-            status_dict["shuffle"] = data.get("shuffle")
-        if data.get("repeat") is not None:
-            status_dict["repeat"] = data.get("repeat")
+            status_dict["vol"] = int(player.volume_level * 100)
+        if player.is_muted is not None:
+            status_dict["mute"] = player.is_muted
+        if player.source is not None:
+            status_dict["source"] = player.source
+        if player.media_position is not None:
+            status_dict["position"] = player.media_position
+        if player.media_duration is not None:
+            status_dict["duration"] = player.media_duration
+        if player.media_title is not None:
+            status_dict["Title"] = player.media_title
+        if player.media_artist is not None:
+            status_dict["Artist"] = player.media_artist
+        if player.media_album is not None:
+            status_dict["Album"] = player.media_album
+        if player.media_image_url is not None:
+            status_dict["entity_picture"] = player.media_image_url
+            status_dict["cover_url"] = player.media_image_url
+        eq_preset = getattr(player, "eq_preset", None)
+        if eq_preset is not None:
+            status_dict["eq"] = eq_preset
+        wifi_rssi = getattr(player, "wifi_rssi", None)
+        if wifi_rssi is not None:
+            status_dict["RSSI"] = wifi_rssi
+            status_dict["wifi_rssi"] = wifi_rssi
+        shuffle = getattr(player, "shuffle", None)
+        if shuffle is not None:
+            status_dict["shuffle"] = shuffle
+        repeat = getattr(player, "repeat", None)
+        if repeat is not None:
+            status_dict["repeat"] = repeat
 
         return status_dict
 
@@ -263,14 +269,16 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self) -> str:
         """Return Wi-Fi RSSI in dBm (negative integer)."""
-        # Use Player property (pywiim 0.24+)
+        # Read directly from Player object (always up-to-date via pywiim)
         if self.coordinator.data:
-            rssi = self.coordinator.data.get("wifi_rssi")
-            if rssi is not None:
-                try:
-                    return f"Wi-Fi {int(rssi)} dBm"
-                except (TypeError, ValueError):
-                    pass
+            player = self.coordinator.data.get("player")
+            if player:
+                rssi = getattr(player, "wifi_rssi", None)
+                if rssi is not None:
+                    try:
+                        return f"Wi-Fi {int(rssi)} dBm"
+                    except (TypeError, ValueError):
+                        pass
 
         # No RSSI → show basic connectivity status
         # Check for recent command failures for more specific status
@@ -467,10 +475,11 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self):
         """Return the current input source (can be selectable or non-selectable)."""
-        # Read directly from coordinator data
-        # Use Player property from coordinator.data
+        # Read directly from Player object (always up-to-date via pywiim)
         if self.coordinator.data:
-            return self.coordinator.data.get("source")
+            player = self.coordinator.data.get("player")
+            if player:
+                return player.source
         return None
 
 

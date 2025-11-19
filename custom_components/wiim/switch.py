@@ -77,7 +77,6 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         try:
             _LOGGER.info("Enabling equalizer for %s", self.speaker.name)
             await self.speaker.coordinator.player.set_eq_enabled(True)
-            await self._async_execute_command_with_refresh("equalizer_on")
 
         except Exception as err:
             _LOGGER.error("Failed to enable equalizer for %s: %s", self.speaker.name, err)
@@ -92,7 +91,6 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         try:
             _LOGGER.info("Disabling equalizer for %s", self.speaker.name)
             await self.speaker.coordinator.player.set_eq_enabled(False)
-            await self._async_execute_command_with_refresh("equalizer_off")
 
         except Exception as err:
             _LOGGER.error("Failed to disable equalizer for %s: %s", self.speaker.name, err)

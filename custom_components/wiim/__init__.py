@@ -371,20 +371,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Use empty capabilities - WiiMClient will handle it
         capabilities = {}
 
-    # Create client with capabilities
-    client = WiiMClient(
-        host=entry.data["host"],
-        port=entry.data.get("port", 443),
-        timeout=entry.data.get("timeout", 10),
-        session=session,
-        capabilities=capabilities,
-    )
-
+    # Coordinator creates client and player internally using HA's shared session
     coordinator = WiiMCoordinator(
         hass,
-        client,
+        host=entry.data["host"],
         entry=entry,
         capabilities=capabilities,
+        port=entry.data.get("port", 443),
+        timeout=entry.data.get("timeout", 10),
     )
 
     # ------------------------------------------------------------------
@@ -401,7 +395,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store minimal references immediately so helper look-ups succeed
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
-        "client": client,
         "speaker": speaker,
         "entry": entry,  # platform access to options
     }

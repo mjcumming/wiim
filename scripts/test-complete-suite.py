@@ -302,6 +302,23 @@ class WiiMCompleteTestSuite:
         sources = state["attributes"].get("source_list", [])
         current = state["attributes"].get("source")
 
+        # Show diagnostic info about sources
+        print(f"  Source list from HA: {sources}")
+        print(f"  Current source: {current}")
+
+        # Try to get diagnostics to see what pywiim is providing
+        try:
+            diagnostics_url = f"{self.ha_url}/api/diagnostics/device/{device.get('device_id', '')}"
+            diag_response = requests.get(diagnostics_url, headers=self.headers, timeout=5)
+            if diag_response.status_code == 200:
+                diag_data = diag_response.json()
+                source_diag = diag_data.get("source_list_diagnostics", {})
+                if source_diag:
+                    print(f"  Pywiim available_sources: {source_diag.get('available_sources_from_pywiim')}")
+                    print(f"  Pywiim input_list: {source_diag.get('input_list_from_device_info')}")
+        except Exception:
+            pass  # Diagnostics not available, skip
+
         if len(sources) < 2:
             self.print_warning("Not enough sources")
             return {"test": "Source", "passed": None, "details": {"skipped": True}}

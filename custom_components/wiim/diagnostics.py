@@ -281,6 +281,34 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 speaker.device_model.model_dump(exclude_none=True), TO_REDACT
             )
 
+        # Source list diagnostics - helps debug input source issues
+        source_diagnostics = {}
+        if coordinator and coordinator.player:
+            player = coordinator.player
+            # Get available_sources from pywiim Player
+            available_sources = getattr(player, "available_sources", None)
+            source_diagnostics["available_sources_from_pywiim"] = list(available_sources) if available_sources else None
+            # Get input_list from device_info
+            input_list = speaker.input_list
+            source_diagnostics["input_list_from_device_info"] = input_list
+            # Show what the media player would display
+            if coordinator.data:
+                media_player = coordinator.data.get("player")
+                if media_player:
+                    # This is what source_list property would return
+                    from .media_player import _capitalize_source_name
+
+                    if available_sources:
+                        source_diagnostics["displayed_source_list"] = [
+                            _capitalize_source_name(str(s)) for s in available_sources
+                        ]
+                    elif input_list:
+                        source_diagnostics["displayed_source_list"] = [
+                            _capitalize_source_name(str(s)) for s in input_list
+                        ]
+                    else:
+                        source_diagnostics["displayed_source_list"] = []
+
         return {
             "device_info": device_info,
             "group_info": group_info,
@@ -291,6 +319,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "command_statistics": command_stats,
             "api_status": async_redact_data(api_status, TO_REDACT),
             "model_data": model_data,
+            "source_list_diagnostics": source_diagnostics,
             "raw_coordinator_data": async_redact_data(raw_data, TO_REDACT),
         }
 

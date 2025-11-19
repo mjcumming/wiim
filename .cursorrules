@@ -244,3 +244,31 @@ Before writing code, ask:
 **This is a wrapper, not a device library.**
 **`pywiim` does the device communication.**
 **We just integrate it with Home Assistant.**
+
+## CRITICAL: Problem Diagnosis Protocol
+
+**When you encounter a device communication or state update issue:**
+
+1. **DO NOT** write workarounds in the integration code
+2. **DO NOT** implement device communication logic here
+3. **DO** identify what pywiim should be doing but isn't
+4. **DO** document the specific pywiim bug/limitation
+5. **DO** report it as a pywiim issue, not an integration issue
+
+### Example: Slave Device State Not Updating
+
+**Problem**: Main Floor slave device isn't updating when Master Bedroom (master) changes state.
+
+**WRONG Approach** ❌:
+
+- Writing code in `media_player.py` to fetch master's state for slaves
+- Implementing master/slave state synchronization in the integration
+- Adding workarounds to read from master's Player object
+
+**CORRECT Approach** ✅:
+
+- Identify that `Player.refresh()` on a slave device should update the slave's Player object with the master's state
+- Document that pywiim needs to fix: When `player.role == "slave"`, `Player.refresh()` should fetch and populate the slave's Player properties (`play_state`, `media_title`, `media_artist`, etc.) with the master's values
+- Report to pywiim maintainers
+
+**The integration reads directly from `player.play_state`, `player.media_title`, etc. If those aren't populated correctly by pywiim, that's a pywiim bug, not an integration bug.**
