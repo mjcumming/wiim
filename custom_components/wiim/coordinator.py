@@ -125,11 +125,36 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Extract metadata from Player object
             metadata = self._extract_metadata()
 
-            # Create a new dict with the updated Player object to force state change detection
+            # Extract frequently-changing properties as primitives to help Home Assistant detect changes
+            # This ensures HA can detect changes even when the Player object reference is the same
+            volume_level = getattr(self.player, "volume_level", None)
+            is_muted = getattr(self.player, "is_muted", None)
+            play_state = getattr(self.player, "play_state", None)
+
+            # Get old values for comparison
+            old_volume = None
+            if self.data and self.data.get("player"):
+                old_volume = getattr(self.data["player"], "volume_level", None)
+
+            # Log volume changes for debugging
+            if volume_level != old_volume:
+                _LOGGER.debug(
+                    "[%s] Volume changed in callback: %s -> %s",
+                    self.player.host,
+                    old_volume,
+                    volume_level,
+                )
+
+            # Create a new dict with the updated Player object and extracted values
+            # Including primitives helps Home Assistant detect changes more reliably
             new_data = {
                 "player": self.player,
                 "group_info": self._last_group_info,
                 "metadata": metadata,
+                # Include frequently-changing properties as primitives for change detection
+                "volume_level": volume_level,
+                "is_muted": is_muted,
+                "play_state": play_state,
             }
             self.async_set_updated_data(new_data)
         else:
@@ -157,12 +182,22 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Extract metadata from Player object
             metadata = self._extract_metadata()
 
+            # Extract frequently-changing properties as primitives to help Home Assistant detect changes
+            volume_level = getattr(self.player, "volume_level", None)
+            is_muted = getattr(self.player, "is_muted", None)
+            play_state = getattr(self.player, "play_state", None)
+
             # Return Player object, cached group info, and metadata - entities read all state directly from Player
             # pywiim handles all playback state management internally (UPnP events, polling, etc.)
+            # Including primitives helps Home Assistant detect changes more reliably
             return {
                 "player": self.player,
                 "group_info": group_info,
                 "metadata": metadata,
+                # Include frequently-changing properties as primitives for change detection
+                "volume_level": volume_level,
+                "is_muted": is_muted,
+                "play_state": play_state,
             }
 
         except WiiMError as err:

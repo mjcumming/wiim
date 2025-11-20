@@ -172,29 +172,53 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def volume_level(self) -> float | None:
-        """Return master volume level."""
+        """Return group volume level from pywiim group object.
+
+        Uses player.group.volume_level which returns the MAXIMUM volume of any device.
+        """
         if not self.available:
             return None
         player = self._get_player()
-        return player.volume_level if player else None
+        if not player:
+            return None
+        group = getattr(player, "group", None)
+        if not group:
+            return None
+        # Use pywiim's group.volume_level property (returns MAX of all devices)
+        return getattr(group, "volume_level", None)
 
     @property
     def is_volume_muted(self) -> bool | None:
-        """Return master mute state."""
+        """Return group mute state from pywiim group object.
+
+        Uses player.group.is_muted which returns True only if ALL devices are muted.
+        """
         if not self.available:
             return None
         player = self._get_player()
-        return player.is_muted if player else None
+        if not player:
+            return None
+        group = getattr(player, "group", None)
+        if not group:
+            return None
+        # Use pywiim's group.is_muted property (True only if ALL devices are muted)
+        return getattr(group, "is_muted", None)
 
     async def async_set_volume_level(self, volume: float) -> None:
-        """Set volume level for all group members."""
+        """Set volume level for all group members using pywiim group.set_volume_all()."""
         if not self.available:
             return
 
-        if not self.available:
+        player = self._get_player()
+        if not player:
             return
+        group = getattr(player, "group", None)
+        if not group:
+            return
+
         try:
-            await self.coordinator.player.set_volume(volume)
+            # Use pywiim's group.set_volume_all() which sets volume on all members proportionally
+            await group.set_volume_all(volume)
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
@@ -211,14 +235,20 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to set group volume: {err}") from err
 
     async def async_mute_volume(self, mute: bool) -> None:
-        """Mute/unmute all group members."""
+        """Mute/unmute all group members using pywiim group.mute_all()."""
         if not self.available:
             return
 
-        if not self.available:
+        player = self._get_player()
+        if not player:
             return
+        group = getattr(player, "group", None)
+        if not group:
+            return
+
         try:
-            await self.coordinator.player.set_mute(mute)
+            # Use pywiim's group.mute_all() which sets mute on all members
+            await group.mute_all(mute)
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level

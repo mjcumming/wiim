@@ -560,7 +560,10 @@ class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self) -> str:
         """Return formatted audio quality string."""
+        if not self.speaker.coordinator.data:
+            return "Unknown"
         metadata = self.speaker.coordinator.data.get("metadata", {})
+
         if not metadata:
             return "Unknown"
 
@@ -622,6 +625,8 @@ class WiiMSampleRateSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self) -> int | None:
         """Return current track's sample rate in Hz."""
+        if not self.speaker.coordinator.data:
+            return None
         metadata = self.speaker.coordinator.data.get("metadata", {})
         sample_rate = metadata.get("sample_rate")
 
@@ -650,6 +655,8 @@ class WiiMBitDepthSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self) -> int | None:
         """Return current track's bit depth."""
+        if not self.speaker.coordinator.data:
+            return None
         metadata = self.speaker.coordinator.data.get("metadata", {})
         bit_depth = metadata.get("bit_depth")
 
@@ -678,6 +685,8 @@ class WiiMBitRateSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self) -> int | None:
         """Return current track's bit rate in kbps."""
+        if not self.speaker.coordinator.data:
+            return None
         metadata = self.speaker.coordinator.data.get("metadata", {})
         bit_rate = metadata.get("bit_rate")
 
