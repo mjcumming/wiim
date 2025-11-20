@@ -194,7 +194,7 @@ async def _reboot_device_service(hass: HomeAssistant, call):
             speaker = entry_data.get("speaker")
             if speaker:
                 try:
-                    await speaker.coordinator.player.client.reboot()
+                    await speaker.coordinator.player.reboot()
                     _LOGGER.info("Reboot command sent successfully to %s", speaker.name)
                 except Exception as err:
                     _LOGGER.info(
@@ -347,6 +347,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info(
                 "[AUDIO OUTPUT] Device %s does not support audio output control",
                 entry.data["host"],
+            )
+        # Log EQ capability specifically for debugging
+        if capabilities.get("supports_eq") or capabilities.get("eq_supported"):
+            _LOGGER.info(
+                "[EQ] Device %s supports EQ (detected by pywiim capability detection)",
+                entry.data["host"],
+            )
+        else:
+            _LOGGER.info(
+                "[EQ] Device %s - EQ support NOT detected by pywiim capability detection. Full capabilities: %s",
+                entry.data["host"],
+                capabilities,
             )
     except Exception as err:
         # Smart logging escalation for capability detection failures

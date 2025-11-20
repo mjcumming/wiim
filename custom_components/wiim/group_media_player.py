@@ -16,11 +16,9 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.components.media_player.const import RepeatMode
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
-from .const import DOMAIN
-from .data import Speaker, find_speaker_by_ip, find_speaker_by_uuid
+from .data import Speaker
 from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,10 +41,21 @@ def _is_connection_error(err: Exception) -> bool:
 
 
 class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
-    """Virtual group coordinator media player.
+    """Virtual group coordinator media player for WiiM multiroom groups.
 
-    Only available when speaker is master with slaves. Provides unified
-    control for the entire multiroom group.
+    This entity dynamically appears when a speaker becomes master with slaves,
+    providing unified control for the entire multiroom group. It disappears when
+    the group is disbanded (no slaves remain).
+
+    Design decisions per pywiim grouping architecture:
+    - Volume shows MAX of all devices (LinkPlay firmware behavior)
+    - Mute only true if ALL devices are muted (LinkPlay firmware behavior)
+    - All playback commands (play/pause/stop/next/previous) delegate to physical master
+    - Media metadata (title/artist/album/cover art) comes from physical master
+    - Shuffle/repeat available only if master's source supports them
+    - Source selection and sound mode/EQ must use individual speaker entities
+    - Join/unjoin operations must use individual speaker entities (blocked here)
+    - All state management handled by pywiim via callbacks (no manual sync needed)
     """
 
     def __init__(self, speaker: Speaker) -> None:
@@ -70,53 +79,43 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def available(self) -> bool:
-        """Return True only when master with slaves."""
+        """Return True only when master with slaves.
+
+        This entity dynamically appears/disappears based on group status:
+        - Appears when device is master with at least one slave
+        - Disappears when group is disbanded (no slaves) or device is slave/solo
+
+        Uses player.role (device API source of truth), NOT group.all_players which
+        may be empty even if device has slaves.
+        """
         if not self.speaker.available or not self.coordinator.last_update_success:
             return False
-        # Only available when master with slaves (derive from pywiim Player.group)
+
         player = self._get_player()
         if not player:
             return False
-        if player.role != "master":
-            return False
-        return bool(self._get_group_members())
 
-    def _get_group_members(self) -> list[Speaker]:
-        """Get list of slave speakers in the group using pywiim Player.group."""
-        player = self._get_player()
-        if not player:
-            return []
-        speakers: list[Speaker] = []
-        added_ids: set[str] = set()
-
-        def _append_speaker(sp: Speaker | None) -> None:
-            if not sp:
-                return
-            if sp.uuid in added_ids:
-                return
-            speakers.append(sp)
-            added_ids.add(sp.uuid)
-
-        # Prefer pywiim group object when populated
-        group = getattr(player, "group", None)
-        if group:
-            member_objs = getattr(group, "members", None) or getattr(group, "slaves", None) or []
-            for member in member_objs:
-                member_uuid = getattr(member, "uuid", None) or getattr(member, "mac", None)
-                if member_uuid:
-                    _append_speaker(find_speaker_by_uuid(self.hass, str(member_uuid)))
-
-        # Fallback to coordinator group_info (populated directly from device APIs)
-        group_info = (self.coordinator.data or {}).get("group_info") if self.coordinator.data else None
-        if group_info and group_info.get("role") == "master":
-            for host in group_info.get("slave_hosts", []) or []:
-                _append_speaker(find_speaker_by_ip(self.hass, host))
-
-        return speakers
+        # Virtual group only available for masters
+        # player.is_master is computed from device API state (source of truth)
+        return player.is_master
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
-        """Flag media player features supported by group coordinator."""
+        """Flag media player features supported by group coordinator.
+
+        The virtual group coordinator provides:
+        - Volume/mute control (group-wide via pywiim's Group object)
+        - Basic playback control (play/pause/stop/next/previous to master)
+        - Play media and announcements
+        - Shuffle/repeat (if master's source supports them)
+
+        Intentionally excluded (use individual speaker entities instead):
+        - GROUPING (join/unjoin operations)
+        - SELECT_SOURCE (source is per-device, not per-group)
+        - SELECT_SOUND_MODE (EQ/sound mode is per-device, not per-group)
+        - BROWSE_MEDIA (browse from individual entity)
+        - MEDIA_ENQUEUE (queue management on individual entity)
+        """
         if not self.available:
             # Return basic features even when unavailable
             return (
@@ -136,10 +135,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
-            # NOTE: GROUPING feature is intentionally excluded for virtual group players
         )
 
-        # Only include shuffle/repeat if pywiim says they're supported
+        # Only include shuffle/repeat if master's source supports them
         if self._shuffle_supported():
             features |= MediaPlayerEntityFeature.SHUFFLE_SET
         if self._repeat_supported():
@@ -205,7 +203,13 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         return getattr(group, "is_muted", None)
 
     async def async_set_volume_level(self, volume: float) -> None:
-        """Set volume level for all group members using pywiim group.set_volume_all()."""
+        """Set volume level for all group members proportionally.
+
+        Uses pywiim's group.set_volume_all() which sets volume on all members
+        while maintaining their relative volume differences. For example, if
+        master is at 50% and slave at 30% (60% of master), setting group to
+        80% results in master at 80% and slave at 48% (still 60% of master).
+        """
         if not self.available:
             return
 
@@ -235,7 +239,10 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to set group volume: {err}") from err
 
     async def async_mute_volume(self, mute: bool) -> None:
-        """Mute/unmute all group members using pywiim group.mute_all()."""
+        """Mute/unmute all group members simultaneously.
+
+        Uses pywiim's group.mute_all() which sets mute state on all members.
+        """
         if not self.available:
             return
 
@@ -265,7 +272,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to set group mute: {err}") from err
 
     async def async_media_play(self) -> None:
-        """Start playback on master (slaves follow automatically)."""
+        """Start playback on master (slaves follow automatically).
+
+        Commands sent to coordinator.player (the physical master) are automatically
+        synchronized to all slaves by the LinkPlay firmware.
+        """
         if not self.available:
             return
 
@@ -275,7 +286,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to play: {err}") from err
 
     async def async_media_pause(self) -> None:
-        """Pause playback on master (slaves follow automatically)."""
+        """Pause playback on master (slaves follow automatically).
+
+        Commands sent to coordinator.player (the physical master) are automatically
+        synchronized to all slaves by the LinkPlay firmware.
+        """
         if not self.available:
             return
 
@@ -285,7 +300,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to pause: {err}") from err
 
     async def async_media_stop(self) -> None:
-        """Stop playback on master (slaves follow automatically)."""
+        """Stop playback on master (slaves follow automatically).
+
+        Commands sent to coordinator.player (the physical master) are automatically
+        synchronized to all slaves by the LinkPlay firmware.
+        """
         if not self.available:
             return
 
@@ -295,7 +314,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to stop: {err}") from err
 
     async def async_media_next_track(self) -> None:
-        """Skip to next track on master (slaves follow automatically)."""
+        """Skip to next track on master (slaves follow automatically).
+
+        Commands sent to coordinator.player (the physical master) are automatically
+        synchronized to all slaves by the LinkPlay firmware.
+        """
         if not self.available:
             return
 
@@ -305,7 +328,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to skip track: {err}") from err
 
     async def async_media_previous_track(self) -> None:
-        """Skip to previous track on master (slaves follow automatically)."""
+        """Skip to previous track on master (slaves follow automatically).
+
+        Commands sent to coordinator.player (the physical master) are automatically
+        synchronized to all slaves by the LinkPlay firmware.
+        """
         if not self.available:
             return
 
@@ -315,7 +342,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to go to previous track: {err}") from err
 
     async def async_play_media(self, _media_type: str, media_id: str, **_kwargs: Any) -> None:
-        """Play media on master (slaves follow automatically)."""
+        """Play media on master (slaves follow automatically).
+
+        Commands sent to coordinator.player (the physical master) are automatically
+        synchronized to all slaves by the LinkPlay firmware.
+        """
         if not self.available:
             return
 
@@ -327,7 +358,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     # ===== SHUFFLE & REPEAT =====
 
     def _shuffle_supported(self) -> bool:
-        """Check if shuffle is supported - query from pywiim Player."""
+        """Check if shuffle is supported by master's current source.
+
+        Shuffle availability depends on the content being played (local files,
+        streaming services, etc.). pywiim's Player automatically determines this.
+        """
         if not self.available:
             return False
         player = self._get_player()
@@ -355,7 +390,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         return None
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
-        """Enable/disable shuffle mode - pass through to pywiim."""
+        """Enable/disable shuffle mode on master (affects group playback).
+
+        State changes are automatically synchronized via pywiim's on_state_changed
+        callback, which triggers coordinator updates for all entities.
+        """
         if not self.available:
             return
         try:
@@ -366,7 +405,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
 
     def _repeat_supported(self) -> bool:
-        """Check if repeat is supported - query from pywiim Player."""
+        """Check if repeat is supported by master's current source.
+
+        Repeat availability depends on the content being played (local files,
+        streaming services, etc.). pywiim's Player automatically determines this.
+        """
         if not self.available:
             return False
         player = self._get_player()
@@ -396,7 +439,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         return None
 
     async def async_set_repeat(self, repeat: RepeatMode) -> None:
-        """Set repeat mode - pass through to pywiim."""
+        """Set repeat mode on master (affects group playback).
+
+        State changes are automatically synchronized via pywiim's on_state_changed
+        callback, which triggers coordinator updates for all entities.
+        """
         if not self.available:
             return
         try:
@@ -411,7 +458,10 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to set repeat: {err}") from err
 
-    # Media properties delegate to master
+    # ===== MEDIA PROPERTIES =====
+    # All media metadata delegates to the physical master player.
+    # The master device determines what's playing and provides metadata.
+
     @property
     def media_title(self) -> str | None:
         """Return media title from master."""
@@ -454,8 +504,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def media_image_url(self) -> str | None:
-        """Image url of current playing media from master."""
-        # Group player only shows cover art when available (in group mode)
+        """Return cover art URL from master."""
         if not self.available:
             return None
         player = self._get_player()
@@ -507,50 +556,38 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
+        """Return extra state attributes for the virtual group coordinator.
+
+        Minimal attributes - all state is managed by pywiim:
+        - group_leader: Name of the physical master device
+        - group_status: "active" when coordinating, "inactive" otherwise
+        """
         attrs = {
             "group_leader": self.speaker.name,
-            "group_role": "coordinator",
-            "is_group_coordinator": True,
-            "music_assistant_excluded": True,
-            "integration_purpose": "home_assistant_multiroom_only",
+            "group_status": "active" if self.available else "inactive",
         }
-
-        if self.available:
-            group_members = self._get_group_members()
-            attrs["group_size"] = len(group_members) + 1  # +1 for master
-            attrs["group_status"] = "active"
-
-            # Build list of entity IDs for group members
-            entity_registry = er.async_get(self.hass)
-            entity_ids = []
-
-            # Include master - get the individual media player entity ID
-            master_entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, self.speaker.uuid)
-            if master_entity_id:
-                entity_ids.append(master_entity_id)
-
-            # Include slaves
-            for slave_speaker in group_members:
-                entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, slave_speaker.uuid)
-                if entity_id:
-                    entity_ids.append(entity_id)
-
-            attrs["group_members"] = entity_ids
-        else:
-            attrs["group_size"] = 0
-            attrs["group_status"] = "inactive"
-            attrs["group_members"] = []
-
         return attrs
 
-    # Prevent join/unjoin on virtual group player
+    # ===== GROUPING OPERATIONS =====
+    # Join/unjoin operations are intentionally blocked on the virtual group
+    # coordinator. Use individual speaker entities to manage group membership.
+    # This maintains clear separation: individual entities for membership,
+    # group coordinator for unified playback control.
+
     async def async_join_players(self, group_members: list[str]) -> None:
-        """Prevent joining - virtual group players cannot join other players."""
+        """Prevent joining - virtual group players cannot join other players.
+
+        To manage group membership, use the individual speaker entities.
+        The group coordinator is only for unified playback control.
+        """
         raise HomeAssistantError(
             "Virtual group player cannot join other players. Use the individual speaker entity instead."
         )
 
     async def async_unjoin_player(self) -> None:
-        """Prevent unjoining - virtual group players cannot be unjoined."""
+        """Prevent unjoining - virtual group players cannot be unjoined.
+
+        To manage group membership, use the individual speaker entities.
+        The group coordinator is only for unified playback control.
+        """
         raise HomeAssistantError("Virtual group player cannot be unjoined. Use the individual speaker entity instead.")

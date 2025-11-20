@@ -98,32 +98,30 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return equalizer-related information."""
+        """Return equalizer-related information.
+
+        pywiim provides:
+        - player.eq_presets: list of available presets (cached from refresh())
+        - player.eq_preset: current preset
+        - capabilities["supports_eq"]: whether device supports EQ
+        """
         if not self.speaker.coordinator.data:
             return {"eq_supported": False, "current_preset": None, "available_presets": []}
 
-        eq_info = self.speaker.coordinator.data.get("eq", {})
-        polling_info = self.speaker.coordinator.data.get("polling", {})
-        api_capabilities = polling_info.get("api_capabilities", {})
+        player = self.speaker.coordinator.data.get("player")
+        capabilities = (
+            self.speaker.coordinator._capabilities if hasattr(self.speaker.coordinator, "_capabilities") else {}
+        )
 
-        # Get available presets from pywiim (if provided)
+        # Get presets and current preset from Player object
         available_presets = []
-        if isinstance(eq_info, dict):
-            # Try to get presets from eq_info dict (pywiim may provide this)
-            available_presets = eq_info.get("available_presets", eq_info.get("presets", []))
+        current_preset = None
+        if player:
+            available_presets = getattr(player, "eq_presets", []) or []
+            current_preset = getattr(player, "eq_preset", None)
 
-        # Fallback: try to get from Player if available
-        if not available_presets:
-            player = self.speaker.coordinator.data.get("player")
-            if player:
-                available_presets = getattr(player, "available_eq_presets", None) or []
-                if not isinstance(available_presets, list):
-                    available_presets = []
-
-        attrs = {
-            "eq_supported": api_capabilities.get("eq_supported", False),
-            "current_preset": eq_info.get("eq_preset") if isinstance(eq_info, dict) else None,
+        return {
+            "eq_supported": capabilities.get("supports_eq", False),
+            "current_preset": current_preset,
             "available_presets": available_presets,
         }
-
-        return attrs

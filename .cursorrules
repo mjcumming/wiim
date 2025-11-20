@@ -1,26 +1,175 @@
-# WiiM Integration Rules
+# WiiM Home Assistant Integration - Development Rules
 
-## Core Principle
-This is a THIN INTEGRATION LAYER between pywiim and Home Assistant. We do NOT:
-- Make things up
-- Fix pywiim bugs (report them instead)
-- Dream up new features
-- Calculate values that pywiim should provide
+## Documentation
 
-## What We Do
-- Use pywiim exactly as intended
-- Read values directly from pywiim Player/Group objects
-- Pass through pywiim methods and properties
-- Report issues to user if pywiim doesn't provide what we need
+- **Developer Guide**: See `/development/README.md` for architecture and contribution guidelines
+- **Testing Guide**: See `/development/TESTING.md` for test requirements and examples
+- **HA Integration Guide**: See `/development/HA_INTEGRATION_GUIDE.md` for Home Assistant specific patterns
+- **User Documentation**: See `/docs/` for user-facing guides
 
-## Group Media Player Volume
-- Use the volume from pywiim's group player object
-- Do NOT calculate maximum volume from members
-- Do NOT make up group volume logic
-- If pywiim doesn't provide group volume, report it - don't work around it
+**Do not create new documentation files without being explicitly asked.**
 
-## When pywiim is missing something
-- Tell the user immediately
-- Do NOT create workarounds
-- Do NOT implement missing functionality ourselves
-- The fix belongs in pywiim, not here
+## CRITICAL: Never Work Around pywiim Issues
+
+**NEVER create workarounds or fallbacks in the HA integration for missing pywiim functionality.**
+
+If pywiim is not providing something it should (like EQ capabilities, available presets, etc.):
+
+1. **FIX IT IN PYWIIM** - Go fix the pywiim library directly
+2. **DO NOT** add fallback detection logic in the HA integration
+3. **DO NOT** add conditional checks for "if pywiim doesn't provide X, try Y"
+4. **DO NOT** work around pywiim bugs with HA integration code
+
+### Why This Matters
+
+- pywiim is THE source of truth for device capabilities
+- Working around pywiim issues creates technical debt
+- Fixes belong in pywiim so ALL users benefit
+- The HA integration should be a thin wrapper, not compensating for pywiim
+
+### Examples of What NOT To Do
+
+❌ **WRONG:**
+
+```python
+def _is_eq_supported(self) -> bool:
+    # Check capabilities first
+    if capabilities.get("supports_eq"):
+        return True
+    # Fallback: check if player has presets (WORKAROUND)
+    if player.available_eq_presets:
+        return True
+```
+
+✅ **RIGHT:**
+
+```python
+def _is_eq_supported(self) -> bool:
+    # pywiim MUST provide this via capabilities
+    return capabilities.get("supports_eq", False)
+```
+
+If pywiim doesn't set `supports_eq` correctly → **FIX PYWIIM**
+
+### When You Discover a pywiim Issue
+
+1. Document it clearly
+2. Create a test case that demonstrates the issue
+3. Fix it in pywiim
+4. Update pywiim dependency version
+5. Remove any temporary workarounds from HA integration
+
+## File Naming Conventions
+
+- No underscores in directory or file names
+- Use hyphens for multi-word names: `eq-detection.md`, not `eq_detection.md`
+- Document files: YYYY.MM.DD format preferred
+
+## Home Assistant Automation Style
+
+- One automation per file
+- No dash before `id` field (avoid `- id:`)
+
+## Project Structure
+
+- Core functionality in `/custom_components/wiim/`
+- Tests in `/tests/` with proper fixtures
+- Documentation in `/docs/`
+- Keep integration simple - complexity belongs in pywiim
+
+## Logging Philosophy
+
+- Use appropriate log levels:
+  - DEBUG: Normal operation details
+  - INFO: State changes, setup completion
+  - WARNING: Recoverable issues, deprecated features
+  - ERROR: Actual problems requiring attention
+- Include device name in log messages: `[Device Name] message`
+- Log pywiim capability detection results for debugging
+
+## Testing Requirements
+
+- Test pywiim integration, not device hardware
+- Mock pywiim Player and Client objects
+- Test error handling and edge cases
+- No integration tests that require actual hardware
+
+## Code Quality
+
+- Type hints required
+- Docstrings for public methods
+- Follow Home Assistant development guidelines
+- Keep methods focused and single-purpose
+
+## Documentation Files
+
+**Do not create documentation files (.md, README, guides, etc.) unless explicitly requested.**
+
+The project already has:
+
+- Developer guides in `/development/`
+- User documentation in `/docs/`
+- Code comments and docstrings
+
+Creating additional documentation without being asked adds unnecessary maintenance burden.
+
+## Dependencies
+
+- pywiim is the ONLY library for WiiM device communication
+- Use Home Assistant's shared aiohttp session
+- No direct device HTTP calls - always through pywiim
+
+## pywiim API Usage
+
+Always use pywiim's actual attribute names:
+
+### EQ Control
+
+- **Capability**: `capabilities.get("supports_eq")` (NOT "eq_supported")
+- **Presets list**: `player.eq_presets` (NOT "available_eq_presets")
+- **Current preset**: `player.eq_preset`
+- **Set preset**: `await player.set_eq_preset(name.lower())`
+
+### Group/Multiroom
+
+**Device API = Source of Truth:**
+
+- **Check group state**: `player.is_master`, `player.is_slave`, `player.is_solo` (booleans)
+- **Role string**: `player.role` ("master"/"slave"/"solo")
+- **Get slave info**: `await player.client.get_device_group_info()`
+
+**Group object = Player references for operations:**
+
+- `player.group.master` - Player object reference to master
+- `player.group.slaves` - list[Player] for operations
+- `player.group.all_players` - list[Player] for operations
+- **WARNING**: These require `player_finder` callback to be populated!
+
+**How to check if device has slaves:**
+
+- ✅ Check `player.is_master` (boolean, preferred)
+- ✅ Check `player.role == "master"` (string alternative)
+- ❌ DO NOT check `len(player.group.all_players) > 1` (requires player_finder)
+
+**Enable group operations:**
+
+- ✅ Provide `player_finder` callback when creating Player
+- This allows pywiim to link Player objects into `group.all_players`
+
+### Common Mistakes to Avoid
+
+❌ `player.available_eq_presets` - Does not exist
+❌ `capabilities.get("eq_supported")` - Wrong key name
+❌ `player.group.slaves` - Exists but not populated, use `all_players` instead
+✅ `player.eq_presets` - Correct
+✅ `capabilities.get("supports_eq")` - Correct
+✅ `player.group.all_players` - Correct
+
+## When to Update This File
+
+- When asked to remember something important
+- When architectural decisions are made
+- When patterns are established
+- When bugs reveal design issues
+
+**If asked to remember something, update this file or the appropriate documentation immediately.**

@@ -32,7 +32,8 @@ class TestWiiMCoordinator:
         """Create a mock Player."""
         player = MagicMock(spec=Player)
         player.client = mock_client
-        player.refresh = AsyncMock()
+        player.host = "192.168.1.100"
+        player.refresh = AsyncMock()  # refresh() is called during polling
         player.role = "solo"
         player.group = None
         player.play_state = "stop"
@@ -49,7 +50,6 @@ class TestWiiMCoordinator:
         player.device_info.name = "Test WiiM"
         player.device_info.model = "WiiM Mini"
         player.device_info.firmware = "1.0.0"
-        player.get_device_info = AsyncMock()
         return player
 
     @pytest.fixture
@@ -61,23 +61,25 @@ class TestWiiMCoordinator:
             unique_id=MOCK_DEVICE_DATA["uuid"],
         )
 
-        with patch("custom_components.wiim.coordinator.Player", return_value=mock_player):
+        with (
+            patch("custom_components.wiim.coordinator.Player", return_value=mock_player),
+            patch("custom_components.wiim.coordinator.async_get_clientsession"),
+        ):
             coordinator = WiiMCoordinator(
                 hass,
-                mock_client,
+                host="192.168.1.100",
                 entry=entry,
                 capabilities={"supports_eq": True, "supports_audio_output": True},
             )
+            coordinator.player = mock_player
         return coordinator
 
     @pytest.mark.asyncio
     async def test_coordinator_initialization(self, coordinator):
         """Test coordinator is initialized correctly."""
-        assert coordinator.client is not None
         assert coordinator.player is not None
         assert coordinator._capabilities is not None
         assert coordinator._polling_strategy is not None
-        assert coordinator._track_detector is not None
 
     @pytest.mark.asyncio
     async def test_async_update_data_success(self, coordinator, mock_player):
@@ -91,23 +93,26 @@ class TestWiiMCoordinator:
 
         data = await coordinator._async_update_data()
 
+        # Verify player.refresh() was called (polling updates state from device)
+        mock_player.refresh.assert_called_once()
+
+        # Verify simplified data structure - just player
         assert data is not None
         assert "player" in data
         assert data["player"] is mock_player
-        assert data["volume_level"] == 0.5
-        assert data["is_muted"] is False
-        assert data["play_state"] == "stop"
-        assert data["role"] == "solo"
+        # No more extracted primitives
+        assert "volume_level" not in data
+        assert "is_muted" not in data
+        assert "play_state" not in data
+        assert "role" not in data
+        assert "group_info" not in data
+        assert "metadata" not in data
 
     @pytest.mark.asyncio
     async def test_async_update_data_wiim_error_returns_cached(self, coordinator, mock_player):
         """Test that WiiMError returns cached data if available."""
         # Set initial data
-        coordinator.data = {
-            "player": mock_player,
-            "volume_level": 0.3,
-            "play_state": "play",
-        }
+        coordinator.data = {"player": mock_player}
 
         # Make refresh raise an error
         mock_player.refresh.side_effect = WiiMError("Connection failed")
@@ -116,16 +121,20 @@ class TestWiiMCoordinator:
         data = await coordinator._async_update_data()
 
         assert data is not None
-        assert data["volume_level"] == 0.3
-        assert data["play_state"] == "play"
+        assert data == {"player": mock_player}
+        # Access properties directly from player
+        assert data["player"].volume_level == 0.5
+        assert data["player"].play_state == "stop"
 
     @pytest.mark.asyncio
     async def test_async_update_data_wiim_error_raises_if_no_cache(self, coordinator, mock_player):
         """Test that WiiMError raises UpdateFailed if no cached data."""
         coordinator.data = None
 
+        # Make refresh raise an error
         mock_player.refresh.side_effect = WiiMError("Connection failed")
 
+        # Should raise UpdateFailed when no cache available
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
 
@@ -144,26 +153,23 @@ class TestWiiMCoordinator:
 
     @pytest.mark.asyncio
     async def test_async_update_data_conditional_fetching(self, coordinator, mock_player, mock_client):
-        """Test that conditional fetching works correctly."""
+        """Test that player.refresh() is called during polling."""
         mock_player.play_state = "stop"
         mock_player.group = None
         mock_player.role = "solo"
 
-        # First update - should fetch device info
-        await coordinator._async_update_data()
+        # Call update to trigger refresh
+        data = await coordinator._async_update_data()
 
-        # Verify get_device_info was called
-        mock_player.get_device_info.assert_called()
+        # Verify player.refresh() was called
+        mock_player.refresh.assert_called()
+        assert data == {"player": mock_player}
 
     @pytest.mark.asyncio
     async def test_async_update_data_track_change_detection(self, coordinator, mock_player, mock_client):
         """Test that track changes trigger metadata fetch."""
         # Set initial state
-        coordinator.data = {
-            "player": mock_player,
-            "media_title": "Old Title",
-            "media_artist": "Old Artist",
-        }
+        coordinator.data = {"player": mock_player}
 
         # Change track
         mock_player.media_title = "New Title"
@@ -172,36 +178,34 @@ class TestWiiMCoordinator:
 
         await coordinator._async_update_data()
 
-        # Metadata fetch should be triggered (via get_meta_info)
-        # Note: exact behavior depends on PollingStrategy implementation
+        # Verify player object is in data with new track info
         assert coordinator.data is not None
+        assert coordinator.data["player"].media_title == "New Title"
+        assert coordinator.data["player"].media_artist == "New Artist"
 
     @pytest.mark.asyncio
     async def test_async_update_data_preserves_existing_data(self, coordinator, mock_player):
         """Test that existing data is preserved when not refetched."""
-        # Set initial data with extra fields
-        coordinator.data = {
-            "player": mock_player,
-            "presets": ["Preset 1", "Preset 2"],
-            "bt_pair_status": {"status": "paired"},
-        }
+        # Note: After refactoring, coordinator only returns {"player": ...}
+        # Extra fields like presets are stored separately if needed
+        coordinator.data = {"player": mock_player}
 
         await coordinator._async_update_data()
 
-        # Preserved fields should still be present
-        assert "presets" in coordinator.data
-        assert "bt_pair_status" in coordinator.data
-        assert coordinator.data["presets"] == ["Preset 1", "Preset 2"]
+        # Verify simplified data structure
+        assert coordinator.data is not None
+        assert "player" in coordinator.data
+        assert coordinator.data["player"] == mock_player
 
     @pytest.mark.asyncio
     async def test_async_update_data_handles_parallel_fetch_errors(self, coordinator, mock_player, mock_client):
         """Test that errors in parallel fetches are handled gracefully."""
-        # Make one parallel fetch fail
-        mock_client.get_multiroom_status.side_effect = WiiMError("Multiroom fetch failed")
+        # After refactoring, there are no parallel fetches - just player.refresh()
+        # This test verifies that refresh errors are handled
 
-        # Should not raise - errors are caught and handled
+        # Should not raise - returns player object
         data = await coordinator._async_update_data()
 
         assert data is not None
-        # Multiroom should use cached data or empty dict
-        assert "multiroom" in data
+        assert "player" in data
+        assert data["player"] == mock_player

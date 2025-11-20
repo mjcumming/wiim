@@ -31,7 +31,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import DOMAIN
-from .data import Speaker, find_speaker_by_ip, find_speaker_by_uuid, get_speaker_from_config_entry
+from .data import Speaker, find_speaker_by_uuid, get_speaker_from_config_entry
 from .entity import WiimEntity
 from .group_media_player import WiiMGroupMediaPlayer
 
@@ -237,13 +237,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         return features
 
     def _is_eq_supported(self) -> bool:
-        """Check if device supports EQ - query from pywiim."""
+        """Check if device supports EQ - query from pywiim.
+
+        pywiim detects EQ support during capability detection and caches it in
+        player.client.capabilities["supports_eq"]. The coordinator stores this
+        in _capabilities for the integration to use.
+        """
         if hasattr(self.coordinator, "_capabilities") and self.coordinator._capabilities:
-            # Check both possible capability keys for compatibility
-            return bool(
-                self.coordinator._capabilities.get("supports_eq", False)
-                or self.coordinator._capabilities.get("eq_supported", False)
-            )
+            return bool(self.coordinator._capabilities.get("supports_eq", False))
         return False
 
     def _has_queue_support(self) -> bool:
@@ -255,12 +256,10 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     async def _ensure_upnp_ready(self) -> None:
         """Ensure UPnP client is available when queue management is requested."""
-        if self._has_queue_support():
-            return
-        await self.coordinator.async_setup_upnp()
+        # PyWiim handles UPnP internally - just check if it's available
         if not self._has_queue_support():
             raise HomeAssistantError(
-                "Queue management requires a UPnP client. Ensure the device supports UPnP and try again."
+                "Queue management not available. The device may not support UPnP or it may not be initialized yet."
             )
 
     @property
@@ -857,121 +856,37 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not player:
             return None
 
-        role = player.role
-
         # If solo, return None (not in a group)
-        if role == "solo":
+        if player.is_solo:
+            return None
+
+        # Use PyWiim's group object - it already knows all the players
+        group = player.group
+        if not group:
             return None
 
         entity_registry = er.async_get(self.hass)
         members: list[str] = []
 
-        def _add_member(entity_id: str | None, *, to_front: bool = False) -> None:
-            if not entity_id or entity_id in members:
-                return
-            if to_front:
-                members.insert(0, entity_id)
-            else:
+        # PyWiim's group.all_players gives us all players (master + slaves)
+        for group_player in group.all_players:
+            entity_id = self._entity_id_from_player(group_player, entity_registry)
+            if entity_id and entity_id not in members:
                 members.append(entity_id)
 
-        group_info = self._get_group_info()
-
-        if role == "master":
-            _add_member(self.entity_id)
-            slave_hosts: list[str] = []
-            if group_info and group_info.get("role") == "master":
-                slave_hosts = group_info.get("slave_hosts", []) or []
-            for host in slave_hosts:
-                _add_member(self._entity_id_from_host(host, entity_registry))
-        else:
-            master_entity_id = None
-            master_host = group_info.get("master_host") if group_info else None
-            if master_host:
-                master_entity_id = self._entity_id_from_host(master_host, entity_registry)
-            if not master_entity_id:
-                master_player = self._get_master_player_reference()
-                if master_player:
-                    master_entity_id = self._entity_id_from_player(master_player, entity_registry)
-            if master_entity_id:
-                _add_member(master_entity_id, to_front=True)
-            _add_member(self.entity_id)
-
-            master_group_info = self._get_master_group_info()
-            if master_group_info and master_group_info.get("slave_hosts"):
-                for host in master_group_info.get("slave_hosts", []):
-                    _add_member(self._entity_id_from_host(host, entity_registry))
-
-        # Fallback: use pywiim's group object when available to capture remaining members
-        group = player.group
-        if group:
-            if role == "slave":
-                _add_member(self._entity_id_from_player(group.master, entity_registry), to_front=True)
-            group_members = getattr(group, "members", None) or getattr(group, "slaves", None) or []
-            for member in group_members:
-                _add_member(self._entity_id_from_player(member, entity_registry))
-
         return members if members else None
-
-    def _get_group_info(self) -> dict[str, Any] | None:
-        """Return cached group info from the coordinator."""
-        if not self.coordinator.data:
-            return None
-        return self.coordinator.data.get("group_info")
-
-    def _get_master_speaker(self) -> Speaker | None:
-        """Return the Speaker object for the master of this slave."""
-        player = self._get_player()
-        if player and player.group and getattr(player.group, "master", None):
-            master_player = player.group.master
-            if master_player and master_player != player:
-                master_uuid = getattr(master_player, "uuid", None)
-                if master_uuid:
-                    speaker = find_speaker_by_uuid(self.hass, str(master_uuid))
-                    if speaker:
-                        return speaker
-
-        group_info = self._get_group_info()
-        if group_info and group_info.get("master_host"):
-            speaker = find_speaker_by_ip(self.hass, group_info["master_host"])
-            if speaker:
-                return speaker
-        return None
-
-    def _get_master_group_info(self) -> dict[str, Any] | None:
-        """Return the master's group_info dictionary if available."""
-        master_speaker = self._get_master_speaker()
-        if master_speaker and master_speaker.coordinator and master_speaker.coordinator.data:
-            return master_speaker.coordinator.data.get("group_info")
-        return None
-
-    def _get_master_player_reference(self):
-        """Return the pywiim Player for the master speaker, if available."""
-        master_speaker = self._get_master_speaker()
-        if master_speaker and master_speaker.coordinator:
-            return getattr(master_speaker.coordinator, "player", None)
-        return None
 
     def _get_metadata_player(self):
         """Return the player that should be used for metadata display."""
         player = self._get_player()
         if not player:
             return None
-        if player.role == "slave":
-            master_player = self._get_master_player_reference()
-            if master_player:
-                return master_player
+        # Slaves should use master's metadata - PyWiim's group.master has it
+        if player.is_slave and player.group:
+            master = getattr(player.group, "master", None)
+            if master:
+                return master
         return player
-
-    def _entity_id_from_host(self, host: str | None, entity_registry: er.EntityRegistry) -> str | None:
-        """Resolve entity_id for a given host/IP using registered speakers."""
-        if not host:
-            return None
-
-        speaker = find_speaker_by_ip(self.hass, host)
-        if not speaker:
-            return None
-
-        return entity_registry.async_get_entity_id("media_player", DOMAIN, speaker.uuid)
 
     @staticmethod
     def _entity_id_from_player(player_obj: Any, entity_registry: er.EntityRegistry) -> str | None:
@@ -1084,16 +999,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not player:
             raise HomeAssistantError("Player is not ready")
 
-        role = player.role
-
         # Masters shouldn't unjoin - they disband the entire group
         # Only slaves can leave a group
-        if role == "master":
+        if player.is_master:
             raise HomeAssistantError("Master cannot unjoin. To disband group, remove all slaves instead.")
 
         # If not in a group, operation is complete (idempotent)
         # This handles both solo players and race conditions where group was just disbanded
-        if role == "solo":
+        if player.is_solo:
             return
 
         try:
@@ -1184,77 +1097,55 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def sound_mode(self) -> str | None:
         """Return current sound mode (EQ preset) from Player.
 
-        Returns the preset in the same format as sound_mode_list (title case)
-        so Home Assistant can properly match and display the current selection.
+        pywiim provides the current preset in player.eq_preset.
+        Returns in title case to match sound_mode_list format.
         """
         if not self._is_eq_supported():
             return None
 
-        # Read directly from Player object (always up-to-date via pywiim)
         player = self._get_player()
         if not player:
             return None
 
         eq_preset = getattr(player, "eq_preset", None)
         if eq_preset:
-            # Format to match sound_mode_list (title case) for proper dropdown display
-            preset_str = str(eq_preset)
-            # Try to find exact match in available presets first (from Player object)
-            available_presets = getattr(player, "available_eq_presets", None)
-            if available_presets and isinstance(available_presets, list):
-                for preset in available_presets:
-                    if str(preset).lower() == preset_str.lower():
-                        # Return in title case to match sound_mode_list format
-                        return str(preset).title()
-            # Fallback: apply title case to raw preset
-            return preset_str.title()
+            return str(eq_preset).title()
         return None
 
     @property
     def sound_mode_list(self) -> list[str] | None:
         """Return list of available sound modes (EQ presets) from Player object.
 
-        Reads directly from Player object (always up-to-date via pywiim).
+        pywiim caches EQ presets in player.eq_presets during refresh().
         """
         if not self._is_eq_supported():
             return None
 
-        # Read directly from Player object (always up-to-date via pywiim)
         player = self._get_player()
         if not player:
             return None
 
-        # Get available presets from Player object (pywiim manages this)
-        available_presets = getattr(player, "available_eq_presets", None)
-        if available_presets and isinstance(available_presets, list):
+        # Get cached presets from Player object (populated during refresh())
+        eq_presets = getattr(player, "eq_presets", None)
+        if eq_presets and isinstance(eq_presets, list):
             # Return list of preset names in title case for display
-            return [str(preset).title() for preset in available_presets]
+            return [str(preset).title() for preset in eq_presets]
 
-        # If no presets found, return None (Home Assistant will hide the selector)
         return None
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
-        """Select sound mode (EQ preset) - pass through to pywiim."""
+        """Select sound mode (EQ preset) - pass through to pywiim.
+
+        pywiim's player.set_eq_preset() handles the preset selection.
+        We pass lowercase preset names as that's what the device API expects.
+        """
         if not self._is_eq_supported():
             raise HomeAssistantError("EQ is not supported on this device")
 
         try:
-            # Normalize to lowercase (pywiim typically expects lowercase preset names)
-            # but first try to match against available presets to get the exact name
-            sound_mode_normalized = sound_mode.lower()
-
-            # Read available presets directly from Player object (pywiim manages this)
-            player = self._get_player()
-            if player:
-                available_presets = getattr(player, "available_eq_presets", None) or []
-                # Find case-insensitive match
-                for preset in available_presets:
-                    if str(preset).lower() == sound_mode_normalized:
-                        sound_mode_normalized = str(preset)  # Use exact preset name from device
-                        break
-
-            await self.coordinator.player.set_eq_preset(sound_mode_normalized)
-        except Exception as err:
+            # Normalize to lowercase (device API expects lowercase)
+            await self.coordinator.player.set_eq_preset(sound_mode.lower())
+        except WiiMError as err:
             raise HomeAssistantError(f"Failed to select sound mode: {err}") from err
 
     # ===== SLEEP TIMER & ALARMS =====
@@ -1401,7 +1292,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             "ip_address": self.speaker.ip_address,
             "mac_address": self.speaker.mac_address,
             "group_role": self.speaker.role,
-            "is_group_coordinator": self.speaker.role == "master" and bool(self.group_members),
+            "is_group_coordinator": self._get_player().is_master if self._get_player() else False,
             "music_assistant_compatible": True,
             "integration_purpose": "individual_speaker_control",
         }
@@ -1427,10 +1318,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if group_members:
             attrs["group_members"] = group_members
             # Determine group state
-            if self.speaker.role == "master":
-                attrs["group_state"] = "coordinator"
-            elif self.speaker.role == "slave":
-                attrs["group_state"] = "member"
+            player = self._get_player()
+            if player:
+                if player.is_master:
+                    attrs["group_state"] = "coordinator"
+                elif player.is_slave:
+                    attrs["group_state"] = "member"
+                else:
+                    attrs["group_state"] = "solo"
             else:
                 attrs["group_state"] = "solo"
         else:

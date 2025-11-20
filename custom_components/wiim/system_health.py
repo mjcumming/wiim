@@ -26,9 +26,17 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
     # Count reachable devices
     reachable_count = sum(1 for speaker in speakers if speaker.available)
 
-    # Count multiroom groups
-    masters = [s for s in speakers if s.role == "master"]
-    slaves = [s for s in speakers if s.role == "slave"]
+    # Count multiroom groups using player properties
+    masters = []
+    slaves = []
+    for s in speakers:
+        if s.coordinator and s.coordinator.data:
+            player = s.coordinator.data.get("player")
+            if player:
+                if player.is_master:
+                    masters.append(s)
+                elif player.is_slave:
+                    slaves.append(s)
 
     # Check first device API health (async)
     first_device_health = None

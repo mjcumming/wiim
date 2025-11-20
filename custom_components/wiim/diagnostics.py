@@ -84,11 +84,23 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 else {},
             }
 
-        # Integration overview
+        # Integration overview - use Player properties for role counting
+        role_counts = {"solo": 0, "master": 0, "slave": 0}
+        for s in all_speakers:
+            if s.coordinator and s.coordinator.data:
+                player = s.coordinator.data.get("player")
+                if player:
+                    if player.is_solo:
+                        role_counts["solo"] += 1
+                    elif player.is_master:
+                        role_counts["master"] += 1
+                    elif player.is_slave:
+                        role_counts["slave"] += 1
+
         integration_info = {
             "total_speakers": len(all_speakers),
             "available_speakers": sum(1 for s in all_speakers if s.available),
-            "roles": {role: sum(1 for s in all_speakers if s.role == role) for role in ["solo", "master", "slave"]},
+            "roles": role_counts,
             "models": list({s.model for s in all_speakers if s.model}),
             "pywiim_version": _get_pywiim_version(),
         }
@@ -181,37 +193,53 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "mac_address": async_redact_data({"mac": speaker.mac_address}, ["mac"]) if speaker.mac_address else None,
         }
 
-        # Group information - read directly from coordinator data
-        multiroom = speaker.coordinator.data.get("multiroom", {}) if speaker.coordinator.data else {}
-        slave_list = multiroom.get("slave_list", [])
-        is_coordinator = speaker.role == "master" and len(slave_list) > 0
+        # Group information - use Player properties
+        player = speaker.coordinator.data.get("player") if speaker.coordinator.data else None
         group_info = {
             "role": speaker.role,
-            "is_group_coordinator": is_coordinator,
-            "group_members_count": len(slave_list),
-            "group_member_names": [
-                slave.get("name", "Unknown") if isinstance(slave, dict) else str(slave) for slave in slave_list
-            ],
-            "coordinator_name": multiroom.get("master_name") if speaker.role == "slave" else None,
+            "is_group_coordinator": False,
+            "group_members_count": 0,
+            "group_member_names": [],
+            "coordinator_name": None,
         }
 
-        # Media state - read from coordinator data (Player properties)
-        data = speaker.coordinator.data or {}
-        media_info = {
-            "playback_state": data.get("play_state"),
-            "volume_level": data.get("volume_level"),
-            "is_muted": data.get("is_muted"),
-            "current_source": data.get("source"),
-            "media_title": data.get("media_title"),
-            "media_artist": data.get("media_artist"),
-            "media_album": data.get("media_album"),
-            "media_duration": data.get("media_duration"),
-            "media_position": data.get("media_position"),
-            "media_image_url": data.get("media_image_url"),
-            "shuffle_state": data.get("shuffle"),
-            "repeat_mode": data.get("repeat"),
-            "sound_mode": data.get("eq_preset"),
-        }
+        if player:
+            group_info["is_group_coordinator"] = player.is_master
+            group_info["role"] = getattr(player, "role", "unknown")
+            # Note: group.all_players may be empty even if device has slaves
+            # Use player.role as source of truth for group state
+            if player.group:
+                # Try to get member info from group object (may be empty)
+                all_players = getattr(player.group, "all_players", [])
+                if all_players:
+                    group_info["group_members_count"] = len(all_players) - 1
+                    group_info["group_member_names"] = [
+                        getattr(p, "name", "Unknown")
+                        for p in all_players
+                        if getattr(p, "uuid", None) != getattr(player, "uuid", None)
+                    ]
+                if player.is_slave and player.group.master:
+                    group_info["coordinator_name"] = getattr(player.group.master, "name", None)
+
+        # Media state - read from Player properties directly
+        player = speaker.coordinator.data.get("player") if speaker.coordinator.data else None
+        media_info = {}
+        if player:
+            media_info = {
+                "playback_state": player.play_state,
+                "volume_level": player.volume_level,
+                "is_muted": player.is_muted,
+                "current_source": player.source,
+                "media_title": player.media_title,
+                "media_artist": player.media_artist,
+                "media_album": player.media_album,
+                "media_duration": player.media_duration,
+                "media_position": player.media_position,
+                "media_image_url": player.media_image_url,
+                "shuffle_state": getattr(player, "shuffle", None),
+                "repeat_mode": getattr(player, "repeat", None),
+                "sound_mode": getattr(player, "eq_preset", None),
+            }
 
         # API capability diagnostics (from coordinator capabilities)
         api_capabilities = {}
@@ -279,26 +307,26 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
 
         # Model data (from Player and DeviceInfo)
         model_data = {}
-        # Build status dict from Player properties (no longer using status_model)
-        data = speaker.coordinator.data or {}
-        if data:
+        # Build status dict from Player properties directly
+        player = speaker.coordinator.data.get("player") if speaker.coordinator.data else None
+        if player:
             status_dict = {
-                "play_status": data.get("play_state"),
-                "vol": int(data.get("volume_level", 0) * 100) if data.get("volume_level") is not None else None,
-                "mute": data.get("is_muted"),
-                "source": data.get("source"),
-                "position": data.get("media_position"),
-                "duration": data.get("media_duration"),
-                "Title": data.get("media_title"),
-                "Artist": data.get("media_artist"),
-                "Album": data.get("media_album"),
-                "entity_picture": data.get("media_image_url"),
-                "cover_url": data.get("media_image_url"),
-                "eq": data.get("eq_preset"),
-                "RSSI": data.get("wifi_rssi"),
-                "wifi_rssi": data.get("wifi_rssi"),
-                "shuffle": data.get("shuffle"),
-                "repeat": data.get("repeat"),
+                "play_status": player.play_state,
+                "vol": int(player.volume_level * 100) if player.volume_level is not None else None,
+                "mute": player.is_muted,
+                "source": player.source,
+                "position": player.media_position,
+                "duration": player.media_duration,
+                "Title": player.media_title,
+                "Artist": player.media_artist,
+                "Album": player.media_album,
+                "entity_picture": player.media_image_url,
+                "cover_url": player.media_image_url,
+                "eq": getattr(player, "eq_preset", None),
+                "RSSI": getattr(player, "wifi_rssi", None),
+                "wifi_rssi": getattr(player, "wifi_rssi", None),
+                "shuffle": getattr(player, "shuffle", None),
+                "repeat": getattr(player, "repeat", None),
             }
             # Remove None values
             status_dict = {k: v for k, v in status_dict.items() if v is not None}

@@ -126,43 +126,49 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return group-related information."""
-        # Read directly from coordinator data
-        multiroom = self.coordinator.data.get("multiroom", {}) if self.coordinator.data else {}
-        slave_list = multiroom.get("slave_list", [])
-        is_coordinator = self.speaker.role == "master" and len(slave_list) > 0
-        group_members_count = len(slave_list)
+        # Get Player object from coordinator
+        player = self.coordinator.data.get("player") if self.coordinator.data else None
 
-        attrs = {
-            "is_group_coordinator": is_coordinator,
-            "group_members_count": group_members_count,
-        }
+        attrs = {}
 
-        # Only log attrs when they change to reduce log spam
-        current_attrs = (is_coordinator, group_members_count)
-        if not hasattr(self, "_last_logged_attrs"):
-            self._last_logged_attrs = None
-        if self._last_logged_attrs != current_attrs:
-            member_names = [
-                slave.get("name", "Unknown") if isinstance(slave, dict) else str(slave) for slave in slave_list
-            ]
-            _LOGGER.info(
-                "🎯 ROLE SENSOR ATTRS CHANGED for %s: is_coordinator=%s, group_count=%s, members=%s",
-                self.speaker.name,
-                is_coordinator,
-                group_members_count,
-                member_names,
-            )
-            self._last_logged_attrs = current_attrs
+        if player:
+            # Use player.role as source of truth
+            # Note: group.all_players may be empty even if device has slaves
+            is_coordinator = player.is_master
+            group_members_count = 0
+            member_names = []
 
-        # Get coordinator name from multiroom data if slave
-        if self.speaker.role == "slave" and multiroom.get("master_name"):
-            attrs["coordinator_name"] = multiroom.get("master_name")
+            # For now, just track that we're a coordinator
+            # group.all_players is for operations, not for counting members
+            # TODO: Use player.client.get_device_group_info() to get actual slave list
 
-        if group_members_count > 1:
-            member_names = [
-                slave.get("name", "Unknown") if isinstance(slave, dict) else str(slave) for slave in slave_list
-            ]
-            attrs["group_member_names"] = member_names
+            attrs = {
+                "is_group_coordinator": is_coordinator,
+                "group_members_count": group_members_count,
+            }
+
+            # Only log attrs when they change to reduce log spam
+            current_attrs = (is_coordinator, group_members_count)
+            if not hasattr(self, "_last_logged_attrs"):
+                self._last_logged_attrs = None
+            if self._last_logged_attrs != current_attrs:
+                _LOGGER.info(
+                    "🎯 ROLE SENSOR ATTRS CHANGED for %s: is_coordinator=%s, group_count=%s, members=%s",
+                    self.speaker.name,
+                    is_coordinator,
+                    group_members_count,
+                    member_names,
+                )
+                self._last_logged_attrs = current_attrs
+
+            # Get coordinator name from group object if slave
+            if player.is_slave and player.group and player.group.master:
+                master_name = getattr(player.group.master, "name", None)
+                if master_name:
+                    attrs["coordinator_name"] = master_name
+
+            if group_members_count > 0:
+                attrs["group_member_names"] = member_names
 
         return attrs
 
@@ -203,56 +209,6 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 
     # -------------------------- Helpers --------------------------
 
-    def _status(self) -> dict[str, Any]:
-        """Return *status* payload as a plain dict from Player properties."""
-        # Read directly from Player object (always up-to-date via pywiim)
-        if not self.coordinator.data:
-            return {}
-        player = self.coordinator.data.get("player")
-        if not player:
-            return {}
-
-        status_dict: dict[str, Any] = {}
-
-        # Map Player properties to status dict format
-        if player.play_state is not None:
-            status_dict["play_status"] = player.play_state
-        if player.volume_level is not None:
-            # Convert back to 0-100 for status dict (Player provides 0-1)
-            status_dict["vol"] = int(player.volume_level * 100)
-        if player.is_muted is not None:
-            status_dict["mute"] = player.is_muted
-        if player.source is not None:
-            status_dict["source"] = player.source
-        if player.media_position is not None:
-            status_dict["position"] = player.media_position
-        if player.media_duration is not None:
-            status_dict["duration"] = player.media_duration
-        if player.media_title is not None:
-            status_dict["Title"] = player.media_title
-        if player.media_artist is not None:
-            status_dict["Artist"] = player.media_artist
-        if player.media_album is not None:
-            status_dict["Album"] = player.media_album
-        if player.media_image_url is not None:
-            status_dict["entity_picture"] = player.media_image_url
-            status_dict["cover_url"] = player.media_image_url
-        eq_preset = getattr(player, "eq_preset", None)
-        if eq_preset is not None:
-            status_dict["eq"] = eq_preset
-        wifi_rssi = getattr(player, "wifi_rssi", None)
-        if wifi_rssi is not None:
-            status_dict["RSSI"] = wifi_rssi
-            status_dict["wifi_rssi"] = wifi_rssi
-        shuffle = getattr(player, "shuffle", None)
-        if shuffle is not None:
-            status_dict["shuffle"] = shuffle
-        repeat = getattr(player, "repeat", None)
-        if repeat is not None:
-            status_dict["repeat"] = repeat
-
-        return status_dict
-
     def _device_info(self) -> dict[str, Any]:
         """Return *device_info* payload as a plain dict extracted from the DeviceInfo model."""
 
@@ -260,9 +216,6 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             return {}
 
         return self.speaker.device_model.model_dump(exclude_none=True)
-
-    def _multiroom(self) -> dict[str, Any]:
-        return self.speaker.coordinator.data.get("multiroom", {}) if self.speaker.coordinator.data else {}
 
     # -------------------------- State ----------------------------
 
@@ -292,13 +245,23 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:  # noqa: D401
-        status = self._status()
         info = self._device_info()
-        multi = self._multiroom()
+
+        # Get Player from coordinator
+        player = self.coordinator.data.get("player") if self.coordinator.data else None
+
+        # Read Player properties directly
+        wifi_rssi = getattr(player, "wifi_rssi", None) if player else None
+
+        # Get group info from player.group
+        group_role = self.speaker.role
+        slave_cnt = None
+        # Note: group.all_players may be empty even if device has slaves
+        # Just show role from device API
 
         attrs: dict[str, Any] = {
             # Identifiers
-            "mac": info.get("mac") or status.get("mac_address"),
+            "mac": info.get("mac"),
             "uuid": info.get("uuid"),
             "project": info.get("project"),
             # Firmware / software
@@ -311,17 +274,16 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             "ssid": info.get("ssid"),
             "ap_mac": info.get("ap_mac"),
             "ip_address": self.speaker.ip_address,
-            "wifi_rssi": status.get("wifi_rssi"),
-            "wifi_channel": status.get("wifi_channel"),
+            "wifi_rssi": wifi_rssi,
             "internet": _to_bool(info.get("internet")),
             "netstat": _to_int(info.get("netstat")),
             # System resources
             "uptime": _to_int(info.get("uptime")),
             "free_ram": _to_int(info.get("free_ram")),
             # Multi-room context
-            "group": multi.get("role") or self.speaker.role,
-            "master_uuid": info.get("master_uuid") or status.get("master_uuid"),
-            "slave_cnt": multi.get("slaves") or multi.get("slave_count"),
+            "group": group_role,
+            "master_uuid": info.get("master_uuid"),
+            "slave_cnt": slave_cnt,
             "preset_key": _to_int(info.get("preset_key")),
         }
 
