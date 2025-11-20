@@ -600,6 +600,8 @@ class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
             attrs["bit_depth"] = bit_depth
         if bit_rate := metadata.get("bit_rate"):
             attrs["bit_rate"] = bit_rate
+        if codec := metadata.get("codec"):
+            attrs["codec"] = codec
 
         return attrs
 

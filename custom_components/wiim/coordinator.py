@@ -74,6 +74,42 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.upnp_client: UpnpClient | None = None
         self._upnp_setup_attempted = False
 
+        # Track last valid metadata to avoid flickering during track changes
+        self._last_valid_metadata: dict[str, Any] | None = None
+
+    def _extract_metadata(self) -> dict[str, Any]:
+        """Extract metadata (audio quality info) from Player object.
+
+        Reads media_sample_rate, media_bit_depth, media_bit_rate, and media_codec
+        directly from pywiim Player object (pywiim v2.0.4+).
+        """
+        metadata: dict[str, Any] = {}
+
+        # Read directly from Player object - pywiim v2.0.4+ exposes these properties
+        sample_rate = getattr(self.player, "media_sample_rate", None)
+        bit_depth = getattr(self.player, "media_bit_depth", None)
+        bit_rate = getattr(self.player, "media_bit_rate", None)
+        codec = getattr(self.player, "media_codec", None)
+
+        # Store values if they exist
+        if sample_rate is not None:
+            metadata["sample_rate"] = sample_rate
+        if bit_depth is not None:
+            metadata["bit_depth"] = bit_depth
+        if bit_rate is not None:
+            metadata["bit_rate"] = bit_rate
+        if codec is not None:
+            metadata["codec"] = codec
+
+        # Update last valid metadata if we have any values
+        if metadata:
+            self._last_valid_metadata = metadata.copy()
+        elif self._last_valid_metadata:
+            # If no new metadata but we have previous valid metadata, use it to avoid flickering
+            metadata = self._last_valid_metadata.copy()
+
+        return metadata
+
     @callback
     def _on_player_state_changed(self) -> None:
         """Callback when pywiim Player detects state changes.
@@ -86,10 +122,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Create a new dict to ensure Home Assistant detects the change
         # (even though Player object reference is the same, its internal state has changed)
         if self.data:
+            # Extract metadata from Player object
+            metadata = self._extract_metadata()
+
             # Create a new dict with the updated Player object to force state change detection
             new_data = {
                 "player": self.player,
                 "group_info": self._last_group_info,
+                "metadata": metadata,
             }
             self.async_set_updated_data(new_data)
         else:
@@ -114,11 +154,15 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             group_info = await self._async_fetch_group_info()
             self._last_group_info = group_info
 
-            # Return only the Player object plus cached group info - entities read all state directly from it
+            # Extract metadata from Player object
+            metadata = self._extract_metadata()
+
+            # Return Player object, cached group info, and metadata - entities read all state directly from Player
             # pywiim handles all playback state management internally (UPnP events, polling, etc.)
             return {
                 "player": self.player,
                 "group_info": group_info,
+                "metadata": metadata,
             }
 
         except WiiMError as err:

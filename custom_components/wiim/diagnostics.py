@@ -76,7 +76,9 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                     else None
                 ),
                 "data_keys": list(speaker.coordinator.data.keys()) if speaker.coordinator.data else [],
-                "client_host": speaker.coordinator.player.host,
+                "client_host": (
+                    getattr(speaker.coordinator.player, "host", None) if speaker.coordinator.player else None
+                ),
                 "capabilities": async_redact_data(speaker.coordinator._capabilities, TO_REDACT)
                 if hasattr(speaker.coordinator, "_capabilities")
                 else {},
@@ -132,13 +134,39 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         # Get API client status
         api_status = {}
         coordinator = speaker.coordinator
-        if coordinator:
+        if coordinator and coordinator.player:
             player = coordinator.player
+            # Safely access player attributes - may be on player or player.client
+            host = getattr(player, "host", None)
+            if host is None and hasattr(player, "client"):
+                host = getattr(player.client, "host", None)
+
+            port = getattr(player, "port", None)
+            if port is None and hasattr(player, "client"):
+                port = getattr(player.client, "port", None)
+
+            timeout = getattr(player, "timeout", None)
+            if timeout is None and hasattr(player, "client"):
+                timeout = getattr(player.client, "timeout", None)
+
+            # Infer connection type from port if not available
+            connection_type = getattr(player, "connection_type", None)
+            if connection_type is None and port is not None:
+                # Infer from port: 443 = HTTPS, 80 = HTTP
+                if port == 443:
+                    connection_type = "HTTPS"
+                elif port == 80:
+                    connection_type = "HTTP"
+                else:
+                    connection_type = f"Port {port}"
+            elif connection_type is None:
+                connection_type = "Unknown"
+
             api_status = {
-                "host": player.host,
-                "port": player.port,
-                "timeout": player.timeout,
-                "connection_type": player.connection_type,
+                "host": host,
+                "port": port,
+                "timeout": timeout,
+                "connection_type": connection_type,
             }
 
         # Device-specific information

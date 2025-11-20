@@ -154,11 +154,40 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         return self.speaker.name
 
     def _is_streaming_source(self) -> bool:
-        """Check if current source is a streaming source (radio/web stream)."""
+        """Check if current source is a streaming source (radio/web stream).
+
+        Checks multiple indicators:
+        - Source name matches known streaming sources
+        - Media title contains stream file extensions (.m3u8, .pls, .m3u)
+        - No duration (streams typically don't have fixed duration)
+        """
         player = self._get_player()
-        if not player or not player.source:
+        if not player:
             return False
-        return str(player.source).lower() in STREAMING_SOURCES
+
+        # Check if source name matches known streaming sources
+        if player.source:
+            source_lower = str(player.source).lower()
+            if source_lower in STREAMING_SOURCES:
+                return True
+
+        # Check media title for stream indicators
+        if hasattr(player, "media_title") and player.media_title:
+            title_lower = str(player.media_title).lower()
+            # Check for common stream file extensions
+            stream_extensions = [".m3u8", ".m3u", ".pls", ".asx"]
+            if any(ext in title_lower for ext in stream_extensions):
+                return True
+
+        # Check if no duration (streams typically don't have fixed duration)
+        # But only if we're actually playing something
+        if self.state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
+            if not self.media_duration or self.media_duration == 0:
+                # Additional check: if source is wifi and no duration, likely a stream
+                if player.source and str(player.source).lower() == "wifi":
+                    return True
+
+        return False
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
@@ -550,9 +579,64 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def media_image_url(self) -> str | None:
-        """Image url of current playing media."""
+        """Image url of current playing media.
+
+        Returns a placeholder URL if pywiim has cover art available but no URL,
+        to ensure Home Assistant calls async_get_media_image().
+        """
         player = self._get_metadata_player()
-        return player.media_image_url if player else None
+        if not player:
+            return None
+
+        # If pywiim has a URL, use it
+        if hasattr(player, "media_image_url") and player.media_image_url:
+            return player.media_image_url
+
+        # If we're playing something, return a placeholder URL to trigger async_get_media_image()
+        # This ensures HA calls our override even when pywiim doesn't have a URL yet
+        if self.state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
+            # Use a hash of track metadata as a unique identifier
+            # This ensures the hash changes when track changes, forcing HA to fetch new image
+            title = self.media_title or ""
+            artist = self.media_artist or ""
+            if title or artist:
+                import hashlib
+
+                track_id = f"{title}|{artist}".encode()
+                track_hash = hashlib.sha256(track_id).hexdigest()[:16]
+                return f"wiim://cover-art/{track_hash}"
+
+        return None
+
+    @property
+    def media_image_hash(self) -> str | None:
+        """Hash value for media image.
+
+        Uses track metadata to generate a hash that changes when track changes,
+        ensuring Home Assistant fetches new cover art for each track.
+        """
+        player = self._get_metadata_player()
+        if not player:
+            return None
+
+        # If we have a URL from pywiim, hash it using the same method as HA base class
+        if hasattr(player, "media_image_url") and player.media_image_url:
+            import hashlib
+
+            return hashlib.sha256(player.media_image_url.encode("utf-8")).hexdigest()[:16]
+
+        # Otherwise, create hash from track metadata to force updates on track change
+        if self.state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
+            import hashlib
+
+            title = self.media_title or ""
+            artist = self.media_artist or ""
+            album = self.media_album_name or ""
+            if title or artist or album:
+                track_id = f"{title}|{artist}|{album}".encode()
+                return hashlib.sha256(track_id).hexdigest()[:16]
+
+        return None
 
     @property
     def media_image_remotely_accessible(self) -> bool:
@@ -578,22 +662,43 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # Check what URL pywiim has (read directly from Player object)
         cover_art_url = player.media_image_url if hasattr(player, "media_image_url") else None
-        _LOGGER.debug("Cover art URL from player.media_image_url: %s", cover_art_url)
+        _LOGGER.debug(
+            "Cover art URL from player.media_image_url: %s (source: %s, state: %s)",
+            cover_art_url,
+            getattr(player, "source", None),
+            self.state,
+        )
+
+        # Check if fetch_cover_art method exists
+        if not hasattr(player, "fetch_cover_art"):
+            _LOGGER.warning(
+                "Player object does not have fetch_cover_art method - this may indicate a pywiim version issue"
+            )
+            # If we have a URL but no fetch method, we could return None to let HA handle it
+            # But since media_image_remotely_accessible is False, HA will call this method
+            return None, None
 
         try:
-            if not hasattr(player, "fetch_cover_art"):
-                _LOGGER.warning("Player object does not have fetch_cover_art method")
-                return None, None
-
             _LOGGER.debug("Calling player.fetch_cover_art() for %s", self.name)
             result = await player.fetch_cover_art()
-            if result:
-                _LOGGER.debug("Cover art fetched successfully: %d bytes, type=%s", len(result[0]), result[1])
-                return result  # (image_bytes, content_type)
+            if result and len(result) >= 2:
+                image_bytes, content_type = result[0], result[1]
+                if image_bytes and len(image_bytes) > 0:
+                    _LOGGER.debug("Cover art fetched successfully: %d bytes, type=%s", len(image_bytes), content_type)
+                    return result  # (image_bytes, content_type)
+                else:
+                    _LOGGER.debug("fetch_cover_art() returned empty image bytes")
             else:
-                _LOGGER.warning("fetch_cover_art() returned None - no cover art available or fetch failed")
+                _LOGGER.debug(
+                    "fetch_cover_art() returned None or invalid result - no cover art available. URL was: %s",
+                    cover_art_url,
+                )
+        except AttributeError as e:
+            _LOGGER.error("fetch_cover_art() method exists but raised AttributeError - possible pywiim issue: %s", e)
+        except WiiMError as e:
+            _LOGGER.warning("WiiM error fetching cover art (may be normal if no cover art available): %s", e)
         except Exception as e:
-            _LOGGER.error("Error fetching cover art: %s", e, exc_info=True)
+            _LOGGER.error("Unexpected error fetching cover art: %s", e, exc_info=True)
 
         return None, None
 
