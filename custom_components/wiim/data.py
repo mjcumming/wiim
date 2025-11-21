@@ -135,13 +135,25 @@ class Speaker:
         dev_reg = dr.async_get(self.hass)
         identifiers = {(DOMAIN, self.uuid)}
 
+        # Get pywiim library version
+        try:
+            import pywiim
+            pywiim_version = getattr(pywiim, "__version__", "unknown")
+        except (ImportError, AttributeError):
+            pywiim_version = "unknown"
+
+        # Combine firmware and library version for display
+        sw_version_display = self.firmware
+        if pywiim_version != "unknown":
+            sw_version_display = f"{self.firmware} (pywiim {pywiim_version})"
+
         dev_reg.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers=identifiers,
             manufacturer="WiiM",
             name=self.name,
             model=self.model,
-            sw_version=self.firmware,
+            sw_version=sw_version_display,
         )
 
         self.device_info = HADeviceInfo(
@@ -149,7 +161,7 @@ class Speaker:
             manufacturer="WiiM",
             name=self.name,
             model=self.model,
-            sw_version=self.firmware,
+            sw_version=sw_version_display,
         )
 
 

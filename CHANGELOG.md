@@ -2,6 +2,16 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0-beta.6] - 2024-11-21
+
+### Changed
+
+- **PyWiiM Version Display**: Moved pywiim library version to Device Info box
+  - Now displays in firmware field as "Linkplay 4.8.731953 (pywiim 2.0.16)"
+  - More visible and accessible than sensor attribute
+  - Appears alongside device model and manufacturer information
+  - Useful for quick verification of library version during support
+
 ## [1.0.0-beta.5] - 2024-11-21
 
 ### Removed
