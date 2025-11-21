@@ -120,7 +120,7 @@ def wiim_speaker(hass, wiim_coordinator):
     """Create a test Speaker instance."""
     # Set up coordinator.player.host for ip_address property
     wiim_coordinator.player.host = "192.168.1.100"
-    
+
     # Set up coordinator.data for other properties
     wiim_coordinator.data = {
         "device_name": "Test WiiM",
@@ -128,7 +128,7 @@ def wiim_speaker(hass, wiim_coordinator):
         "role": "solo",
         "firmware": "1.0.0",
     }
-    
+
     # Create a mock config entry
     config_entry = MagicMock(spec=ConfigEntry)
     config_entry.entry_id = "test_wiim_entry"
