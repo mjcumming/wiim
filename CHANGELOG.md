@@ -2,6 +2,21 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0-beta.4] - 2024-11-21
+
+### Added
+
+- **PyWiim Library Version Sensor**: Added `pywiim_version` attribute to Device Status diagnostic sensor
+  - Shows the currently loaded pywiim library version (e.g., "2.0.16")
+  - Useful for support and troubleshooting
+  - Helps identify version-specific issues
+  - Located in diagnostic sensor attributes alongside firmware versions
+
+### Technical
+
+- **Version Tracking**: Gracefully handles missing `__version__` attribute with fallback to "unknown"
+- **Diagnostic Enhancement**: Better visibility into integration and library versions for debugging
+
 ## [1.0.0-beta.3] - 2024-11-21
 
 ### Fixed

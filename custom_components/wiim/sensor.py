@@ -259,6 +259,14 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
         # Note: group.all_players may be empty even if device has slaves
         # Just show role from device API
 
+        # Get pywiim library version for diagnostics
+        try:
+            import pywiim
+
+            pywiim_version = getattr(pywiim, "__version__", "unknown")
+        except (ImportError, AttributeError):
+            pywiim_version = "unknown"
+
         attrs: dict[str, Any] = {
             # Identifiers
             "mac": info.get("mac"),
@@ -268,8 +276,8 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             "firmware": info.get("firmware"),
             "release": info.get("release") or info.get("Release"),
             "mcu_ver": info.get("mcu_ver"),
-            "ble_fw_ver": info.get("ble_fw_ver"),
             "dsp_ver": info.get("dsp_ver"),
+            "pywiim_version": pywiim_version,
             # Network
             "ssid": info.get("ssid"),
             "ap_mac": info.get("ap_mac"),
@@ -364,10 +372,6 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
             # DSP version (digital signal processor firmware)
             if dsp_ver := getattr(self.speaker.device_model, "dsp_ver", None):
                 attrs["dsp_version"] = str(dsp_ver)
-
-            # Bluetooth firmware version
-            if ble_ver := getattr(self.speaker.device_model, "ble_fw_ver", None):
-                attrs["bluetooth_version"] = str(ble_ver)
 
             # Release/build info
             if release := getattr(self.speaker.device_model, "release", None):
