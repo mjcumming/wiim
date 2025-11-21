@@ -54,31 +54,61 @@ def wiim_client():
 @pytest.fixture
 def wiim_coordinator(wiim_client):
     """Create a mock WiiM coordinator."""
+    # Create mock Player object with all properties
+    mock_player = MagicMock()
+    mock_player.client = wiim_client
+    mock_player.host = "192.168.1.100"
+
+    # Playback state properties
+    mock_player.volume_level = 0.5
+    mock_player.is_muted = False
+    mock_player.play_state = "stop"
+
+    # Role and group properties
+    mock_player.role = "solo"
+    mock_player.is_master = False
+    mock_player.is_slave = False
+    mock_player.is_solo = True
+    mock_player.group = None
+
+    # Media properties
+    mock_player.media_title = None
+    mock_player.media_artist = None
+    mock_player.media_album = None
+    mock_player.media_duration = None
+    mock_player.media_position = None
+    mock_player.media_image_url = None
+    mock_player.source = None
+
+    # Audio quality properties
+    mock_player.media_sample_rate = None
+    mock_player.media_bit_depth = None
+    mock_player.media_bit_rate = None
+    mock_player.media_codec = None
+
+    # Device info properties
+    mock_player.name = "Test WiiM"
+    mock_player.model = "WiiM Mini"
+    mock_player.firmware = "1.0.0"
+    mock_player.uuid = "test-speaker-uuid"
+    mock_player.mac_address = "aa:bb:cc:dd:ee:ff"
+
+    # Additional properties
+    mock_player.eq_preset = None
+    mock_player.wifi_rssi = None
+    mock_player.shuffle = None
+    mock_player.repeat = None
+    mock_player.available_sources = []
+
+    # Methods
+    mock_player.refresh = AsyncMock()
+    mock_player.reboot = AsyncMock()
+
+    # Create coordinator with simplified data structure
     coordinator = MagicMock()
     coordinator.client = wiim_client
-    coordinator.data = {
-        "status": {
-            "uuid": "test-speaker-uuid",
-            "DeviceName": "Test WiiM",
-            "project": "WiiM Mini",
-            "firmware": "1.0.0",
-            "MAC": "aa:bb:cc:dd:ee:ff",
-            "vol": "50",
-            "mute": "0",
-            "status": "stop",
-        },
-        "multiroom": {"role": "solo", "slaves": 0},
-        "role": "solo",
-        "polling": {
-            "interval": 5,
-            "is_playing": False,
-            "api_capabilities": {
-                "statusex_supported": True,
-                "metadata_supported": True,
-                "eq_supported": True,
-            },
-        },
-    }
+    coordinator.player = mock_player
+    coordinator.data = {"player": mock_player}
     coordinator.last_update_success = True
     coordinator.async_request_refresh = AsyncMock()
     coordinator.record_user_command = MagicMock()
@@ -121,18 +151,32 @@ def wiim_speaker_slave(hass):
     from custom_components.wiim.const import DOMAIN
     from custom_components.wiim.data import Speaker
 
+    # Create mock Player object for slave
+    slave_player = MagicMock()
+    slave_player.client = AsyncMock()
+    slave_player.client.host = "192.168.1.101"
+    slave_player.host = "192.168.1.101"
+
+    # Role properties - slave
+    slave_player.role = "slave"
+    slave_player.is_master = False
+    slave_player.is_slave = True
+    slave_player.is_solo = False
+    slave_player.group = None  # Will be set in group tests
+
+    # Other properties
+    slave_player.volume_level = 0.5
+    slave_player.is_muted = False
+    slave_player.play_state = "stop"
+    slave_player.name = "Test Slave"
+    slave_player.model = "WiiM Pro"
+    slave_player.uuid = "test-slave-uuid"
+
     # Create mock coordinator for slave
     slave_coordinator = MagicMock()
-    slave_coordinator.client = AsyncMock()
-    slave_coordinator.client.host = "192.168.1.101"
-    slave_coordinator.data = {
-        "status": {
-            "uuid": "test-slave-uuid",
-            "DeviceName": "Test Slave",
-            "project": "WiiM Pro",
-        },
-        "multiroom": {"role": "slave"},
-    }
+    slave_coordinator.client = slave_player.client
+    slave_coordinator.player = slave_player
+    slave_coordinator.data = {"player": slave_player}
     slave_coordinator.last_update_success = True
     slave_coordinator.async_request_refresh = AsyncMock()
 

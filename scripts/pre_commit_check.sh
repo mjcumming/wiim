@@ -22,7 +22,7 @@ echo "📦 Import test..."
 python -c "
 import sys
 sys.path.insert(0, '.')
-from custom_components.wiim.api import WiiMClient
+from pywiim import WiiMClient
 from custom_components.wiim.coordinator import WiiMCoordinator
 print('✅ Core imports successful')
 "

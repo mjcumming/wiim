@@ -14,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN, EQ_PRESET_MAP
+from .const import CONF_ENABLE_EQ_CONTROLS, DOMAIN
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
 
@@ -76,8 +76,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         """
         try:
             _LOGGER.info("Enabling equalizer for %s", self.speaker.name)
-            await self.speaker.coordinator.client.set_eq_enabled(True)
-            await self._async_execute_command_with_refresh("equalizer_on")
+            await self.speaker.coordinator.player.set_eq_enabled(True)
 
         except Exception as err:
             _LOGGER.error("Failed to enable equalizer for %s: %s", self.speaker.name, err)
@@ -91,8 +90,7 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
         """
         try:
             _LOGGER.info("Disabling equalizer for %s", self.speaker.name)
-            await self.speaker.coordinator.client.set_eq_enabled(False)
-            await self._async_execute_command_with_refresh("equalizer_off")
+            await self.speaker.coordinator.player.set_eq_enabled(False)
 
         except Exception as err:
             _LOGGER.error("Failed to disable equalizer for %s: %s", self.speaker.name, err)
@@ -100,18 +98,30 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return equalizer-related information."""
+        """Return equalizer-related information.
+
+        pywiim provides:
+        - player.eq_presets: list of available presets (cached from refresh())
+        - player.eq_preset: current preset
+        - capabilities["supports_eq"]: whether device supports EQ
+        """
         if not self.speaker.coordinator.data:
             return {"eq_supported": False, "current_preset": None, "available_presets": []}
 
-        eq_info = self.speaker.coordinator.data.get("eq", {})
-        polling_info = self.speaker.coordinator.data.get("polling", {})
-        api_capabilities = polling_info.get("api_capabilities", {})
+        player = self.speaker.coordinator.data.get("player")
+        capabilities = (
+            self.speaker.coordinator._capabilities if hasattr(self.speaker.coordinator, "_capabilities") else {}
+        )
 
-        attrs = {
-            "eq_supported": api_capabilities.get("eq_supported", False),
-            "current_preset": eq_info.get("eq_preset"),
-            "available_presets": list(EQ_PRESET_MAP.keys()),
+        # Get presets and current preset from Player object
+        available_presets = []
+        current_preset = None
+        if player:
+            available_presets = getattr(player, "eq_presets", []) or []
+            current_preset = getattr(player, "eq_preset", None)
+
+        return {
+            "eq_supported": capabilities.get("supports_eq", False),
+            "current_preset": current_preset,
+            "available_presets": available_presets,
         }
-
-        return attrs

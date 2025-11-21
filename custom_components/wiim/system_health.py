@@ -1,5 +1,8 @@
 """Provide info to system health."""
 
+from __future__ import annotations
+
+from importlib import metadata
 from typing import Any
 
 from homeassistant.components import system_health
@@ -23,15 +26,30 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
     # Count reachable devices
     reachable_count = sum(1 for speaker in speakers if speaker.available)
 
-    # Count multiroom groups
-    masters = [s for s in speakers if s.role == "master"]
-    slaves = [s for s in speakers if s.role == "slave"]
+    # Count multiroom groups using player properties
+    masters = []
+    slaves = []
+    for s in speakers:
+        if s.coordinator and s.coordinator.data:
+            player = s.coordinator.data.get("player")
+            if player:
+                if player.is_master:
+                    masters.append(s)
+                elif player.is_slave:
+                    slaves.append(s)
 
     # Check first device API health (async)
     first_device_health = None
     if speakers:
         first_speaker = speakers[0]
         first_device_health = await _check_device_health(first_speaker)
+
+    # Get pywiim version
+    pywiim_version = "unknown"
+    try:
+        pywiim_version = metadata.version("pywiim")
+    except metadata.PackageNotFoundError:
+        pass
 
     return {
         "configured_devices": len(entries),
@@ -40,6 +58,7 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
         "multiroom_slaves": len(slaves),
         "first_device_api": first_device_health,  # This will be async
         "integration_version": "2.0.0",  # Your current version
+        "pywiim_version": pywiim_version,
     }
 
 
@@ -47,7 +66,7 @@ async def _check_device_health(speaker) -> str:
     """Check health of a specific device."""
     try:
         # Quick API test
-        await speaker.coordinator.client.get_device_info()
+        await speaker.coordinator.player.get_device_info()
         polling_interval = speaker.coordinator.update_interval.total_seconds()
         return f"OK (polling: {polling_interval}s)"
     except Exception as err:

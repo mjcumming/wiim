@@ -46,10 +46,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service import async_register_admin_service
+from pywiim import WiiMClient
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 # Import config_flow to make it available as a module attribute for tests
 from . import config_flow  # noqa: F401
-from .api import WiiMClient, WiiMConnectionError, WiiMError, WiiMTimeoutError
 from .const import (
     CONF_ENABLE_MAINTENANCE_BUTTONS,
     CONF_ENABLE_NETWORK_MONITORING,
@@ -57,6 +58,7 @@ from .const import (
 )
 from .coordinator import WiiMCoordinator
 from .data import Speaker
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,17 +100,12 @@ def get_enabled_platforms(
 
     # Conditionally add SELECT platform based on device audio output capabilities
     if capabilities is None:
-        # Try to get capabilities from coordinator (fallback for reload/update scenarios)
+        # Get capabilities from coordinator
         if entry.entry_id in hass.data.get(DOMAIN, {}):
             coordinator_data = hass.data[DOMAIN][entry.entry_id]
             if "coordinator" in coordinator_data:
                 coordinator = coordinator_data["coordinator"]
-                # Capabilities are stored in coordinator but not in client
                 capabilities = getattr(coordinator, "_capabilities", {})
-
-                # Fallback: check client capabilities for backward compatibility
-                if not capabilities and hasattr(coordinator, "client") and hasattr(coordinator.client, "capabilities"):
-                    capabilities = coordinator.client.capabilities
 
     if capabilities:
         supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
@@ -197,7 +194,7 @@ async def _reboot_device_service(hass: HomeAssistant, call):
             speaker = entry_data.get("speaker")
             if speaker:
                 try:
-                    await speaker.coordinator.client.reboot()
+                    await speaker.coordinator.player.reboot()
                     _LOGGER.info("Reboot command sent successfully to %s", speaker.name)
                 except Exception as err:
                     _LOGGER.info(
@@ -248,7 +245,7 @@ async def _sync_time_service(hass: HomeAssistant, call):
             speaker = entry_data.get("speaker")
             if speaker:
                 try:
-                    await speaker.coordinator.client.sync_time()
+                    await speaker.coordinator.player.client.sync_time()
                     _LOGGER.info("Time sync command sent successfully to %s", speaker.name)
                 except Exception as err:
                     _LOGGER.error("Failed to sync time for %s: %s", speaker.name, err)
@@ -258,56 +255,83 @@ async def _sync_time_service(hass: HomeAssistant, call):
     _LOGGER.error("No WiiM device found for entity %s", entity_id)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up WiiM from a config entry."""
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    """Set up the WiiM integration domain."""
+    _LOGGER.info("WiiM integration async_setup called")
+    # Initialize domain data structure
+    hass.data.setdefault(DOMAIN, {})
 
-    # Register global services if this is the first entry
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
+    # Register services here (only once, even if called multiple times)
+    if not hass.services.has_service(DOMAIN, "reboot_device"):
+        from .services import async_setup_services
 
-        # Register global services
-        async_register_admin_service(
-            hass,
+        # Register global services (using hass.services.async_register like Sonos)
+        hass.services.async_register(
             DOMAIN,
             "reboot_device",
             _reboot_device_service,
         )
-        async_register_admin_service(
-            hass,
+        hass.services.async_register(
             DOMAIN,
             "sync_time",
             _sync_time_service,
         )
 
-    # Simplified v2.0.0 architecture: no custom registry, just use HA config entries
+        # Register platform entity services (sleep timer and alarms)
+        await async_setup_services(hass)
+        _LOGGER.info("WiiM services registered")
+
+    _LOGGER.info("WiiM integration async_setup completed")
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up WiiM from a config entry."""
+    _LOGGER.info("WiiM async_setup_entry called for entry: %s (host: %s)", entry.entry_id, entry.data.get("host"))
+
+    # Initialize domain data structure
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
+
+    # Ensure services are registered (fallback if async_setup wasn't called)
+    # This ensures services work even when reloading config entries
+    if not hass.services.has_service(DOMAIN, "reboot_device"):
+        from .services import async_setup_services
+
+        # Register global services (using hass.services.async_register like Sonos)
+        hass.services.async_register(
+            DOMAIN,
+            "reboot_device",
+            _reboot_device_service,
+        )
+        hass.services.async_register(
+            DOMAIN,
+            "sync_time",
+            _sync_time_service,
+        )
+
+        # Register platform entity services (sleep timer and alarms)
+        await async_setup_services(hass)
+        _LOGGER.info("WiiM services registered in async_setup_entry (fallback)")
 
     # Create client and coordinator with firmware capabilities
     session = async_get_clientsession(hass)
 
-    # Detect device capabilities first
-    from .firmware_capabilities import detect_device_capabilities
-
-    # Create temporary client for capability detection
-    # Use Audio Pro MkII-compatible settings speculatively to handle devices
-    # that require client cert + port 4443 before we can detect capabilities
-    temp_capabilities = {
-        "protocol_priority": ["https", "http"],
-        "preferred_ports": [4443, 8443, 443],  # Try Audio Pro MkII ports first
-    }
-    temp_client = WiiMClient(
-        host=entry.data["host"],
-        port=entry.data.get("port", 443),
-        timeout=entry.data.get("timeout", 10),
-        session=session,
-        capabilities=temp_capabilities,
-    )
-
-    # Detect capabilities
+    # Create client - pywiim handles capability detection
+    # Note: We pass Home Assistant's managed session to pywiim, but pywiim may create
+    # additional internal sessions for temporary operations (e.g., getting master name)
+    # that aren't properly closed. This results in "Unclosed client session" warnings
+    # which are harmless but should be fixed in pywiim itself.
+    capabilities = {}
     try:
-        device_info = await temp_client.get_device_info_model()
-        capabilities = detect_device_capabilities(device_info)
+        temp_client = WiiMClient(
+            host=entry.data["host"],
+            port=entry.data.get("port", 443),
+            timeout=entry.data.get("timeout", 10),
+            session=session,
+        )
+        # Use pywiim's _detect_capabilities() method
+        capabilities = await temp_client._detect_capabilities()
         _LOGGER.info(
             "Detected device capabilities for %s: %s",
             entry.data["host"],
@@ -321,13 +345,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         else:
             _LOGGER.info(
-                "[AUDIO OUTPUT] Device %s does not support audio output control (is_wiim=%s, is_legacy=%s)",
+                "[AUDIO OUTPUT] Device %s does not support audio output control",
                 entry.data["host"],
-                capabilities.get("is_wiim_device", False),
-                capabilities.get("is_legacy_device", False),
+            )
+        # Log EQ capability specifically for debugging
+        if capabilities.get("supports_eq") or capabilities.get("eq_supported"):
+            _LOGGER.info(
+                "[EQ] Device %s supports EQ (detected by pywiim capability detection)",
+                entry.data["host"],
+            )
+        else:
+            _LOGGER.info(
+                "[EQ] Device %s - EQ support NOT detected by pywiim capability detection. Full capabilities: %s",
+                entry.data["host"],
+                capabilities,
             )
     except Exception as err:
-        # Smart logging escalation for capability detection failures too
+        # Smart logging escalation for capability detection failures
         retry_count = getattr(entry, "_capability_detection_retry_count", 0)
         retry_count += 1
         entry._capability_detection_retry_count = retry_count
@@ -346,22 +380,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             retry_count,
             err,
         )
+        # Use empty capabilities - WiiMClient will handle it
         capabilities = {}
 
-    # Create client with capabilities
-    client = WiiMClient(
-        host=entry.data["host"],
-        port=entry.data.get("port", 443),
-        timeout=entry.data.get("timeout", 10),
-        session=session,
-        capabilities=capabilities,
-    )
-
+    # Coordinator creates client and player internally using HA's shared session
     coordinator = WiiMCoordinator(
         hass,
-        client,
+        host=entry.data["host"],
         entry=entry,
         capabilities=capabilities,
+        port=entry.data.get("port", 443),
+        timeout=entry.data.get("timeout", 10),
     )
 
     # ------------------------------------------------------------------
@@ -378,7 +407,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store minimal references immediately so helper look-ups succeed
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
-        "client": client,
         "speaker": speaker,
         "entry": entry,  # platform access to options
     }

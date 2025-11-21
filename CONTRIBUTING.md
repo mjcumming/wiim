@@ -7,6 +7,7 @@ Thank you for your interest in contributing to the WiiM Home Assistant integrati
 ### Non-negotiables
 
 1. **File Location**: Every file must live inside `custom_components/wiim/` - this is the only directory you may touch.
+
    - Never modify `homeassistant/` core folders
    - Never import private HA internals
 
@@ -29,8 +30,8 @@ Thank you for your interest in contributing to the WiiM Home Assistant integrati
 Before writing code, ask yourself:
 
 1. What user story am I solving? (quote the Issue #)
-2. Where does this logic belong? (`api.py` ↔ `coordinator.py` ↔ entity/service)
-3. What data do I need from the device? (`getStatusEx`, `getPlayerStatus`, etc.)
+2. Where does this logic belong? (`pywiim` ↔ `coordinator.py` ↔ entity/service)
+3. What data do I need from the device? (via `pywiim` client methods)
 4. How will I test success & failure? (unit + integration test)
 5. How does this interact with multi-room state?
 6. What happens if the device is offline? (timeouts, retries)
@@ -40,16 +41,16 @@ If any answer is fuzzy—stop and clarify.
 
 ### Common Pitfalls
 
-| Symptom | Root Cause | Fix |
-|---------|------------|-----|
-| Accidentally imported `homeassistant.components.media_player` internals | Breaking core encapsulation | Refactor to use public helpers only |
-| Group slider only moves host | Missing service loop | Implement `set_group_volume` helper |
-| JSON decode error | Field hex-encoded | Use `bytes.fromhex().decode()` to parse `Title`, `Artist` |
+| Symptom                                                                 | Root Cause                  | Fix                                                       |
+| ----------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------- |
+| Accidentally imported `homeassistant.components.media_player` internals | Breaking core encapsulation | Refactor to use public helpers only                       |
+| Group slider only moves host                                            | Missing service loop        | Implement `set_group_volume` helper                       |
+| JSON decode error                                                       | Field hex-encoded           | Use `bytes.fromhex().decode()` to parse `Title`, `Artist` |
 
 ### PR Checklist
 
 - [ ] Code confined to `custom_components/wiim/`
-- [ ] Fulfils Issue #___ ✅
+- [ ] Fulfils Issue #\_\_\_ ✅
 - [ ] Added/updated unit + integration tests
 - [ ] Passes `pre-commit` & coverage ≥ 90%
 - [ ] Docs/changelog updated
@@ -59,4 +60,4 @@ If any answer is fuzzy—stop and clarify.
 
 1. Re-read this file
 2. Open GitHub Discussion with "QUESTION:" prefix
-3. Wait for sign-off before coding 
+3. Wait for sign-off before coding

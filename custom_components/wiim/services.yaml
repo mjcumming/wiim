@@ -266,3 +266,68 @@ set_touch_buttons:
       required: true
       selector:
         boolean:
+
+set_sleep_timer:
+  name: Set Sleep Timer
+  description: Set a sleep timer on the WiiM device (WiiM devices only).
+  target:
+    entity:
+      integration: wiim
+      domain: media_player
+  fields:
+    sleep_time:
+      name: Sleep Time
+      description: Time in seconds until the device turns off (0-7200)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 7200
+          unit_of_measurement: seconds
+
+clear_sleep_timer:
+  name: Clear Sleep Timer
+  description: Clear the sleep timer on the WiiM device (WiiM devices only).
+  target:
+    entity:
+      integration: wiim
+      domain: media_player
+
+update_alarm:
+  name: Update Alarm
+  description: >
+    Update an alarm on the WiiM device (WiiM devices only).
+
+    WiiM devices support 3 alarm slots (0-2). Alarm times must be in UTC format.
+  target:
+    entity:
+      integration: wiim
+      domain: media_player
+  fields:
+    alarm_id:
+      name: Alarm ID
+      description: The alarm slot to update (0-2)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 2
+          mode: box
+    time:
+      name: Time
+      description: Alarm time in UTC (HH:MM:SS format, e.g., "07:00:00")
+      required: false
+      selector:
+        text:
+    trigger:
+      name: Trigger
+      description: Alarm trigger type (e.g., "daily")
+      required: false
+      selector:
+        text:
+    operation:
+      name: Operation
+      description: Alarm operation type (e.g., "playback")
+      required: false
+      selector:
+        text:

@@ -3,7 +3,7 @@
 # This Makefile provides commands for testing, linting, and building
 # the WiiM Home Assistant integration.
 
-.PHONY: help test test-phase test-quick lint format clean install install-dev build check-all release check-python check-ha-compat
+.PHONY: help test test-phase test-quick lint format clean install install-dev build check-all release check-python check-ha-compat pre-run
 
 # Default target
 help:
@@ -16,6 +16,7 @@ help:
 	@echo "  test-quick     - Run tests without coverage (faster)"
 	@echo ""
 	@echo "Code Quality:"
+	@echo "  pre-run        - Quick checks before running HA (syntax, lint, imports)"
 	@echo "  validate       - Validate refactor integrity & API consistency"
 	@echo "  pre-commit     - Run all pre-commit validation checks"
 	@echo "  lint           - Run linting checks"
@@ -68,6 +69,11 @@ test-phase:
 test-verbose:
 	@echo "🧪 Running WiiM Integration Tests (Verbose)..."
 	python tests/run_tests.py --verbose
+
+# Quick pre-run check (before starting HA)
+pre-run:
+	@echo "🔍 Running pre-run checks..."
+	@bash scripts/pre_run_check.sh
 
 # Code quality targets
 lint:

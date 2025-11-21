@@ -104,11 +104,19 @@ def run_unit_tests(verbose: bool = False) -> bool:
 
 
 def run_integration_tests(verbose: bool = False) -> bool:
-    """Run integration tests (currently placeholder only)."""
+    """Run integration tests."""
     print_header("Running Integration Tests", Colors.BLUE)
-    print_info("Integration tests not yet implemented - focusing on comprehensive unit tests")
-    print_success("Integration tests skipped (no real tests yet)")
-    return True
+
+    cmd = [
+        get_python_executable(),
+        "-m",
+        "pytest",
+        "tests/integration/",
+        "-v" if verbose else "-q",
+        "--tb=short",
+    ]
+
+    return run_command(cmd, "Integration tests")
 
 
 def run_specific_test_file(test_file: str, verbose: bool = False) -> bool:
@@ -196,7 +204,7 @@ def run_all_tests(verbose: bool = False) -> bool:
 
     if passed == total:
         print_success("🎉 All tests passed! WiiM integration is production-ready.")
-        print_info("Testing approach: Comprehensive unit tests (81 tests) + code style checks")
+        print_info("Testing approach: Integration tests + unit tests for integration glue code + code style checks")
         return True
     else:
         print_error("❌ Some tests failed. Please fix issues before deployment.")

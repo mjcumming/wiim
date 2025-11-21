@@ -2,6 +2,28 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [0.3.0] - 2025-11-17
+
+### Changed
+
+- **Major Refactor**: Migrated all device communication logic to standalone `pywiim` package
+  - Integration now acts as a thin wrapper between Home Assistant and `pywiim` library
+  - All HTTP API communication, UPnP handling, and device logic moved to `pywiim>=1.0.57`
+  - Improved maintainability and separation of concerns
+  - No functional changes for users - all features remain the same
+  - Better code organization: HA-specific code in integration, device logic in `pywiim`
+
+### Removed
+
+- Internal API module (replaced by `pywiim` package)
+- Temporary testing documentation files
+
+### Developer Notes
+
+- Integration now requires `pywiim>=1.0.57` package (automatically installed)
+- See `development/HA_INTEGRATION_GUIDE.md` for integration patterns with `pywiim`
+- All device communication now goes through `pywiim.WiiMClient` and `pywiim.Player` classes
+
 ## [0.2.28] - 2025-11-13
 
 ### Fixed

@@ -77,7 +77,7 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
         """
         try:
             _LOGGER.info("Initiating reboot for %s", self.speaker.name)
-            await self.speaker.coordinator.client.reboot()
+            await self.speaker.coordinator.player.reboot()
             _LOGGER.info("Reboot command sent successfully to %s", self.speaker.name)
             await self._async_execute_command_with_refresh("reboot")
 
@@ -121,7 +121,7 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
         """
         try:
             _LOGGER.info("Synchronizing time for %s", self.speaker.name)
-            await self.speaker.coordinator.client.sync_time()
+            await self.speaker.coordinator.player.sync_time()
             await self._async_execute_command_with_refresh("sync_time")
 
         except Exception as err:
@@ -154,7 +154,8 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
     def available(self) -> bool:
         """Return if the button is available (not scanning)."""
         # Disable button during scan to prevent multiple simultaneous scans
-        scan_status = self.speaker.get_bluetooth_scan_status()
+        # Read directly from coordinator data
+        scan_status = self.coordinator.data.get("bt_scan_status", "Idle") if self.coordinator.data else "Idle"
         is_scanning = scan_status in ("Scanning", "Initializing") or self._scan_in_progress
         return not is_scanning
 
@@ -164,7 +165,8 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
         Scans for nearby Bluetooth devices and stores results for selection.
         """
         # Prevent multiple simultaneous scans
-        scan_status = self.speaker.get_bluetooth_scan_status()
+        # Read directly from coordinator data
+        scan_status = self.coordinator.data.get("bt_scan_status", "Idle") if self.coordinator.data else "Idle"
         if scan_status in ("Scanning", "Initializing") or self._scan_in_progress:
             _LOGGER.warning(
                 "Bluetooth scan already in progress for %s (status: %s). Please wait for current scan to complete.",
@@ -178,13 +180,16 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
             self.async_write_ha_state()  # Update button state to show it's disabled
 
             _LOGGER.info("Starting Bluetooth scan for %s", self.speaker.name)
-            self.speaker.set_bluetooth_devices([], "Scanning")
+            # Update coordinator data to show scanning state
+            if self.coordinator.data:
+                self.coordinator.data["bt_scan_status"] = "Scanning"
+                self.coordinator.data["bt_history"] = []
 
             # Trigger entity update to show scanning state
             self.async_write_ha_state()
 
-            # Perform the scan (10 seconds for better device discovery)
-            devices = await self.speaker.coordinator.client.scan_for_bluetooth_devices(duration=10)
+            # Perform the scan (10 seconds for better device discovery) - pywiim handles this
+            devices = await self.speaker.coordinator.player.scan_for_bluetooth_devices(duration=10)
 
             # Log detailed scan results
             _LOGGER.info(
@@ -208,17 +213,22 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
                     self.speaker.name,
                 )
 
-            # Store results
+            # Store results in coordinator data
             _LOGGER.info(
                 "Storing %d Bluetooth devices for %s: %s",
                 len(devices),
                 self.speaker.name,
                 [f"{d.get('name', 'Unknown')} ({d.get('mac', 'N/A')})" for d in devices] if devices else "none",
             )
-            self.speaker.set_bluetooth_devices(devices, "Complete")
+            # Update coordinator data with scan results
+            if self.coordinator.data:
+                self.coordinator.data["bt_history"] = devices
+                self.coordinator.data["bt_scan_status"] = "Complete"
+            # Request refresh to propagate changes
+            await self.coordinator.async_request_refresh()
 
-            # Verify storage
-            stored = self.speaker.get_bluetooth_devices()
+            # Verify storage - read from coordinator data
+            stored = self.coordinator.data.get("bt_history", []) if self.coordinator.data else []
             _LOGGER.info(
                 "Verified stored devices for %s: %d devices found",
                 self.speaker.name,
@@ -236,7 +246,10 @@ class WiiMBluetoothScanButton(WiimEntity, ButtonEntity):
 
         except Exception as err:
             _LOGGER.error("Failed to scan Bluetooth devices for %s: %s", self.speaker.name, err)
-            self.speaker.set_bluetooth_devices([], "Failed")
+            # Update coordinator data to show failed state
+            if self.coordinator.data:
+                self.coordinator.data["bt_scan_status"] = "Failed"
+                self.coordinator.data["bt_history"] = []
             raise
         finally:
             # Always re-enable button after scan completes (success or failure)

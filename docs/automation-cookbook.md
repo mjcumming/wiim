@@ -56,6 +56,215 @@ wiim_morning_routine:
         preset: 1
 ```
 
+## ⏰ Alarms and Sleep Timers
+
+### Morning Alarm with Music
+
+Wake up to your favorite music using WiiM's built-in alarm:
+
+```yaml
+automation:
+  alias: "Bedroom Morning Alarm"
+  description: "Set daily alarm for weekday mornings (WiiM devices only)"
+  trigger:
+    platform: time
+    at: "22:00:00" # Set alarm the night before
+  condition:
+    - condition: time
+      weekday:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+  action:
+    # Set alarm for 7:00 AM local time (convert to UTC!)
+    # For EST (UTC-5): 7:00 AM = 12:00:00 UTC
+    # For PST (UTC-8): 7:00 AM = 15:00:00 UTC
+    - service: wiim.update_alarm
+      target:
+        entity_id: media_player.bedroom
+      data:
+        alarm_id: 0
+        time: "12:00:00" # 7:00 AM EST in UTC
+        trigger: "daily"
+        operation: "playback"
+```
+
+### Weekend vs Weekday Alarm
+
+Different alarm times for weekends:
+
+```yaml
+automation:
+  - alias: "Set Weekday Alarm"
+    trigger:
+      platform: time
+      at: "22:00:00"
+    condition:
+      - condition: time
+        weekday:
+          - mon
+          - tue
+          - wed
+          - thu
+    action:
+      - service: wiim.update_alarm
+        target:
+          entity_id: media_player.bedroom
+        data:
+          alarm_id: 0
+          time: "12:00:00" # 7:00 AM EST
+          trigger: "daily"
+          operation: "playback"
+
+  - alias: "Set Weekend Alarm"
+    trigger:
+      platform: time
+      at: "22:00:00"
+    condition:
+      - condition: time
+        weekday:
+          - fri
+          - sat
+    action:
+      - service: wiim.update_alarm
+        target:
+          entity_id: media_player.bedroom
+        data:
+          alarm_id: 0
+          time: "14:00:00" # 9:00 AM EST
+          trigger: "daily"
+          operation: "playback"
+```
+
+### Sleep Timer Automation
+
+Automatically set sleep timer when starting bedtime music:
+
+```yaml
+automation:
+  alias: "Bedtime Music with Sleep Timer"
+  description: "Play sleep sounds and auto-shutoff after 30 minutes"
+  trigger:
+    platform: state
+    entity_id: input_boolean.bedtime_mode
+    to: "on"
+  action:
+    # Start playing sleep sounds
+    - service: wiim.play_preset
+      target:
+        entity_id: media_player.bedroom
+      data:
+        preset: 6 # Your sleep sounds preset
+    # Set volume low
+    - service: media_player.volume_set
+      target:
+        entity_id: media_player.bedroom
+      data:
+        volume_level: 0.15
+    # Set 30 minute sleep timer
+    - service: wiim.set_sleep_timer
+      target:
+        entity_id: media_player.bedroom
+      data:
+        sleep_time: 1800 # 30 minutes in seconds
+```
+
+### Gradual Volume Sleep Timer
+
+Fade volume before sleep timer ends:
+
+```yaml
+automation:
+  alias: "Fade to Sleep"
+  trigger:
+    platform: state
+    entity_id: input_boolean.sleep_mode
+    to: "on"
+  action:
+    # Start music
+    - service: wiim.play_preset
+      target:
+        entity_id: media_player.bedroom
+      data:
+        preset: 6
+    # Initial volume
+    - service: media_player.volume_set
+      target:
+        entity_id: media_player.bedroom
+      data:
+        volume_level: 0.3
+    # Wait 15 minutes
+    - delay: "00:15:00"
+    # Reduce volume
+    - service: media_player.volume_set
+      target:
+        entity_id: media_player.bedroom
+      data:
+        volume_level: 0.15
+    # Wait 10 minutes
+    - delay: "00:10:00"
+    # Further reduce
+    - service: media_player.volume_set
+      target:
+        entity_id: media_player.bedroom
+      data:
+        volume_level: 0.05
+    # Set sleep timer for final 5 minutes
+    - service: wiim.set_sleep_timer
+      target:
+        entity_id: media_player.bedroom
+      data:
+        sleep_time: 300
+```
+
+### Smart Sleep Timer Based on Presence
+
+Only set sleep timer if everyone is home:
+
+```yaml
+automation:
+  alias: "Conditional Sleep Timer"
+  trigger:
+    platform: time
+    at: "22:30:00"
+  condition:
+    - condition: state
+      entity_id: group.family
+      state: "home"
+    - condition: state
+      entity_id: media_player.bedroom
+      state: "playing"
+  action:
+    - service: wiim.set_sleep_timer
+      target:
+        entity_id: media_player.bedroom
+      data:
+        sleep_time: 1800
+```
+
+### Clear Sleep Timer Automation
+
+Cancel sleep timer when you get up early:
+
+```yaml
+automation:
+  alias: "Cancel Sleep Timer on Movement"
+  trigger:
+    platform: state
+    entity_id: binary_sensor.bedroom_motion
+    to: "on"
+  condition:
+    - condition: time
+      after: "05:00:00"
+      before: "07:00:00"
+  action:
+    - service: wiim.clear_sleep_timer
+      target:
+        entity_id: media_player.bedroom
+```
+
 ## ⏰ Time-Based Automations
 
 ### Morning Music Routine
@@ -526,8 +735,7 @@ automation:
 ## 📚 More Resources
 
 - **[🎛️ User Guide](user-guide.md)** - Complete features and configuration reference
-- **[❓ FAQ](FAQ.md)** - Quick answers to common questions
-- **[🔧 Troubleshooting](troubleshooting.md)** - Fix common issues and network problems
+- **[❓ FAQ & Troubleshooting](faq-and-troubleshooting.md)** - Quick answers and solutions
 
 ---
 
