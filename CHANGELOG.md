@@ -2,6 +2,12 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.9] - 2024-11-21
+
+### Note
+
+This is the same as 1.0.0 but with version number bumped to ensure it appears as the latest stable release (newer than all beta versions in GitHub/HACS sorting).
+
 ## [1.0.0] - 2024-11-21
 
 ### 🎉 First Stable Release
