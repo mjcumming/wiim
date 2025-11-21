@@ -192,6 +192,11 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
         """Flag media player features supported by WiiM."""
+        # Check if player is a slave in a multiroom group
+        player = self._get_player()
+        is_slave = player.is_slave if player else False
+
+        # Base features available to all players (including slaves)
         features = (
             MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_MUTE
@@ -199,15 +204,22 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
-            | MediaPlayerEntityFeature.SELECT_SOURCE
-            | MediaPlayerEntityFeature.PLAY_MEDIA
-            | MediaPlayerEntityFeature.BROWSE_MEDIA
-            | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
-            | MediaPlayerEntityFeature.CLEAR_PLAYLIST
         )
 
+        # Slaves don't control their own playback/sources - master controls everything
+        # Only add these features if not a slave
+        if not is_slave:
+            features |= (
+                MediaPlayerEntityFeature.SELECT_SOURCE
+                | MediaPlayerEntityFeature.PLAY_MEDIA
+                | MediaPlayerEntityFeature.BROWSE_MEDIA
+                | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
+                | MediaPlayerEntityFeature.CLEAR_PLAYLIST
+            )
+
         # Exclude next/previous track for streaming sources (radio/web streams)
-        if not self._is_streaming_source():
+        # Slaves also shouldn't have track control (master controls that)
+        if not self._is_streaming_source() and not is_slave:
             features |= MediaPlayerEntityFeature.NEXT_TRACK
             features |= MediaPlayerEntityFeature.PREVIOUS_TRACK
 
@@ -216,22 +228,23 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # The role check is enforced in async_join_players() to prevent slaves from initiating joins
         features |= MediaPlayerEntityFeature.GROUPING
 
-        # Only include shuffle/repeat if pywiim says they're supported
-        if self._shuffle_supported():
-            features |= MediaPlayerEntityFeature.SHUFFLE_SET
-        if self._repeat_supported():
-            features |= MediaPlayerEntityFeature.REPEAT_SET
+        # Only include shuffle/repeat if pywiim says they're supported and not a slave
+        if not is_slave:
+            if self._shuffle_supported():
+                features |= MediaPlayerEntityFeature.SHUFFLE_SET
+            if self._repeat_supported():
+                features |= MediaPlayerEntityFeature.REPEAT_SET
 
-        # Enable EQ (sound mode) only if device supports it
-        if self._is_eq_supported():
+        # Enable EQ (sound mode) only if device supports it and not a slave
+        if not is_slave and self._is_eq_supported():
             features |= MediaPlayerEntityFeature.SELECT_SOUND_MODE
 
-        # Enable seek if we have duration
-        if self.media_duration and self.media_duration > 0:
+        # Enable seek if we have duration and not a slave
+        if not is_slave and self.media_duration and self.media_duration > 0:
             features |= MediaPlayerEntityFeature.SEEK
 
-        # Enable queue management if UPnP client is available
-        if self._has_queue_support():
+        # Enable queue management if UPnP client is available and not a slave
+        if not is_slave and self._has_queue_support():
             features |= MediaPlayerEntityFeature.MEDIA_ENQUEUE
 
         return features
@@ -994,20 +1007,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         raise NotImplementedError("Use async_unjoin_player instead")
 
     async def async_unjoin_player(self) -> None:
-        """Leave the current group."""
+        """Leave the current group.
+
+        Calls pywiim's leave_group() regardless of player role (master/slave/solo).
+        PyWiim handles the complexity of what that means for each role.
+        """
         player = self._get_player()
         if not player:
             raise HomeAssistantError("Player is not ready")
-
-        # Masters shouldn't unjoin - they disband the entire group
-        # Only slaves can leave a group
-        if player.is_master:
-            raise HomeAssistantError("Master cannot unjoin. To disband group, remove all slaves instead.")
-
-        # If not in a group, operation is complete (idempotent)
-        # This handles both solo players and race conditions where group was just disbanded
-        if player.is_solo:
-            return
 
         try:
             await player.leave_group()

@@ -108,9 +108,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         - Basic playback control (play/pause/stop/next/previous to master)
         - Play media and announcements
         - Shuffle/repeat (if master's source supports them)
+        - GROUPING (manage group membership - add/remove slaves)
 
         Intentionally excluded (use individual speaker entities instead):
-        - GROUPING (join/unjoin operations)
         - SELECT_SOURCE (source is per-device, not per-group)
         - SELECT_SOUND_MODE (EQ/sound mode is per-device, not per-group)
         - BROWSE_MEDIA (browse from individual entity)
@@ -135,6 +135,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
+            | MediaPlayerEntityFeature.GROUPING
         )
 
         # Only include shuffle/repeat if master's source supports them
@@ -569,25 +570,86 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         return attrs
 
     # ===== GROUPING OPERATIONS =====
-    # Join/unjoin operations are intentionally blocked on the virtual group
-    # coordinator. Use individual speaker entities to manage group membership.
-    # This maintains clear separation: individual entities for membership,
-    # group coordinator for unified playback control.
+    # The virtual group coordinator provides centralized group management.
+    # It can add players to its group (join) and remove slaves (unjoin).
 
     async def async_join_players(self, group_members: list[str]) -> None:
-        """Prevent joining - virtual group players cannot join other players.
+        """Add other players to this group.
 
-        To manage group membership, use the individual speaker entities.
-        The group coordinator is only for unified playback control.
+        This adds the specified players as slaves to this master's group.
+        If they're already in other groups, they'll leave those first.
         """
-        raise HomeAssistantError(
-            "Virtual group player cannot join other players. Use the individual speaker entity instead."
-        )
+        import asyncio
+
+        from .data import get_all_speakers
+
+        if not self.available:
+            raise HomeAssistantError("Group coordinator is not available")
+
+        player = self._get_player()
+        if not player:
+            raise HomeAssistantError("Player is not ready")
+
+        if not player.is_master:
+            raise HomeAssistantError("Cannot add players: not currently a master")
+
+        master_player = player
+        speakers = get_all_speakers(self.hass)
+        join_tasks = []
+
+        for entity_id in group_members:
+            # Skip self
+            if entity_id == self.entity_id:
+                continue
+
+            # Find the speaker coordinator for this entity
+            speaker = next((s for s in speakers if s.media_player_entity_id == entity_id), None)
+            if not speaker:
+                _LOGGER.warning("Could not find speaker for entity %s", entity_id)
+                continue
+
+            # Get the target player
+            target_player = speaker.coordinator.player
+            if not target_player:
+                _LOGGER.warning("Player not ready for entity %s", entity_id)
+                continue
+
+            # Skip if already in this group
+            if target_player.is_slave and hasattr(player, "group"):
+                group = getattr(player, "group", None)
+                if group and target_player in getattr(group, "all_players", []):
+                    _LOGGER.debug("Player %s already in group, skipping", entity_id)
+                    continue
+
+            # Add join task
+            join_tasks.append(target_player.join_group(master_player))
+
+        # Execute all join operations in parallel
+        if join_tasks:
+            try:
+                join_results = await asyncio.gather(*join_tasks, return_exceptions=True)
+                for result in join_results:
+                    if isinstance(result, Exception):
+                        raise HomeAssistantError(f"Failed to add player to group: {result}") from result
+            except WiiMError as err:
+                raise HomeAssistantError(f"Failed to add players to group: {err}") from err
 
     async def async_unjoin_player(self) -> None:
-        """Prevent unjoining - virtual group players cannot be unjoined.
+        """Disband this group.
 
-        To manage group membership, use the individual speaker entities.
-        The group coordinator is only for unified playback control.
+        When called on the virtual group coordinator (which represents a master),
+        this calls leave_group() on the master player. PyWiim handles what that
+        means (presumably disbanding the group).
         """
-        raise HomeAssistantError("Virtual group player cannot be unjoined. Use the individual speaker entity instead.")
+        if not self.available:
+            # Already not in a group, operation complete
+            return
+
+        player = self._get_player()
+        if not player:
+            raise HomeAssistantError("Player is not ready")
+
+        try:
+            await player.leave_group()
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to disband group: {err}") from err

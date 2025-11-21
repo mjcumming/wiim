@@ -79,19 +79,19 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_player_state_changed(self) -> None:
         """Callback when pywiim Player detects state changes.
 
-        Uses async_set_updated_data() to properly update coordinator data
-        and notify all entities. The callback now fires AFTER pywiim has
-        fully updated the Player object's properties (including metadata).
+        Directly notifies listeners to update immediately without going through
+        the coordinator's data update mechanism (which has throttling/debouncing).
+        The callback fires AFTER pywiim has fully updated the Player object's
+        properties (including metadata), so entities can read fresh data directly
+        from self.player.
         """
-        # Update coordinator data to trigger entity updates
-        # PyWiim Player object has all state - just pass it through
-        if self.data:
-            # Create a new dict to ensure Home Assistant detects the change
-            new_data = {"player": self.player}
-            self.async_set_updated_data(new_data)
-        else:
-            # If no data yet, just notify listeners (will be populated on next refresh)
-            self.async_update_listeners()
+        # Update coordinator's cached data reference (but don't trigger update flow)
+        # This ensures self.data is always in sync with self.player
+        self.data = {"player": self.player}
+
+        # Directly notify all entities to refresh their state from the player
+        # This bypasses DataUpdateCoordinator's throttling for immediate UI updates
+        self.async_update_listeners()
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update coordinator data - polls device following pywiim's PollingStrategy."""
