@@ -29,6 +29,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt
+from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import DOMAIN
@@ -148,6 +149,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         super().__init__(speaker)
         self._attr_unique_id = speaker.uuid
         self._attr_name = None  # Use device name
+        self._attr_media_position_updated_at: dt.datetime | None = None
+        self._last_position: int | None = None
 
     @property
     def name(self) -> str:
@@ -586,32 +589,34 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def media_position(self) -> int | None:
-        """Return media position."""
+        """Return media position in seconds."""
         player = self._get_metadata_player()
-        return player.media_position if player else None
+        if not player:
+            return None
+
+        position = player.media_position
+
+        # Update timestamp when playing and position changed (Sonos/LinkPlay pattern)
+        if self.state == MediaPlayerState.PLAYING and position != self._last_position:
+            self._last_position = position
+            self._attr_media_position_updated_at = dt_util.utcnow()
+        elif self.state == MediaPlayerState.IDLE:
+            # Clear position tracking when idle
+            self._last_position = None
+            self._attr_media_position_updated_at = None
+        # When PAUSED or STOPPED: keep last timestamp (don't update)
+
+        return position
 
     @property
     def media_position_updated_at(self) -> dt.datetime | None:
         """When was the position of the current playing media valid.
 
-        Returns value from pywiim's media_position_updated_at (Unix timestamp).
-        Home Assistant uses this to calculate current position between updates.
+        Following Sonos/LinkPlay pattern: Set timestamp to utcnow() when PLAYING,
+        freeze when PAUSED, clear when IDLE/STOPPED.
+        Home Assistant uses this with media_position to calculate current position.
         """
-        player = self._get_metadata_player()
-        if not player:
-            return None
-
-        # Get Unix timestamp from pywiim
-        timestamp = getattr(player, "media_position_updated_at", None)
-        if timestamp is None:
-            return None
-
-        # Convert Unix timestamp to datetime object
-        try:
-            return dt.utc_from_timestamp(float(timestamp))
-        except (ValueError, TypeError):
-            _LOGGER.debug("Invalid media_position_updated_at timestamp from pywiim: %s", timestamp)
-            return None
+        return self._attr_media_position_updated_at
 
     @property
     def media_image_url(self) -> str | None:

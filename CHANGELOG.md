@@ -2,13 +2,29 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.10] - 2024-11-21
+
+### Fixed
+
+- **Critical**: Fixed media position display discrepancy between iOS and web dashboard
+  - Implemented Home Assistant best practice: integration now manages `media_position_updated_at` timestamp
+  - Following Sonos/LinkPlay pattern: timestamp updates when PLAYING, freezes when PAUSED, clears when IDLE
+  - Position advancement now handled entirely by HA frontend for smooth, consistent display
+  - Fixed missing `dt_util` import that caused NameError at runtime
+
+### Changed
+
+- **Requirements**: Updated to `pywiim>=2.1.0` (removes position estimation - HA frontend handles it)
+- **Architecture**: Simplified position tracking - read raw position from pywiim, manage timestamp ourselves
+
+### Technical Details
+
+- Position display formula (handled by HA): `current_position = media_position + (now - media_position_updated_at)`
+- Integration provides static position and timestamp; frontend calculates live position
+- Eliminates competing estimation logic between pywiim and HA
+- Matches standard Home Assistant integration patterns
+
 ## [1.0.9] - 2024-11-21
-
-### Note
-
-This is the same as 1.0.0 but with version number bumped to ensure it appears as the latest stable release (newer than all beta versions in GitHub/HACS sorting).
-
-## [1.0.0] - 2024-11-21
 
 ### 🎉 First Stable Release
 
