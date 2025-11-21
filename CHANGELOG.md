@@ -2,6 +2,17 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0-beta.8] - 2024-11-21
+
+### Changed
+
+- **Device Info Organization**: Reorganized version display for better clarity
+  - **Hardware**: Now shows device firmware (e.g., "Linkplay 4.8.731953")
+  - **Software**: Now shows pywiim library version (e.g., "pywiim 2.0.17")
+  - **Serial Number**: Now shows device MAC address
+  - More logical separation: hardware firmware vs software library
+  - Better for support and troubleshooting
+
 ## [1.0.0-beta.7] - 2024-11-21
 
 ### Changed

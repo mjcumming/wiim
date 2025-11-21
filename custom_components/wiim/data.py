@@ -131,13 +131,20 @@ class Speaker:
         pass
 
     async def _register_ha_device(self, entry: ConfigEntry) -> None:
-        """Register device in HA registry."""
+        """Register device in HA registry.
+
+        Device Info display:
+        - Hardware: Device firmware version (e.g., "Linkplay 4.8.731953")
+        - Software: PyWiiM library version (e.g., "pywiim 2.0.17")
+        - Serial Number: Device MAC address
+        """
         dev_reg = dr.async_get(self.hass)
         identifiers = {(DOMAIN, self.uuid)}
 
-        # Get pywiim library version for separate display
+        # Get pywiim library version
         try:
             import pywiim
+
             pywiim_version = f"pywiim {getattr(pywiim, '__version__', 'unknown')}"
         except (ImportError, AttributeError):
             pywiim_version = "pywiim unknown"
@@ -148,8 +155,9 @@ class Speaker:
             manufacturer="WiiM",
             name=self.name,
             model=self.model,
-            sw_version=self.firmware,
-            hw_version=pywiim_version,  # Show pywiim version on separate line
+            hw_version=self.firmware,  # Device firmware (LinkPlay)
+            sw_version=pywiim_version,  # Integration library version
+            serial_number=self.mac_address,  # MAC address as serial
         )
 
         self.device_info = HADeviceInfo(
@@ -157,8 +165,9 @@ class Speaker:
             manufacturer="WiiM",
             name=self.name,
             model=self.model,
-            sw_version=self.firmware,
-            hw_version=pywiim_version,  # Show pywiim version on separate line
+            hw_version=self.firmware,  # Device firmware (LinkPlay)
+            sw_version=pywiim_version,  # Integration library version
+            serial_number=self.mac_address,  # MAC address as serial
         )
 
 
