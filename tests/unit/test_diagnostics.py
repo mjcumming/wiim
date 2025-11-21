@@ -37,7 +37,7 @@ def mock_speaker():
     speaker.coordinator.last_update_success = True
     speaker.coordinator.last_update_time.isoformat.return_value = "2024-01-01T12:00:00"
     speaker.coordinator.data = {"test": "data", "status_model": MagicMock()}
-    speaker.coordinator.client.host = "192.168.1.100"
+    speaker.coordinator.player.host = "192.168.1.100"
 
     # Mock media methods
     speaker.get_playback_state.return_value = "playing"
@@ -295,7 +295,7 @@ class TestDiagnosticsIntegration:
         master.coordinator.update_interval.total_seconds.return_value = 30.0
         master.coordinator.last_update_success = True
         master.coordinator.data = {}
-        master.coordinator.client.host = "192.168.1.100"
+        master.coordinator.player.host = "192.168.1.100"
 
         slave = MagicMock()
         slave.role = "slave"

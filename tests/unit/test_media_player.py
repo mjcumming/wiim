@@ -357,13 +357,13 @@ class TestMediaPlayerControls:
     async def test_set_source_api_method(self, media_player):
         """Test that the set_source API method exists and works correctly."""
         # Test that the client has the set_source method
-        assert hasattr(media_player.speaker.coordinator.client, "set_source")
+        assert hasattr(media_player.speaker.coordinator.player, "set_source")
 
         # Test calling set_source directly on the client
-        await media_player.speaker.coordinator.client.set_source("wifi")
+        await media_player.speaker.coordinator.player.set_source("wifi")
 
         # Verify the mock was called
-        media_player.speaker.coordinator.client.set_source.assert_called_once_with("wifi")
+        media_player.speaker.coordinator.player.set_source.assert_called_once_with("wifi")
 
 
 class TestMediaPlayerGrouping:

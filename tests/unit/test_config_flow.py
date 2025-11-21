@@ -120,7 +120,7 @@ class TestIPv6ConfigFlowHandling:
 async def test_form(hass: HomeAssistant) -> None:
     """Test we get the manual entry form directly (setup mode choice was removed)."""
     # Mock async_search to prevent socket usage during discovery
-    with patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock):
+    with patch("pywiim.discovery.discover_devices", new_callable=AsyncMock, return_value=[]):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "manual"  # Goes directly to manual entry now
@@ -152,7 +152,7 @@ async def test_form_successful_connection(hass: HomeAssistant) -> None:
 async def test_form_connection_error(hass: HomeAssistant) -> None:
     """Test connection error during config flow."""
     with (
-        patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock),
+        patch("pywiim.discovery.discover_devices", new_callable=AsyncMock, return_value=[]),
         patch(
             "custom_components.wiim.config_flow.validate_wiim_device",
             new_callable=AsyncMock,
@@ -175,7 +175,7 @@ async def test_form_connection_error(hass: HomeAssistant) -> None:
 async def test_form_timeout_error(hass: HomeAssistant) -> None:
     """Test timeout error during config flow."""
     with (
-        patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock),
+        patch("pywiim.discovery.discover_devices", new_callable=AsyncMock, return_value=[]),
         patch(
             "custom_components.wiim.config_flow.validate_wiim_device",
             new_callable=AsyncMock,
@@ -198,7 +198,7 @@ async def test_form_timeout_error(hass: HomeAssistant) -> None:
 async def test_form_invalid_host(hass: HomeAssistant) -> None:
     """Test invalid host error."""
     with (
-        patch("custom_components.wiim.config_flow.async_search", new_callable=AsyncMock),
+        patch("pywiim.discovery.discover_devices", new_callable=AsyncMock, return_value=[]),
         patch(
             "custom_components.wiim.config_flow.validate_wiim_device",
             new_callable=AsyncMock,
@@ -318,7 +318,7 @@ async def test_duplicate_detection_by_uuid(hass: HomeAssistant) -> None:
     ).add_to_hass(hass)
 
     # Mock the discovery to return a device with same UUID but different IP
-    with patch("custom_components.wiim.config_flow.async_search") as mock_search:
+    with patch("pywiim.discovery.discover_devices", new_callable=AsyncMock, return_value=[]) as mock_search:
         # Mock the device discovery callback
         mock_device = AsyncMock()
         mock_device.host = "192.168.1.101"  # Different IP
@@ -364,7 +364,7 @@ async def test_discovery_filters_duplicate_by_uuid(hass: HomeAssistant) -> None:
     flow.hass = hass
 
     # Mock async_search to return a device with same UUID but different IP
-    with patch("custom_components.wiim.config_flow.async_search") as mock_search:
+    with patch("pywiim.discovery.discover_devices", new_callable=AsyncMock, return_value=[]) as mock_search:
         mock_device = AsyncMock()
         mock_device.host = "192.168.1.102"  # Different IP
         mock_device.location = None

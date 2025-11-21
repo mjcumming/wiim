@@ -83,9 +83,9 @@ def mock_coordinator_fixture():
     coordinator.async_request_refresh = AsyncMock()
     coordinator.last_update_success = True
     # Add the client property
-    coordinator.client = MagicMock()
-    coordinator.client.host = "192.168.1.100"
-    coordinator.client._host = "192.168.1.100"
+    coordinator.player = MagicMock()
+    coordinator.player.host = "192.168.1.100"
+    coordinator.player._host = "192.168.1.100"
     coordinator.ha_group_members = set()
     return coordinator
 

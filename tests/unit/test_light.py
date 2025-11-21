@@ -108,8 +108,8 @@ class TestWiiMLEDLight:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.set_led = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.set_led = AsyncMock()
 
         light = WiiMLEDLight(speaker)
         light._async_execute_command_with_refresh = AsyncMock()
@@ -118,7 +118,7 @@ class TestWiiMLEDLight:
         with patch.object(light, "async_write_ha_state") as mock_write_state:
             await light.async_turn_on()
 
-            speaker.coordinator.client.set_led.assert_called_once_with(True)
+            speaker.coordinator.player.set_led.assert_called_once_with(True)
             light._async_execute_command_with_refresh.assert_called_once_with("led_on")
             mock_write_state.assert_called_once()
             assert light._is_on is True
@@ -133,9 +133,9 @@ class TestWiiMLEDLight:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.set_led = AsyncMock()
-        speaker.coordinator.client.set_led_brightness = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.set_led = AsyncMock()
+        speaker.coordinator.player.set_led_brightness = AsyncMock()
 
         light = WiiMLEDLight(speaker)
         light._async_execute_command_with_refresh = AsyncMock()
@@ -145,8 +145,8 @@ class TestWiiMLEDLight:
             # Test with 50% brightness (128/255 ≈ 0.5)
             await light.async_turn_on(brightness=128)
 
-            speaker.coordinator.client.set_led.assert_called_once_with(True)
-            speaker.coordinator.client.set_led_brightness.assert_called_once_with(50)  # 128/255 * 100
+            speaker.coordinator.player.set_led.assert_called_once_with(True)
+            speaker.coordinator.player.set_led_brightness.assert_called_once_with(50)  # 128/255 * 100
             light._async_execute_command_with_refresh.assert_called_once_with("led_on")
             mock_write_state.assert_called_once()
             assert light._is_on is True
@@ -161,8 +161,8 @@ class TestWiiMLEDLight:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.set_led = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.set_led = AsyncMock()
 
         light = WiiMLEDLight(speaker)
         light._async_execute_command_with_refresh = AsyncMock()
@@ -171,7 +171,7 @@ class TestWiiMLEDLight:
         with patch.object(light, "async_write_ha_state") as mock_write_state:
             await light.async_turn_off()
 
-            speaker.coordinator.client.set_led.assert_called_once_with(False)
+            speaker.coordinator.player.set_led.assert_called_once_with(False)
             light._async_execute_command_with_refresh.assert_called_once_with("led_off")
             mock_write_state.assert_called_once()
             assert light._is_on is False
@@ -185,8 +185,8 @@ class TestWiiMLEDLight:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.set_led = AsyncMock(side_effect=Exception("API Error"))
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.set_led = AsyncMock(side_effect=Exception("API Error"))
 
         light = WiiMLEDLight(speaker)
         light._async_execute_command_with_refresh = AsyncMock()
@@ -207,8 +207,8 @@ class TestWiiMLEDLight:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.set_led = AsyncMock(side_effect=Exception("API Error"))
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.set_led = AsyncMock(side_effect=Exception("API Error"))
 
         light = WiiMLEDLight(speaker)
         light._async_execute_command_with_refresh = AsyncMock()
@@ -246,9 +246,9 @@ class TestWiiMLEDLight:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.set_led = AsyncMock()
-        speaker.coordinator.client.set_led_brightness = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.set_led = AsyncMock()
+        speaker.coordinator.player.set_led_brightness = AsyncMock()
 
         light = WiiMLEDLight(speaker)
         light._async_execute_command_with_refresh = AsyncMock()
@@ -258,8 +258,8 @@ class TestWiiMLEDLight:
             # Test 50% brightness
             await light.async_set_brightness(128)
 
-            speaker.coordinator.client.set_led.assert_called_once_with(True)
-            speaker.coordinator.client.set_led_brightness.assert_called_once_with(50)  # 128/255 * 100
+            speaker.coordinator.player.set_led.assert_called_once_with(True)
+            speaker.coordinator.player.set_led_brightness.assert_called_once_with(50)  # 128/255 * 100
             light._async_execute_command_with_refresh.assert_called_once_with("led_brightness")
             mock_write_state.assert_called_once()
             assert light._is_on is True
@@ -274,9 +274,9 @@ class TestWiiMLEDLight:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.set_led = AsyncMock()
-        speaker.coordinator.client.set_led_brightness = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.set_led = AsyncMock()
+        speaker.coordinator.player.set_led_brightness = AsyncMock()
 
         light = WiiMLEDLight(speaker)
         light._async_execute_command_with_refresh = AsyncMock()
@@ -285,8 +285,8 @@ class TestWiiMLEDLight:
         with patch.object(light, "async_write_ha_state") as mock_write_state:
             await light.async_set_brightness(0)
 
-            speaker.coordinator.client.set_led.assert_called_once_with(True)
-            speaker.coordinator.client.set_led_brightness.assert_called_once_with(0)
+            speaker.coordinator.player.set_led.assert_called_once_with(True)
+            speaker.coordinator.player.set_led_brightness.assert_called_once_with(0)
             light._async_execute_command_with_refresh.assert_called_once_with("led_brightness")
             mock_write_state.assert_called_once()
             assert light._is_on is True

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import voluptuous as vol
-
 from homeassistant.components.media_player import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv, service
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import service
 
 from .const import DOMAIN
 

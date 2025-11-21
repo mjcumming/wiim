@@ -45,7 +45,6 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.service import async_register_admin_service
 from pywiim import WiiMClient
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
@@ -263,8 +262,6 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
     # Register services here (only once, even if called multiple times)
     if not hass.services.has_service(DOMAIN, "reboot_device"):
-        from .services import async_setup_services
-
         # Register global services (using hass.services.async_register like Sonos)
         hass.services.async_register(
             DOMAIN,
@@ -296,8 +293,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Ensure services are registered (fallback if async_setup wasn't called)
     # This ensures services work even when reloading config entries
     if not hass.services.has_service(DOMAIN, "reboot_device"):
-        from .services import async_setup_services
-
         # Register global services (using hass.services.async_register like Sonos)
         hass.services.async_register(
             DOMAIN,

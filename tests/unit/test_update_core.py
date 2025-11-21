@@ -209,12 +209,12 @@ class TestUpdateInstallationLogic:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.reboot = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.reboot = AsyncMock()
 
         # Simulate the installation process
         try:
-            await speaker.coordinator.client.reboot()
+            await speaker.coordinator.player.reboot()
             success = True
         except Exception:
             success = False
@@ -228,12 +228,12 @@ class TestUpdateInstallationLogic:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.reboot = AsyncMock(side_effect=Exception("Network error"))
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.reboot = AsyncMock(side_effect=Exception("Network error"))
 
         # Simulate the installation process with error handling
         try:
-            await speaker.coordinator.client.reboot()
+            await speaker.coordinator.player.reboot()
             success = True
         except Exception:
             # Reboot commands often don't return proper responses

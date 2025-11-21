@@ -195,8 +195,8 @@ class TestSelectPlatformSetup:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.capabilities = {"supports_audio_output": True}
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
 
         with patch("custom_components.wiim.select.get_speaker_from_config_entry", return_value=speaker):
             entities = []
@@ -226,8 +226,8 @@ class TestSelectPlatformSetup:
         # Create coordinator mock with _capabilities attribute
         coordinator = MagicMock()
         coordinator._capabilities = {"supports_audio_output": False}
-        coordinator.client = MagicMock()
-        coordinator.client.capabilities = {"supports_audio_output": False}
+        coordinator.player = MagicMock()
+        coordinator.player.capabilities = {"supports_audio_output": False}
         speaker.coordinator = coordinator
 
         with patch("custom_components.wiim.select.get_speaker_from_config_entry", return_value=speaker):
@@ -255,7 +255,7 @@ class TestSelectPlatformSetup:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
+        speaker.coordinator.player = MagicMock()
         # No capabilities attribute - should create entity as fallback
 
         with patch("custom_components.wiim.select.get_speaker_from_config_entry", return_value=speaker):
@@ -284,9 +284,9 @@ class TestSelectPlatformSetup:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        # hasattr(speaker.coordinator.client, "capabilities") should return True
-        speaker.coordinator.client.capabilities = {"supports_audio_output": True}
+        speaker.coordinator.player = MagicMock()
+        # hasattr(speaker.coordinator.player, "capabilities") should return True
+        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
 
         with patch("custom_components.wiim.select.get_speaker_from_config_entry", return_value=speaker):
             entities = []
@@ -404,8 +404,8 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         coordinator = MagicMock()
-        coordinator.client = AsyncMock()
-        coordinator.client.connect_bluetooth_device = AsyncMock()
+        coordinator.player = AsyncMock()
+        coordinator.player.connect_bluetooth_device = AsyncMock()
         coordinator.async_request_refresh = AsyncMock()
         speaker.coordinator = coordinator
 
@@ -426,7 +426,7 @@ class TestWiiMOutputModeSelectBluetoothIntegration:
             await select.async_select_option("BT Device 1 - TOZO-T6")
 
             # Should connect to Bluetooth device
-            coordinator.client.connect_bluetooth_device.assert_called_once_with("19:12:25:08:0f:b7")
+            coordinator.player.connect_bluetooth_device.assert_called_once_with("19:12:25:08:0f:b7")
             # Should set output mode to Bluetooth
             mock_controller.select_output_mode.assert_called_once_with("Bluetooth Out")
             # Should refresh coordinator

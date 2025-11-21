@@ -106,7 +106,7 @@ def wiim_coordinator(wiim_client):
 
     # Create coordinator with simplified data structure
     coordinator = MagicMock()
-    coordinator.client = wiim_client
+    coordinator.player = wiim_client
     coordinator.player = mock_player
     coordinator.data = {"player": mock_player}
     coordinator.last_update_success = True
@@ -174,7 +174,7 @@ def wiim_speaker_slave(hass):
 
     # Create mock coordinator for slave
     slave_coordinator = MagicMock()
-    slave_coordinator.client = slave_player.client
+    slave_coordinator.player = slave_player.client
     slave_coordinator.player = slave_player
     slave_coordinator.data = {"player": slave_player}
     slave_coordinator.last_update_success = True

@@ -69,8 +69,8 @@ class TestSystemHealthInfo:
         mock_speaker1.available = True
         mock_speaker1.role = "master"
         mock_speaker1.coordinator = MagicMock()
-        mock_speaker1.coordinator.client = MagicMock()
-        mock_speaker1.coordinator.client.get_device_info = AsyncMock()
+        mock_speaker1.coordinator.player = MagicMock()
+        mock_speaker1.coordinator.player.get_device_info = AsyncMock()
         mock_speaker1.coordinator.update_interval = MagicMock()
         mock_speaker1.coordinator.update_interval.total_seconds.return_value = 5.0
 
@@ -115,8 +115,8 @@ class TestSystemHealthInfo:
         mock_speaker.available = True
         mock_speaker.role = "solo"
         mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.client = MagicMock()
-        mock_speaker.coordinator.client.get_device_info = AsyncMock()
+        mock_speaker.coordinator.player = MagicMock()
+        mock_speaker.coordinator.player.get_device_info = AsyncMock()
         mock_speaker.coordinator.update_interval = MagicMock()
         mock_speaker.coordinator.update_interval.total_seconds.return_value = 5.0
 
@@ -124,7 +124,7 @@ class TestSystemHealthInfo:
             result = await system_health_info(hass)
 
             # Verify API call was made
-            mock_speaker.coordinator.client.get_device_info.assert_called_once()
+            mock_speaker.coordinator.player.get_device_info.assert_called_once()
 
             # Check that first device API health is included
             assert "first_device_api" in result
@@ -147,14 +147,14 @@ class TestSystemHealthInfo:
         mock_speaker.available = True
         mock_speaker.role = "solo"
         mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.client = MagicMock()
-        mock_speaker.coordinator.client.get_device_info = AsyncMock(side_effect=Exception("Connection timeout"))
+        mock_speaker.coordinator.player = MagicMock()
+        mock_speaker.coordinator.player.get_device_info = AsyncMock(side_effect=Exception("Connection timeout"))
 
         with patch("custom_components.wiim.system_health.get_all_speakers", return_value=[mock_speaker]):
             result = await system_health_info(hass)
 
             # Verify API call was attempted
-            mock_speaker.coordinator.client.get_device_info.assert_called_once()
+            mock_speaker.coordinator.player.get_device_info.assert_called_once()
 
             # Check that error is reported
             assert "first_device_api" in result
@@ -173,8 +173,8 @@ class TestDeviceHealthCheck:
         # Mock speaker with successful API
         mock_speaker = MagicMock()
         mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.client = MagicMock()
-        mock_speaker.coordinator.client.get_device_info = AsyncMock()
+        mock_speaker.coordinator.player = MagicMock()
+        mock_speaker.coordinator.player.get_device_info = AsyncMock()
         mock_speaker.coordinator.update_interval = MagicMock()
         mock_speaker.coordinator.update_interval.total_seconds.return_value = 10.0
 
@@ -191,8 +191,8 @@ class TestDeviceHealthCheck:
         # Mock speaker with API error
         mock_speaker = MagicMock()
         mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.client = MagicMock()
-        mock_speaker.coordinator.client.get_device_info = AsyncMock(side_effect=Exception("Network unreachable"))
+        mock_speaker.coordinator.player = MagicMock()
+        mock_speaker.coordinator.player.get_device_info = AsyncMock(side_effect=Exception("Network unreachable"))
 
         result = await _check_device_health(mock_speaker)
 
@@ -208,8 +208,8 @@ class TestDeviceHealthCheck:
         long_error = "This is a very long error message that should be truncated to 50 characters"
         mock_speaker = MagicMock()
         mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.client = MagicMock()
-        mock_speaker.coordinator.client.get_device_info = AsyncMock(side_effect=Exception(long_error))
+        mock_speaker.coordinator.player = MagicMock()
+        mock_speaker.coordinator.player.get_device_info = AsyncMock(side_effect=Exception(long_error))
 
         result = await _check_device_health(mock_speaker)
 

@@ -89,8 +89,8 @@ class TestSensorPlatformSetupLogic:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.capabilities = {"supports_audio_output": False}
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.capabilities = {"supports_audio_output": False}
 
         with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
             entities = []
@@ -118,8 +118,8 @@ class TestSensorPlatformSetupLogic:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.capabilities = {"supports_audio_output": True}
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
 
         with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
             entities = []
@@ -151,8 +151,8 @@ class TestSensorPlatformSetupLogic:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.capabilities = {"supports_audio_output": True}
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
         speaker.coordinator._metadata_supported = True
 
         with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
@@ -185,8 +185,8 @@ class TestSensorPlatformSetupLogic:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.capabilities = {"supports_audio_output": True}
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
         speaker.coordinator._metadata_supported = False
 
         with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
@@ -219,7 +219,7 @@ class TestSensorPlatformSetupLogic:
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
+        speaker.coordinator.player = MagicMock()
         # No capabilities attribute - should create Bluetooth sensor as fallback
 
         with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):

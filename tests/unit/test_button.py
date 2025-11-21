@@ -42,15 +42,15 @@ class TestWiiMRebootButton:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.reboot = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.reboot = AsyncMock()
 
         button = WiiMRebootButton(speaker)
         button._async_execute_command_with_refresh = AsyncMock()
 
         await button.async_press()
 
-        speaker.coordinator.client.reboot.assert_called_once()
+        speaker.coordinator.player.reboot.assert_called_once()
         button._async_execute_command_with_refresh.assert_called_once_with("reboot")
 
     @pytest.mark.asyncio
@@ -62,8 +62,8 @@ class TestWiiMRebootButton:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.reboot = AsyncMock(side_effect=Exception("Connection error"))
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.reboot = AsyncMock(side_effect=Exception("Connection error"))
 
         button = WiiMRebootButton(speaker)
         button._async_execute_command_with_refresh = AsyncMock()
@@ -71,7 +71,7 @@ class TestWiiMRebootButton:
         # Should not raise exception - reboot is considered successful even with errors
         await button.async_press()
 
-        speaker.coordinator.client.reboot.assert_called_once()
+        speaker.coordinator.player.reboot.assert_called_once()
         button._async_execute_command_with_refresh.assert_called_once_with("reboot")
 
 
@@ -102,15 +102,15 @@ class TestWiiMSyncTimeButton:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.sync_time = AsyncMock()
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.sync_time = AsyncMock()
 
         button = WiiMSyncTimeButton(speaker)
         button._async_execute_command_with_refresh = AsyncMock()
 
         await button.async_press()
 
-        speaker.coordinator.client.sync_time.assert_called_once()
+        speaker.coordinator.player.sync_time.assert_called_once()
         button._async_execute_command_with_refresh.assert_called_once_with("sync_time")
 
     @pytest.mark.asyncio
@@ -122,8 +122,8 @@ class TestWiiMSyncTimeButton:
         speaker.name = "Test WiiM"
         speaker.uuid = "test-speaker-uuid"
         speaker.coordinator = MagicMock()
-        speaker.coordinator.client = MagicMock()
-        speaker.coordinator.client.sync_time = AsyncMock(side_effect=Exception("Network error"))
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.sync_time = AsyncMock(side_effect=Exception("Network error"))
 
         button = WiiMSyncTimeButton(speaker)
         button._async_execute_command_with_refresh = AsyncMock()
@@ -132,7 +132,7 @@ class TestWiiMSyncTimeButton:
         with pytest.raises(Exception, match="Network error"):
             await button.async_press()
 
-        speaker.coordinator.client.sync_time.assert_called_once()
+        speaker.coordinator.player.sync_time.assert_called_once()
         button._async_execute_command_with_refresh.assert_not_called()
 
 

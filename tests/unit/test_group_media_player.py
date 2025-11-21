@@ -28,15 +28,15 @@ def mock_speaker():
     speaker.get_media_position.return_value = 30
     speaker.get_media_position_updated_at.return_value = 1234567890.0
     speaker.get_media_image_url.return_value = "http://example.com/image.jpg"
-    speaker.coordinator.client = MagicMock()
+    speaker.coordinator.player = MagicMock()
     # Mock async client methods
-    speaker.coordinator.client.set_volume = AsyncMock()
-    speaker.coordinator.client.set_mute = AsyncMock()
-    speaker.coordinator.client.play = AsyncMock()
-    speaker.coordinator.client.pause = AsyncMock()
-    speaker.coordinator.client.stop = AsyncMock()
-    speaker.coordinator.client.next_track = AsyncMock()
-    speaker.coordinator.client.previous_track = AsyncMock()
+    speaker.coordinator.player.set_volume = AsyncMock()
+    speaker.coordinator.player.set_mute = AsyncMock()
+    speaker.coordinator.player.play = AsyncMock()
+    speaker.coordinator.player.pause = AsyncMock()
+    speaker.coordinator.player.stop = AsyncMock()
+    speaker.coordinator.player.next_track = AsyncMock()
+    speaker.coordinator.player.previous_track = AsyncMock()
     speaker.coordinator.async_request_refresh = AsyncMock()
     return speaker
 
@@ -270,7 +270,7 @@ def test_group_mute_unavailable(group_media_player, mock_speaker):
 async def test_set_volume_level_available(group_media_player, mock_speaker):
     """Test setting volume level when available."""
     mock_slave = MagicMock()
-    mock_slave.coordinator.client.set_volume = AsyncMock()
+    mock_slave.coordinator.player.set_volume = AsyncMock()
 
     mock_speaker.role = "master"
     mock_speaker.group_members = [mock_slave]
@@ -278,8 +278,8 @@ async def test_set_volume_level_available(group_media_player, mock_speaker):
     await group_media_player.async_set_volume_level(0.8)
 
     # Should set volume on both coordinator and member
-    mock_speaker.coordinator.client.set_volume.assert_called_once_with(0.8)
-    mock_slave.coordinator.client.set_volume.assert_called_once_with(0.8)
+    mock_speaker.coordinator.player.set_volume.assert_called_once_with(0.8)
+    mock_slave.coordinator.player.set_volume.assert_called_once_with(0.8)
     mock_speaker.coordinator.async_request_refresh.assert_called_once()
 
 
@@ -292,14 +292,14 @@ async def test_set_volume_level_unavailable(group_media_player, mock_speaker):
     await group_media_player.async_set_volume_level(0.8)
 
     # Should not make any API calls
-    mock_speaker.coordinator.client.set_volume.assert_not_called()
+    mock_speaker.coordinator.player.set_volume.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_mute_volume_available(group_media_player, mock_speaker):
     """Test muting volume when available."""
     mock_slave = MagicMock()
-    mock_slave.coordinator.client.set_mute = AsyncMock()
+    mock_slave.coordinator.player.set_mute = AsyncMock()
 
     mock_speaker.role = "master"
     mock_speaker.group_members = [mock_slave]
@@ -307,8 +307,8 @@ async def test_mute_volume_available(group_media_player, mock_speaker):
     await group_media_player.async_mute_volume(True)
 
     # Should set mute on both coordinator and member
-    mock_speaker.coordinator.client.set_mute.assert_called_once_with(True)
-    mock_slave.coordinator.client.set_mute.assert_called_once_with(True)
+    mock_speaker.coordinator.player.set_mute.assert_called_once_with(True)
+    mock_slave.coordinator.player.set_mute.assert_called_once_with(True)
     mock_speaker.coordinator.async_request_refresh.assert_called_once()
 
 
@@ -321,19 +321,19 @@ async def test_playback_commands_available(group_media_player, mock_speaker):
 
     # Test all playback commands
     await group_media_player.async_media_play()
-    mock_speaker.coordinator.client.play.assert_called_once()
+    mock_speaker.coordinator.player.play.assert_called_once()
 
     await group_media_player.async_media_pause()
-    mock_speaker.coordinator.client.pause.assert_called_once()
+    mock_speaker.coordinator.player.pause.assert_called_once()
 
     await group_media_player.async_media_stop()
-    mock_speaker.coordinator.client.stop.assert_called_once()
+    mock_speaker.coordinator.player.stop.assert_called_once()
 
     await group_media_player.async_media_next_track()
-    mock_speaker.coordinator.client.next_track.assert_called_once()
+    mock_speaker.coordinator.player.next_track.assert_called_once()
 
     await group_media_player.async_media_previous_track()
-    mock_speaker.coordinator.client.previous_track.assert_called_once()
+    mock_speaker.coordinator.player.previous_track.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -344,7 +344,7 @@ async def test_playback_commands_unavailable(group_media_player, mock_speaker):
 
     # Should not make any API calls
     await group_media_player.async_media_play()
-    mock_speaker.coordinator.client.play.assert_not_called()
+    mock_speaker.coordinator.player.play.assert_not_called()
 
 
 def test_extra_state_attributes_available(group_media_player, mock_speaker):
