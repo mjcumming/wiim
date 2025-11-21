@@ -16,6 +16,7 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.components.media_player.const import RepeatMode
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util import dt
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .data import Speaker
@@ -501,6 +502,32 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return None
         player = self._get_player()
         return player.media_position if player else None
+
+    @property
+    def media_position_updated_at(self) -> dt.datetime | None:
+        """When was the position of the current playing media valid.
+
+        Returns value from pywiim's media_position_updated_at (Unix timestamp).
+        Home Assistant uses this to calculate current position between updates.
+        """
+        if not self.available:
+            return None
+
+        player = self._get_player()
+        if not player:
+            return None
+
+        # Get Unix timestamp from pywiim
+        timestamp = getattr(player, "media_position_updated_at", None)
+        if timestamp is None:
+            return None
+
+        # Convert Unix timestamp to datetime object
+        try:
+            return dt.utc_from_timestamp(float(timestamp))
+        except (ValueError, TypeError):
+            _LOGGER.debug("Invalid media_position_updated_at timestamp from pywiim: %s", timestamp)
+            return None
 
     @property
     def media_image_url(self) -> str | None:

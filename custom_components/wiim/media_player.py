@@ -28,6 +28,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import DOMAIN
@@ -588,6 +589,29 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Return media position."""
         player = self._get_metadata_player()
         return player.media_position if player else None
+
+    @property
+    def media_position_updated_at(self) -> dt.datetime | None:
+        """When was the position of the current playing media valid.
+
+        Returns value from pywiim's media_position_updated_at (Unix timestamp).
+        Home Assistant uses this to calculate current position between updates.
+        """
+        player = self._get_metadata_player()
+        if not player:
+            return None
+
+        # Get Unix timestamp from pywiim
+        timestamp = getattr(player, "media_position_updated_at", None)
+        if timestamp is None:
+            return None
+
+        # Convert Unix timestamp to datetime object
+        try:
+            return dt.utc_from_timestamp(float(timestamp))
+        except (ValueError, TypeError):
+            _LOGGER.debug("Invalid media_position_updated_at timestamp from pywiim: %s", timestamp)
+            return None
 
     @property
     def media_image_url(self) -> str | None:

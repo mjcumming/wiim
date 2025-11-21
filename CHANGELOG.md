@@ -2,6 +2,23 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0-beta.3] - 2024-11-21
+
+### Fixed
+
+- **Media Position and Seek**: Fixed media position tracking and seek functionality
+  - Added missing `media_position_updated_at` property to both media player entities
+  - Home Assistant now correctly tracks playback position with smooth progress bar updates
+  - Seek controls now work properly with pywiim's position estimation system
+  - Position updates every second during playback using pywiim's hybrid approach (HTTP polling + UPnP events + position estimation)
+  - Fixed issue where progress bar would appear frozen during playback
+
+### Technical
+
+- **Position Tracking**: Properly converts pywiim's Unix timestamp to datetime objects for Home Assistant
+- **Error Handling**: Added validation for malformed timestamps from pywiim
+- **Integration Compliance**: Follows Home Assistant patterns used by Sonos, Cast, and other media player integrations
+
 ## [1.0.0-beta.2] - 2024-11-21
 
 ### Fixed
