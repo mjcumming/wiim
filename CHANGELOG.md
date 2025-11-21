@@ -2,6 +2,15 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0-beta.7] - 2024-11-21
+
+### Changed
+
+- **PyWiiM Version Display**: Show pywiim version as separate line in Device Info
+  - Now displays as "Hardware: pywiim 2.0.17" on its own line
+  - More clear and readable than combining with firmware version
+  - Easy to see at a glance for support and troubleshooting
+
 ## [1.0.0-beta.6] - 2024-11-21
 
 ### Changed
