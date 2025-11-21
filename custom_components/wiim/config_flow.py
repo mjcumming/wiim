@@ -86,6 +86,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
+            # Trigger slave discovery in background
+            self.hass.async_create_task(self._discover_slaves(device.ip))
+
             return self.async_create_entry(title=device_name, data={CONF_HOST: device.ip})
 
         if self._discovered_devices:
@@ -119,6 +122,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
+            # Trigger slave discovery in background
+            self.hass.async_create_task(self._discover_slaves(host))
+
             return self.async_create_entry(title=device_name, data={CONF_HOST: host})
 
         schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of your WiiM device"): str})
@@ -135,7 +141,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         known_hosts = {entry.data[CONF_HOST] for entry in existing_entries}
         known_uuids = {entry.unique_id for entry in existing_entries if entry.unique_id}
 
-        devices = await discover_devices(validate=True, timeout=5)
+        devices = await discover_devices(validate=True)
         discovered = []
         for device in devices:
             if not device.ip:
@@ -154,6 +160,14 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         host = discovery_info.host
         _LOGGER.debug("Zeroconf discovery for host: %s", host)
 
+        # Check if this IP is already configured before validation
+        # This prevents already-configured devices from appearing in discovered list
+        existing_entries = self._async_current_entries()
+        for entry in existing_entries:
+            if entry.data.get(CONF_HOST) == host:
+                return self.async_abort(reason="already_configured")
+
+        # Validate device to get UUID
         discovered_device = DiscoveredDevice(ip=host)
         validated_device = await validate_device(discovered_device)
 
@@ -161,6 +175,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_uuid = validated_device.uuid or host
         unique_id = device_uuid
 
+        # Set unique_id and abort if already configured by UUID
         await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
@@ -178,6 +193,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not host:
             return self.async_abort(reason="no_host")
 
+        # Check if this IP is already configured before validation
+        # This prevents already-configured devices from appearing in discovered list
+        existing_entries = self._async_current_entries()
+        for entry in existing_entries:
+            if entry.data.get(CONF_HOST) == host:
+                return self.async_abort(reason="already_configured")
+
         discovered_device = DiscoveredDevice(ip=host)
         validated_device = await validate_device(discovered_device)
 
@@ -185,6 +207,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_uuid = validated_device.uuid or host
         unique_id = device_uuid
 
+        # Set unique_id and abort if already configured by UUID
         await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
@@ -208,6 +231,13 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not host:
             return self.async_abort(reason="no_host")
 
+        # Check if this IP is already configured before validation
+        # This prevents already-configured devices from appearing in discovered list
+        existing_entries = self._async_current_entries()
+        for entry in existing_entries:
+            if entry.data.get(CONF_HOST) == host:
+                return self.async_abort(reason="already_configured")
+
         discovered_device = DiscoveredDevice(ip=host)
         validated_device = await validate_device(discovered_device)
 
@@ -215,6 +245,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         final_uuid = validated_device.uuid or device_uuid or host
         unique_id = final_uuid
 
+        # Set unique_id and abort if already configured by UUID
         await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
@@ -240,6 +271,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 device_name = validated_device.name or f"WiiM Device ({host})"
                 await self.async_set_unique_id(device_uuid)
                 self._abort_if_unique_id_configured()
+
+                # Trigger slave discovery in background
+                self.hass.async_create_task(self._discover_slaves(host))
+
                 return self.async_create_entry(title=device_name, data={CONF_HOST: host})
 
         schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of the missing device"): str})
@@ -261,6 +296,9 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             entry_data = {CONF_HOST: self.data[CONF_HOST]}
             if "ssdp_info" in self.data:
                 entry_data["ssdp_info"] = self.data["ssdp_info"]
+
+            # Trigger slave discovery in background
+            self.hass.async_create_task(self._discover_slaves(self.data[CONF_HOST]))
 
             return self.async_create_entry(
                 title=self.data["name"],
@@ -285,6 +323,82 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def is_matching(self, other_flow: config_entries.ConfigFlow) -> bool:
         """Check if two flows are matching."""
         return False
+
+    async def _discover_slaves(self, host: str) -> None:
+        """Discover and add any slave devices attached to a master.
+
+        When a master device is added, check if it has slaves and automatically
+        trigger discovery flows for them (without unjoining the group).
+        """
+        try:
+            from homeassistant.helpers.aiohttp_client import async_get_clientsession
+            from pywiim import WiiMClient
+
+            # Create a temporary client to check for slaves
+            session = async_get_clientsession(self.hass)
+            client = WiiMClient(host=host, session=session)
+
+            # Get group info to see if this device is a master with slaves
+            group_info = await client.get_device_group_info()
+
+            if not group_info:
+                return
+
+            # Check if this is a master with slaves
+            role = group_info.get("role", "solo")
+            if role != "master":
+                return
+
+            slave_list = group_info.get("slave_list", [])
+            if not slave_list:
+                return
+
+            _LOGGER.info(
+                "Master device at %s has %d slave(s), triggering discovery for them",
+                host,
+                len(slave_list),
+            )
+
+            # Check existing entries to avoid re-adding
+            existing_entries = self._async_current_entries()
+            known_hosts = {entry.data[CONF_HOST] for entry in existing_entries}
+            known_uuids = {entry.unique_id for entry in existing_entries if entry.unique_id}
+
+            # Trigger discovery for each slave
+            for slave in slave_list:
+                slave_ip = slave.get("ip")
+                slave_uuid = slave.get("uuid")
+                slave_name = slave.get("name", f"WiiM Device ({slave_ip})")
+
+                if not slave_ip:
+                    continue
+
+                # Skip if already configured
+                if slave_ip in known_hosts:
+                    _LOGGER.debug("Slave %s already configured, skipping", slave_ip)
+                    continue
+
+                if slave_uuid and slave_uuid in known_uuids:
+                    _LOGGER.debug("Slave %s (UUID: %s) already configured, skipping", slave_ip, slave_uuid)
+                    continue
+
+                _LOGGER.info("Triggering discovery for slave: %s (%s)", slave_name, slave_ip)
+
+                # Trigger integration discovery for this slave
+                self.hass.async_create_task(
+                    self.hass.config_entries.flow.async_init(
+                        DOMAIN,
+                        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
+                        data={
+                            CONF_HOST: slave_ip,
+                            "device_name": slave_name,
+                            "device_uuid": slave_uuid,
+                        },
+                    )
+                )
+
+        except Exception as err:
+            _LOGGER.debug("Failed to discover slaves for %s: %s", host, err)
 
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):

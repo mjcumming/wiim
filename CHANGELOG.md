@@ -2,6 +2,24 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0-beta.2] - 2024-11-21
+
+### Fixed
+
+- **Discovery Filtering**: Fixed already-configured devices appearing in the discovered devices list
+  - SSDP, Zeroconf, and integration discovery now check if devices are already configured BEFORE validation
+  - Prevents duplicate discovery notifications for devices that are already set up
+  - Improves user experience by showing only truly new devices
+
+### Added
+
+- **Automatic Slave Discovery**: When adding a master device with slaves, the integration now automatically discovers and prompts to add the slave devices
+  - Queries master device for its slave list after adding
+  - Triggers discovery flows for any unconfigured slaves
+  - Works even when slaves don't broadcast SSDP/Zeroconf (because they're in slave mode)
+  - Non-invasive: slaves can be added without unjoining the group
+  - Ensures all devices in a multiroom setup are easily discovered and configured
+
 ## [0.3.0] - 2025-11-17
 
 ### Changed
