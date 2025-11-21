@@ -2,6 +2,43 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0] - 2024-11-21
+
+### 🎉 First Stable Release
+
+This is the first stable release of the WiiM Audio integration for Home Assistant, built on the powerful `pywiim` library for reliable device communication.
+
+**What's Included:**
+
+- ✅ Complete media player control (play, pause, stop, volume, seek)
+- ✅ Full multiroom/grouping support via pywiim
+- ✅ Automatic device discovery (SSDP, Zeroconf, UPnP)
+- ✅ Media position tracking with smooth progress updates
+- ✅ Audio quality sensors (sample rate, bit depth, bit rate)
+- ✅ 10-band EQ control and audio output mode selection
+- ✅ Bluetooth device management
+- ✅ Sleep timer and alarm support
+- ✅ TTS (Text-to-Speech) support
+- ✅ Scene restoration with EQ presets
+- ✅ Comprehensive diagnostics and health monitoring
+- ✅ 39% test coverage (66/73 tests passing)
+
+**Device Info Display:**
+
+- Hardware: Device firmware version
+- Software: PyWiiM library version
+- Serial Number: Device MAC address
+
+**Supported Devices:**
+
+- WiiM Mini, Pro, Pro Plus, Amp, Ultra
+- LinkPlay-compatible devices (Arylic, Audio Pro, Dayton Audio, DOSS, etc.)
+
+**Requirements:**
+
+- Home Assistant 2024.12.0+
+- PyWiiM library 2.0.14+
+
 ## [1.0.0-beta.8] - 2024-11-21
 
 ### Changed
