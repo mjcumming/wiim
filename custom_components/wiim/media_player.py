@@ -593,8 +593,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def media_image_url(self) -> str | None:
         """Image url of current playing media.
 
-        Returns a placeholder URL if pywiim has cover art available but no URL,
-        to ensure Home Assistant calls async_get_media_image().
+        Returns a placeholder URL to ensure Home Assistant calls async_get_media_image(),
+        which allows pywiim to serve its default WiiM logo when nothing is playing
+        or no cover art is available.
         """
         player = self._get_metadata_player()
         if not player:
@@ -604,28 +605,27 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if hasattr(player, "media_image_url") and player.media_image_url:
             return player.media_image_url
 
-        # If we're playing something, return a placeholder URL to trigger async_get_media_image()
-        # This ensures HA calls our override even when pywiim doesn't have a URL yet
-        if self.state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
-            # Use a hash of track metadata as a unique identifier
-            # This ensures the hash changes when track changes, forcing HA to fetch new image
-            title = self.media_title or ""
-            artist = self.media_artist or ""
-            if title or artist:
-                import hashlib
+        # Always return a placeholder URL to trigger async_get_media_image()
+        # This ensures HA calls our override in all states (including IDLE)
+        # When nothing is playing, pywiim can serve its default WiiM logo
+        import hashlib
 
-                track_id = f"{title}|{artist}".encode()
-                track_hash = hashlib.sha256(track_id).hexdigest()[:16]
-                return f"wiim://cover-art/{track_hash}"
+        # Create a unique identifier based on current state and metadata
+        title = self.media_title or ""
+        artist = self.media_artist or ""
+        state = str(self.state or "idle")
 
-        return None
+        # Use state + metadata to generate hash, ensuring it changes when track/state changes
+        track_id = f"{state}|{title}|{artist}".encode()
+        track_hash = hashlib.sha256(track_id).hexdigest()[:16]
+        return f"wiim://cover-art/{track_hash}"
 
     @property
     def media_image_hash(self) -> str | None:
         """Hash value for media image.
 
-        Uses track metadata to generate a hash that changes when track changes,
-        ensuring Home Assistant fetches new cover art for each track.
+        Uses state and track metadata to generate a hash that changes when
+        track or state changes, ensuring Home Assistant fetches new cover art.
         """
         player = self._get_metadata_player()
         if not player:
@@ -637,18 +637,17 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
             return hashlib.sha256(player.media_image_url.encode("utf-8")).hexdigest()[:16]
 
-        # Otherwise, create hash from track metadata to force updates on track change
-        if self.state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
-            import hashlib
+        # Always create hash from state and metadata (including IDLE state)
+        # This ensures cover art updates when state changes (e.g., IDLE -> PLAYING)
+        import hashlib
 
-            title = self.media_title or ""
-            artist = self.media_artist or ""
-            album = self.media_album_name or ""
-            if title or artist or album:
-                track_id = f"{title}|{artist}|{album}".encode()
-                return hashlib.sha256(track_id).hexdigest()[:16]
+        title = self.media_title or ""
+        artist = self.media_artist or ""
+        album = self.media_album_name or ""
+        state = str(self.state or "idle")
 
-        return None
+        track_id = f"{state}|{title}|{artist}|{album}".encode()
+        return hashlib.sha256(track_id).hexdigest()[:16]
 
     @property
     def media_image_remotely_accessible(self) -> bool:

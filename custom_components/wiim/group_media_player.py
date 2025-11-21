@@ -108,9 +108,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         - Basic playback control (play/pause/stop/next/previous to master)
         - Play media and announcements
         - Shuffle/repeat (if master's source supports them)
-        - GROUPING (manage group membership - add/remove slaves)
 
         Intentionally excluded (use individual speaker entities instead):
+        - GROUPING (virtual entity shouldn't appear in group dialogs)
         - SELECT_SOURCE (source is per-device, not per-group)
         - SELECT_SOUND_MODE (EQ/sound mode is per-device, not per-group)
         - BROWSE_MEDIA (browse from individual entity)
@@ -135,7 +135,6 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
-            | MediaPlayerEntityFeature.GROUPING
         )
 
         # Only include shuffle/repeat if master's source supports them
@@ -505,11 +504,35 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     @property
     def media_image_url(self) -> str | None:
-        """Return cover art URL from master."""
+        """Return cover art URL from master.
+
+        Returns a placeholder URL to ensure Home Assistant calls async_get_media_image(),
+        which allows pywiim to serve its default WiiM logo when nothing is playing
+        or no cover art is available.
+        """
         if not self.available:
             return None
         player = self._get_player()
-        return player.media_image_url if player else None
+        if not player:
+            return None
+
+        # If pywiim has a URL, use it
+        if hasattr(player, "media_image_url") and player.media_image_url:
+            return player.media_image_url
+
+        # Always return a placeholder URL to trigger async_get_media_image()
+        # This ensures HA calls our override in all states (including IDLE)
+        import hashlib
+
+        # Create a unique identifier based on current state and metadata
+        title = getattr(player, "media_title", "") or ""
+        artist = getattr(player, "media_artist", "") or ""
+        state = str(self.state or "idle")
+
+        # Use state + metadata to generate hash
+        track_id = f"{state}|{title}|{artist}".encode()
+        track_hash = hashlib.sha256(track_id).hexdigest()[:16]
+        return f"wiim://group-cover-art/{track_hash}"
 
     @property
     def media_image_remotely_accessible(self) -> bool:
@@ -568,88 +591,3 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             "group_status": "active" if self.available else "inactive",
         }
         return attrs
-
-    # ===== GROUPING OPERATIONS =====
-    # The virtual group coordinator provides centralized group management.
-    # It can add players to its group (join) and remove slaves (unjoin).
-
-    async def async_join_players(self, group_members: list[str]) -> None:
-        """Add other players to this group.
-
-        This adds the specified players as slaves to this master's group.
-        If they're already in other groups, they'll leave those first.
-        """
-        import asyncio
-
-        from .data import get_all_speakers
-
-        if not self.available:
-            raise HomeAssistantError("Group coordinator is not available")
-
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not ready")
-
-        if not player.is_master:
-            raise HomeAssistantError("Cannot add players: not currently a master")
-
-        master_player = player
-        speakers = get_all_speakers(self.hass)
-        join_tasks = []
-
-        for entity_id in group_members:
-            # Skip self
-            if entity_id == self.entity_id:
-                continue
-
-            # Find the speaker coordinator for this entity
-            speaker = next((s for s in speakers if s.media_player_entity_id == entity_id), None)
-            if not speaker:
-                _LOGGER.warning("Could not find speaker for entity %s", entity_id)
-                continue
-
-            # Get the target player
-            target_player = speaker.coordinator.player
-            if not target_player:
-                _LOGGER.warning("Player not ready for entity %s", entity_id)
-                continue
-
-            # Skip if already in this group
-            if target_player.is_slave and hasattr(player, "group"):
-                group = getattr(player, "group", None)
-                if group and target_player in getattr(group, "all_players", []):
-                    _LOGGER.debug("Player %s already in group, skipping", entity_id)
-                    continue
-
-            # Add join task
-            join_tasks.append(target_player.join_group(master_player))
-
-        # Execute all join operations in parallel
-        if join_tasks:
-            try:
-                join_results = await asyncio.gather(*join_tasks, return_exceptions=True)
-                for result in join_results:
-                    if isinstance(result, Exception):
-                        raise HomeAssistantError(f"Failed to add player to group: {result}") from result
-            except WiiMError as err:
-                raise HomeAssistantError(f"Failed to add players to group: {err}") from err
-
-    async def async_unjoin_player(self) -> None:
-        """Disband this group.
-
-        When called on the virtual group coordinator (which represents a master),
-        this calls leave_group() on the master player. PyWiim handles what that
-        means (presumably disbanding the group).
-        """
-        if not self.available:
-            # Already not in a group, operation complete
-            return
-
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not ready")
-
-        try:
-            await player.leave_group()
-        except WiiMError as err:
-            raise HomeAssistantError(f"Failed to disband group: {err}") from err
