@@ -4,7 +4,7 @@
   <img src="images/logo.png" alt="WiiM Integration Logo" width="200"/>
 </p>
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
 [![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
 [![Home Assistant](https://img.shields.io/badge/home%20assistant-2024.12.0+-blue.svg)](https://www.home-assistant.io/)
@@ -22,7 +22,6 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ## Why Choose This Integration?
 
-- **🏠 Native Integration** - Built entirely within Home Assistant's framework with full platform support
 - **🎵 Complete Media Control** - Full transport controls, volume, sources, presets, TTS, and media browsing
 - **🔗 True Multiroom** - Uses Home Assistant's native grouping for reliable synchronized playback
 - **⚡ Powered by pywiim** - Built on the brand new, fully async [`pywiim`](https://github.com/mjcumming/pywiim) library we wrote for robust, high-performance device communication
@@ -46,8 +45,8 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ### 1. Install via HACS (Recommended)
 
-1. **Add to HACS**: Integrations → ⋮ → Custom repositories → Add `https://github.com/mjcumming/wiim`
-2. **Install**: Search "WiiM Audio" → Download → Restart Home Assistant
+1. **Find in HACS**: HACS → Integrations → Search "WiiM Audio"
+2. **Install**: Download → Restart Home Assistant
 3. **Configure**: Settings → Devices & Services → Add Integration → "WiiM Audio"
 
 ### 2. Manual Installation

@@ -31,7 +31,6 @@ This document outlines the testing strategy and best practices for the WiiM Home
 tests/
   unit/
     test_coordinator_core.py
-    test_coordinator_multiroom.py
     test_media_player.py
     test_config_flow.py
     test_sensor.py

@@ -2,6 +2,32 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.0-beta.5] - 2024-11-21
+
+### Removed
+
+- **Update Platform**: Removed deprecated firmware update platform
+  - Firmware updates should be managed through WiiM app or device web interface
+  - Update platform was not reliable for tracking firmware update status
+  - Reboot button documentation updated to note it applies downloaded firmware updates
+
+### Changed
+
+- **Bluetooth Device Update**: Refactored to synchronous operation for better reliability
+
+  - "BT Update Paired Devices" now blocks until device list is refreshed
+  - Improved error handling and state updates
+  - More predictable behavior when updating paired device list
+
+- **Reboot Button**: Enhanced documentation to clarify firmware update behavior
+  - Rebooting device will apply any downloaded firmware updates
+  - Clarified use cases for reboot button
+
+### Technical
+
+- **Code Cleanup**: Removed 1,600+ lines of unused test files and old test infrastructure
+- **Platform List**: Cleaned up platform registration to remove deprecated update platform
+
 ## [1.0.0-beta.4] - 2024-11-21
 
 ### Added

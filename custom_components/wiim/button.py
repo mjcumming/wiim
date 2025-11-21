@@ -51,9 +51,10 @@ async def async_setup_entry(
 
 
 class WiiMRebootButton(WiimEntity, ButtonEntity):
-    """Device reboot button for system maintenance.
+    """Device reboot button for system maintenance and firmware updates.
 
-    Useful for resolving connectivity issues or applying firmware updates.
+    Rebooting the device will apply any downloaded firmware updates.
+    Also useful for resolving connectivity issues and refreshing device state.
     """
 
     _attr_icon = "mdi:restart"
@@ -72,8 +73,8 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Execute device reboot command.
 
-        Sends reboot command to the device and requests status refresh
-        to monitor the reboot process.
+        Sends reboot command to the device. If the device has downloaded a firmware
+        update, the reboot will trigger the installation process.
         """
         try:
             _LOGGER.info("Initiating reboot for %s", self.speaker.name)

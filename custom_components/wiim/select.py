@@ -204,41 +204,37 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
             if option == "BT Update Paired Devices":
                 _LOGGER.info("Updating Bluetooth paired devices list for %s", self.speaker.name)
 
-                # Fetch fresh Bluetooth history from device
-                async def _refresh_and_update():
-                    try:
-                        # Fetch fresh BT history
-                        fresh_history = await self.speaker.coordinator.player.get_bluetooth_history()
-                        _LOGGER.info(
-                            "Bluetooth history updated for %s: %d devices found",
-                            self.speaker.name,
-                            len(fresh_history) if isinstance(fresh_history, list) else 0,
-                        )
-                        # Update coordinator data with fresh history
-                        if self.coordinator.data:
-                            self.coordinator.data["bt_history"] = fresh_history
-                        # Refresh coordinator to propagate changes
-                        await self.coordinator.async_request_refresh()
-                        # Refresh entity state to update options dropdown
-                        self.async_write_ha_state()
-                    except Exception as refresh_err:
-                        _LOGGER.error(
-                            "Failed to update Bluetooth devices list for %s: %s",
-                            self.speaker.name,
-                            refresh_err,
-                        )
+                try:
+                    # Fetch fresh BT history from device (blocks until complete)
+                    fresh_history = await self.speaker.coordinator.player.get_bluetooth_history()
+                    _LOGGER.info(
+                        "Bluetooth history updated for %s: %d devices found",
+                        self.speaker.name,
+                        len(fresh_history) if isinstance(fresh_history, list) else 0,
+                    )
+                    # Update coordinator data with fresh history
+                    if self.coordinator.data:
+                        self.coordinator.data["bt_history"] = fresh_history
 
-                # Start refresh in background
-                if hasattr(self, "hass") and self.hass:
-                    self.hass.async_create_task(_refresh_and_update())
-                else:
-                    import asyncio
+                    # Refresh coordinator to propagate changes
+                    await self.coordinator.async_request_refresh()
 
-                    _ = asyncio.create_task(_refresh_and_update())  # Store reference to avoid warning
-                _LOGGER.info(
-                    "Bluetooth devices list refresh initiated for %s. Options will update after refresh completes.",
-                    self.speaker.name,
-                )
+                    # Refresh entity state to update options dropdown and reset to current output
+                    self.async_write_ha_state()
+
+                    _LOGGER.info(
+                        "Bluetooth devices list refresh completed for %s. Menu rebuilt with current output selected.",
+                        self.speaker.name,
+                    )
+                except Exception as refresh_err:
+                    _LOGGER.error(
+                        "Failed to update Bluetooth devices list for %s: %s",
+                        self.speaker.name,
+                        refresh_err,
+                    )
+                    # Re-raise to show error in UI
+                    raise
+
                 return
 
             # Handle "BT Device X - Name" format
@@ -278,8 +274,8 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                     # Connect to the device
                     await self.speaker.coordinator.player.connect_bluetooth_device(mac_address)
 
-                    # Set output mode to Bluetooth Out
-                    await self.speaker.coordinator.player.set_audio_output_mode(4)  # Bluetooth mode
+                    # Set output mode to Bluetooth Out (using documented API with friendly name)
+                    await self.speaker.coordinator.player.select_output("Bluetooth Out")
 
                     _LOGGER.info(
                         "Successfully connected to Bluetooth device %s and set output mode to Bluetooth",
@@ -297,10 +293,8 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
 
                     if previous_output_mode and previous_output_mode != "Bluetooth Out":
                         try:
-                            # Map output mode to hardware mode value
-                            mode_map = {"Line Out": 0, "Optical Out": 1, "Coax Out": 2, "Bluetooth Out": 4}
-                            hardware_mode = mode_map.get(previous_output_mode, 0)
-                            await self.speaker.coordinator.player.set_audio_output_mode(hardware_mode)
+                            # Revert to previous output mode using friendly name
+                            await self.speaker.coordinator.player.select_output(previous_output_mode)
                             _LOGGER.info(
                                 "Reverted output mode to %s after Bluetooth connection failure",
                                 previous_output_mode,
@@ -314,7 +308,7 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                     else:
                         # If no previous mode or it was already Bluetooth, default to Line Out
                         try:
-                            await self.speaker.coordinator.player.set_audio_output_mode(0)  # Line Out
+                            await self.speaker.coordinator.player.select_output("Line Out")
                             _LOGGER.info(
                                 "Reverted output mode to Line Out (default) after Bluetooth connection failure"
                             )
@@ -330,11 +324,9 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                 return
 
             # Handle regular output modes (Line Out, Optical Out, etc.)
-            # Map output mode to hardware mode value
-            mode_map = {"Line Out": 0, "Optical Out": 1, "Coax Out": 2, "Bluetooth Out": 4, "Headphone Out": 4}
-            hardware_mode = mode_map.get(option, 0)
-            _LOGGER.info("WiiM Output Mode Select: Setting hardware mode %d for '%s'", hardware_mode, option)
-            await self.speaker.coordinator.player.set_audio_output_mode(hardware_mode)
+            # Use PyWim's documented API with friendly names
+            _LOGGER.info("WiiM Output Mode Select: Setting output mode to '%s'", option)
+            await self.speaker.coordinator.player.select_output(option)
             _LOGGER.info(
                 "WiiM Output Mode Select: Successfully set output mode to '%s'",
                 option,
@@ -710,7 +702,7 @@ class WiiMBluetoothDeviceSelect(WiimEntity, SelectEntity):
 
                 # Optionally switch output mode to Bluetooth
                 try:
-                    await self.speaker.coordinator.player.set_audio_output_mode(4)  # Bluetooth mode
+                    await self.speaker.coordinator.player.select_output("Bluetooth Out")
                     _LOGGER.info("Switched output mode to Bluetooth for %s", self.speaker.name)
                 except Exception as err:
                     _LOGGER.warning(

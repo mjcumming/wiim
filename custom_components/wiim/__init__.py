@@ -67,7 +67,6 @@ CORE_PLATFORMS: list[Platform] = [
     Platform.SENSOR,  # Always enabled - role sensor is essential for multiroom
     Platform.NUMBER,  # Always enabled - group volume control for multiroom
     Platform.SWITCH,  # Always enabled - group mute control for multiroom
-    Platform.UPDATE,  # Always enabled - firmware update indicator
     Platform.LIGHT,  # Always enabled - front-panel LED control
     Platform.SELECT,  # Always enabled - audio output mode control and Bluetooth device selection
     Platform.BUTTON,  # Always enabled - Bluetooth scan button (maintenance buttons are optional)
