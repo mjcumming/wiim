@@ -1,14 +1,14 @@
 """WiiM-specific pytest fixtures."""
 
 # Import our components for testing
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Import WiiM components at module level
+from custom_components.wiim.const import DOMAIN
+from custom_components.wiim.data import Speaker
 
 
 @pytest.fixture
@@ -118,23 +118,26 @@ def wiim_coordinator(wiim_client):
 @pytest.fixture
 def wiim_speaker(hass, wiim_coordinator):
     """Create a test Speaker instance."""
-    from homeassistant.config_entries import ConfigEntry
-
-    from custom_components.wiim.const import DOMAIN
-    from custom_components.wiim.data import Speaker
-
+    # Set up coordinator.player.host for ip_address property
+    wiim_coordinator.player.host = "192.168.1.100"
+    
+    # Set up coordinator.data for other properties
+    wiim_coordinator.data = {
+        "device_name": "Test WiiM",
+        "model": "WiiM Mini",
+        "role": "solo",
+        "firmware": "1.0.0",
+    }
+    
     # Create a mock config entry
     config_entry = MagicMock(spec=ConfigEntry)
+    config_entry.entry_id = "test_wiim_entry"
     config_entry.unique_id = "test-speaker-uuid"
     config_entry.data = {"host": "192.168.1.100"}
     config_entry.options = {}
     config_entry.title = "Test WiiM"
 
     speaker = Speaker(hass, wiim_coordinator, config_entry)
-    speaker.ip_address = "192.168.1.100"  # Use correct attribute name
-    speaker.name = "Test WiiM"
-    speaker.model = "WiiM Mini"
-    speaker.role = "solo"
 
     # Emulate the data structure the integration uses at runtime so helper
     # functions (e.g. find_speaker_by_uuid) work inside the tests.
@@ -146,15 +149,8 @@ def wiim_speaker(hass, wiim_coordinator):
 @pytest.fixture
 def wiim_speaker_slave(hass):
     """Create a test slave Speaker instance."""
-    from homeassistant.config_entries import ConfigEntry
-
-    from custom_components.wiim.const import DOMAIN
-    from custom_components.wiim.data import Speaker
-
     # Create mock Player object for slave
     slave_player = MagicMock()
-    slave_player.client = AsyncMock()
-    slave_player.client.host = "192.168.1.101"
     slave_player.host = "192.168.1.101"
 
     # Role properties - slave

@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-STUBS_DIR = Path(__file__).resolve().parents[1] / "stubs"
+# Add repository root to path for custom_components imports
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+STUBS_DIR = REPO_ROOT / "stubs"
 if str(STUBS_DIR) not in sys.path:
     sys.path.insert(0, str(STUBS_DIR))
 
