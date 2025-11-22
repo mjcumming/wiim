@@ -149,20 +149,46 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         self._attr_unique_id = speaker.uuid
         self._attr_name = None  # Use device name
 
+    def _derive_state_from_player(self, player) -> MediaPlayerState | None:
+        """Map pywiim's play_state to MediaPlayerState."""
+        if not self.available or not player:
+            return None
+
+        play_state = getattr(player, "play_state", None)
+        if not play_state:
+            return MediaPlayerState.IDLE
+
+        play_state_str = str(play_state).lower()
+        if play_state_str in ("play", "playing", "load"):
+            return MediaPlayerState.PLAYING
+        if play_state_str == "pause":
+            return MediaPlayerState.PAUSED
+        return MediaPlayerState.IDLE
+
     def _update_position_from_coordinator(self) -> None:
         """Update media position attributes from coordinator data (LinkPlay pattern)."""
         player = self._get_metadata_player()
         if not player:
+            self._attr_state = None
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
             self._attr_media_duration = None
             return
 
+        current_state = self._derive_state_from_player(player)
+        self._attr_state = current_state
+
         # Get values from pywiim
         new_position = player.media_position
         # If duration is 0, return None (unknown) to avoid 00:00 display
         new_duration = player.media_duration if player.media_duration else None
-        current_state = self.state
+        _LOGGER.debug(
+            "[%s] Coordinator update (state=%s, raw_pos=%s, raw_dur=%s)",
+            self.name,
+            current_state,
+            new_position,
+            new_duration,
+        )
 
         # Diagnostic logging for troubleshooting
         if current_state == MediaPlayerState.PLAYING and (not new_duration or new_duration == 0):
@@ -183,22 +209,29 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Else: Keep existing duration (don't clear on transient errors during playback)
 
         # Simple Position Update (Robust)
-        # Always update position and timestamp when playing to prevent "runaway" time
-        # (Smart Update/jitter reduction removed for stability)
-        if current_state == MediaPlayerState.PLAYING:
-            self._attr_media_position = new_position
-            self._attr_media_position_updated_at = dt_util.utcnow()
-
-        elif current_state == MediaPlayerState.IDLE:
+        if new_position is None:
+            # Clear stale progress when the device hasn't reported a value yet (e.g., immediately after track change)
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
-
+        elif current_state == MediaPlayerState.PLAYING:
+            self._attr_media_position = new_position
+            self._attr_media_position_updated_at = dt_util.utcnow()
+        elif current_state == MediaPlayerState.IDLE or current_state is None:
+            self._attr_media_position = None
+            self._attr_media_position_updated_at = None
         else:  # PAUSED or STOPPED
-            # Just update the static position
             self._attr_media_position = new_position
             # Freeze timestamp (don't update it, just keep the last one or let it be stale as it's unused in PAUSED)
             # Actually, LinkPlay clears it on STOPPED. We can keep it as is or set to None if it makes sense.
             # For PAUSED, we want to show the static position.
+
+        _LOGGER.debug(
+            "[%s] Published position=%s (ts=%s) duration=%s",
+            self.name,
+            self._attr_media_position,
+            self._attr_media_position_updated_at,
+            self._attr_media_duration,
+        )
 
         # Update supported features (includes SEEK based on duration)
         self._update_supported_features()
@@ -346,25 +379,11 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState | None:
         """Return the current state."""
-        if not self.available:
-            return None
+        if self._attr_state is not None:
+            return self._attr_state
 
-        # Read play_state directly from Player object (always up-to-date via pywiim)
         player = self._get_player()
-        if not player:
-            return MediaPlayerState.IDLE
-
-        play_state = player.play_state
-        if not play_state:
-            return MediaPlayerState.IDLE
-
-        play_state_str = str(play_state).lower()
-        if play_state_str in ("play", "playing", "load"):
-            return MediaPlayerState.PLAYING
-        elif play_state_str == "pause":
-            return MediaPlayerState.PAUSED
-        else:
-            return MediaPlayerState.IDLE
+        return self._derive_state_from_player(player)
 
     # ===== VOLUME =====
 
