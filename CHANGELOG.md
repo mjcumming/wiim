@@ -2,118 +2,72 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
-## [1.0.17] - 2024-11-21
+## [1.0.17] - 2025-11-22
 
 ### Fixed
 
-- **Duration Flickering**: Fixed issue where duration would flicker to "00:00" during playback (likely due to UPnP events missing metadata).
+- **Duration Flickering**: Fixed issue where duration would flicker to "00:00" during playback.
   - Logic now preserves the last known valid duration if the device reports 0/None while playing.
-  - Prevents UI instability and progress bar rendering errors.
 
-## [1.0.16] - 2024-11-21
+## [1.0.16] - 2025-11-22
 
 ### Fixed
 
 - **Position Stability**: Reverted to robust "always update" strategy for position tracking.
-  - Removes "Smart Update" optimization that caused position runaway/double-counting in some scenarios.
-  - Guarantees position and timestamp are always in sync on every poll.
-  - Fixes "06:17" position display for shorter tracks.
+  - Removes "Smart Update" optimization that caused position runaway.
+  - Guarantees position and timestamp are always in sync.
 
-## [1.0.15] - 2024-11-21
+## [1.0.15] - 2025-11-22
 
 ### Fixed
 
-- **Position Display**: Fixed bug where position would "run away" and exceed track duration (e.g., showing 6:18 for a 4:00 track).
-  - Root Cause: The logic updated the position value but sometimes kept the old timestamp, causing the frontend to double-count elapsed time.
+- **Position Display**: Fixed bug where position would "run away" and exceed track duration.
   - Fix: Ensure position and timestamp are ALWAYS updated together atomically.
 - **Duration Display**: Fixed "00:00" duration issue by returning `None` when duration is 0.
 
-## [1.0.14] - 2024-11-21
+## [1.0.14] - 2025-11-22
 
 ### Fixed
 
 - **Duration Display**: Fixed "00:00" duration issue by returning `None` when duration is 0 (unknown).
-- **Position Jitter**: Implemented Sonos-style "Smart Update" logic.
-  - Only updates `media_position_updated_at` timestamp if reported position deviates significantly (> 1.5s) from expected position.
-  - Prevents progress bar from jumping backward/forward due to network latency or polling jitter.
-  - Ensures smooth playback progress on web dashboard.
-- **Startup/State Transitions**: Improved handling of position updates during Play/Pause transitions and initial startup.
+- **Position Jitter**: Implemented Sonos-style "Smart Update" logic (later reverted in 1.0.16).
+- **Startup/State Transitions**: Improved handling of position updates.
 
 ### Added
 
-- **Debug Logging**: Enhanced coordinator logging to show position, duration, and play state on every poll when playing.
+- **Debug Logging**: Enhanced coordinator logging.
 
-## [1.0.13] - 2024-11-21
+## [1.0.13] - 2025-11-22
 
 ### Fixed
 
-- **Seek Controls**: Fixed seek controls not working
-  - Root cause: `supported_features` was @property accessing `self.media_duration` at wrong time
-  - Solution: Update `_attr_supported_features` during coordinator update (LinkPlay pattern)
-  - SEEK feature now properly enabled/disabled based on actual duration value
-  - Added debug logging to track seek operations
+- **Seek Controls**: Fixed seek controls not working.
+  - Solution: Update `_attr_supported_features` during coordinator update.
 
-### Technical Details
-
-- Moved from `@property supported_features()` to `_update_supported_features()` method
-- Called during coordinator update to set `_attr_supported_features`
-- Base class @cached_property returns `_attr_supported_features`
-- SEEK enabled when `_attr_media_duration > 0`, disabled otherwise
-
-## [1.0.12] - 2024-11-21
+## [1.0.12] - 2025-11-22
 
 ### Added
 
-- **Diagnostic logging**: Added warnings when pywiim returns invalid duration values
-  - Logs position, duration, state, and title when duration is None/0 during playback
-  - Helps identify root cause of "duration=00:00" web dashboard issues
-  - See `DEBUGGING_DURATION_ISSUE.md` for troubleshooting guide
+- **Diagnostic logging**: Added warnings when pywiim returns invalid duration values.
 
-### Note
-
-If you see duration showing **00:00** on the web dashboard:
-
-1. Enable debug logging for `custom_components.wiim`
-2. Look for "PyWiim returned invalid duration!" warnings in logs
-3. Report to pywiim library - this indicates pywiim is not properly parsing duration from the device
-
-## [1.0.11] - 2024-11-21
+## [1.0.11] - 2025-11-22
 
 ### Fixed
 
-- **Property Mutation**: Fixed property mutation bug causing incorrect position/duration on web dashboard
-  - Moved timestamp management from property getters to coordinator update handler
-  - Following LinkPlay's `_update_properties()` pattern during `_handle_coordinator_update()`
-  - Properties now read `_attr` values instead of mutating state
-  - Fixes web dashboard showing duration=00:00 and nonsensical position values
+- **Property Mutation**: Fixed property mutation bug causing incorrect position/duration on web dashboard.
+  - Solution: Update `_attr` values during coordinator updates.
 
-### Technical Details
-
-**Root Cause**: Mutating state in property getters caused race conditions when properties were accessed multiple times during state calculation. The web dashboard would call `media_position` and `media_duration` properties repeatedly, triggering timestamp updates at wrong times.
-
-**Solution**: Implement LinkPlay pattern - update `_attr` values during coordinator updates, properties just return those values. No mutation in getters.
-
-## [1.0.10] - 2024-11-21
+## [1.0.10] - 2025-11-22
 
 ### Fixed
 
-- **Media Position Display**: Fixed media position display discrepancy between iOS and web dashboard
-  - Implemented Home Assistant best practice: integration now manages `media_position_updated_at` timestamp
-  - Following Sonos/LinkPlay pattern: timestamp updates when PLAYING, freezes when PAUSED, clears when IDLE
-  - Position advancement now handled entirely by HA frontend for smooth, consistent display
-  - Fixed missing `dt_util` import that caused NameError at runtime
+- **Media Position Display**: Fixed media position display discrepancy between iOS and web dashboard.
+  - Implemented Home Assistant best practice: integration now manages `media_position_updated_at` timestamp.
 
 ### Changed
 
-- **Requirements**: Updated to `pywiim>=2.1.0` (removes position estimation - HA frontend handles it)
-- **Architecture**: Simplified position tracking - read raw position from pywiim, manage timestamp ourselves
-
-### Technical Details
-
-- Position display formula (handled by HA): `current_position = media_position + (now - media_position_updated_at)`
-- Integration provides static position and timestamp; frontend calculates live position
-- Eliminates competing estimation logic between pywiim and HA
-- Matches standard Home Assistant integration patterns
+- **Requirements**: Updated to `pywiim>=2.1.0`.
+- **Architecture**: Simplified position tracking.
 
 ## [1.0.9] - 2024-11-21
 
