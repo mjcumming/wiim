@@ -26,7 +26,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         host: str,
         entry=None,
         capabilities: dict[str, Any] | None = None,
-        port: int = 443,
+        port: int | None = None,
+        protocol: str | None = None,
         timeout: int = 10,
     ) -> None:
         """Initialize the coordinator."""
@@ -44,13 +45,21 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         session = async_get_clientsession(hass)
 
         # Create pywiim client with HA's session
-        client = WiiMClient(
-            host=host,
-            port=port,
-            timeout=timeout,
-            session=session,
-            capabilities=capabilities,
-        )
+        # Only pass port/protocol if we have a cached endpoint (optimized pattern)
+        # Otherwise, let pywiim probe automatically (simplest pattern)
+        client_kwargs = {
+            "host": host,
+            "timeout": timeout,
+            "session": session,
+            "capabilities": capabilities,
+        }
+        if port is not None and protocol is not None:
+            # We have a cached endpoint - use it for faster startup
+            client_kwargs["port"] = port
+            client_kwargs["protocol"] = protocol
+        # If port/protocol not provided, pywiim will probe automatically
+
+        client = WiiMClient(**client_kwargs)
 
         # Wrap client in Player (recommended for HA - pywiim manages all state)
         # Provide player_finder for automatic group linking

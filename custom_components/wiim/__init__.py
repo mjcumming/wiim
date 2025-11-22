@@ -39,6 +39,7 @@ except ModuleNotFoundError:  # pragma: no cover – only executed in test env
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -311,6 +312,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create client and coordinator with firmware capabilities
     session = async_get_clientsession(hass)
 
+    # Check if we have a cached endpoint from previous discovery (optimized pattern)
+    cached_endpoint = entry.data.get("endpoint")
+    port = None
+    protocol = None
+    if cached_endpoint:
+        # Parse cached endpoint and extract port/protocol
+        parsed = urlparse(cached_endpoint)
+        port = parsed.port
+        protocol = parsed.scheme
+        _LOGGER.debug(
+            "Using cached endpoint for %s: %s (protocol=%s, port=%s)",
+            entry.data["host"],
+            cached_endpoint,
+            protocol,
+            port,
+        )
+
     # Create client - pywiim handles capability detection
     # Note: We pass Home Assistant's managed session to pywiim, but pywiim may create
     # additional internal sessions for temporary operations (e.g., getting master name)
@@ -318,12 +336,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # which are harmless but should be fixed in pywiim itself.
     capabilities = {}
     try:
-        temp_client = WiiMClient(
-            host=entry.data["host"],
-            port=entry.data.get("port", 443),
-            timeout=entry.data.get("timeout", 10),
-            session=session,
-        )
+        # Use cached endpoint if available, otherwise let pywiim probe automatically
+        temp_client_kwargs = {
+            "host": entry.data["host"],
+            "timeout": entry.data.get("timeout", 10),
+            "session": session,
+        }
+        if port is not None and protocol is not None:
+            temp_client_kwargs["port"] = port
+            temp_client_kwargs["protocol"] = protocol
+        temp_client = WiiMClient(**temp_client_kwargs)
         # Use pywiim's _detect_capabilities() method
         capabilities = await temp_client._detect_capabilities()
         _LOGGER.info(
@@ -378,12 +400,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         capabilities = {}
 
     # Coordinator creates client and player internally using HA's shared session
+    # Pass port/protocol if we have a cached endpoint, otherwise let pywiim probe
     coordinator = WiiMCoordinator(
         hass,
         host=entry.data["host"],
         entry=entry,
         capabilities=capabilities,
-        port=entry.data.get("port", 443),
+        port=port,
+        protocol=protocol,
         timeout=entry.data.get("timeout", 10),
     )
 
@@ -418,6 +442,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("Starting initial data fetch for %s", entry.data["host"])
         await coordinator.async_config_entry_first_refresh()
         _LOGGER.info("Initial data fetch completed for %s", entry.data["host"])
+
+        # After first successful connection, persist the discovered endpoint (optimized pattern)
+        # This avoids probing on every startup for faster initialization
+        if not cached_endpoint:
+            discovered_endpoint = coordinator.player.client.discovered_endpoint
+            if discovered_endpoint:
+                _LOGGER.info(
+                    "Caching discovered endpoint for %s: %s",
+                    entry.data["host"],
+                    discovered_endpoint,
+                )
+                hass.config_entries.async_update_entry(
+                    entry,
+                    data={**entry.data, "endpoint": discovered_endpoint},
+                )
 
         # Complete speaker setup now that we have fresh coordinator data
         _LOGGER.info("🚀 Starting speaker.async_setup() for %s", entry.data["host"])

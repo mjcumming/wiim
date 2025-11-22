@@ -335,6 +335,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             from pywiim import WiiMClient
 
             # Create a temporary client to check for slaves
+            # Let pywiim probe automatically - we don't have endpoint cached here
             session = async_get_clientsession(self.hass)
             client = WiiMClient(host=host, session=session)
 

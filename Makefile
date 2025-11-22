@@ -3,7 +3,7 @@
 # This Makefile provides commands for testing, linting, and building
 # the WiiM Home Assistant integration.
 
-.PHONY: help test test-phase test-quick lint format clean install install-dev build check-all release check-python check-ha-compat pre-run
+.PHONY: help test test-phase test-quick lint format clean install install-dev build check-all check-python check-ha-compat pre-run
 
 # Default target
 help:
@@ -17,7 +17,6 @@ help:
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  pre-run        - Quick checks before running HA (syntax, lint, imports)"
-	@echo "  validate       - Validate refactor integrity & API consistency"
 	@echo "  pre-commit     - Run all pre-commit validation checks"
 	@echo "  lint           - Run linting checks"
 	@echo "  format         - Format code with ruff"
@@ -30,7 +29,9 @@ help:
 	@echo "  build          - Build integration package"
 	@echo "  install        - Install for development"
 	@echo "  install-dev    - Install dev dependencies with HA checks"
-	@echo "  release        - Full release build (test + lint + build)"
+	@echo ""
+	@echo "Release:"
+	@echo "  Use scripts/release.sh for proper release process"
 	@echo ""
 
 # Python version validation
@@ -84,10 +85,6 @@ lint:
 	@echo "📏 File size check temporarily disabled during refactor"
 	# @python scripts/ruff_size_check.py custom_components/wiim 500 700
 
-validate:
-	@echo "🔍 Validating refactor integrity..."
-	python scripts/validate_refactor.py
-
 pre-commit:
 	@echo "🔄 Running pre-commit checks..."
 	bash scripts/pre_commit_check.sh
@@ -97,7 +94,7 @@ format:
 	-python -m ruff format custom_components/wiim/
 	-python -m ruff format tests/
 
-check-all: validate lint test
+check-all: lint test
 	@echo "✅ All quality checks completed"
 
 # Build targets
@@ -117,18 +114,8 @@ build: clean
 	@find custom_components/wiim -name "*.py" | wc -l | xargs echo "Python files:"
 	@du -sh custom_components/wiim | cut -f1 | xargs echo "Total size:"
 	@echo "Build completed successfully!"
-
-# Release target - runs full validation pipeline
-release: clean check-all build
 	@echo ""
-	@echo "🎉 WiiM Integration Release Build Complete!"
-	@echo ""
-	@echo "📊 Release Summary:"
-	@echo "  ✅ All tests passed"
-	@echo "  ✅ Code quality checks passed"
-	@echo "  ✅ Build artifacts created"
-	@echo ""
-	@echo "Ready for deployment! 🚀"
+	@echo "💡 For releases, use: bash scripts/release.sh"
 
 # Development helpers
 dev-check: lint test

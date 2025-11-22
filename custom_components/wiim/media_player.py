@@ -794,6 +794,10 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         """Play media from URL or preset with optional queue management."""
+        # Validate media_id is not empty
+        if not media_id:
+            raise HomeAssistantError("media_id cannot be empty")
+
         # Handle preset numbers (presets don't support queue management)
         if media_type == "preset":
             preset_num = int(media_id)
@@ -806,10 +810,35 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         # Handle media_source
         if media_source.is_media_source_id(media_id):
-            sourced_media = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
-            media_id = sourced_media.url
-            # Process URL to handle relative paths
-            media_id = async_process_play_media_url(self.hass, media_id)
+            original_media_id = media_id
+            _LOGGER.debug("Resolving media source: %s", original_media_id)
+            try:
+                sourced_media = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
+                _LOGGER.debug(
+                    "Resolved media source - url: %s, mime_type: %s", sourced_media.url, sourced_media.mime_type
+                )
+                media_id = sourced_media.url
+                # Validate that we have a valid URL before processing
+                if not media_id:
+                    _LOGGER.error(
+                        "Media source resolved to empty URL. Original media_id: %s, mime_type: %s",
+                        original_media_id,
+                        sourced_media.mime_type,
+                    )
+                    raise HomeAssistantError(
+                        f"Media source resolved to empty URL for: {original_media_id}. "
+                        f"This may indicate the media source is not playable or not properly configured."
+                    )
+                # Process URL to handle relative paths
+                media_id = async_process_play_media_url(self.hass, media_id)
+            except Exception as err:
+                _LOGGER.error(
+                    "Failed to resolve media source %s: %s",
+                    original_media_id,
+                    err,
+                    exc_info=True,
+                )
+                raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
 
         enqueue: MediaPlayerEnqueue | None = kwargs.get(ATTR_MEDIA_ENQUEUE)
         if enqueue and enqueue != MediaPlayerEnqueue.REPLACE:

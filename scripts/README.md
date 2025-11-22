@@ -162,7 +162,7 @@ Convenience targets for common operations:
 
 ```bash
 # Release workflow
-make release          # Full release: lint + test + build
+bash scripts/release.sh [version]  # Full release process (use this, not make release)
 
 # Development
 make pre-run          # Quick checks before running HA

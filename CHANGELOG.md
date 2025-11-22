@@ -2,6 +2,33 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [Unreleased]
+
+## [1.0.22] - 2025-11-22
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.10
+  - Fixes issue where `audio_output_mode` was returning None
+  - `player.audio_output_mode` now correctly displays current output mode in Home Assistant select entities
+  - pywiim 2.1.10 automatically fetches audio output status every 60 seconds when supported
+  - Ensures compatibility with latest library features and fixes
+
+## [1.0.21] - 2025-01-27
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.5
+  - Ensures compatibility with latest library features and fixes
+
+### Fixed
+
+- **Media Source Playback**: Fixed IndexError when playing media sources that resolve to empty URLs
+  - Added validation to check for empty URLs before processing
+  - Improved error handling with clearer error messages
+  - Added debug logging to help diagnose media source resolution issues
+  - Prevents crashes when selecting non-playable items or improperly configured media sources
+
 ## [1.0.20] - 2025-11-22
 
 ### Changed

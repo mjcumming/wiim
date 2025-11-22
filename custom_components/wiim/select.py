@@ -78,36 +78,79 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
 
     @property
     def options(self) -> list[str]:
-        """Return available output options."""
+        """Return available output options.
+
+        Available as a property on player: player.available_outputs
+        Returns a list of output names (hardware modes + paired BT devices).
+        Returns empty list if device doesn't support audio output or data not yet loaded.
+        """
         player = self.coordinator.data.get("player")
         if not player:
             return []
 
-        # Always filter out generic "Bluetooth Out"
-        # pywiim's player.available_outputs already handles refreshing the BT list
-        # when requested, so we just present what the API gives us (minus the generic option)
-        return [opt for opt in player.available_outputs if opt != "Bluetooth Out"]
+        # Access as a property on player (not a method)
+        # available_outputs is a property on player, not player.audio
+        # Returns None if not supported/not loaded, or empty list if supported but no outputs
+        available_outputs = getattr(player, "available_outputs", None)
+        if available_outputs is None:
+            # Device may not support audio output or data not yet loaded
+            # pywiim handles fetching automatically via player.refresh()
+            return []
+
+        # Return the list (may be empty if device supports audio output but has no outputs configured)
+        return available_outputs
 
     @property
     def current_option(self) -> str | None:
-        """Return current output."""
+        """Return current output.
+
+        Returns the currently selected output mode, which must match one of the
+        options in the available_outputs list. Returns None if output status
+        is not available or doesn't match any option.
+        """
         player = self.coordinator.data.get("player")
         if not player:
+            return None
+
+        # Get available options to ensure we return a valid value
+        available = player.available_outputs
+        if not available:
+            # No outputs available (device may not support or data not loaded)
+            # pywiim handles fetching automatically via player.refresh()
             return None
 
         # Check if BT output is active and which device is connected
         if player.is_bluetooth_output_active:
             for device in player.bluetooth_output_devices:
                 if device.get("connected"):
-                    return f"BT: {device['name']}"
-            return "Bluetooth Out"
+                    bt_option = f"BT: {device['name']}"
+                    # Ensure this option exists in available_outputs
+                    if bt_option in available:
+                        return bt_option
+            # Fall back to generic "Bluetooth Out" if no specific device found
+            if "Bluetooth Out" in available:
+                return "Bluetooth Out"
 
-        # Hardware output (auto-detects Headphone Out on Ultra)
-        return player.audio_output_mode
+        # Get current hardware output mode
+        current_mode = player.audio_output_mode
+        if current_mode and current_mode in available:
+            return current_mode
+
+        # If current_mode doesn't match, try to find a matching option
+        # (handles case where device returns slightly different format)
+        if current_mode:
+            for option in available:
+                if option.lower() == current_mode.lower():
+                    return option
+
+        # If still no match, return None (will show as "Unknown" in HA)
+        # pywiim handles fetching automatically - no manual refresh needed
+        return None
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected output."""
         player = self.coordinator.data.get("player")
-        if player:
-            await player.audio.select_output(option)
-            # State updates via callback automatically
+        if not player:
+            return
+        await player.audio.select_output(option)
+        # State updates automatically via callback - no manual refresh needed
