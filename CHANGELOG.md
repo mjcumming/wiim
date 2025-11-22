@@ -2,6 +2,21 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.19] - 2025-11-22
+
+### Changed
+
+- **Dependency Update**: Enforced minimum `pywiim` library version 2.1.1
+  - Ensures compatibility with latest library features and fixes
+
+### Technical
+
+- **Code Simplification**: Major code cleanup and refactoring
+  - Removed ~880 lines of redundant code from button and select entities
+  - Simplified button entity naming using `_attr_has_entity_name` pattern
+  - Removed Bluetooth scan button (functionality integrated into Audio Output Mode select)
+  - Streamlined select entity logic for better maintainability
+
 ## [1.0.18] - 2025-11-22
 
 ### Changed

@@ -344,13 +344,6 @@ target:
   entity_id: select.living_room_audio_output_mode
 data:
   option: "BT Device 1 - TOZO-T6"
-
-# Update list after pairing new devices in WiiM app
-service: select.select_option
-target:
-  entity_id: select.living_room_audio_output_mode
-data:
-  option: "BT Update Paired Devices"
 ```
 
 **Note:** Bluetooth pairing must be done via the WiiM app. Home Assistant can only connect to already-paired devices.
@@ -426,16 +419,6 @@ automation:
 ### ⚠️ Unofficial API Services
 
 These services use reverse-engineered endpoints that may not work on all firmware versions. Test thoroughly before using in production.
-
-**Bluetooth Device Scanning**
-
-```yaml
-service: wiim.scan_bluetooth
-target:
-  entity_id: media_player.living_room
-data:
-  duration: 5 # 3-10 seconds
-```
 
 **Audio Settings**
 

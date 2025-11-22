@@ -30,7 +30,7 @@ class TestWiiMRebootButton:
 
         assert button.speaker is speaker
         assert button.unique_id == "test-speaker-uuid_reboot"
-        assert button.name == "Test WiiM Reboot"
+        assert button.name == "Reboot"
         assert button.icon == "mdi:restart"
 
     @pytest.mark.asyncio
@@ -90,7 +90,7 @@ class TestWiiMSyncTimeButton:
 
         assert button.speaker is speaker
         assert button.unique_id == "test-speaker-uuid_sync_time"
-        assert button.name == "Test WiiM Sync Time"
+        assert button.name == "Sync Time"
         assert button.icon == "mdi:clock-sync"
 
     @pytest.mark.asyncio
