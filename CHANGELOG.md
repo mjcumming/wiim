@@ -2,6 +2,15 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.15] - 2024-11-21
+
+### Fixed
+
+- **CRITICAL: Position Display**: Fixed bug where position would "run away" and exceed track duration (e.g., showing 6:18 for a 4:00 track).
+  - Root Cause: The "Smart Update" logic updated the position value but sometimes kept the old timestamp, causing the frontend to double-count elapsed time.
+  - Fix: Ensure position and timestamp are ALWAYS updated together atomically.
+- **Duration Display**: Fixed "00:00" duration issue by returning `None` when duration is 0.
+
 ## [1.0.14] - 2024-11-21
 
 ### Fixed

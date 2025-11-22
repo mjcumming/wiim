@@ -12,6 +12,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pywiim import Player, PollingStrategy, WiiMClient
 from pywiim.exceptions import WiiMError
 
+from .data import find_speaker_by_ip
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -67,9 +69,6 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         This callback allows pywiim to automatically link Player objects when
         groups are detected, enabling group.all_players to be populated.
         """
-        # Import here to avoid circular import
-        from .data import find_speaker_by_ip
-
         speaker = find_speaker_by_ip(self.hass, host)
         if speaker and speaker.coordinator and speaker.coordinator.player:
             return speaker.coordinator.player
@@ -119,7 +118,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.player.media_duration,
                     self.player.media_title,
                 )
-            
+
             return {"player": self.player}
 
         except WiiMError as err:
