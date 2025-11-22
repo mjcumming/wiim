@@ -2,6 +2,23 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.13] - 2024-11-21
+
+### Fixed
+
+- **Critical**: Fixed seek controls not working
+  - Root cause: `supported_features` was @property accessing `self.media_duration` at wrong time
+  - Solution: Update `_attr_supported_features` during coordinator update (LinkPlay pattern)
+  - SEEK feature now properly enabled/disabled based on actual duration value
+  - Added debug logging to track seek operations
+
+### Technical Details
+
+- Moved from `@property supported_features()` to `_update_supported_features()` method
+- Called during coordinator update to set `_attr_supported_features`  
+- Base class @cached_property returns `_attr_supported_features`
+- SEEK enabled when `_attr_media_duration > 0`, disabled otherwise
+
 ## [1.0.12] - 2024-11-21
 
 ### Added
@@ -14,6 +31,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Note
 
 If you see duration showing **00:00** on the web dashboard:
+
 1. Enable debug logging for `custom_components.wiim`
 2. Look for "PyWiim returned invalid duration!" warnings in logs
 3. Report to pywiim library - this indicates pywiim is not properly parsing duration from the device

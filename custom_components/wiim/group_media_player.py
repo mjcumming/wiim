@@ -73,30 +73,34 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             self._attr_media_position_updated_at = None
             self._attr_media_duration = None
             return
-            
+
         player = self._get_player()
         if not player:
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
             self._attr_media_duration = None
             return
-            
+
         # Get values from pywiim
         position = player.media_position
         duration = player.media_duration
         current_state = self.state
-        
+
         # Diagnostic logging for troubleshooting
         if current_state == MediaPlayerState.PLAYING and (not duration or duration == 0):
             _LOGGER.warning(
                 "GROUP %s: PyWiim returned invalid duration! position=%s, duration=%s, state=%s, title=%s",
-                self.name, position, duration, current_state, getattr(player, 'media_title', 'Unknown')
+                self.name,
+                position,
+                duration,
+                current_state,
+                getattr(player, "media_title", "Unknown"),
             )
-        
+
         # Update position/duration
         self._attr_media_position = position
         self._attr_media_duration = duration
-        
+
         # Update timestamp based on state (Sonos/LinkPlay pattern)
         if current_state == MediaPlayerState.PLAYING:
             # When playing, update timestamp to now

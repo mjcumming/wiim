@@ -157,23 +157,27 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             self._attr_media_position_updated_at = None
             self._attr_media_duration = None
             return
-            
+
         # Get values from pywiim
         position = player.media_position
         duration = player.media_duration
         current_state = self.state
-        
+
         # Diagnostic logging for troubleshooting
         if current_state == MediaPlayerState.PLAYING and (not duration or duration == 0):
             _LOGGER.warning(
                 "%s: PyWiim returned invalid duration! position=%s, duration=%s, state=%s, title=%s",
-                self.name, position, duration, current_state, getattr(player, 'media_title', 'Unknown')
+                self.name,
+                position,
+                duration,
+                current_state,
+                getattr(player, "media_title", "Unknown"),
             )
-        
+
         # Update position/duration
         self._attr_media_position = position
         self._attr_media_duration = duration
-        
+
         # Update timestamp based on state (Sonos/LinkPlay pattern)
         if current_state == MediaPlayerState.PLAYING:
             # When playing, update timestamp to now
@@ -182,6 +186,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             # When idle, clear timestamp
             self._attr_media_position_updated_at = None
         # When PAUSED/STOPPED: keep existing timestamp (it freezes)
+        
+        # Update supported features (includes SEEK based on duration)
+        self._update_supported_features()
 
     @property
     def name(self) -> str:
@@ -224,9 +231,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         return False
 
-    @property
-    def supported_features(self) -> MediaPlayerEntityFeature:
-        """Flag media player features supported by WiiM."""
+    def _update_supported_features(self) -> None:
+        """Update supported features based on current state (LinkPlay pattern)."""
         # Check if player is a slave in a multiroom group
         player = self._get_player()
         is_slave = player.is_slave if player else False
@@ -274,15 +280,16 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not is_slave and self._is_eq_supported():
             features |= MediaPlayerEntityFeature.SELECT_SOUND_MODE
 
-        # Enable seek if we have duration and not a slave
-        if not is_slave and self.media_duration and self.media_duration > 0:
+        # Enable seek if we have duration and not a slave  
+        # Use _attr_media_duration (set during coordinator update) not property
+        if not is_slave and self._attr_media_duration and self._attr_media_duration > 0:
             features |= MediaPlayerEntityFeature.SEEK
 
         # Enable queue management if UPnP client is available and not a slave
         if not is_slave and self._has_queue_support():
             features |= MediaPlayerEntityFeature.MEDIA_ENQUEUE
 
-        return features
+        self._attr_supported_features = features
 
     def _is_eq_supported(self) -> bool:
         """Check if device supports EQ - query from pywiim.
@@ -453,10 +460,20 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to skip to previous track: {err}") from err
 
     async def async_media_seek(self, position: float) -> None:
-        """Seek to position."""
+        """Seek to position in seconds."""
+        _LOGGER.debug(
+            "%s: Seeking to position %s (duration=%s, supported_features has SEEK=%s)",
+            self.name,
+            position,
+            self._attr_media_duration,
+            bool(self._attr_supported_features & MediaPlayerEntityFeature.SEEK),
+        )
         try:
             await self.coordinator.player.seek(int(position))
+            # Force immediate coordinator refresh to get new position
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
+            _LOGGER.error("%s: Seek failed: %s", self.name, err)
             raise HomeAssistantError(f"Failed to seek: {err}") from err
 
     # ===== SOURCE =====
