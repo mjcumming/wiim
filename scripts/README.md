@@ -201,10 +201,18 @@ make build            # Build integration package
    ./scripts/release.sh 0.3.1
    ```
 
+   The release script automatically:
+   - Runs linting checks
+   - Runs all tests
+   - Updates version in manifest.json
+   - Commits changes
+   - Creates git tag
+   - **Pushes to GitHub** (commit + tag)
+
 3. **Verify release**
 
-   - Check GitHub for tag
-   - Create GitHub release
+   - Check GitHub for tag (should already be pushed)
+   - Create GitHub release from the tag
    - Verify HACS can see new version
 
 4. **Test with HACS**

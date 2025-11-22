@@ -1,6 +1,7 @@
 #!/bin/bash
 # WiiM Integration Release Script
-# Automates the release process: linting, testing, versioning, changelog, and git operations
+# Automates the complete release process: linting, testing, versioning, changelog, commit, tag, and push
+# A "release" means doing everything - including pushing to GitHub
 
 set -e  # Exit on error
 
@@ -189,21 +190,11 @@ main() {
             print_warning "  Tag may already exist"
         fi
 
-        # Ask about pushing
-        echo ""
-        echo -n "Push to GitHub (including tags)? (y/n): "
-        read -r push_choice
-
-        if [[ "$push_choice" == "y" ]]; then
-            print_step "  → Pushing to GitHub..."
-            git push origin main
-            git push origin "v${NEW_VERSION}"
-            print_success "  Pushed to GitHub"
-        else
-            print_warning "  Skipped push. Remember to push manually:"
-            echo "    git push origin main"
-            echo "    git push origin v${NEW_VERSION}"
-        fi
+        # Push to GitHub (release means doing everything)
+        print_step "  → Pushing to GitHub..."
+        git push origin main
+        git push origin "v${NEW_VERSION}"
+        print_success "  Pushed to GitHub"
     else
         print_warning "Skipped git operations"
     fi
