@@ -175,8 +175,12 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 getattr(player, "media_title", "Unknown"),
             )
 
-        # Update duration (always update)
-        self._attr_media_duration = new_duration
+        # Update duration (keep existing if new is invalid during playback)
+        if new_duration:
+            self._attr_media_duration = new_duration
+        elif current_state == MediaPlayerState.IDLE:
+            self._attr_media_duration = None
+        # Else: Keep existing duration (don't clear on transient errors during playback)
 
         # Simple Position Update (Robust)
         # Always update position and timestamp when playing to prevent "runaway" time

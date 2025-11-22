@@ -2,6 +2,14 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.17] - 2024-11-21
+
+### Fixed
+
+- **Duration Flickering**: Fixed issue where duration would flicker to "00:00" during playback (likely due to UPnP events missing metadata).
+  - Logic now preserves the last known valid duration if the device reports 0/None while playing.
+  - Prevents UI instability and progress bar rendering errors.
+
 ## [1.0.16] - 2024-11-21
 
 ### Fixed
