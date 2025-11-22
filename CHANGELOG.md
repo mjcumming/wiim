@@ -2,6 +2,22 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.11] - 2024-11-21
+
+### Fixed
+
+- **Critical**: Fixed property mutation bug causing incorrect position/duration on web dashboard
+  - Moved timestamp management from property getters to coordinator update handler
+  - Following LinkPlay's `_update_properties()` pattern during `_handle_coordinator_update()`
+  - Properties now read `_attr` values instead of mutating state
+  - Fixes web dashboard showing duration=00:00 and nonsensical position values
+
+### Technical Details
+
+**Root Cause**: Mutating state in property getters caused race conditions when properties were accessed multiple times during state calculation. The web dashboard would call `media_position` and `media_duration` properties repeatedly, triggering timestamp updates at wrong times.
+
+**Solution**: Implement LinkPlay pattern - update `_attr` values during coordinator updates, properties just return those values. No mutation in getters.
+
 ## [1.0.10] - 2024-11-21
 
 ### Fixed

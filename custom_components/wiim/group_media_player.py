@@ -15,6 +15,7 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
 )
 from homeassistant.components.media_player.const import RepeatMode
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt
 from homeassistant.util import dt as dt_util
@@ -65,8 +66,35 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         super().__init__(speaker)
         self._attr_unique_id = f"{speaker.uuid}_group_coordinator"
         self._attr_name = None  # Use dynamic name property
-        self._attr_media_position_updated_at: dt.datetime | None = None
-        self._last_position: int | None = None
+
+    def _update_position_from_coordinator(self) -> None:
+        """Update media position attributes from coordinator data (LinkPlay pattern)."""
+        if not self.available:
+            self._attr_media_position = None
+            self._attr_media_position_updated_at = None
+            self._attr_media_duration = None
+            return
+
+        player = self._get_player()
+        if not player:
+            self._attr_media_position = None
+            self._attr_media_position_updated_at = None
+            self._attr_media_duration = None
+            return
+
+        # Update position/duration
+        self._attr_media_position = player.media_position
+        self._attr_media_duration = player.media_duration
+
+        # Update timestamp based on state (Sonos/LinkPlay pattern)
+        current_state = self.state
+        if current_state == MediaPlayerState.PLAYING:
+            # When playing, update timestamp to now
+            self._attr_media_position_updated_at = dt_util.utcnow()
+        elif current_state == MediaPlayerState.IDLE:
+            # When idle, clear timestamp
+            self._attr_media_position_updated_at = None
+        # When PAUSED/STOPPED: keep existing timestamp (it freezes)
 
     @property
     def name(self) -> str:
@@ -490,49 +518,14 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         player = self._get_player()
         return player.media_album if player else None
 
-    @property
-    def media_duration(self) -> int | None:
-        """Return media duration from master."""
-        if not self.available:
-            return None
-        player = self._get_player()
-        return player.media_duration if player else None
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_position_from_coordinator()
+        super()._handle_coordinator_update()
 
-    @property
-    def media_position(self) -> int | None:
-        """Return media position from master in seconds."""
-        if not self.available:
-            return None
-
-        player = self._get_player()
-        if not player:
-            return None
-
-        position = player.media_position
-
-        # Update timestamp when playing and position changed (Sonos/LinkPlay pattern)
-        if self.state == MediaPlayerState.PLAYING and position != self._last_position:
-            self._last_position = position
-            self._attr_media_position_updated_at = dt_util.utcnow()
-        elif self.state == MediaPlayerState.IDLE:
-            # Clear position tracking when idle
-            self._last_position = None
-            self._attr_media_position_updated_at = None
-        # When PAUSED or STOPPED: keep last timestamp (don't update)
-
-        return position
-
-    @property
-    def media_position_updated_at(self) -> dt.datetime | None:
-        """When was the position of the current playing media valid.
-
-        Following Sonos/LinkPlay pattern: Set timestamp to utcnow() when PLAYING,
-        freeze when PAUSED, clear when IDLE/STOPPED.
-        Home Assistant uses this with media_position to calculate current position.
-        """
-        if not self.available:
-            return None
-        return self._attr_media_position_updated_at
+    # Properties now use _attr values set during coordinator update
+    # No mutation in property getters - following LinkPlay pattern
 
     @property
     def media_image_url(self) -> str | None:
