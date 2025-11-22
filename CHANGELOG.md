@@ -2,12 +2,21 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.16] - 2024-11-21
+
+### Fixed
+
+- **Position Stability**: Reverted to robust "always update" strategy for position tracking.
+  - Removes "Smart Update" optimization that caused position runaway/double-counting in some scenarios.
+  - Guarantees position and timestamp are always in sync on every poll.
+  - Fixes "06:17" position display for shorter tracks.
+
 ## [1.0.15] - 2024-11-21
 
 ### Fixed
 
-- **CRITICAL: Position Display**: Fixed bug where position would "run away" and exceed track duration (e.g., showing 6:18 for a 4:00 track).
-  - Root Cause: The "Smart Update" logic updated the position value but sometimes kept the old timestamp, causing the frontend to double-count elapsed time.
+- **Position Display**: Fixed bug where position would "run away" and exceed track duration (e.g., showing 6:18 for a 4:00 track).
+  - Root Cause: The logic updated the position value but sometimes kept the old timestamp, causing the frontend to double-count elapsed time.
   - Fix: Ensure position and timestamp are ALWAYS updated together atomically.
 - **Duration Display**: Fixed "00:00" duration issue by returning `None` when duration is 0.
 
@@ -30,7 +39,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ### Fixed
 
-- **Critical**: Fixed seek controls not working
+- **Seek Controls**: Fixed seek controls not working
   - Root cause: `supported_features` was @property accessing `self.media_duration` at wrong time
   - Solution: Update `_attr_supported_features` during coordinator update (LinkPlay pattern)
   - SEEK feature now properly enabled/disabled based on actual duration value
@@ -64,7 +73,7 @@ If you see duration showing **00:00** on the web dashboard:
 
 ### Fixed
 
-- **Critical**: Fixed property mutation bug causing incorrect position/duration on web dashboard
+- **Property Mutation**: Fixed property mutation bug causing incorrect position/duration on web dashboard
   - Moved timestamp management from property getters to coordinator update handler
   - Following LinkPlay's `_update_properties()` pattern during `_handle_coordinator_update()`
   - Properties now read `_attr` values instead of mutating state
@@ -80,7 +89,7 @@ If you see duration showing **00:00** on the web dashboard:
 
 ### Fixed
 
-- **Critical**: Fixed media position display discrepancy between iOS and web dashboard
+- **Media Position Display**: Fixed media position display discrepancy between iOS and web dashboard
   - Implemented Home Assistant best practice: integration now manages `media_position_updated_at` timestamp
   - Following Sonos/LinkPlay pattern: timestamp updates when PLAYING, freezes when PAUSED, clears when IDLE
   - Position advancement now handled entirely by HA frontend for smooth, consistent display

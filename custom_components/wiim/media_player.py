@@ -178,31 +178,12 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Update duration (always update)
         self._attr_media_duration = new_duration
 
-        # Smart Position Update (Sonos logic)
-        # Prevent "jitter" by only updating timestamp if position deviates significantly
-        should_update_timestamp = False
-
+        # Simple Position Update (Robust)
+        # Always update position and timestamp when playing to prevent "runaway" time
+        # (Smart Update/jitter reduction removed for stability)
         if current_state == MediaPlayerState.PLAYING:
-            if (
-                self._attr_media_position is not None
-                and self._attr_media_position_updated_at is not None
-                and new_position is not None
-            ):
-                # Calculate where we expect to be
-                time_delta = dt_util.utcnow() - self._attr_media_position_updated_at
-                expected_position = self._attr_media_position + time_delta.total_seconds()
-
-                # If deviation is significant (> 1.5s), force an update
-                # Otherwise, keep the old anchor to ensure smooth interpolation
-                if abs(expected_position - new_position) > 1.5:
-                    should_update_timestamp = True
-            else:
-                # No previous state, or new position is None -> Update
-                should_update_timestamp = True
-
-            if should_update_timestamp:
-                self._attr_media_position = new_position
-                self._attr_media_position_updated_at = dt_util.utcnow()
+            self._attr_media_position = new_position
+            self._attr_media_position_updated_at = dt_util.utcnow()
 
         elif current_state == MediaPlayerState.IDLE:
             self._attr_media_position = None
