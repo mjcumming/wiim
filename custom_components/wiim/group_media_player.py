@@ -82,33 +82,59 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return
 
         # Get values from pywiim
-        position = player.media_position
-        duration = player.media_duration
+        new_position = player.media_position
+        # If duration is 0, return None (unknown) to avoid 00:00 display
+        new_duration = player.media_duration if player.media_duration else None
         current_state = self.state
 
         # Diagnostic logging for troubleshooting
-        if current_state == MediaPlayerState.PLAYING and (not duration or duration == 0):
+        if current_state == MediaPlayerState.PLAYING and (not new_duration or new_duration == 0):
             _LOGGER.warning(
                 "GROUP %s: PyWiim returned invalid duration! position=%s, duration=%s, state=%s, title=%s",
                 self.name,
-                position,
-                duration,
+                new_position,
+                new_duration,
                 current_state,
                 getattr(player, "media_title", "Unknown"),
             )
 
-        # Update position/duration
-        self._attr_media_position = position
-        self._attr_media_duration = duration
+        # Update duration (always update)
+        self._attr_media_duration = new_duration
 
-        # Update timestamp based on state (Sonos/LinkPlay pattern)
+        # Smart Position Update (Sonos logic)
+        # Prevent "jitter" by only updating timestamp if position deviates significantly
+        should_update_timestamp = False
+
         if current_state == MediaPlayerState.PLAYING:
-            # When playing, update timestamp to now
-            self._attr_media_position_updated_at = dt_util.utcnow()
+            if (
+                self._attr_media_position is not None
+                and self._attr_media_position_updated_at is not None
+                and new_position is not None
+            ):
+                # Calculate where we expect to be
+                time_delta = dt_util.utcnow() - self._attr_media_position_updated_at
+                expected_position = self._attr_media_position + time_delta.total_seconds()
+
+                # If deviation is significant (> 1.5s), force an update
+                # Otherwise, keep the old anchor to ensure smooth interpolation
+                if abs(expected_position - new_position) > 1.5:
+                    should_update_timestamp = True
+            else:
+                # No previous state, or new position is None -> Update
+                should_update_timestamp = True
+
+            if should_update_timestamp:
+                self._attr_media_position = new_position
+                self._attr_media_position_updated_at = dt_util.utcnow()
+
         elif current_state == MediaPlayerState.IDLE:
-            # When idle, clear timestamp
+            self._attr_media_position = None
             self._attr_media_position_updated_at = None
-        # When PAUSED/STOPPED: keep existing timestamp (it freezes)
+
+        else:  # PAUSED or STOPPED
+            # Just update the static position
+            self._attr_media_position = new_position
+            # Freeze timestamp
 
     @property
     def name(self) -> str:
@@ -269,6 +295,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         try:
             # Use pywiim's group.set_volume_all() which sets volume on all members proportionally
             await group.set_volume_all(volume)
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
@@ -302,6 +329,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         try:
             # Use pywiim's group.mute_all() which sets mute on all members
             await group.mute_all(mute)
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
@@ -328,6 +356,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.play()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play: {err}") from err
 
@@ -342,6 +371,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.pause()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to pause: {err}") from err
 
@@ -356,6 +386,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.stop()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop: {err}") from err
 
@@ -370,6 +401,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.next_track()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to skip track: {err}") from err
 
@@ -384,6 +416,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.previous_track()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to go to previous track: {err}") from err
 
@@ -398,6 +431,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.play_url(media_id)
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play media: {err}") from err
 
@@ -447,6 +481,8 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.player.set_shuffle(shuffle)
             # pywiim updates Player state immediately and pushes event via on_state_changed callback
             # The callback triggers async_update_listeners() which notifies all entities automatically
+            # Force refresh to ensure immediate UI update
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
 
@@ -496,6 +532,8 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.player.set_repeat(repeat.value)
             # pywiim updates Player state immediately and pushes event via on_state_changed callback
             # The callback triggers async_update_listeners() which notifies all entities automatically
+            # Force refresh to ensure immediate UI update
+            await self.coordinator.async_request_refresh()
         except AttributeError as err:
             # Fallback if set_repeat not yet available in pywiim Player
             raise HomeAssistantError(

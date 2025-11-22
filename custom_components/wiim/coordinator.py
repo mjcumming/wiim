@@ -110,6 +110,16 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.update_interval = timedelta(seconds=optimal_interval)
 
             # Return Player object - it has everything (state, metadata, group info, etc.)
+            if is_playing and _LOGGER.isEnabledFor(logging.DEBUG):
+                _LOGGER.debug(
+                    "Poll result for %s: state=%s, pos=%s, dur=%s, title='%s'",
+                    self.player.host,
+                    play_state,
+                    self.player.media_position,
+                    self.player.media_duration,
+                    self.player.media_title,
+                )
+            
             return {"player": self.player}
 
         except WiiMError as err:

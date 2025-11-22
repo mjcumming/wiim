@@ -159,34 +159,62 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             return
 
         # Get values from pywiim
-        position = player.media_position
-        duration = player.media_duration
+        new_position = player.media_position
+        # If duration is 0, return None (unknown) to avoid 00:00 display
+        new_duration = player.media_duration if player.media_duration else None
         current_state = self.state
 
         # Diagnostic logging for troubleshooting
-        if current_state == MediaPlayerState.PLAYING and (not duration or duration == 0):
+        if current_state == MediaPlayerState.PLAYING and (not new_duration or new_duration == 0):
             _LOGGER.warning(
                 "%s: PyWiim returned invalid duration! position=%s, duration=%s, state=%s, title=%s",
                 self.name,
-                position,
-                duration,
+                new_position,
+                new_duration,
                 current_state,
                 getattr(player, "media_title", "Unknown"),
             )
 
-        # Update position/duration
-        self._attr_media_position = position
-        self._attr_media_duration = duration
+        # Update duration (always update)
+        self._attr_media_duration = new_duration
 
-        # Update timestamp based on state (Sonos/LinkPlay pattern)
+        # Smart Position Update (Sonos logic)
+        # Prevent "jitter" by only updating timestamp if position deviates significantly
+        should_update_timestamp = False
+
         if current_state == MediaPlayerState.PLAYING:
-            # When playing, update timestamp to now
-            self._attr_media_position_updated_at = dt_util.utcnow()
+            if (
+                self._attr_media_position is not None
+                and self._attr_media_position_updated_at is not None
+                and new_position is not None
+            ):
+                # Calculate where we expect to be
+                time_delta = dt_util.utcnow() - self._attr_media_position_updated_at
+                expected_position = self._attr_media_position + time_delta.total_seconds()
+
+                # If deviation is significant (> 1.5s), force an update
+                # Otherwise, keep the old anchor to ensure smooth interpolation
+                if abs(expected_position - new_position) > 1.5:
+                    should_update_timestamp = True
+            else:
+                # No previous state, or new position is None -> Update
+                should_update_timestamp = True
+
+            if should_update_timestamp:
+                self._attr_media_position = new_position
+                self._attr_media_position_updated_at = dt_util.utcnow()
+
         elif current_state == MediaPlayerState.IDLE:
-            # When idle, clear timestamp
+            self._attr_media_position = None
             self._attr_media_position_updated_at = None
-        # When PAUSED/STOPPED: keep existing timestamp (it freezes)
-        
+
+        else:  # PAUSED or STOPPED
+            # Just update the static position
+            self._attr_media_position = new_position
+            # Freeze timestamp (don't update it, just keep the last one or let it be stale as it's unused in PAUSED)
+            # Actually, LinkPlay clears it on STOPPED. We can keep it as is or set to None if it makes sense.
+            # For PAUSED, we want to show the static position.
+
         # Update supported features (includes SEEK based on duration)
         self._update_supported_features()
 
@@ -280,7 +308,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not is_slave and self._is_eq_supported():
             features |= MediaPlayerEntityFeature.SELECT_SOUND_MODE
 
-        # Enable seek if we have duration and not a slave  
+        # Enable seek if we have duration and not a slave
         # Use _attr_media_duration (set during coordinator update) not property
         if not is_slave and self._attr_media_duration and self._attr_media_duration > 0:
             features |= MediaPlayerEntityFeature.SEEK
@@ -371,6 +399,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Set volume level 0..1."""
         try:
             await self.coordinator.player.set_volume(volume)
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
@@ -390,6 +419,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Mute/unmute volume."""
         try:
             await self.coordinator.player.set_mute(mute)
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
@@ -409,6 +439,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Start playback."""
         try:
             await self.coordinator.player.play()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to start playback: {err}") from err
 
@@ -416,6 +447,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Pause playback."""
         try:
             await self.coordinator.player.pause()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to pause playback: {err}") from err
 
@@ -423,6 +455,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Toggle play/pause."""
         try:
             await self.coordinator.player.media_play_pause()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to toggle play/pause: {err}") from err
 
@@ -442,6 +475,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 await player.pause()
             else:
                 await player.stop()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop playback: {err}") from err
 
@@ -449,6 +483,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Skip to next track."""
         try:
             await self.coordinator.player.next_track()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to skip to next track: {err}") from err
 
@@ -456,6 +491,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Skip to previous track."""
         try:
             await self.coordinator.player.previous_track()
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to skip to previous track: {err}") from err
 
@@ -601,6 +637,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.set_source(device_source)
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to select source '{source}': {err}") from err
 
@@ -769,6 +806,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             preset_num = int(media_id)
             try:
                 await self.coordinator.player.play_preset(preset_num)
+                await self.coordinator.async_request_refresh()
             except WiiMError as err:
                 raise HomeAssistantError(f"Failed to play preset: {err}") from err
             return
@@ -798,12 +836,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             if enqueue == MediaPlayerEnqueue.PLAY:
                 try:
                     await self.coordinator.player.play_url(media_id)
+                    await self.coordinator.async_request_refresh()
                 except WiiMError as err:
                     raise HomeAssistantError(f"Failed to play media immediately: {err}") from err
                 return
 
         try:
             await self.coordinator.player.play_url(media_id)
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play media: {err}") from err
 
@@ -1102,6 +1142,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.player.set_shuffle(shuffle)
             # pywiim updates Player state immediately and pushes event via on_state_changed callback
             # The callback triggers async_update_listeners() which notifies all entities automatically
+            # We also force a refresh to ensure UI update in case callback is delayed
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
 
@@ -1138,6 +1180,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.player.set_repeat(repeat.value)
             # pywiim updates Player state immediately and pushes event via on_state_changed callback
             # The callback triggers async_update_listeners() which notifies all entities automatically
+            # We also force a refresh to ensure UI update in case callback is delayed
+            await self.coordinator.async_request_refresh()
         except AttributeError as err:
             # Fallback if set_repeat not yet available in pywiim Player
             raise HomeAssistantError(
@@ -1200,6 +1244,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         try:
             # Normalize to lowercase (device API expects lowercase)
             await self.coordinator.player.set_eq_preset(sound_mode.lower())
+            await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to select sound mode: {err}") from err
 

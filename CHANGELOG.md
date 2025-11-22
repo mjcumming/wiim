@@ -2,6 +2,21 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.14] - 2024-11-21
+
+### Fixed
+
+- **Duration Display**: Fixed "00:00" duration issue by returning `None` when duration is 0 (unknown).
+- **Position Jitter**: Implemented Sonos-style "Smart Update" logic.
+  - Only updates `media_position_updated_at` timestamp if reported position deviates significantly (> 1.5s) from expected position.
+  - Prevents progress bar from jumping backward/forward due to network latency or polling jitter.
+  - Ensures smooth playback progress on web dashboard.
+- **Startup/State Transitions**: Improved handling of position updates during Play/Pause transitions and initial startup.
+
+### Added
+
+- **Debug Logging**: Enhanced coordinator logging to show position, duration, and play state on every poll when playing.
+
 ## [1.0.13] - 2024-11-21
 
 ### Fixed
@@ -15,7 +30,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Technical Details
 
 - Moved from `@property supported_features()` to `_update_supported_features()` method
-- Called during coordinator update to set `_attr_supported_features`  
+- Called during coordinator update to set `_attr_supported_features`
 - Base class @cached_property returns `_attr_supported_features`
 - SEEK enabled when `_attr_media_duration > 0`, disabled otherwise
 
