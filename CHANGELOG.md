@@ -4,6 +4,17 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+## [1.0.23] - 2025-11-22
+
+### Fixed
+
+- **Scene Restoration**: Fixed issue where scenes could not restore URLs that were playing when the scene was saved
+  - Added `media_content_id` property to track currently playing URLs
+  - URLs are now properly stored in entity state for scene restoration
+  - Works for both individual and group media player entities
+  - URLs are cleared appropriately when source changes, playback stops, or state becomes IDLE
+  - Resolves GitHub issue #116
+
 ## [1.0.22] - 2025-11-22
 
 ### Changed
