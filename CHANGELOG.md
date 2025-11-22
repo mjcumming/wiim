@@ -2,72 +2,13 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
-## [1.0.17] - 2025-11-22
-
-### Fixed
-
-- **Duration Flickering**: Fixed issue where duration would flicker to "00:00" during playback.
-  - Logic now preserves the last known valid duration if the device reports 0/None while playing.
-
-## [1.0.16] - 2025-11-22
-
-### Fixed
-
-- **Position Stability**: Reverted to robust "always update" strategy for position tracking.
-  - Removes "Smart Update" optimization that caused position runaway.
-  - Guarantees position and timestamp are always in sync.
-
-## [1.0.15] - 2025-11-22
-
-### Fixed
-
-- **Position Display**: Fixed bug where position would "run away" and exceed track duration.
-  - Fix: Ensure position and timestamp are ALWAYS updated together atomically.
-- **Duration Display**: Fixed "00:00" duration issue by returning `None` when duration is 0.
-
-## [1.0.14] - 2025-11-22
-
-### Fixed
-
-- **Duration Display**: Fixed "00:00" duration issue by returning `None` when duration is 0 (unknown).
-- **Position Jitter**: Implemented Sonos-style "Smart Update" logic (later reverted in 1.0.16).
-- **Startup/State Transitions**: Improved handling of position updates.
-
-### Added
-
-- **Debug Logging**: Enhanced coordinator logging.
-
-## [1.0.13] - 2025-11-22
-
-### Fixed
-
-- **Seek Controls**: Fixed seek controls not working.
-  - Solution: Update `_attr_supported_features` during coordinator update.
-
-## [1.0.12] - 2025-11-22
-
-### Added
-
-- **Diagnostic logging**: Added warnings when pywiim returns invalid duration values.
-
-## [1.0.11] - 2025-11-22
-
-### Fixed
-
-- **Property Mutation**: Fixed property mutation bug causing incorrect position/duration on web dashboard.
-  - Solution: Update `_attr` values during coordinator updates.
-
-## [1.0.10] - 2025-11-22
-
-### Fixed
-
-- **Media Position Display**: Fixed media position display discrepancy between iOS and web dashboard.
-  - Implemented Home Assistant best practice: integration now manages `media_position_updated_at` timestamp.
+## [1.0.18] - 2025-11-22
 
 ### Changed
 
-- **Requirements**: Updated to `pywiim>=2.1.0`.
-- **Architecture**: Simplified position tracking.
+- **Position and Duration Updates**: Ongoing work on position and duration tracking.
+  - Position and volume updates may or may not work correctly in the web UI.
+  - Further testing and refinement needed.
 
 ## [1.0.9] - 2024-11-21
 
