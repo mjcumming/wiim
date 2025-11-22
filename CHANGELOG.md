@@ -2,6 +2,22 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.12] - 2024-11-21
+
+### Added
+
+- **Diagnostic logging**: Added warnings when pywiim returns invalid duration values
+  - Logs position, duration, state, and title when duration is None/0 during playback
+  - Helps identify root cause of "duration=00:00" web dashboard issues
+  - See `DEBUGGING_DURATION_ISSUE.md` for troubleshooting guide
+
+### Note
+
+If you see duration showing **00:00** on the web dashboard:
+1. Enable debug logging for `custom_components.wiim`
+2. Look for "PyWiim returned invalid duration!" warnings in logs
+3. Report to pywiim library - this indicates pywiim is not properly parsing duration from the device
+
 ## [1.0.11] - 2024-11-21
 
 ### Fixed

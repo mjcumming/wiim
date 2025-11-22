@@ -28,7 +28,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import dt
 from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
@@ -158,13 +157,24 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             self._attr_media_position_updated_at = None
             self._attr_media_duration = None
             return
-
-        # Update position/duration
-        self._attr_media_position = player.media_position
-        self._attr_media_duration = player.media_duration
-
-        # Update timestamp based on state (Sonos/LinkPlay pattern)
+            
+        # Get values from pywiim
+        position = player.media_position
+        duration = player.media_duration
         current_state = self.state
+        
+        # Diagnostic logging for troubleshooting
+        if current_state == MediaPlayerState.PLAYING and (not duration or duration == 0):
+            _LOGGER.warning(
+                "%s: PyWiim returned invalid duration! position=%s, duration=%s, state=%s, title=%s",
+                self.name, position, duration, current_state, getattr(player, 'media_title', 'Unknown')
+            )
+        
+        # Update position/duration
+        self._attr_media_position = position
+        self._attr_media_duration = duration
+        
+        # Update timestamp based on state (Sonos/LinkPlay pattern)
         if current_state == MediaPlayerState.PLAYING:
             # When playing, update timestamp to now
             self._attr_media_position_updated_at = dt_util.utcnow()
