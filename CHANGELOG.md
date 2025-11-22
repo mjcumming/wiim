@@ -2,6 +2,20 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.20] - 2025-11-22
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.3
+  - Ensures compatibility with latest library features and fixes
+
+### Fixed
+
+- **Logging**: Removed unnecessary warning logs when playing streams without duration
+  - Streams (radio, live audio) don't have durations, which is expected behavior
+  - Removed warnings from both `media_player.py` and `group_media_player.py`
+  - Debug logging still captures this information for troubleshooting
+
 ## [1.0.19] - 2025-11-22
 
 ### Changed

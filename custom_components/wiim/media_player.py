@@ -190,17 +190,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             new_duration,
         )
 
-        # Diagnostic logging for troubleshooting
-        if current_state == MediaPlayerState.PLAYING and (not new_duration or new_duration == 0):
-            _LOGGER.warning(
-                "%s: PyWiim returned invalid duration! position=%s, duration=%s, state=%s, title=%s",
-                self.name,
-                new_position,
-                new_duration,
-                current_state,
-                getattr(player, "media_title", "Unknown"),
-            )
-
         # Update duration (keep existing if new is invalid during playback)
         if new_duration:
             self._attr_media_duration = new_duration
