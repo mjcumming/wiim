@@ -1,21 +1,15 @@
 {
   "domain": "wiim",
   "name": "WiiM",
-  "codeowners": [
-    "@mjcumming"
-  ],
+  "codeowners": ["@mjcumming"],
   "config_flow": true,
-  "dependencies": [
-    "http"
-  ],
+  "dependencies": ["http"],
   "documentation": "https://github.com/mjcumming/wiim",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
   "quality_scale": "silver",
-  "requirements": [
-    "pywiim>=2.1.10"
-  ],
+  "requirements": ["pywiim>=2.1.15"],
   "ssdp": [
     {
       "manufacturer": "WiiM",
@@ -43,7 +37,7 @@
       "st": "urn:schemas-upnp-org:service:ConnectionManager:1"
     }
   ],
-  "version": "1.0.23",
+  "version": "1.0.25",
   "zeroconf": [
     {
       "type": "_linkplay._tcp.local."

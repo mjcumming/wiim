@@ -4,6 +4,36 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+## [1.0.25] - 2025-11-23
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.15
+  - pywiim 2.1.15 now handles audio output state refresh internally after failed Bluetooth connections
+  - Ensures compatibility with latest library features and fixes
+
+### Added
+
+- **Device Info Enhancements**: Improved device information display
+  - IP address now shown in Serial Number field
+  - MAC address added as device connection for better device identification
+  - Device name no longer includes IP address (cleaner display)
+
+## [1.0.24] - 2025-11-23
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.11
+  - These fixes were implemented in pywiim 2.1.11:
+    - Headphone output now appears in available_output_modes for WiiM Ultra (GitHub issues #86, #117)
+    - Preset names now populate automatically with periodic refresh every 60 seconds (GitHub issue #118)
+    - EQ preset change detection automatically fetches full EQ info when preset changes
+    - Monitor CLI improvements: debug info for all roles, preset stations display
+    - Simplified role detection logic using `group` field exclusively
+    - Improved audio output selection behavior
+    - Clear multiroom source when device is not a slave
+  - Ensures compatibility with latest library features and fixes
+
 ## [1.0.23] - 2025-11-22
 
 ### Fixed

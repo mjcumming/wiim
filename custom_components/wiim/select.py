@@ -7,7 +7,9 @@ import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .data import Speaker, get_speaker_from_config_entry
 from .entity import WiimEntity
@@ -107,32 +109,40 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
         Returns the currently selected output mode, which must match one of the
         options in the available_outputs list. Returns None if output status
         is not available or doesn't match any option.
+
+        Implementation follows pywiim integration guide pattern:
+        https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md#audio-output-selection
         """
         player = self.coordinator.data.get("player")
         if not player:
             return None
 
         # Get available options to ensure we return a valid value
-        available = player.available_outputs
+        # Per pywiim guide: available_outputs is a property on player
+        available = getattr(player, "available_outputs", None)
         if not available:
             # No outputs available (device may not support or data not loaded)
             # pywiim handles fetching automatically via player.refresh()
             return None
 
         # Check if BT output is active and which device is connected
-        if player.is_bluetooth_output_active:
-            for device in player.bluetooth_output_devices:
+        # Per pywiim guide: Check is_bluetooth_output_active first
+        is_bt_active = getattr(player, "is_bluetooth_output_active", False)
+        if is_bt_active:
+            # Find the specific connected BT device from bluetooth_output_devices
+            # Note: We only show specific BT devices, not generic "Bluetooth Out"
+            # (per pywiim guide: "Generic 'Bluetooth Out' is removed when specific BT devices are available")
+            bt_devices = getattr(player, "bluetooth_output_devices", [])
+            for device in bt_devices:
                 if device.get("connected"):
                     bt_option = f"BT: {device['name']}"
                     # Ensure this option exists in available_outputs
                     if bt_option in available:
                         return bt_option
-            # Fall back to generic "Bluetooth Out" if no specific device found
-            if "Bluetooth Out" in available:
-                return "Bluetooth Out"
 
         # Get current hardware output mode
-        current_mode = player.audio_output_mode
+        # Per pywiim guide: Use player.audio_output_mode property
+        current_mode = getattr(player, "audio_output_mode", None)
         if current_mode and current_mode in available:
             return current_mode
 
@@ -143,14 +153,57 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                 if option.lower() == current_mode.lower():
                     return option
 
-        # If still no match, return None (will show as "Unknown" in HA)
-        # pywiim handles fetching automatically - no manual refresh needed
+        # If still no match, log debug to help diagnose (not warning - may be normal during startup)
+        _LOGGER.debug(
+            "[%s] Current audio output mode '%s' from pywiim doesn't match any option in available_outputs=%s. "
+            "This may indicate audio output status hasn't been fetched yet or a format mismatch.",
+            self.speaker.name,
+            current_mode,
+            available,
+        )
         return None
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected output."""
         player = self.coordinator.data.get("player")
         if not player:
-            return
-        await player.audio.select_output(option)
-        # State updates automatically via callback - no manual refresh needed
+            raise HomeAssistantError("Player is not available")
+
+        try:
+            await player.audio.select_output(option)
+            # State updates automatically via callback - no manual refresh needed
+        except (WiiMConnectionError, WiiMTimeoutError) as err:
+            # Connection/timeout errors are transient
+            _LOGGER.warning(
+                "Connection issue selecting audio output '%s' on %s: %s. The device may be temporarily unreachable.",
+                option,
+                self.speaker.name,
+                err,
+            )
+            raise HomeAssistantError(
+                f"Unable to select audio output '{option}' on {self.speaker.name}: device temporarily unreachable"
+            ) from err
+        except WiiMError as err:
+            # Check if it's a Bluetooth connection error (device returned invalid JSON)
+            error_str = str(err).lower()
+            if "bluetooth" in error_str or "connectbta2dp" in error_str or "invalid json" in error_str:
+                _LOGGER.warning(
+                    "Bluetooth connection error selecting audio output '%s' on %s: %s. "
+                    "The device may not support this Bluetooth device or it may be out of range.",
+                    option,
+                    self.speaker.name,
+                    err,
+                )
+                raise HomeAssistantError(
+                    f"Failed to connect to Bluetooth device '{option}' on {self.speaker.name}. "
+                    "The device may not be available or may not support this Bluetooth connection."
+                ) from err
+            # Other errors
+            _LOGGER.error(
+                "Failed to select audio output '%s' on %s: %s",
+                option,
+                self.speaker.name,
+                err,
+                exc_info=True,
+            )
+            raise HomeAssistantError(f"Failed to select audio output '{option}': {err}") from err

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.device_registry import DeviceInfo as HADeviceInfo
 
 from .const import DOMAIN
@@ -136,7 +137,8 @@ class Speaker:
         Device Info display:
         - Hardware: Device firmware version (e.g., "Linkplay 4.8.731953")
         - Software: PyWiiM library version (e.g., "pywiim 2.0.17")
-        - Serial Number: Device MAC address
+        - Serial Number: Device IP address
+        - Connections: Device MAC address
         """
         dev_reg = dr.async_get(self.hass)
         identifiers = {(DOMAIN, self.uuid)}
@@ -149,6 +151,11 @@ class Speaker:
         except (ImportError, AttributeError):
             pywiim_version = "pywiim unknown"
 
+        # Build connections set with MAC address if available
+        connections: set[tuple[str, str]] = set()
+        if self.mac_address:
+            connections.add((CONNECTION_NETWORK_MAC, self.mac_address))
+
         dev_reg.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers=identifiers,
@@ -157,7 +164,8 @@ class Speaker:
             model=self.model,
             hw_version=self.firmware,  # Device firmware (LinkPlay)
             sw_version=pywiim_version,  # Integration library version
-            serial_number=self.mac_address,  # MAC address as serial
+            serial_number=self.ip_address,  # IP address as serial number
+            connections=connections if connections else None,  # MAC address as connection
         )
 
         self.device_info = HADeviceInfo(
@@ -167,7 +175,8 @@ class Speaker:
             model=self.model,
             hw_version=self.firmware,  # Device firmware (LinkPlay)
             sw_version=pywiim_version,  # Integration library version
-            serial_number=self.mac_address,  # MAC address as serial
+            serial_number=self.ip_address,  # IP address as serial number
+            connections=connections if connections else None,  # MAC address as connection
         )
 
 
