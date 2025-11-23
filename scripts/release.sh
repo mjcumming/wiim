@@ -155,10 +155,7 @@ main() {
         print_success "Updated manifest.json to version ${NEW_VERSION}"
 
         echo ""
-        print_step "Step 4: Updating CHANGELOG.md..."
-        echo "Please update CHANGELOG.md manually with release notes for version ${NEW_VERSION}"
-        echo "Press Enter when done..."
-        read -r
+        print_step "Step 4: CHANGELOG.md updated automatically"
     else
         print_warning "Skipping version updates (no version change)"
     fi

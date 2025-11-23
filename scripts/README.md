@@ -202,6 +202,7 @@ make build            # Build integration package
    ```
 
    The release script automatically:
+
    - Runs linting checks
    - Runs all tests
    - Updates version in manifest.json
