@@ -1,0 +1,79 @@
+{
+  "host": "192.168.1.115",
+  "port": 443,
+  "timestamp": "2025-11-25T18:46:29.336581",
+  "source": "spotify",
+  "properties": {
+    "source": "spotify",
+    "play_state": "play",
+    "media_title": "In the Flesh?",
+    "media_artist": "Pink Floyd",
+    "shuffle": true,
+    "shuffle_supported": true,
+    "repeat": "off",
+    "repeat_supported": true,
+    "loop_mode": null
+  },
+  "shuffle_test": {
+    "supported": true,
+    "set_true": {
+      "success": false,
+      "error": "Invalid loop mode: 3. Valid values: 0,1,2,4,5,6"
+    },
+    "set_false": {
+      "success": true,
+      "state_after": true,
+      "changed": false
+    },
+    "errors": [
+      "set_shuffle(True): Invalid loop mode: 3. Valid values: 0,1,2,4,5,6"
+    ],
+    "initial_state": true
+  },
+  "repeat_test": {
+    "supported": true,
+    "initial_state": "off",
+    "modes": {
+      "off": {
+        "success": false,
+        "error": "Invalid loop mode: 3. Valid values: 0,1,2,4,5,6",
+        "is_loop_mode_error": true
+      },
+      "one": {
+        "success": true,
+        "state_after": "off",
+        "loop_mode_after": null,
+        "state_changed": false
+      },
+      "all": {
+        "success": true,
+        "state_after": "off",
+        "loop_mode_after": null,
+        "state_changed": false
+      }
+    },
+    "errors": [
+      "set_repeat('off'): Invalid loop mode: 3. Valid values: 0,1,2,4,5,6"
+    ],
+    "loop_mode_observed": 3
+  },
+  "summary": {
+    "source": "spotify",
+    "shuffle_works": false,
+    "shuffle_errors": [
+      "set_shuffle(True): Invalid loop mode: 3. Valid values: 0,1,2,4,5,6"
+    ],
+    "repeat_works": false,
+    "repeat_partial": true,
+    "repeat_modes": {
+      "off": false,
+      "one": true,
+      "all": true
+    },
+    "repeat_errors": [
+      "set_repeat('off'): Invalid loop mode: 3. Valid values: 0,1,2,4,5,6"
+    ],
+    "loop_mode": 3,
+    "loop_mode_invalid": true
+  }
+}

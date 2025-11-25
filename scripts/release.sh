@@ -210,6 +210,8 @@ main() {
         echo "  1. Go to https://github.com/mjcumming/wiim/releases"
         echo "  2. Create a new release from tag v${NEW_VERSION}"
         echo "  3. Copy relevant CHANGELOG.md entries to release notes"
+        echo ""
+        echo "For diagnostic tools (monitor_cli), see: scripts/DIAGNOSTIC-GUIDE.md"
     fi
 }
 
