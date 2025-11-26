@@ -59,10 +59,20 @@ For troubleshooting device issues, use pywiim's `monitor_cli` diagnostic tool. T
 
 **Quick Start:**
 
+⚠️ **Note:** The Home Assistant Terminal add-on does not include Python. Use one of these methods:
+
+**Via SSH (Home Assistant Container):**
+
 ```bash
-# In Home Assistant Terminal:
-wget -q https://raw.githubusercontent.com/mjcumming/pywiim/main/scripts/monitor_cli.py -O /tmp/monitor_cli.py
-python3 /tmp/monitor_cli.py <device_ip>
+docker exec -it homeassistant wget -q https://github.com/mjcumming/pywiim/raw/refs/heads/main/pywiim/cli/monitor_cli.py -O /tmp/monitor_cli.py
+docker exec -it homeassistant python3 /tmp/monitor_cli.py <device_ip>
+```
+
+**Locally on your computer:**
+
+```bash
+wget -q https://github.com/mjcumming/pywiim/raw/refs/heads/main/pywiim/cli/monitor_cli.py -O monitor_cli.py
+python3 monitor_cli.py <device_ip>
 ```
 
 **Full Documentation:** See [`DIAGNOSTIC-GUIDE.md`](./DIAGNOSTIC-GUIDE.md) for complete instructions including:
