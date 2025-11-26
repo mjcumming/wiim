@@ -4,6 +4,38 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+## [1.0.26] - 2025-11-25
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.17
+  - pywiim 2.1.17 includes critical fixes for EQ, shuffle, and repeat settings
+  - Improved shuffle and repeat mode detection and control across different streaming services
+  - Enhanced EQ preset handling and state synchronization
+  - Ensures compatibility with latest library features and fixes
+
+### Fixed
+
+- **Shuffle and Repeat Controls**: Fixed shuffle and repeat mode functionality across streaming services
+
+  - **Spotify**: Shuffle and repeat modes now work correctly
+  - **Amazon Music**: Shuffle and repeat modes now work correctly
+  - **AirPlay**: Shuffle and repeat modes are not available from the WiiM device (expected behavior - AirPlay protocol limitation)
+  - Improved service-specific capability detection for better UI control availability
+  - Enhanced state synchronization when shuffle/repeat modes change
+
+- **EQ Settings**: Fixed equalizer preset selection and state management
+  - Improved EQ preset detection and application
+  - Enhanced state updates when EQ settings change
+  - Better error handling for devices without EQ support
+
+### Testing
+
+- Verified shuffle and repeat functionality with:
+  - **Spotify**: ✅ Shuffle and repeat modes work correctly
+  - **Amazon Music**: ✅ Shuffle and repeat modes work correctly
+  - **AirPlay**: ⚠️ Shuffle and repeat modes not available (protocol limitation)
+
 ## [1.0.25] - 2025-11-23
 
 ### Changed
