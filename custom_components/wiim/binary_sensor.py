@@ -76,14 +76,16 @@ class WiiMConnectivityBinarySensor(WiimEntity, BinarySensorEntity):
             "device_uuid": self.speaker.uuid,
         }
 
-        # Add defensive polling info if available
-        polling_info = self.speaker.coordinator.data.get("polling", {})
-        if polling_info:
+        # Add defensive polling info (computed from coordinator/player state)
+        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
+        if player and self.speaker.coordinator.update_interval:
+            polling_interval = self.speaker.coordinator.update_interval.total_seconds()
+            play_state = getattr(player, "play_state", None) or ""
+            is_playing = play_state.lower() in ("play", "playing", "load")
             attrs.update(
                 {
-                    "is_playing": polling_info.get("is_playing"),
-                    "polling_interval": polling_info.get("interval"),
-                    "api_capabilities": polling_info.get("api_capabilities", {}),
+                    "is_playing": is_playing,
+                    "polling_interval": polling_interval,
                 }
             )
 

@@ -9,20 +9,19 @@ from typing import Any
 
 from homeassistant.components import media_source
 from homeassistant.components.media_player import (
+    ATTR_MEDIA_ANNOUNCE,
     ATTR_MEDIA_ENQUEUE,
     BrowseError,
     BrowseMedia,
+    MediaClass,
     MediaPlayerEnqueue,
     MediaPlayerEntity,
-)
-from homeassistant.components.media_player.browse_media import async_process_play_media_url
-from homeassistant.components.media_player.const import (
-    MediaClass,
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
     RepeatMode,
 )
+from homeassistant.components.media_player.browse_media import async_process_play_media_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -828,6 +827,37 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not media_id:
             raise HomeAssistantError("media_id cannot be empty")
 
+        # Check for announce parameter - uses device's built-in playPromptUrl endpoint
+        # The device firmware automatically:
+        # - Lowers current playback volume
+        # - Plays the notification audio
+        # - Restores volume after completion
+        # No state management needed - device handles it all
+        announce = kwargs.get(ATTR_MEDIA_ANNOUNCE, False)
+        if announce:
+            # Handle media_source resolution for announcements
+            if media_source.is_media_source_id(media_id):
+                original_media_id = media_id
+                try:
+                    sourced_media = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
+                    media_id = sourced_media.url
+                    if not media_id:
+                        raise HomeAssistantError(f"Media source resolved to empty URL: {original_media_id}")
+                    media_id = async_process_play_media_url(self.hass, media_id)
+                except Exception as err:
+                    _LOGGER.error("Failed to resolve media source for announcement: %s", err, exc_info=True)
+                    raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
+
+            # Use device's built-in notification endpoint (playPromptUrl)
+            # Device automatically handles volume ducking and restoration
+            try:
+                _LOGGER.debug("[%s] Playing notification via device firmware: %s", self.name, media_id)
+                await self.coordinator.player.play_notification(media_id)
+                await self.coordinator.async_request_refresh()
+            except WiiMError as err:
+                raise HomeAssistantError(f"Failed to play notification: {err}") from err
+            return
+
         # Handle preset numbers (presets don't support queue management)
         if media_type == "preset":
             preset_num = int(media_id)
@@ -966,11 +996,71 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # Presets directory - show individual presets (1-20)
         if media_content_type == "presets":
             preset_children: list[BrowseMedia] = []
+            player = self._get_player()
+
+            # Try to get preset names from pywiim if available
+            preset_names: dict[int, str] = {}
+            if player:
+                # Check if pywiim provides preset information
+                # First, try to get all presets at once (more efficient)
+                if hasattr(player, "presets"):
+                    presets = getattr(player, "presets", None)
+                    if isinstance(presets, dict):
+                        for preset_num, preset_info in presets.items():
+                            if isinstance(preset_num, int) and 1 <= preset_num <= 20:
+                                if isinstance(preset_info, dict) and "name" in preset_info:
+                                    preset_names[preset_num] = preset_info["name"]
+                                elif hasattr(preset_info, "name"):
+                                    preset_names[preset_num] = preset_info.name
+                    elif isinstance(presets, list):
+                        for idx, preset_info in enumerate(presets, start=1):
+                            if 1 <= idx <= 20:
+                                if isinstance(preset_info, dict) and "name" in preset_info:
+                                    preset_names[idx] = preset_info["name"]
+                                elif hasattr(preset_info, "name"):
+                                    preset_names[idx] = preset_info.name
+                # Fallback: try get_preset method if available (slower, but works if presets attr not available)
+                elif hasattr(player, "get_preset"):
+                    # Fetch preset names for presets 1-20
+                    # Use asyncio.gather for parallel fetching if possible
+                    try:
+
+                        async def fetch_preset(preset_num: int) -> tuple[int, str | None]:
+                            try:
+                                preset_info = await player.get_preset(preset_num)
+                                if preset_info and hasattr(preset_info, "name"):
+                                    return (preset_num, preset_info.name)
+                                elif preset_info and isinstance(preset_info, dict) and "name" in preset_info:
+                                    return (preset_num, preset_info["name"])
+                            except Exception:
+                                pass
+                            return (preset_num, None)
+
+                        # Fetch all presets in parallel
+                        results = await asyncio.gather(*[fetch_preset(i) for i in range(1, 21)])
+                        for preset_num, preset_name in results:
+                            if preset_name:
+                                preset_names[preset_num] = preset_name
+                    except Exception:
+                        # If parallel fetching fails, fall back to sequential
+                        for preset_num in range(1, 21):
+                            try:
+                                preset_info = await player.get_preset(preset_num)
+                                if preset_info and hasattr(preset_info, "name"):
+                                    preset_names[preset_num] = preset_info.name
+                                elif preset_info and isinstance(preset_info, dict) and "name" in preset_info:
+                                    preset_names[preset_num] = preset_info["name"]
+                            except Exception:
+                                # If get_preset fails or preset doesn't exist, use fallback
+                                pass
+
             # Show presets 1-20 (device dependent, but max is 20 per service definition)
             for preset_num in range(1, 21):
+                # Use actual preset name if available, otherwise fallback to "Preset N"
+                preset_title = preset_names.get(preset_num, f"Preset {preset_num}")
                 preset_children.append(
                     BrowseMedia(
-                        title=f"Preset {preset_num}",
+                        title=preset_title,
                         media_class=MediaClass.MUSIC,
                         media_content_id=str(preset_num),
                         media_content_type="preset",

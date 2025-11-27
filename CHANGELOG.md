@@ -4,6 +4,28 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+### Added
+
+- **Announcement Support**: Added support for Home Assistant's `announce` parameter in `play_media`
+  - Uses device's built-in `playPromptUrl` endpoint via `player.play_notification()`
+  - Device firmware automatically handles volume ducking and restoration
+  - Works with NETWORK, USB, and AirPlay sources
+  - Resolves GitHub issue #124
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.20
+  - Ensures compatibility with latest library features and fixes
+
+### Fixed
+
+- **Preset Names**: Fixed preset name listing in media browser to display actual preset names from device
+
+  - Presets now show their configured names (e.g., "BBC Radio 1") instead of generic "Preset 1", "Preset 2", etc.
+  - Falls back to generic names if preset names are not available from pywiim
+  - Supports both `presets` attribute and `get_preset()` method from pywiim
+  - Resolves GitHub issue #122
+
 ## [1.0.28] - 2025-01-27
 
 ### Changed

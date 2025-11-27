@@ -62,11 +62,13 @@ class WiiMEqualizerSwitch(WiimEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if equalizer is enabled."""
-        if not self.speaker.coordinator.data:
+        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
+        if not player:
             return None
 
-        eq_info = self.speaker.coordinator.data.get("eq", {})
-        return bool(eq_info.get("enabled", False))
+        # Get EQ enabled status from player property (v1.0+ structure)
+        eq_enabled = getattr(player, "eq_enabled", None)
+        return bool(eq_enabled) if eq_enabled is not None else None
 
     async def async_turn_on(self, **kwargs) -> None:
         """Enable the equalizer.

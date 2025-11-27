@@ -105,6 +105,14 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "pywiim_version": _get_pywiim_version(),
         }
 
+        # Get player for group_members_count calculation
+        player = speaker.coordinator.data.get("player") if speaker.coordinator.data else None
+        group_members_count = 0
+        if player and player.is_master and getattr(player, "group", None):
+            all_players = getattr(player.group, "all_players", [])
+            # Subtract 1 to exclude the master itself
+            group_members_count = len(all_players) - 1 if all_players else 0
+
         return {
             "entry_data": async_redact_data(entry.data, TO_REDACT),
             "entry_options": async_redact_data(entry.options, TO_REDACT),
@@ -116,9 +124,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 "firmware": speaker.firmware,
                 "role": speaker.role,
                 "available": speaker.available,
-                "group_members_count": len(speaker.coordinator.data.get("multiroom", {}).get("slave_list", []))
-                if speaker.coordinator.data
-                else 0,
+                "group_members_count": group_members_count,
             },
         }
 
