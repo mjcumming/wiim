@@ -53,34 +53,16 @@ jobs:
             echo "Version unchanged"
           fi
 
-  tests:
+  # HACS validation - only needed for releases
+  # Note: Tests and linting are handled by the CI workflow, which runs on every push.
+  # This workflow only runs when manifest.json changes, so CI will have already validated the code.
+  hacs-validation:
     needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install test requirements
-        run: |
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir -r requirements_test.txt
-
-      - name: Ruff lint
-        run: |
-          ruff check custom_components/wiim --line-length 120
-
-      - name: Flake8 lint
-        run: |
-          flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
-
-      - name: Run pytest
-        run: |
-          pytest tests/ --cov=custom_components/wiim --cov-report=xml
 
       # --- HACS repository validation ---------------------------------------------------
       # Validate that the repository follows all rules required by HACS.
@@ -94,7 +76,7 @@ jobs:
           ignore: "topics brands"
 
   release:
-    needs: [check-version, tests]
+    needs: [check-version, hacs-validation]
     if: needs.check-version.outputs.version-changed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:

@@ -68,6 +68,7 @@ class TestWiiMConnectivityBinarySensor:
 
     def test_connectivity_sensor_attributes_with_polling_info(self):
         """Test connectivity sensor attributes when polling info is available."""
+        from datetime import timedelta
         from custom_components.wiim.binary_sensor import WiiMConnectivityBinarySensor
 
         speaker = MagicMock()
@@ -76,9 +77,14 @@ class TestWiiMConnectivityBinarySensor:
         speaker.ip = "192.168.1.100"
         speaker.available = True
         speaker.coordinator = MagicMock()
-        speaker.coordinator.data = {
-            "polling": {"is_playing": True, "interval": 5, "api_capabilities": {"statusex_supported": True}}
-        }
+
+        # Mock Player object with play_state
+        player = MagicMock()
+        player.play_state = "play"
+
+        # Set coordinator data with player object (matching actual coordinator structure)
+        speaker.coordinator.data = {"player": player}
+        speaker.coordinator.update_interval = timedelta(seconds=5)
 
         sensor = WiiMConnectivityBinarySensor(speaker)
         attrs = sensor.extra_state_attributes
@@ -87,7 +93,6 @@ class TestWiiMConnectivityBinarySensor:
         assert attrs["device_uuid"] == "test-speaker-uuid"
         assert attrs["is_playing"] is True
         assert attrs["polling_interval"] == 5
-        assert attrs["api_capabilities"]["statusex_supported"] is True
 
     def test_connectivity_sensor_attributes_with_failure_count(self):
         """Test connectivity sensor attributes when failure count is available."""
