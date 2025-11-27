@@ -98,6 +98,8 @@ jobs:
 
       - name: Check if release already exists
         id: release-check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view "v${{ needs.check-version.outputs.version }}" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -142,11 +144,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES: ${{ steps.changelog.outputs.changelog }}
         run: |
+          # Double-check that release doesn't exist before creating
+          if gh release view "v${{ needs.check-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "Release v${{ needs.check-version.outputs.version }} already exists, skipping creation"
+            exit 0
+          fi
           gh release create "v${{ needs.check-version.outputs.version }}" \
             --title "WiiM Audio v${{ needs.check-version.outputs.version }}" \
             --notes "$RELEASE_NOTES" \
             --latest \
-            wiim.zip
+            wiim.zip || {
+              if gh release view "v${{ needs.check-version.outputs.version }}" >/dev/null 2>&1; then
+                echo "Release already exists (created by another process), continuing..."
+                exit 0
+              else
+                echo "Failed to create release"
+                exit 1
+              fi
+            }
 
       - name: Success notification
         if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
