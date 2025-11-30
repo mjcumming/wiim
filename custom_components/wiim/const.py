@@ -14,6 +14,7 @@ DOMAIN = "wiim"
 CONF_VOLUME_STEP = "volume_step"
 CONF_VOLUME_STEP_PERCENT = "volume_step_percent"
 CONF_ENABLE_MAINTENANCE_BUTTONS = "enable_maintenance_buttons"
+CONF_ENABLE_NETWORK_MONITORING = "enable_network_monitoring"
 
 # HA-specific defaults (not from pywiim)
 DEFAULT_VOLUME_STEP = 0.05

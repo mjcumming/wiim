@@ -14,7 +14,7 @@
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
   "quality_scale": "silver",
   "requirements": [
-    "pywiim>=2.1.24"
+    "pywiim>=2.1.26"
   ],
   "ssdp": [
     {

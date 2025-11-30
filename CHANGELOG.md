@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.30] - 2025-11-30
+
+### Changed
+
+- Release version 1.0.30
+
+
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
 ## [Unreleased]
@@ -8,15 +15,16 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 - **Announcement Support**: Added support for Home Assistant's `announce` parameter in `play_media`
   - Uses device's built-in `playPromptUrl` endpoint via `player.play_notification()`
-  - Device firmware automatically handles volume ducking and restoration
   - Works with NETWORK, USB, and AirPlay sources
-  - Resolves GitHub issue #124
 
 ### Changed
 
-- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.24
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.26
 
-  - Ensures compatibility with latest library features and fixes
+  - Adds support for Audio Pro Gen1 device grouping operations (Wi-Fi Direct mode)
+  - pywiim now automatically detects firmware version and selects appropriate grouping mode
+  - Gen1 devices (A26, C10, C5a) with firmware < v4.2.8020 now supported via legacy `ConnectMasterAp` command
+  - **Note**: Gen1 Audio Pro support implemented following legacy code patterns but not tested due to lack of hardware
 
 - **Code Simplification**: Removed unused platform entities and configuration options
 
