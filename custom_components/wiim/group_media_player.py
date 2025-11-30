@@ -20,6 +20,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
+from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
 from .data import Speaker
 from .entity import WiimEntity
 
@@ -252,6 +253,18 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return None
         # Use pywiim's group.is_muted property (True only if ALL devices are muted)
         return getattr(group, "is_muted", None)
+
+    @property
+    def volume_step(self) -> float:
+        """Return the step to be used by the volume_up and volume_down services.
+
+        Reads the configured volume step from the config entry options.
+        Defaults to 5% (0.05) if not configured.
+        """
+        if hasattr(self, "speaker") and hasattr(self.speaker, "config_entry"):
+            volume_step = self.speaker.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+            return float(volume_step)
+        return DEFAULT_VOLUME_STEP
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level for all group members proportionally.

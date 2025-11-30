@@ -45,11 +45,23 @@ async def async_setup_entry(
     entities.append(WiiMInputSensor(speaker))
 
     # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
-    # Only create if device supports audio output modes
-    # Access capabilities from coordinator where they're properly stored
-    capabilities = getattr(speaker.coordinator, "_capabilities", {})
-    if capabilities:
-        supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
+    # Use same capability detection logic as select entity (audio output mode selector)
+    # Determine capabilities safely. Prefer client.capabilities if it is a dict,
+    # otherwise use coordinator._capabilities if it is a dict. Avoid treating
+    # MagicMock attributes as truthy capability containers.
+    capabilities = None
+
+    client = getattr(speaker.coordinator, "client", None)
+    client_capabilities = getattr(client, "capabilities", None)
+    if isinstance(client_capabilities, dict):
+        capabilities = client_capabilities
+    else:
+        coordinator_capabilities = getattr(speaker.coordinator, "_capabilities", None)
+        if isinstance(coordinator_capabilities, dict):
+            capabilities = coordinator_capabilities
+
+    if isinstance(capabilities, dict):
+        supports_audio_output = bool(capabilities.get("supports_audio_output", False))
         if supports_audio_output:
             entities.append(WiiMBluetoothOutputSensor(speaker))
             _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")
@@ -60,7 +72,8 @@ async def async_setup_entry(
             )
     else:
         if capabilities is None:
-            return []
+            # No capabilities available - don't create sensor (same as select entity behavior)
+            _LOGGER.debug("Skipping Bluetooth output sensor - capabilities not available")
 
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))

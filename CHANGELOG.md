@@ -14,8 +14,15 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ### Changed
 
-- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.20
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.24
+
   - Ensures compatibility with latest library features and fixes
+
+- **Code Simplification**: Removed unused platform entities and configuration options
+
+- **Documentation**: Updated FAQ with real-time monitoring instructions
+  - Added instructions for using `pywiim.cli.monitor_cli` for device monitoring
+  - Updated diagnostic download instructions with correct UI paths
 
 ### Fixed
 
@@ -25,6 +32,19 @@ All notable changes to unified WiiM Audio integration will be documented in this
   - Falls back to generic names if preset names are not available from pywiim
   - Supports both `presets` attribute and `get_preset()` method from pywiim
   - Resolves GitHub issue #122
+
+### Testing
+
+- **Comprehensive Test Coverage**: Significantly expanded test suite to improve code quality and prevent regressions
+  - Increased overall test coverage from 74% to 78% (target: 80%)
+  - Added 30+ new tests covering critical features and edge cases
+  - **Diagnostics**: Added tests for config entry diagnostics, device diagnostics, and error handling (88% coverage)
+  - **Data Helpers**: Added tests for `find_speaker_by_uuid`, `find_speaker_by_ip`, and `get_all_speakers` (89% coverage)
+  - **Config Flow**: Added tests for missing device step and discovery confirm step (62% coverage)
+  - **Init Integration**: Added tests for capability detection, cached endpoint handling, and service registration
+  - **Sensors**: Added tests for audio quality sensor and Bluetooth output sensor (79% coverage)
+  - **System Health**: Enhanced tests for health checks and multiroom counting (98% coverage)
+  - All 371 tests passing with comprehensive coverage of core functionality
 
 ## [1.0.28] - 2025-01-27
 

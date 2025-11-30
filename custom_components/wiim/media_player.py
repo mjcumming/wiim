@@ -30,7 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
-from .const import DOMAIN
+from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
 from .data import Speaker, find_speaker_by_uuid, get_speaker_from_config_entry
 from .entity import WiimEntity
 from .group_media_player import WiiMGroupMediaPlayer
@@ -381,6 +381,18 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Return volume level 0..1 (already converted by Player)."""
         player = self._get_player()
         return player.volume_level if player else None
+
+    @property
+    def volume_step(self) -> float:
+        """Return the step to be used by the volume_up and volume_down services.
+
+        Reads the configured volume step from the config entry options.
+        Defaults to 5% (0.05) if not configured.
+        """
+        if hasattr(self, "speaker") and hasattr(self.speaker, "config_entry") and self.speaker.config_entry is not None:
+            volume_step = self.speaker.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+            return float(volume_step)
+        return DEFAULT_VOLUME_STEP
 
     @property
     def is_volume_muted(self) -> bool | None:

@@ -21,7 +21,6 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pywiim.discovery import DiscoveredDevice, discover_devices, validate_device
 
 from .const import (
-    CONF_DEBUG_LOGGING,
     CONF_ENABLE_MAINTENANCE_BUTTONS,
     CONF_VOLUME_STEP,
     CONF_VOLUME_STEP_PERCENT,
@@ -411,36 +410,43 @@ class WiiMOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle options flow."""
-        if user_input is not None:
-            options_data = {}
+        try:
+            if user_input is not None:
+                options_data = {}
 
-            # Volume step: convert from percentage (UI) to decimal (internal)
-            if CONF_VOLUME_STEP_PERCENT in user_input:
-                options_data[CONF_VOLUME_STEP] = user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
+                # Volume step: convert from percentage (UI) to decimal (internal)
+                if CONF_VOLUME_STEP_PERCENT in user_input:
+                    options_data[CONF_VOLUME_STEP] = user_input[CONF_VOLUME_STEP_PERCENT] / 100.0
 
-            # Feature toggles
-            if CONF_ENABLE_MAINTENANCE_BUTTONS in user_input:
-                options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[CONF_ENABLE_MAINTENANCE_BUTTONS]
-            if CONF_DEBUG_LOGGING in user_input:
-                options_data[CONF_DEBUG_LOGGING] = user_input[CONF_DEBUG_LOGGING]
+                # Feature toggles
+                if CONF_ENABLE_MAINTENANCE_BUTTONS in user_input:
+                    options_data[CONF_ENABLE_MAINTENANCE_BUTTONS] = user_input[CONF_ENABLE_MAINTENANCE_BUTTONS]
 
-            return self.async_create_entry(title="", data=options_data)
+                return self.async_create_entry(title="", data=options_data)
 
-        # Populate form with current or default values
-        current_volume_step_decimal = self.entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
-        volume_step_percent = int(current_volume_step_decimal * 100)
+            # Populate form with current or default values
+            # Safely access entry options with fallbacks
+            entry_options = getattr(self.entry, "options", {}) or {}
+            current_volume_step_decimal = entry_options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+            volume_step_percent = int(current_volume_step_decimal * 100)
 
-        current_maintenance_buttons = self.entry.options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, False)
-        current_debug_logging = self.entry.options.get(CONF_DEBUG_LOGGING, False)
+            current_maintenance_buttons = entry_options.get(CONF_ENABLE_MAINTENANCE_BUTTONS, False)
 
-        schema = vol.Schema(
-            {
-                vol.Optional(CONF_VOLUME_STEP_PERCENT, default=volume_step_percent): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=50)
-                ),
-                vol.Optional(CONF_ENABLE_MAINTENANCE_BUTTONS, default=current_maintenance_buttons): bool,
-                vol.Optional(CONF_DEBUG_LOGGING, default=current_debug_logging): bool,
-            }
-        )
+            schema = vol.Schema(
+                {
+                    vol.Optional(CONF_VOLUME_STEP_PERCENT, default=volume_step_percent): vol.All(
+                        vol.Coerce(int), vol.Range(min=1, max=50)
+                    ),
+                    vol.Optional(CONF_ENABLE_MAINTENANCE_BUTTONS, default=current_maintenance_buttons): bool,
+                }
+            )
 
-        return self.async_show_form(step_id="init", data_schema=schema)
+            return self.async_show_form(step_id="init", data_schema=schema)
+        except Exception as err:
+            _LOGGER.exception("Error in options flow: %s", err)
+            # Return a form with error message
+            return self.async_show_form(
+                step_id="init",
+                errors={"base": "unknown_error"},
+                data_schema=vol.Schema({}),
+            )

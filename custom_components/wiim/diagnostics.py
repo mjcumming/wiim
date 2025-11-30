@@ -280,32 +280,31 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         # Note: UPnP is used for queue management only, not event subscriptions
         upnp_info = {}
         if coordinator:
-            has_upnp_client = coordinator.upnp_client is not None
             has_player = coordinator.player is not None
-            upnp_setup_attempted = getattr(coordinator, "_upnp_setup_attempted", False)
+            # UPnP client is on the player object, not the coordinator
+            has_upnp_client = False
+            upnp_client = None
+            if has_player:
+                upnp_client = getattr(coordinator.player, "_upnp_client", None)
+                has_upnp_client = upnp_client is not None
 
             if has_upnp_client:
                 status = "Active"
                 status_detail = "UPnP client available (queue management enabled)"
-            elif upnp_setup_attempted:
-                status = "Not Active"
-                status_detail = "UPnP setup attempted but failed (queue management unavailable)"
             else:
                 status = "Not Active"
-                status_detail = "UPnP setup not attempted (queue management unavailable)"
+                status_detail = "UPnP client not available (queue management unavailable)"
 
             upnp_info = {
                 "status": status,
                 "status_detail": status_detail,
                 "has_upnp_client": has_upnp_client,
                 "has_player": has_player,
-                "upnp_setup_attempted": upnp_setup_attempted,
                 "note": "UPnP is used for queue management only. Event subscriptions are not implemented.",
             }
 
             # Add UPnP client info if available
-            if has_upnp_client and coordinator.upnp_client:
-                upnp_client = coordinator.upnp_client
+            if has_upnp_client and upnp_client:
                 upnp_info["upnp_client"] = {
                     "description_url": getattr(upnp_client, "description_url", None),
                     "host": getattr(upnp_client, "host", None),

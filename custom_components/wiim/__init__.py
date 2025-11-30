@@ -45,6 +45,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pywiim import WiiMClient
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
@@ -53,7 +55,6 @@ from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 from . import config_flow  # noqa: F401
 from .const import (
     CONF_ENABLE_MAINTENANCE_BUTTONS,
-    CONF_ENABLE_NETWORK_MONITORING,
     DOMAIN,
 )
 from .coordinator import WiiMCoordinator
@@ -76,8 +77,6 @@ CORE_PLATFORMS: list[Platform] = [
 # Essential optional platforms based on user configuration
 OPTIONAL_PLATFORMS: dict[str, Platform] = {
     CONF_ENABLE_MAINTENANCE_BUTTONS: Platform.BUTTON,  # Note: BUTTON is in CORE but maintenance buttons are optional
-    CONF_ENABLE_NETWORK_MONITORING: Platform.BINARY_SENSOR,
-    # Note: EQ controls are now handled within the switch platform conditionally
 }
 
 
@@ -155,8 +154,9 @@ async def _update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def _reboot_device_service(hass: HomeAssistant, call):
+async def _reboot_device_service(call):
     """Handle reboot_device service call."""
+    hass = call.hass
     entity_id = call.data.get("entity_id")
     if not entity_id:
         _LOGGER.error("entity_id is required for reboot_device service")
@@ -173,8 +173,8 @@ async def _reboot_device_service(hass: HomeAssistant, call):
         return
 
     # Get the speaker from the entity's device
-    device_registry = hass.helpers.device_registry.async_get(hass)
-    entity_registry = hass.helpers.entity_registry.async_get(hass)
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
 
     entity_entry = entity_registry.async_get(entity_id)
     if not entity_entry or not entity_entry.device_id:
@@ -206,8 +206,9 @@ async def _reboot_device_service(hass: HomeAssistant, call):
     _LOGGER.error("No WiiM device found for entity %s", entity_id)
 
 
-async def _sync_time_service(hass: HomeAssistant, call):
+async def _sync_time_service(call):
     """Handle sync_time service call."""
+    hass = call.hass
     entity_id = call.data.get("entity_id")
     if not entity_id:
         _LOGGER.error("entity_id is required for sync_time service")
@@ -224,8 +225,8 @@ async def _sync_time_service(hass: HomeAssistant, call):
         return
 
     # Get the speaker from the entity's device
-    device_registry = hass.helpers.device_registry.async_get(hass)
-    entity_registry = hass.helpers.entity_registry.async_get(hass)
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
 
     entity_entry = entity_registry.async_get(entity_id)
     if not entity_entry or not entity_entry.device_id:
