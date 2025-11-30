@@ -48,14 +48,18 @@ For detailed API documentation, polling strategies, and UPnP architecture, see t
 
 ## 📋 **Essential Technical Docs**
 
-| Document                     | Purpose                              | Audience   |
-| ---------------------------- | ------------------------------------ | ---------- |
-| **[TESTING.md](TESTING.md)** | Testing strategy for the integration | Developers |
+| Document                                                               | Purpose                          | Audience   |
+| ---------------------------------------------------------------------- | -------------------------------- | ---------- |
+| **[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)**                 | Complete architecture guide      | Developers |
+| **[../docs/DEVELOPMENT-RULES.md](../docs/DEVELOPMENT-RULES.md)**       | Development rules and guidelines | Developers |
+| **[../docs/TESTING-CONSOLIDATED.md](../docs/TESTING-CONSOLIDATED.md)** | Testing strategy                 | Developers |
 
 ## 🎯 **For New Contributors**
 
-1. **[../CONTRIBUTING.md](../CONTRIBUTING.md)** - Start here for contribution workflow
-2. **[TESTING.md](TESTING.md)** - Testing strategy and best practices
+1. **[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)** - ⭐ START HERE - Complete architecture guide
+2. **[../docs/DEVELOPMENT-RULES.md](../docs/DEVELOPMENT-RULES.md)** - Development rules and guidelines
+3. **[../CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution workflow
+4. **[../docs/TESTING-CONSOLIDATED.md](../docs/TESTING-CONSOLIDATED.md)** - Testing strategy
 
 ## 📚 **External References**
 

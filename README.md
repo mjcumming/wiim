@@ -12,7 +12,7 @@
 [![Quality Scale](https://img.shields.io/badge/quality%20scale-silver-brightgreen.svg)](https://www.home-assistant.io/docs/quality_scale/)
 [![Project Status](https://img.shields.io/badge/project%20status-active-success.svg)](https://github.com/mjcumming/wiim)
 [![CI](https://img.shields.io/github/actions/workflow/status/mjcumming/wiim/tests.yaml?branch=main&label=CI)](https://github.com/mjcumming/wiim/actions/workflows/tests.yaml)
-[![Codecov](https://img.shields.io/codecov/c/github/mjcumming/wiim)](https://codecov.io/gh/mjcumming/wiim)
+[![codecov](https://codecov.io/gh/mjcumming/wiim/branch/main/graph/badge.svg)](https://codecov.io/gh/mjcumming/wiim)
 [![GitHub Issues](https://img.shields.io/github/issues/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/issues)
 [![GitHub Pull Requests](https://img.shields.io/github/issues-pr/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/pulls)
 
@@ -37,7 +37,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 ## Supported Devices
 
 - **WiiM**: Mini, Pro, Pro Plus, Amp, Ultra
-- **LinkPlay Compatible**: Arylic, Audio Pro (including MkII models), Dayton Audio, DOSS, and many more
+- **LinkPlay Compatible**: Arylic, Audio Pro (including Gen1: A26, C10, C5a and MkII models), Dayton Audio, DOSS, and many more
 - **Enhanced Compatibility**: Automatic protocol fallback for devices with non-standard configurations
 - **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
 

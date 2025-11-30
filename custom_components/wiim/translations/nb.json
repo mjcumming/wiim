@@ -47,16 +47,14 @@
           "idle_update_rate": "💤 Oppdateringsrate når inaktiv (sekunder)",
           "volume_step_percent": "🔊 Volumtrinnstørrelse (%)",
           "enable_maintenance_buttons": "🔧 Vedlikeholdsknapper",
-          "enable_diagnostic_entities": "📊 Diagnosesensorer",
-          "debug_logging": "🐛 Debug-modus"
+          "enable_diagnostic_entities": "📊 Diagnosesensorer"
         },
         "data_description": {
           "playing_update_rate": "Rask spørring når musikk spilles for jevne posisjonsoppdateringer (1-5 sekunder)",
           "idle_update_rate": "Langsommere spørring når ikke spiller for effektivitet (5-60 sekunder)",
           "volume_step_percent": "Volumendringsstørrelse når volum opp/ned-knapper brukes (1-50%). Mindre trinn gir finere kontroll.",
           "enable_maintenance_buttons": "Vis enhetsvedlikeholdsknapper (omstart, synkroniser tid) for feilsøking",
-          "enable_diagnostic_entities": "Vis avanserte diagnosesensorer for debugging og ytelsesovervåking",
-          "debug_logging": "Aktiver detaljert logging for feilsøking. Anbefales kun ved problemer."
+          "enable_diagnostic_entities": "Vis avanserte diagnosesensorer for debugging og ytelsesovervåking"
         }
       }
     }

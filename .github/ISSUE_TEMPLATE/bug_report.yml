@@ -51,18 +51,70 @@ body:
   - type: dropdown
     id: device-model
     attributes:
-      label: WiiM Device Model
-      description: What WiiM/LinkPlay device are you using?
+      label: Primary WiiM Device Model
+      description: What WiiM/LinkPlay device is experiencing the issue? (If multiple devices are involved, list the primary one here)
       options:
         - WiiM Mini
         - WiiM Pro
         - WiiM Pro Plus
         - WiiM Amp
         - WiiM Ultra
+        - Arylic A50+
+        - Arylic A100
+        - Arylic H50
+        - Arylic S10
+        - Arylic S50 Pro+
+        - Arylic (other model)
+        - Audio Pro A10 MkII
+        - Audio Pro A15 MkII
+        - Audio Pro A28
+        - Audio Pro C10 MkII
+        - Audio Pro (other model)
         - Other LinkPlay device
         - Unknown/Multiple devices
     validations:
       required: true
+
+  - type: input
+    id: primary-device-name
+    attributes:
+      label: Primary Device Name
+      description: The name of the primary device as it appears in Home Assistant (e.g., "Living Room Speaker")
+      placeholder: "e.g., Living Room Speaker"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: is-grouped
+    attributes:
+      label: Is this device part of a group?
+      description: Is the device experiencing the issue part of a master/slave group?
+      options:
+        - "No - device is standalone"
+        - "Yes - device is in a group"
+    validations:
+      required: true
+
+  - type: textarea
+    id: grouped-devices
+    attributes:
+      label: Grouped Devices Details
+      description: |
+        **⚠️ IMPORTANT: Only fill this out if you selected "Yes - device is in a group" above. If your device is standalone, leave this blank.**
+
+        If your device is part of a group, please provide:
+        1. **Master device name** (as it appears in Home Assistant)
+        2. **All slave device names** (as they appear in Home Assistant)
+        3. **Device models** for each device in the group
+
+        Example:
+        - Master: "Living Room Speaker" (WiiM Pro)
+        - Slaves: "Kitchen Speaker" (WiiM Mini), "Bedroom Speaker" (WiiM Mini)
+      placeholder: |
+        Master: [device name] ([model])
+        Slaves: [device name] ([model]), [device name] ([model])
+    validations:
+      required: false
 
   - type: textarea
     id: description

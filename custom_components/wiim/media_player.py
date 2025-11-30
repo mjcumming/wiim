@@ -37,9 +37,6 @@ from .group_media_player import WiiMGroupMediaPlayer
 
 _LOGGER = logging.getLogger(__name__)
 
-# Streaming sources that don't support next/previous track
-STREAMING_SOURCES = ["wifi", "webradio", "iheartradio", "pandora", "tunein"]
-
 
 def _is_connection_error(err: Exception) -> bool:
     """Check if error is a connection or timeout error (including in exception chain)."""
@@ -230,41 +227,13 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Return the name of the entity."""
         return self.speaker.name
 
-    def _is_streaming_source(self) -> bool:
-        """Check if current source is a streaming source (radio/web stream).
-
-        Checks multiple indicators:
-        - Source name matches known streaming sources
-        - Media title contains stream file extensions (.m3u8, .pls, .m3u)
-        - No duration (streams typically don't have fixed duration)
-        """
+    def _next_track_supported(self) -> bool:
+        """Check if next/previous track is supported - query from pywiim Player."""
         player = self._get_player()
         if not player:
             return False
-
-        # Check if source name matches known streaming sources
-        if player.source:
-            source_lower = str(player.source).lower()
-            if source_lower in STREAMING_SOURCES:
-                return True
-
-        # Check media title for stream indicators
-        if hasattr(player, "media_title") and player.media_title:
-            title_lower = str(player.media_title).lower()
-            # Check for common stream file extensions
-            stream_extensions = [".m3u8", ".m3u", ".pls", ".asx"]
-            if any(ext in title_lower for ext in stream_extensions):
-                return True
-
-        # Check if no duration (streams typically don't have fixed duration)
-        # But only if we're actually playing something
-        if self.state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
-            if not self.media_duration or self.media_duration == 0:
-                # Additional check: if source is wifi and no duration, likely a stream
-                if player.source and str(player.source).lower() == "wifi":
-                    return True
-
-        return False
+        # Use pywiim's next_track_supported property (per integration guide)
+        return bool(player.next_track_supported)
 
     def _update_supported_features(self) -> None:
         """Update supported features based on current state (LinkPlay pattern)."""
@@ -293,9 +262,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 | MediaPlayerEntityFeature.CLEAR_PLAYLIST
             )
 
-        # Exclude next/previous track for streaming sources (radio/web streams)
+        # Only include next/previous track if pywiim says they're supported and not a slave
         # Slaves also shouldn't have track control (master controls that)
-        if not self._is_streaming_source() and not is_slave:
+        if not is_slave and self._next_track_supported():
             features |= MediaPlayerEntityFeature.NEXT_TRACK
             features |= MediaPlayerEntityFeature.PREVIOUS_TRACK
 
@@ -475,13 +444,9 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError("Player is not available")
 
         try:
-            # Use pause for web streams (stop doesn't work reliably)
-            if self._is_streaming_source():
-                await player.pause()
-            else:
-                await player.stop()
-                # Clear media_content_id when stopped (not paused, as pause preserves state)
-                self._attr_media_content_id = None
+            await player.stop()
+            # Clear media_content_id when stopped (not paused, as pause preserves state)
+            self._attr_media_content_id = None
             await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop playback: {err}") from err

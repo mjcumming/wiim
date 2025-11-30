@@ -47,16 +47,14 @@
           "idle_update_rate": "💤 Idle Update Rate (seconds)",
           "volume_step_percent": "🔊 Volume Step Size (%)",
           "enable_maintenance_buttons": "🔧 Maintenance Buttons",
-          "enable_diagnostic_entities": "📊 Diagnostic Sensors",
-          "debug_logging": "🐛 Debug Mode"
+          "enable_diagnostic_entities": "📊 Diagnostic Sensors"
         },
         "data_description": {
           "playing_update_rate": "Fast polling when music is playing for smooth position updates (1-5 seconds)",
           "idle_update_rate": "Slower polling when not playing for efficiency (5-60 seconds)",
           "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
           "enable_maintenance_buttons": "Show device maintenance buttons (reboot, sync time) for troubleshooting",
-          "enable_diagnostic_entities": "Show advanced diagnostic sensors for debugging and performance monitoring",
-          "debug_logging": "Enable detailed logging for troubleshooting. Recommended only when experiencing issues."
+          "enable_diagnostic_entities": "Show advanced diagnostic sensors for debugging and performance monitoring"
         }
       }
     }

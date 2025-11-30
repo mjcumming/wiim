@@ -51,38 +51,6 @@ Comprehensive release script that handles the entire release workflow:
 
 ---
 
-## Diagnostic Tools
-
-### `monitor_cli` - Device Diagnostics
-
-For troubleshooting device issues, use pywiim's `monitor_cli` diagnostic tool. The `pywiim` library is already installed with the integration.
-
-**Quick Start:**
-
-⚠️ **Note:** The Home Assistant Terminal add-on does not include Python. Use one of these methods:
-
-**Via SSH (Home Assistant Container):**
-
-```bash
-docker exec -it homeassistant wget -q https://github.com/mjcumming/pywiim/raw/refs/heads/main/pywiim/cli/monitor_cli.py -O /tmp/monitor_cli.py
-docker exec -it homeassistant python3 /tmp/monitor_cli.py <device_ip>
-```
-
-**Locally on your computer:**
-
-```bash
-wget -q https://github.com/mjcumming/pywiim/raw/refs/heads/main/pywiim/cli/monitor_cli.py -O monitor_cli.py
-python3 monitor_cli.py <device_ip>
-```
-
-**Full Documentation:** See [`DIAGNOSTIC-GUIDE.md`](./DIAGNOSTIC-GUIDE.md) for complete instructions including:
-
-- Running in Home Assistant Terminal
-- Running via SSH
-- Running locally on your computer
-- What diagnostics are shown
-- Troubleshooting tips
-
 ---
 
 ## Testing Scripts

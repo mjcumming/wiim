@@ -56,8 +56,19 @@ If any answer is fuzzy—stop and clarify.
 - [ ] Docs/changelog updated
 - [ ] Tested on real device (model & firmware listed)
 
+## Documentation
+
+For detailed architecture, development rules, and testing strategy:
+
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete architecture guide
+- **[docs/DEVELOPMENT-RULES.md](docs/DEVELOPMENT-RULES.md)** - Development rules
+- **[docs/TESTING-CONSOLIDATED.md](docs/TESTING-CONSOLIDATED.md)** - Testing strategy
+- **[docs/PROJECT-STRUCTURE.md](docs/PROJECT-STRUCTURE.md)** - Project structure
+
 ## When in Doubt
 
 1. Re-read this file
-2. Open GitHub Discussion with "QUESTION:" prefix
-3. Wait for sign-off before coding
+2. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+3. Read [docs/DEVELOPMENT-RULES.md](docs/DEVELOPMENT-RULES.md)
+4. Open GitHub Discussion with "QUESTION:" prefix
+5. Wait for sign-off before coding

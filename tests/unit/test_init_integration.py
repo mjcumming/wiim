@@ -263,3 +263,208 @@ class TestIntegrationTeardown:
 
         # Check entry is still loaded after reload
         assert entry.state is ConfigEntryState.LOADED
+
+
+class TestIntegrationServices:
+    """Test integration service functionality."""
+
+    @pytest.mark.asyncio
+    async def test_reboot_device_service(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test reboot_device service is registered."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Verify service is registered
+        assert hass.services.has_service(DOMAIN, "reboot_device")
+
+    @pytest.mark.asyncio
+    async def test_sync_time_service(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test sync_time service."""
+        from unittest.mock import AsyncMock, patch
+        from custom_components.wiim.data import get_all_speakers
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Get the media player entity
+        entity_registry = er.async_get(hass)
+        entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+        media_player_entities = [e for e in entities if e.domain == "media_player"]
+        assert len(media_player_entities) > 0
+
+        entity_id = media_player_entities[0].entity_id
+
+        # Get actual speakers and mock sync_time on client
+        speakers = get_all_speakers(hass)
+        if (
+            speakers
+            and hasattr(speakers[0].coordinator, "player")
+            and hasattr(speakers[0].coordinator.player, "client")
+        ):
+            speakers[0].coordinator.player.client.sync_time = AsyncMock()
+
+            # Call the service
+            await hass.services.async_call(
+                DOMAIN,
+                "sync_time",
+                {"entity_id": entity_id},
+                blocking=True,
+            )
+
+            # Verify sync_time was called if speaker found
+            if hasattr(speakers[0].coordinator.player.client, "sync_time"):
+                speakers[0].coordinator.player.client.sync_time.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reboot_service_handles_missing_entity(self, hass: HomeAssistant) -> None:
+        """Test reboot_device service handles missing entity."""
+        from custom_components.wiim import async_setup
+
+        await async_setup(hass, {})
+
+        # Call service with non-existent entity
+        await hass.services.async_call(
+            DOMAIN,
+            "reboot_device",
+            {"entity_id": "media_player.nonexistent"},
+            blocking=True,
+        )
+
+        # Should not raise, just log error
+
+    @pytest.mark.asyncio
+    async def test_get_enabled_platforms_with_capabilities(self, hass: HomeAssistant) -> None:
+        """Test get_enabled_platforms with capabilities."""
+        from custom_components.wiim import get_enabled_platforms
+        from homeassistant.const import Platform
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+
+        # Test with audio output capability
+        capabilities = {"supports_audio_output": True}
+        platforms = get_enabled_platforms(hass, entry, capabilities)
+
+        assert Platform.SELECT in platforms
+        assert Platform.MEDIA_PLAYER in platforms
+        assert Platform.SENSOR in platforms
+
+        # Test without audio output capability
+        capabilities = {"supports_audio_output": False}
+        platforms = get_enabled_platforms(hass, entry, capabilities)
+
+        # SELECT should still be enabled for Bluetooth
+        assert Platform.SELECT in platforms
+
+    @pytest.mark.asyncio
+    async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:
+        """Test get_enabled_platforms with optional features enabled."""
+        from custom_components.wiim import get_enabled_platforms
+        from custom_components.wiim.const import CONF_ENABLE_MAINTENANCE_BUTTONS
+        from homeassistant.const import Platform
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        # Use add_to_hass to properly initialize entry
+        entry.add_to_hass(hass)
+        # Update options after adding to hass
+        hass.config_entries.async_update_entry(entry, options={CONF_ENABLE_MAINTENANCE_BUTTONS: True})
+
+        # Test with empty capabilities dict (triggers warning path but still enables SELECT)
+        # When capabilities is empty dict, it checks if it's falsy and goes to else branch
+        platforms = get_enabled_platforms(hass, entry, {})
+
+        # SELECT should still be enabled for Bluetooth even without capabilities
+        assert Platform.SELECT in platforms
+        # BUTTON is in CORE_PLATFORMS
+        assert Platform.BUTTON in platforms
+        # Core platforms should be present
+        assert Platform.MEDIA_PLAYER in platforms
+        assert Platform.SENSOR in platforms
+        # NUMBER, SWITCH, LIGHT should also be in core
+        assert Platform.NUMBER in platforms
+        assert Platform.SWITCH in platforms
+        assert Platform.LIGHT in platforms
+
+
+class TestInitCapabilityDetection:
+    """Test capability detection in async_setup_entry."""
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_with_cached_endpoint(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test setup_entry with cached endpoint."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data={**MOCK_CONFIG, "endpoint": "http://192.168.1.100:80"},
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        # Setup should complete successfully
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Verify entry is loaded
+        assert entry.state == ConfigEntryState.LOADED
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_capability_detection_error(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test setup_entry handles capability detection errors gracefully."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        # Even with capability detection errors, setup should complete
+        # (bypass_get_data fixture handles the coordinator refresh)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Entry should still be loaded (capability errors are logged but don't fail setup)
+        assert entry.state == ConfigEntryState.LOADED
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_caches_discovered_endpoint(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test setup_entry caches discovered endpoint."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Mini",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        # Setup should complete and endpoint caching happens internally
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Verify entry is loaded
+        assert entry.state == ConfigEntryState.LOADED

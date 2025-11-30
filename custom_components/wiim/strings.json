@@ -56,8 +56,7 @@
           "idle_update_rate": "💤 Idle Update Rate (seconds)",
           "volume_step_percent": "🔊 Volume Step Size (%)",
           "enable_maintenance_buttons": "🔧 Maintenance Buttons",
-          "enable_diagnostic_entities": "📊 Diagnostic Sensors",
-          "debug_logging": "🐛 Debug Mode"
+          "enable_diagnostic_entities": "📊 Diagnostic Sensors"
         }
       }
     }

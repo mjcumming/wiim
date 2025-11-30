@@ -18,15 +18,40 @@
 
 Refer to the full upstream guide whenever you need code samples, diagrams, or the complete checklist.
 
+## API Reference
+
+> The complete API reference for `pywiim` is also maintained upstream: <https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md>.
+> This provides detailed documentation for all classes, methods, and models in the library.
+
+When you need detailed API documentation for `WiiMClient`, `Player`, models, exceptions, or any API mixins, refer to the upstream API reference guide.
+
 ## Working offline or auditing changes
 
 If you truly need a local snapshot (for example while traveling without internet), fetch it ad hoc and avoid committing the downloaded copy:
 
 ```bash
+# Fetch the HA integration guide
 curl -L https://raw.githubusercontent.com/mjcumming/pywiim/main/docs/integration/HA_INTEGRATION.md \
   -o /tmp/ha_integration_guide.md
+
+# Fetch the API reference guide
+curl -L https://raw.githubusercontent.com/mjcumming/pywiim/main/docs/integration/API_REFERENCE.md \
+  -o /tmp/api_reference_guide.md
 ```
 
-Review it locally, then delete the temporary file when done. Should we ever need to vendor a copy again, make sure to document the source commit hash in the PR description so reviewers know which upstream version was imported.
+Review them locally, then delete the temporary files when done. Should we ever need to vendor a copy again, make sure to document the source commit hash in the PR description so reviewers know which upstream version was imported.
 
-_Last reviewed against upstream on 2025-11-16._
+## Version Tracking
+
+This guide should be reviewed and updated whenever the `pywiim` library version is updated in `manifest.json`.
+
+**Current pywiim version requirement:** See `custom_components/wiim/manifest.json` for the current minimum version.
+
+**Update process:**
+
+1. When updating `pywiim` version in `manifest.json`, update the review date below
+2. Fetch the latest upstream guides to check for changes
+3. Update this file's review date and note any significant changes
+4. Document the version update in `CHANGELOG.md`
+
+_Last reviewed against upstream on 2025-11-29._

@@ -376,8 +376,7 @@ If you're still experiencing issues:
 
 1. **Enable debug logging** (see above)
 2. **Download diagnostics**
-   - Device: Settings → Devices & Services → WiiM Audio → Device → Download Diagnostics
-   - Integration: Settings → Devices & Services → WiiM Audio → ⋮ → Download Diagnostics
+   - Device: Settings → Devices & Services → WiiM → Device → ⋮ → Download Diagnostics
 3. **Check existing issues** on [GitHub](https://github.com/mjcumming/wiim/issues)
 4. **Create new issue** with:
    - Device model and firmware version
@@ -385,6 +384,31 @@ If you're still experiencing issues:
    - Debug logs (including pywiim logs)
    - Diagnostic download
    - Steps to reproduce the problem
+
+### Real-time Monitoring with monitor_cli
+
+For real-time device monitoring, install pywiim on your computer:
+
+**Windows:**
+
+```cmd
+pip install pywiim
+python -m pywiim.cli.monitor_cli YOUR_DEVICE_IP
+```
+
+**Mac/Linux:**
+
+```bash
+pip3 install pywiim
+python3 -m pywiim.cli.monitor_cli YOUR_DEVICE_IP
+```
+
+This shows real-time device state including audio output mode, playback state, and multiroom status. Press Ctrl+C to stop.
+
+**Options:**
+
+- `--verbose` - Enable verbose logging
+- `--no-tui` - Use scrolling log instead of fixed display
 
 ### Technical Notes
 

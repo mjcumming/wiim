@@ -87,27 +87,39 @@ main() {
     CURRENT_VERSION=$(get_current_version)
     print_step "Current version: ${CURRENT_VERSION}"
 
-    # Ask for new version if not provided
+    # Require version as argument
     if [[ -z "$1" ]]; then
-        echo -n "Enter new version (or press Enter to skip version bump): "
-        read NEW_VERSION
-    else
-        NEW_VERSION=$1
+        print_error "Version required. Usage: $0 <version> [--push]"
+        print_error "Example: $0 1.0.30"
+        print_error "Example: $0 1.0.30 --push  (to also commit, tag, and push)"
+        exit 1
     fi
 
-    # Skip version bump if empty
-    if [[ -z "$NEW_VERSION" ]]; then
-        print_warning "Skipping version bump, using current version ${CURRENT_VERSION}"
-        NEW_VERSION=$CURRENT_VERSION
-    else
-        # Validate version format (semver)
-        if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            print_error "Invalid version format. Use semantic versioning (e.g., 0.3.0)"
-            exit 1
-        fi
+    NEW_VERSION=$1
+    shift  # Remove version from arguments
 
-        print_step "New version: ${NEW_VERSION}"
+    # Check for --push flag
+    PUSH_TO_GIT=false
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --push)
+                PUSH_TO_GIT=true
+                shift
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                exit 1
+                ;;
+        esac
+    done
+
+    # Validate version format (semver)
+    if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        print_error "Invalid version format. Use semantic versioning (e.g., 1.0.30)"
+        exit 1
     fi
+
+    print_step "New version: ${NEW_VERSION}"
 
     echo ""
     print_step "Step 1: Running linting checks..."
@@ -117,14 +129,14 @@ main() {
     if python -m ruff check custom_components/wiim/ --line-length 120; then
         print_success "  Ruff checks passed"
     else
-        print_error "  Ruff checks failed"
-        echo -n "Attempt auto-fix? (y/n): "
-        read -r fix_choice
-        if [[ "$fix_choice" == "y" ]]; then
-            python -m ruff check custom_components/wiim/ --fix --line-length 120
-            python -m ruff format custom_components/wiim/
+        print_warning "  Ruff checks failed, attempting auto-fix..."
+        python -m ruff check custom_components/wiim/ --fix --line-length 120
+        python -m ruff format custom_components/wiim/
+        # Check again after auto-fix
+        if python -m ruff check custom_components/wiim/ --line-length 120; then
             print_success "  Auto-fixed and formatted"
         else
+            print_error "  Ruff checks still failed after auto-fix"
             exit 1
         fi
     fi
@@ -155,28 +167,25 @@ main() {
         print_success "Updated manifest.json to version ${NEW_VERSION}"
 
         echo ""
-        print_step "Step 4: CHANGELOG.md updated automatically"
+        print_step "Step 4: Updating CHANGELOG.md..."
+        update_changelog "$NEW_VERSION"
     else
         print_warning "Skipping version updates (no version change)"
     fi
 
-    echo ""
-    print_step "Step 5: Git operations..."
+    # Git operations (only if --push flag is set)
+    if [[ "$PUSH_TO_GIT" == "true" ]]; then
+        echo ""
+        print_step "Step 5: Git operations..."
 
-    # Show git status
-    echo ""
-    git status --short
-    echo ""
+        # Show git status
+        echo ""
+        git status --short
+        echo ""
 
-    # Ask for confirmation
-    echo -n "Commit and tag release? (y/n): "
-    read -r commit_choice
-
-    if [[ "$commit_choice" == "y" ]]; then
         # Commit changes
         print_step "  → Committing changes..."
-        git add custom_components/wiim/manifest.json CHANGELOG.md
-        git add custom_components/wiim/*.py  # Add any fixed linting issues
+        git add -A  # Add all changes (modified, deleted, and new files)
         git commit -m "Release version ${NEW_VERSION}" || print_warning "  Nothing to commit"
 
         # Create tag
@@ -187,13 +196,14 @@ main() {
             print_warning "  Tag may already exist"
         fi
 
-        # Push to GitHub (release means doing everything)
+        # Push to GitHub
         print_step "  → Pushing to GitHub..."
         git push origin main
         git push origin "v${NEW_VERSION}"
         print_success "  Pushed to GitHub"
     else
-        print_warning "Skipped git operations"
+        echo ""
+        print_warning "Skipping git operations (use --push flag to commit, tag, and push)"
     fi
 
     echo ""
@@ -204,14 +214,16 @@ main() {
     echo "  Linting: ✓"
     echo "  Tests: ✓"
 
-    if [[ "$commit_choice" == "y" ]]; then
+    if [[ "$PUSH_TO_GIT" == "true" ]]; then
         echo ""
         echo "Next steps:"
-        echo "  1. Go to https://github.com/mjcumming/wiim/releases"
-        echo "  2. Create a new release from tag v${NEW_VERSION}"
-        echo "  3. Copy relevant CHANGELOG.md entries to release notes"
+        echo "  - GitHub Actions will automatically create the release from tag v${NEW_VERSION}"
+        echo "  - Check https://github.com/mjcumming/wiim/releases for the new release"
+    else
         echo ""
-        echo "For diagnostic tools (monitor_cli), see: scripts/DIAGNOSTIC-GUIDE.md"
+        echo "Next steps:"
+        echo "  - Review changes: git diff"
+        echo "  - Commit manually or run: $0 ${NEW_VERSION} --push"
     fi
 }
 

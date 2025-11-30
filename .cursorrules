@@ -4,10 +4,12 @@
 
 - **Developer Guide**: See `/development/README.md` for architecture and contribution guidelines
 - **Testing Guide**: See `/development/TESTING.md` for test requirements and examples
-- **HA Integration Guide**: See `/development/HA_INTEGRATION_GUIDE.md` for Home Assistant specific patterns
+- **HA Integration Guide**: See `/development/HA_INTEGRATION_GUIDE.md` for Home Assistant specific patterns (references upstream guides)
 - **User Documentation**: See `/docs/` for user-facing guides
 
 **Do not create new documentation files without being explicitly asked.**
+
+**Always reference upstream pywiim documentation** (see "Reference Upstream Documentation" section below) instead of duplicating content.
 
 ## CRITICAL: Never Work Around pywiim Issues
 
@@ -59,6 +61,33 @@ If pywiim doesn't set `supports_eq` correctly → **FIX PYWIIM**
 4. Update pywiim dependency version
 5. Remove any temporary workarounds from HA integration
 
+## Reference Upstream Documentation
+
+**ALWAYS reference upstream pywiim documentation guides instead of duplicating content.**
+
+When working with pywiim integration patterns or API usage:
+
+1. **Reference** `/development/HA_INTEGRATION_GUIDE.md` for Home Assistant integration patterns
+2. **Reference** the upstream [HA Integration Guide](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md) for detailed patterns
+3. **Reference** the upstream [API Reference](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) for API documentation
+4. **DO NOT** duplicate upstream documentation content in this repository
+5. **DO NOT** create local copies of upstream guides (they become stale)
+
+**When pywiim version is updated:**
+
+1. **Update** the review date in `/development/HA_INTEGRATION_GUIDE.md`
+2. **Update** the pywiim version tracked in that file (if documented)
+3. **Check** if upstream guides have changed and note any breaking changes
+4. **Update** `manifest.json` with the new minimum pywiim version requirement
+5. **Document** in CHANGELOG.md the pywiim version update
+
+**Why:**
+
+- Upstream documentation is maintained alongside library changes
+- Prevents documentation drift and stale information
+- Single source of truth reduces maintenance burden
+- Version tracking ensures compatibility awareness
+
 ## File Naming Conventions
 
 - No underscores in directory or file names
@@ -103,15 +132,69 @@ If pywiim doesn't set `supports_eq` correctly → **FIX PYWIIM**
 
 ## Documentation Files
 
-**Do not create documentation files (.md, README, guides, etc.) unless explicitly requested.**
+**CRITICAL: Do not create documentation files unless explicitly requested or needed for long-term reference.**
 
-The project already has:
+### Documentation Rules
 
-- Developer guides in `/development/`
-- User documentation in `/docs/`
-- Code comments and docstrings
+1. **Do NOT create "progress" or "summary" files**
 
-Creating additional documentation without being asked adds unnecessary maintenance burden.
+   - ❌ No "TEST-SUITE-SUMMARY.md", "COVERAGE-PROGRESS.md", "FINAL-SUMMARY.md"
+   - ❌ No "look what I did" documentation
+   - ❌ No temporary status files
+   - ❌ No session summaries
+   - ✅ Update existing documentation instead
+
+2. **Only create documentation when:**
+
+   - ✅ Explicitly requested by user
+   - ✅ Needed for long-term reference (architecture, rules, guides)
+   - ✅ Replacing/consolidating existing documentation
+   - ✅ User-facing documentation (user guides, FAQs)
+
+3. **Update existing files instead:**
+
+   - ✅ Update `tests/README.md` with test info
+   - ✅ Update `docs/TESTING-CONSOLIDATED.md` with testing strategy
+   - ✅ Update `docs/ARCHITECTURE.md` with architecture changes
+   - ✅ Update `docs/DEVELOPMENT-RULES.md` with new rules
+
+4. **Use Git for progress tracking:**
+
+   - ✅ Git commits for progress
+   - ✅ Test output for status (`pytest --cov`)
+   - ✅ CI/CD reports for coverage
+   - ❌ Don't create files for status updates
+
+5. **Documentation structure:**
+   - `/docs/` - User and developer documentation (long-term reference only)
+   - `/tests/README.md` - Test quick reference only
+   - `/development/` - Developer guides
+   - Code comments and docstrings - Inline documentation
+
+### When to Create vs Update
+
+**Create new file only if:**
+
+- It's a completely new topic not covered elsewhere
+- User explicitly requests it
+- It's replacing multiple redundant files
+
+**Update existing file if:**
+
+- Information belongs in an existing document
+- It's a status update or progress report
+- It's temporary or session-specific information
+
+**Examples:**
+
+- ❌ Creating `TEST-SUITE-COMPLETE.md` when `tests/README.md` exists
+- ✅ Updating `tests/README.md` with new test information
+- ❌ Creating `COVERAGE-PROGRESS.md` for status updates
+- ✅ Running `pytest --cov` to see coverage (no file needed)
+- ❌ Creating `FINAL-SUMMARY.md` for session summary
+- ✅ Using git commits and test results for progress tracking
+
+**See `docs/DOCUMENTATION-GUIDELINES.md` and `docs/DOCUMENTATION-BEST-PRACTICES.md` for detailed guidance.**
 
 ## Dependencies
 
