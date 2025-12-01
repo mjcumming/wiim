@@ -2,6 +2,13 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.32] - 2025-12-01
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.27
+  - Ensures compatibility with latest library features and fixes
+
 ## [1.0.31] - 2025-12-01
 
 ### Fixed

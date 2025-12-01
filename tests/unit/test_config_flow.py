@@ -370,16 +370,37 @@ class TestWiiMConfigFlow:
             return_value={"type": FlowResultType.CREATE_ENTRY, "data": {CONF_HOST: "192.168.1.100"}}
         )
 
-        # First call shows form
-        result = await config_flow.async_step_discovery_confirm(None)
-        assert result["type"] == FlowResultType.FORM
+        # Mock onboarding as complete (onboarded)
+        with patch("custom_components.wiim.config_flow.onboarding.async_is_onboarded", return_value=True):
+            # First call shows form when onboarded
+            result = await config_flow.async_step_discovery_confirm(None)
+            assert result["type"] == FlowResultType.FORM
 
         # Second call with input creates entry
-        user_input = {}
-        result = await config_flow.async_step_discovery_confirm(user_input)
+        with patch("custom_components.wiim.config_flow.onboarding.async_is_onboarded", return_value=True):
+            user_input = {}
+            result = await config_flow.async_step_discovery_confirm(user_input)
 
-        assert result["type"] == FlowResultType.CREATE_ENTRY
-        config_flow.async_create_entry.assert_called_once()
+            assert result["type"] == FlowResultType.CREATE_ENTRY
+            config_flow.async_create_entry.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_discovery_confirm_during_onboarding(self, config_flow, hass):
+        """Test discovery_confirm step auto-creates entry during onboarding."""
+        config_flow.data = {CONF_HOST: "192.168.1.100", "name": "Test WiiM"}
+        config_flow.context = {}  # Initialize as dict, not mappingproxy
+        config_flow._discover_slaves = AsyncMock()
+        config_flow.hass = hass
+        config_flow.async_create_entry = MagicMock(
+            return_value={"type": FlowResultType.CREATE_ENTRY, "data": {CONF_HOST: "192.168.1.100"}}
+        )
+
+        # Mock onboarding as not complete (during onboarding)
+        with patch("custom_components.wiim.config_flow.onboarding.async_is_onboarded", return_value=False):
+            # Should auto-create entry without showing form
+            result = await config_flow.async_step_discovery_confirm(None)
+            assert result["type"] == FlowResultType.CREATE_ENTRY
+            config_flow.async_create_entry.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_discovery_confirm_with_ssdp_info(self, config_flow, hass):
@@ -406,3 +427,32 @@ class TestWiiMConfigFlow:
         # Verify async_create_entry was called with ssdp_info
         call_kwargs = config_flow.async_create_entry.call_args[1]
         assert "ssdp_info" in call_kwargs["data"]
+
+    @pytest.mark.asyncio
+    async def test_discovery_confirm_with_ssdp_info_during_onboarding(self, config_flow, hass):
+        """Test discovery_confirm step preserves SSDP info during onboarding."""
+        config_flow.data = {
+            CONF_HOST: "192.168.1.100",
+            "name": "Test WiiM",
+            "ssdp_info": {"location": "http://192.168.1.100/description.xml"},
+        }
+        config_flow.context = {}  # Initialize as dict
+        config_flow._discover_slaves = AsyncMock()
+        config_flow.hass = hass
+        config_flow.async_create_entry = MagicMock(
+            return_value={
+                "type": FlowResultType.CREATE_ENTRY,
+                "data": {CONF_HOST: "192.168.1.100", "ssdp_info": {"location": "http://192.168.1.100/description.xml"}},
+            }
+        )
+
+        # Mock onboarding as not complete (during onboarding)
+        with patch("custom_components.wiim.config_flow.onboarding.async_is_onboarded", return_value=False):
+            # Should auto-create entry with SSDP info without showing form
+            result = await config_flow.async_step_discovery_confirm(None)
+            assert result["type"] == FlowResultType.CREATE_ENTRY
+            config_flow.async_create_entry.assert_called_once()
+            # Verify async_create_entry was called with ssdp_info
+            call_kwargs = config_flow.async_create_entry.call_args[1]
+            assert "ssdp_info" in call_kwargs["data"]
+            assert call_kwargs["data"]["ssdp_info"] == {"location": "http://192.168.1.100/description.xml"}

@@ -254,6 +254,13 @@ _LOGGER.info("Volume set")
 
 ### Test Coverage
 
+- **CRITICAL: Codecov Patch Coverage Requirement**
+  - Codecov requires **77.88% patch coverage** for new/changed code
+  - Patch coverage = coverage of lines you added or modified in your PR
+  - This is separate from overall project coverage (currently 77.64%)
+  - **Every new line of code must have corresponding tests**
+  - Codecov will fail the CI check if patch coverage is below 77.88%
+  - Always add tests when adding or modifying code
 - **Minimum**: 10% (current requirement)
 - **Target**: 80%+
 - **Focus**: Core functionality first
@@ -273,10 +280,13 @@ _LOGGER.info("Volume set")
 
 ### Test Requirements
 
+- ✅ **Every new code addition → Write tests immediately**
+- ✅ **Every code modification → Update/add tests for changed functionality**
 - ✅ Every bug fix → Regression test
 - ✅ New feature → Unit tests
 - ✅ Edge cases → Test None, missing attributes, errors
 - ✅ All tests must pass before merge
+- ✅ Verify patch coverage with `pytest --cov` before committing
 
 ## PR Checklist
 
@@ -284,10 +294,11 @@ Before submitting a PR:
 
 - [ ] Code confined to `custom_components/wiim/`
 - [ ] Fulfils Issue #\_\_\_ ✅
-- [ ] Added/updated unit tests
+- [ ] Added/updated unit tests for all new/changed code
 - [ ] All tests pass: `make test`
 - [ ] Passes linting: `make lint`
 - [ ] Coverage ≥ 10% (target 80%+)
+- [ ] **Patch coverage ≥ 77.88% (Codecov requirement - verify with `pytest --cov`)**
 - [ ] Docs/changelog updated (if needed)
 - [ ] Tested on real device (if applicable)
 - [ ] Follows architecture patterns

@@ -1,6 +1,6 @@
 """Unit tests for WiiM Group Media Player - testing group coordination functionality."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 from homeassistant.components.media_player import MediaPlayerEntityFeature, MediaPlayerState
@@ -669,6 +669,84 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
         assert MediaPlayerEntityFeature.VOLUME_STEP in features
         # Should not have playback features when unavailable
         assert MediaPlayerEntityFeature.PLAY not in features
+
+    def test_supported_features_with_next_track_supported(self, mock_group_speaker, mock_master_player):
+        """Test supported_features includes NEXT_TRACK and PREVIOUS_TRACK when supported."""
+        mock_master_player.next_track_supported = True
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        features = entity.supported_features
+
+        assert MediaPlayerEntityFeature.NEXT_TRACK in features
+        assert MediaPlayerEntityFeature.PREVIOUS_TRACK in features
+
+    def test_supported_features_without_next_track_supported(self, mock_group_speaker, mock_master_player):
+        """Test supported_features excludes NEXT_TRACK and PREVIOUS_TRACK when not supported."""
+        mock_master_player.next_track_supported = False
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        features = entity.supported_features
+
+        assert MediaPlayerEntityFeature.NEXT_TRACK not in features
+        assert MediaPlayerEntityFeature.PREVIOUS_TRACK not in features
+
+    def test_supported_features_next_track_missing_attribute(self, mock_group_speaker, mock_master_player):
+        """Test supported_features when next_track_supported attribute is missing."""
+        # Remove the attribute to simulate older pywiim versions or unsupported sources
+        delattr(mock_master_player, "next_track_supported")
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        features = entity.supported_features
+
+        assert MediaPlayerEntityFeature.NEXT_TRACK not in features
+        assert MediaPlayerEntityFeature.PREVIOUS_TRACK not in features
+
+    def test_next_track_supported_returns_true(self, mock_group_speaker, mock_master_player):
+        """Test _next_track_supported returns True when supported."""
+        mock_master_player.next_track_supported = True
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        assert entity._next_track_supported() is True
+
+    def test_next_track_supported_returns_false_when_not_supported(self, mock_group_speaker, mock_master_player):
+        """Test _next_track_supported returns False when not supported."""
+        mock_master_player.next_track_supported = False
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        assert entity._next_track_supported() is False
+
+    def test_next_track_supported_returns_false_when_unavailable(self, mock_group_speaker):
+        """Test _next_track_supported returns False when entity is unavailable."""
+        mock_group_speaker.coordinator.data = None
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        assert entity._next_track_supported() is False
+
+    def test_next_track_supported_returns_false_when_player_missing(self, mock_group_speaker, mock_master_player):
+        """Test _next_track_supported returns False when player is missing."""
+        # Set up entity to be available (has master with slaves)
+        mock_master_player.is_master = True
+        mock_master_player.group.all_players = [mock_master_player, MagicMock()]  # Has slaves
+        # But set player to None in coordinator data
+        mock_group_speaker.coordinator.data = {"player": None}
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        # Patch available property to return True to test the player=None path (line 450)
+        # This tests the defensive check even though in practice available would be False
+        with patch(
+            "custom_components.wiim.group_media_player.WiiMGroupMediaPlayer.available",
+            new_callable=PropertyMock,
+            return_value=True,
+        ):
+            assert entity._next_track_supported() is False
+
+    def test_next_track_supported_returns_false_when_attribute_missing(self, mock_group_speaker, mock_master_player):
+        """Test _next_track_supported returns False when attribute is missing."""
+        # Remove the attribute to simulate older pywiim versions
+        delattr(mock_master_player, "next_track_supported")
+        entity = WiiMGroupMediaPlayer(mock_group_speaker)
+
+        assert entity._next_track_supported() is False
 
 
 class TestWiiMGroupMediaPlayerStateEdgeCases:

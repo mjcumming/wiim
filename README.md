@@ -397,13 +397,26 @@ The diagnostics include:
 
 **All sensitive data (IP addresses, MAC addresses, network names) is automatically redacted.**
 
+### Real-time Device Monitoring
+
+For real-time device monitoring and debugging, use the `monitor_cli` tool from the `pywiim` library:
+
+```bash
+# Install pywiim
+pip3 install pywiim
+
+# Monitor a device (replace with your device IP)
+python3 -m pywiim.cli.monitor_cli YOUR_DEVICE_IP
+```
+
+This shows real-time device state including audio output mode, playback state, and multiroom status. Use `--verbose` for detailed logging or `--no-tui` for scrolling log output. Press `Ctrl+C` to stop.
+
 ## Documentation
 
 - **[📚 Quick Start Guide](docs/README.md)** - Installation and basic setup
 - **[🎛️ User Guide](docs/user-guide.md)** - Complete features and configuration
 - **[🤖 Automation Cookbook](docs/automation-cookbook.md)** - Ready-to-use automation patterns
-- **[❓ FAQ](docs/FAQ.md)** - Quick answers to common questions
-- **[🔧 Troubleshooting](docs/troubleshooting.md)** - Fix common issues and network problems
+- **[❓ FAQ & Troubleshooting](docs/faq-and-troubleshooting.md)** - Quick answers to common questions and solutions to common problems
 
 ## Support & Community
 
