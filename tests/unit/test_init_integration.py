@@ -1,4 +1,4 @@
-"""Integration tests for WiiM integration setup and teardown."""
+"""Unit tests for WiiM integration setup and teardown."""
 
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -288,7 +288,8 @@ class TestIntegrationServices:
     @pytest.mark.asyncio
     async def test_sync_time_service(self, hass: HomeAssistant, bypass_get_data) -> None:
         """Test sync_time service."""
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock
+
         from custom_components.wiim.data import get_all_speakers
 
         entry = MockConfigEntry(
@@ -351,8 +352,9 @@ class TestIntegrationServices:
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_capabilities(self, hass: HomeAssistant) -> None:
         """Test get_enabled_platforms with capabilities."""
-        from custom_components.wiim import get_enabled_platforms
         from homeassistant.const import Platform
+
+        from custom_components.wiim import get_enabled_platforms
 
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -379,9 +381,10 @@ class TestIntegrationServices:
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:
         """Test get_enabled_platforms with optional features enabled."""
+        from homeassistant.const import Platform
+
         from custom_components.wiim import get_enabled_platforms
         from custom_components.wiim.const import CONF_ENABLE_MAINTENANCE_BUTTONS
-        from homeassistant.const import Platform
 
         entry = MockConfigEntry(
             domain=DOMAIN,

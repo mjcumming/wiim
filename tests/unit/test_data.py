@@ -6,8 +6,8 @@ import pytest
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from custom_components.wiim.data import Speaker, get_speaker_from_config_entry
 from custom_components.wiim.const import DOMAIN
+from custom_components.wiim.data import Speaker, get_speaker_from_config_entry
 
 
 @pytest.fixture

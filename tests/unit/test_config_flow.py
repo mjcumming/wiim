@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.wiim.config_flow import WiiMConfigFlow, WiiMOptionsFlow
@@ -13,7 +12,6 @@ from custom_components.wiim.const import (
     CONF_HOST,
     CONF_VOLUME_STEP,
     CONF_VOLUME_STEP_PERCENT,
-    DEFAULT_VOLUME_STEP,
     DOMAIN,
 )
 
@@ -187,8 +185,8 @@ class TestWiiMConfigFlow:
     @pytest.mark.asyncio
     async def test_discovery_step(self, config_flow, hass):
         """Test discovery step."""
+
         from homeassistant.components.ssdp import SsdpServiceInfo
-        from urllib.parse import urlparse
 
         discovery_info = SsdpServiceInfo(
             ssdp_location="http://192.168.1.100:49152/description.xml",
@@ -228,7 +226,6 @@ class TestWiiMConfigFlow:
     async def test_discovery_step_handles_duplicate(self, config_flow, hass):
         """Test discovery step handles duplicate entries."""
         from homeassistant.components.ssdp import SsdpServiceInfo
-        from homeassistant.config_entries import ConfigEntries
 
         discovery_info = SsdpServiceInfo(
             ssdp_location="http://192.168.1.100:49152/description.xml",
@@ -269,8 +266,9 @@ class TestWiiMConfigFlow:
     @pytest.mark.asyncio
     async def test_zeroconf_step(self, config_flow, hass):
         """Test zeroconf discovery step."""
-        from homeassistant.components.zeroconf import ZeroconfServiceInfo
         from ipaddress import IPv4Address
+
+        from homeassistant.components.zeroconf import ZeroconfServiceInfo
 
         zeroconf_info = ZeroconfServiceInfo(
             ip_address=IPv4Address("192.168.1.100"),

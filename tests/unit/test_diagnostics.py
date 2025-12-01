@@ -149,8 +149,9 @@ class TestConfigEntryDiagnostics:
     @pytest.mark.asyncio
     async def test_config_entry_diagnostics_success(self, hass, mock_config_entry, mock_speaker):
         """Test config entry diagnostics with valid speaker."""
-        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
         from unittest.mock import patch
+
+        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
 
         with patch(
             "custom_components.wiim.diagnostics.get_speaker_from_config_entry",
@@ -168,8 +169,9 @@ class TestConfigEntryDiagnostics:
     @pytest.mark.asyncio
     async def test_config_entry_diagnostics_speaker_not_found(self, hass, mock_config_entry):
         """Test config entry diagnostics when speaker not found."""
-        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
         from unittest.mock import patch
+
+        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
 
         with patch(
             "custom_components.wiim.diagnostics.get_speaker_from_config_entry",
@@ -183,8 +185,9 @@ class TestConfigEntryDiagnostics:
     @pytest.mark.asyncio
     async def test_config_entry_diagnostics_with_group(self, hass, mock_config_entry, mock_speaker):
         """Test config entry diagnostics with group information."""
-        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
         from unittest.mock import MagicMock, patch
+
+        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
 
         # Setup master with group
         mock_speaker.coordinator.data = {"player": MagicMock()}
@@ -206,8 +209,9 @@ class TestConfigEntryDiagnostics:
     @pytest.mark.asyncio
     async def test_config_entry_diagnostics_handles_exception(self, hass, mock_config_entry):
         """Test config entry diagnostics handles exceptions."""
-        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
         from unittest.mock import patch
+
+        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
 
         with patch(
             "custom_components.wiim.diagnostics.get_speaker_from_config_entry",
@@ -224,9 +228,10 @@ class TestDiagnosticsHelperFunctions:
 
     def test_get_pywiim_version(self):
         """Test _get_pywiim_version function."""
-        from custom_components.wiim.diagnostics import _get_pywiim_version
-        from unittest.mock import patch
         from importlib.metadata import PackageNotFoundError
+        from unittest.mock import patch
+
+        from custom_components.wiim.diagnostics import _get_pywiim_version
 
         with patch("custom_components.wiim.diagnostics.metadata.version", return_value="1.0.0"):
             version = _get_pywiim_version()

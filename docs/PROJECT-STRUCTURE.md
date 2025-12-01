@@ -39,10 +39,8 @@ wiim/
 │   │   ├── test_config_flow.py
 │   │   ├── test_diagnostics.py
 │   │   └── ...
-│   ├── integration/            # Integration tests
-│   │   └── test_ipv6_regression.py
-│   ├── conftest.py             # Shared pytest fixtures
-│   ├── conftest_wiim.py        # WiiM-specific fixtures
+
+│   ├── conftest.py             # All pytest fixtures (consolidated)
 │   ├── const.py                # Test constants
 │   ├── run_tests.py            # Test runner
 │   └── README.md               # Test documentation
@@ -132,13 +130,6 @@ Each platform file follows the same pattern:
 - Test individual components
 - Run on every commit
 
-#### `tests/integration/`
-
-- Realistic integration tests
-- Test workflows
-- May use test containers
-- Run pre-release
-
 #### `scripts/`
 
 - Manual validation tests
@@ -210,16 +201,6 @@ tests/unit/
 ├── test_media_player.py      # Media player tests
 ├── test_config_flow.py       # Config flow tests
 ├── test_diagnostics.py       # Diagnostics tests
-└── ...
-```
-
-**Pattern**: One test file per source file
-
-### Integration Tests
-
-```
-tests/integration/
-├── test_ipv6_regression.py   # IPv6 regression test
 └── ...
 ```
 

@@ -84,8 +84,9 @@ class TestWiiMChannelBalance:
 
     def test_channel_balance_initialization(self):
         """Test channel balance entity initialization."""
-        from custom_components.wiim.number import WiiMChannelBalance
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.number import WiiMChannelBalance
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -102,8 +103,9 @@ class TestWiiMChannelBalance:
 
     def test_channel_balance_native_value(self):
         """Test channel balance native_value property."""
-        from custom_components.wiim.number import WiiMChannelBalance
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.number import WiiMChannelBalance
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -116,8 +118,9 @@ class TestWiiMChannelBalance:
     @pytest.mark.asyncio
     async def test_channel_balance_set_native_value(self):
         """Test setting channel balance value."""
-        from custom_components.wiim.number import WiiMChannelBalance
         from unittest.mock import AsyncMock, MagicMock, patch
+
+        from custom_components.wiim.number import WiiMChannelBalance
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -137,8 +140,9 @@ class TestWiiMChannelBalance:
     @pytest.mark.asyncio
     async def test_channel_balance_set_native_value_handles_error(self):
         """Test channel balance handles errors when setting value."""
-        from custom_components.wiim.number import WiiMChannelBalance
         from unittest.mock import AsyncMock, MagicMock
+
+        from custom_components.wiim.number import WiiMChannelBalance
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -154,8 +158,9 @@ class TestWiiMChannelBalance:
 
     def test_channel_balance_extra_state_attributes(self):
         """Test channel balance extra_state_attributes."""
-        from custom_components.wiim.number import WiiMChannelBalance
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.number import WiiMChannelBalance
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"

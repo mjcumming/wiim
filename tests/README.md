@@ -1,4 +1,4 @@
-# WiiM Integration Tests
+# WiiM Unit Tests
 
 ## Quick Start
 
@@ -25,10 +25,7 @@ tests/
 │   ├── test_config_flow.py     # Config flow & options
 │   ├── test_diagnostics.py     # Diagnostics & error handling
 │   └── ...
-├── integration/       # Integration tests (realistic scenarios)
-│   └── test_ipv6_regression.py
-├── conftest.py        # Shared pytest fixtures
-├── conftest_wiim.py   # WiiM-specific fixtures
+├── conftest.py        # All pytest fixtures (consolidated)
 └── run_tests.py       # Test runner script
 ```
 
@@ -40,12 +37,6 @@ tests/
 - **Isolated** - Use mocks/fixtures
 - **Comprehensive** - Test all code paths
 - **Regression** - Prevent bugs from returning
-
-### Integration Tests (`tests/integration/`)
-
-- **Realistic** - Test real scenarios
-- **End-to-end** - Test full workflows
-- **Slower** - May require setup
 
 ## Running Tests
 
@@ -116,12 +107,33 @@ Examples:
 
 ## Test Fixtures
 
-See `conftest.py` and `conftest_wiim.py` for available fixtures:
+See `conftest.py` for all available fixtures, organized into categories:
 
+**Autouse Fixtures** (applied automatically):
+
+- `auto_enable_custom_integrations` - Enable custom integrations
+- `skip_notifications` - Skip notification calls
+- `allow_unwatched_threads` - Allow background threads
+
+**Core Mock Fixtures**:
+
+- `mock_wiim_client` - Mock pywiim client
 - `mock_coordinator` - Mock coordinator
-- `mock_speaker` - Mock speaker
-- `mock_config_entry` - Mock config entry
-- `hass` - Home Assistant instance (from pytest_homeassistant_custom_component)
+
+**Error Simulation Fixtures**:
+
+- `bypass_get_data` - Bypass API calls for testing integration setup
+- `error_on_get_data` - Simulate API errors
+
+**WiiM-Specific Fixtures**:
+
+- `wiim_config_entry`, `wiim_client`, `wiim_coordinator`, `wiim_speaker`, `wiim_speaker_slave`
+
+**Helper Fixtures**:
+
+- `mock_wiim_device_registry`, `mock_wiim_dispatcher`
+
+Note: Many test files define their own local fixtures for specific scenarios. See `conftest.py` for complete documentation.
 
 ## Coverage Goals
 
@@ -144,7 +156,7 @@ See `conftest.py` and `conftest_wiim.py` for available fixtures:
 - `test_system_health.py` - System health (1 test)
 - `test_entity_core.py` - Base entity (4 tests)
 - `test_coordinator_core.py` - Coordinator (9 tests)
-- `test_init_integration.py` - Integration setup (10 tests)
+- `test_init_integration.py` - Integration setup and teardown (10 tests)
 - `test_binary_sensor.py` - Binary sensor platform (1 test)
 - `test_button.py` - Button entities (11 tests)
 - `test_number.py` - Number entities (4 tests)

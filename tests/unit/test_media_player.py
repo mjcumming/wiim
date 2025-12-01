@@ -189,7 +189,7 @@ class TestWiiMMediaPlayerPlayback:
 
     @pytest.mark.asyncio
     async def test_media_stop(self, media_player, mock_coordinator):
-        """Test stop command."""
+        """Test stop command clears media content ID."""
         player = mock_coordinator.data["player"]
         player.stop = AsyncMock(return_value=True)
         player.source = "spotify"  # Not streaming
@@ -198,14 +198,6 @@ class TestWiiMMediaPlayerPlayback:
 
         player.stop.assert_called_once()
         mock_coordinator.async_request_refresh.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_media_stop(self, media_player, mock_coordinator):
-        """Test stop command clears media content ID."""
-        player = mock_coordinator.data["player"]
-        player.stop = AsyncMock(return_value=True)
-
-        await media_player.async_media_stop()
 
         # Should call stop and clear media_content_id
         player.stop.assert_called_once()
@@ -300,8 +292,8 @@ class TestWiiMMediaPlayerSource:
     @pytest.mark.asyncio
     async def test_select_source_handles_error(self, media_player, mock_coordinator):
         """Test select source handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.set_source = AsyncMock(side_effect=WiiMError("Source error"))
 
@@ -389,8 +381,8 @@ class TestWiiMMediaPlayerErrorHandling:
     @pytest.mark.asyncio
     async def test_set_volume_handles_error(self, media_player, mock_coordinator):
         """Test set volume handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.set_volume = AsyncMock(side_effect=WiiMError("Volume error"))
 
@@ -400,8 +392,8 @@ class TestWiiMMediaPlayerErrorHandling:
     @pytest.mark.asyncio
     async def test_mute_handles_error(self, media_player, mock_coordinator):
         """Test mute handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.set_mute = AsyncMock(side_effect=WiiMError("Mute error"))
 
@@ -476,8 +468,8 @@ class TestWiiMMediaPlayerShuffleRepeat:
     @pytest.mark.asyncio
     async def test_set_shuffle_handles_error(self, media_player, mock_coordinator):
         """Test set_shuffle handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.set_shuffle = AsyncMock(side_effect=WiiMError("Shuffle error"))
 
@@ -565,9 +557,9 @@ class TestWiiMMediaPlayerShuffleRepeat:
     @pytest.mark.asyncio
     async def test_set_repeat_handles_error(self, media_player, mock_coordinator):
         """Test set_repeat handles errors."""
-        from pywiim.exceptions import WiiMError
-        from homeassistant.exceptions import HomeAssistantError
         from homeassistant.components.media_player import RepeatMode
+        from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.set_repeat = AsyncMock(side_effect=WiiMError("Repeat error"))
 
@@ -577,8 +569,8 @@ class TestWiiMMediaPlayerShuffleRepeat:
     @pytest.mark.asyncio
     async def test_set_repeat_handles_attribute_error(self, media_player, mock_coordinator):
         """Test set_repeat handles AttributeError when method not available."""
-        from homeassistant.exceptions import HomeAssistantError
         from homeassistant.components.media_player import RepeatMode
+        from homeassistant.exceptions import HomeAssistantError
 
         mock_coordinator.player.set_repeat = AsyncMock(side_effect=AttributeError("Method not found"))
 
@@ -664,8 +656,8 @@ class TestWiiMMediaPlayerSoundMode:
     @pytest.mark.asyncio
     async def test_select_sound_mode_handles_error(self, media_player, mock_coordinator):
         """Test select_sound_mode handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator._capabilities = {"supports_eq": True}
         mock_coordinator.player.set_eq_preset = AsyncMock(side_effect=WiiMError("EQ error"))
@@ -726,8 +718,8 @@ class TestWiiMMediaPlayerPlayMedia:
     @pytest.mark.asyncio
     async def test_play_media_handles_error(self, media_player, mock_coordinator):
         """Test play_media handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.play_url = AsyncMock(side_effect=WiiMError("Play error"))
         media_player.hass = MagicMock()
@@ -807,8 +799,8 @@ class TestWiiMMediaPlayerJoinUnjoin:
     @pytest.mark.asyncio
     async def test_async_unjoin_player_handles_error(self, media_player, mock_coordinator):
         """Test async_unjoin_player handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         player = mock_coordinator.data["player"]
         player.leave_group = AsyncMock(side_effect=WiiMError("Leave error"))
@@ -867,8 +859,8 @@ class TestWiiMMediaPlayerTimers:
     @pytest.mark.asyncio
     async def test_set_sleep_timer_handles_error(self, media_player, mock_coordinator):
         """Test set_sleep_timer handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.set_sleep_timer = AsyncMock(side_effect=WiiMError("Timer error"))
 
@@ -887,8 +879,8 @@ class TestWiiMMediaPlayerTimers:
     @pytest.mark.asyncio
     async def test_clear_sleep_timer_handles_error(self, media_player, mock_coordinator):
         """Test clear_sleep_timer handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.cancel_sleep_timer = AsyncMock(side_effect=WiiMError("Cancel error"))
 
@@ -919,8 +911,8 @@ class TestWiiMMediaPlayerTimers:
     @pytest.mark.asyncio
     async def test_set_alarm_handles_error(self, media_player, mock_coordinator):
         """Test set_alarm handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.get_alarm = AsyncMock(return_value=None)
         mock_coordinator.player.set_alarm = AsyncMock(side_effect=WiiMError("Alarm error"))
@@ -970,15 +962,17 @@ class TestWiiMMediaPlayerHelperFunctions:
 
     def test_is_connection_error_detects_connection_error(self):
         """Test _is_connection_error detects WiiMConnectionError."""
-        from custom_components.wiim.media_player import _is_connection_error
         from pywiim.exceptions import WiiMConnectionError
+
+        from custom_components.wiim.media_player import _is_connection_error
 
         assert _is_connection_error(WiiMConnectionError("Connection lost")) is True
 
     def test_is_connection_error_detects_timeout_error(self):
         """Test _is_connection_error detects WiiMTimeoutError."""
-        from custom_components.wiim.media_player import _is_connection_error
         from pywiim.exceptions import WiiMTimeoutError
+
+        from custom_components.wiim.media_player import _is_connection_error
 
         assert _is_connection_error(WiiMTimeoutError("Timeout")) is True
 
@@ -1003,8 +997,9 @@ class TestWiiMMediaPlayerHelperFunctions:
 
     def test_media_source_filter(self):
         """Test media_source_filter filters audio content."""
-        from custom_components.wiim.media_player import media_source_filter
         from homeassistant.components.media_player import BrowseMedia, MediaType
+
+        from custom_components.wiim.media_player import media_source_filter
 
         audio_item = MagicMock(spec=BrowseMedia)
         audio_item.media_content_type = "audio/mpeg"
@@ -1086,8 +1081,8 @@ class TestWiiMMediaPlayerClearPlaylist:
     @pytest.mark.asyncio
     async def test_clear_playlist_handles_error(self, media_player, mock_coordinator):
         """Test clear_playlist handles errors."""
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.clear_playlist = AsyncMock(side_effect=WiiMError("Clear error"))
 
@@ -1243,8 +1238,8 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
     async def test_play_media_handles_add_to_queue_error(self, media_player, mock_coordinator):
         """Test play_media handles add_to_queue error."""
         from homeassistant.components.media_player import ATTR_MEDIA_ENQUEUE, MediaPlayerEnqueue
-        from pywiim.exceptions import WiiMError
         from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.add_to_queue = AsyncMock(side_effect=WiiMError("Queue error"))
         mock_coordinator.player._upnp_client = MagicMock()

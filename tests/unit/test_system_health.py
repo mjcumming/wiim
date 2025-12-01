@@ -35,6 +35,7 @@ class TestSystemHealth:
     async def test_system_health_with_speakers(self, hass: HomeAssistant):
         """Test system health with actual speakers."""
         from unittest.mock import MagicMock, patch
+
         from custom_components.wiim.system_health import system_health_info
 
         # Create mock speakers
@@ -70,6 +71,7 @@ class TestSystemHealth:
     async def test_system_health_device_health_check(self, hass: HomeAssistant):
         """Test system health device health check."""
         from unittest.mock import AsyncMock, MagicMock
+
         from custom_components.wiim.system_health import _check_device_health
 
         mock_speaker = MagicMock()
@@ -89,6 +91,7 @@ class TestSystemHealth:
     async def test_system_health_device_health_check_error(self, hass: HomeAssistant):
         """Test system health device health check with error."""
         from unittest.mock import AsyncMock, MagicMock
+
         from custom_components.wiim.system_health import _check_device_health
 
         mock_speaker = MagicMock()
@@ -105,6 +108,7 @@ class TestSystemHealth:
     async def test_system_health_pywiim_version(self, hass: HomeAssistant):
         """Test system health includes pywiim version."""
         from unittest.mock import MagicMock, patch
+
         from custom_components.wiim.system_health import system_health_info
 
         mock_entry = MagicMock()
@@ -120,8 +124,9 @@ class TestSystemHealth:
     @pytest.mark.asyncio
     async def test_system_health_pywiim_version_not_found(self, hass: HomeAssistant):
         """Test system health handles missing pywiim version."""
-        from unittest.mock import MagicMock, patch
         from importlib.metadata import PackageNotFoundError
+        from unittest.mock import MagicMock, patch
+
         from custom_components.wiim.system_health import system_health_info
 
         mock_entry = MagicMock()

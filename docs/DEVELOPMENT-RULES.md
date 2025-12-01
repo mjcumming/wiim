@@ -140,7 +140,7 @@ Before writing code, ask yourself:
 1. **What user story am I solving?** (quote the Issue #)
 2. **Where does this logic belong?** (`pywiim` ↔ `coordinator.py` ↔ entity/service)
 3. **What data do I need from the device?** (via `pywiim` client methods)
-4. **How will I test success & failure?** (unit + integration test)
+4. **How will I test success & failure?** (unit tests)
 5. **How does this interact with multi-room state?**
 6. **What happens if the device is offline?** (timeouts, retries)
 7. **How will this appear in Home Assistant UI?** (state, attributes, services)
@@ -266,13 +266,7 @@ _LOGGER.info("Volume set")
    - Run on every commit
    - Test all code paths
 
-2. **Integration Tests** (`tests/integration/`)
-
-   - Realistic scenarios
-   - May use test containers
-   - Test workflows
-
-3. **Manual Validation** (`scripts/`)
+2. **Manual Validation** (`scripts/`)
    - Real devices
    - Before major releases
    - User acceptance
@@ -280,7 +274,7 @@ _LOGGER.info("Volume set")
 ### Test Requirements
 
 - ✅ Every bug fix → Regression test
-- ✅ New feature → Unit + integration tests
+- ✅ New feature → Unit tests
 - ✅ Edge cases → Test None, missing attributes, errors
 - ✅ All tests must pass before merge
 
@@ -290,7 +284,7 @@ Before submitting a PR:
 
 - [ ] Code confined to `custom_components/wiim/`
 - [ ] Fulfils Issue #\_\_\_ ✅
-- [ ] Added/updated unit + integration tests
+- [ ] Added/updated unit tests
 - [ ] All tests pass: `make test`
 - [ ] Passes linting: `make lint`
 - [ ] Coverage ≥ 10% (target 80%+)

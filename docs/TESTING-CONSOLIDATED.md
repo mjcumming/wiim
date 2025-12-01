@@ -1,5 +1,7 @@
 # Testing Guidelines
 
+This document provides comprehensive testing guidelines for the WiiM Home Assistant integration.
+
 ## Test Directory Structure
 
 ### `tests/` - Automated Tests (Primary)
@@ -15,10 +17,7 @@ tests/
 │   ├── test_config_flow.py
 │   ├── test_diagnostics.py
 │   └── ...
-├── integration/       # Integration tests (realistic scenarios)
-│   └── test_ipv6_regression.py
-├── conftest.py        # Shared pytest fixtures
-├── conftest_wiim.py   # WiiM-specific fixtures
+├── conftest.py        # All pytest fixtures (consolidated)
 └── run_tests.py       # Test runner
 ```
 
@@ -173,24 +172,6 @@ def test_component_behavior():
 - Mocked (no real devices)
 - Comprehensive (all code paths)
 
-#### Integration Tests (`tests/integration/`)
-
-**Pattern**:
-
-```python
-async def test_workflow():
-    """Test complete workflow."""
-    # Setup
-    # Execute workflow
-    # Verify results
-```
-
-**Requirements**:
-
-- Realistic scenarios
-- May use test containers
-- Test workflows, not just units
-
 #### Manual Validation (`scripts/`)
 
 **Requirements**:
@@ -217,18 +198,38 @@ def test_<component>_<behavior>_<condition>():
 
 ## Test Fixtures
 
-### Shared Fixtures (`conftest.py`)
+All fixtures are defined in `tests/conftest.py` and organized into categories:
 
-- `mock_wiim_client` - Mock pywiim client
-- `mock_coordinator` - Mock coordinator
-- `hass` - Home Assistant instance
-- `enable_custom_integrations` - Enable custom integrations
+### Autouse Fixtures (applied automatically)
 
-### WiiM Fixtures (`conftest_wiim.py`)
+- `auto_enable_custom_integrations` - Enable custom integrations
+- `skip_notifications` - Skip notification calls
+- `allow_unwatched_threads` - Allow background threads
 
-- `mock_player` - Mock pywiim Player
-- `mock_speaker` - Mock Speaker object
-- `mock_config_entry` - Mock config entry
+### Core Mock Fixtures
+
+- `mock_wiim_client` - Mock pywiim client with common methods
+- `mock_coordinator` - Mock coordinator with standard data structure
+
+### Error Simulation Fixtures
+
+- `bypass_get_data` - Bypass API calls and return mock data
+- `error_on_get_data` - Simulate API errors for error handling tests
+
+### WiiM-Specific Fixtures
+
+- `wiim_config_entry` - Mock config entry
+- `wiim_client` - Mock WiiM client with realistic responses
+- `wiim_coordinator` - Mock coordinator with full player object
+- `wiim_speaker` - Test Speaker instance with HA integration
+- `wiim_speaker_slave` - Test slave Speaker for group testing
+
+### Helper Fixtures
+
+- `mock_wiim_device_registry` - Mock device registry
+- `mock_wiim_dispatcher` - Mock dispatcher
+
+Note: Many test files define their own local fixtures for specific test scenarios. This is acceptable and encouraged when fixtures are test-specific.
 
 ## Regression Tests
 

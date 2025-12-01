@@ -228,7 +228,6 @@ wiim/
 │
 ├── tests/                      # Automated tests (pytest)
 │   ├── unit/                   # Unit tests (fast, mocked)
-│   ├── integration/            # Integration tests
 │   ├── conftest.py             # Shared fixtures
 │   └── run_tests.py            # Test runner
 │
@@ -336,14 +335,7 @@ raise HomeAssistantError("Error")
 - **When**: Every commit, pre-release
 - **Coverage Target**: 80%+
 
-#### 2. Integration Tests (`tests/integration/`)
-
-- **Purpose**: Realistic scenarios
-- **Speed**: Seconds to minutes
-- **Devices**: Mocked or test containers
-- **When**: Pre-release, PR validation
-
-#### 3. Manual Validation (`scripts/`)
+#### 2. Manual Validation (`scripts/`)
 
 - **Purpose**: Real device testing
 - **Speed**: Minutes
@@ -353,7 +345,7 @@ raise HomeAssistantError("Error")
 ### Test Requirements
 
 1. **Every bug fix** → Regression test
-2. **New feature** → Unit + integration tests
+2. **New feature** → Unit tests
 3. **Edge cases** → Test None, missing attributes, errors
 4. **Coverage** → Aim for 80%+
 

@@ -510,8 +510,9 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_initialization(self):
         """Test diagnostic sensor initialization."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMDiagnosticSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -525,8 +526,9 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_native_value_with_rssi(self):
         """Test diagnostic sensor native_value with RSSI."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMDiagnosticSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -541,8 +543,9 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_native_value_online(self):
         """Test diagnostic sensor native_value when online."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMDiagnosticSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -559,8 +562,9 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_native_value_offline(self):
         """Test diagnostic sensor native_value when offline."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMDiagnosticSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -576,8 +580,9 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_extra_state_attributes(self):
         """Test diagnostic sensor extra_state_attributes."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMDiagnosticSensor
 
         mock_device_model = MagicMock()
         mock_device_model.model_dump = MagicMock(return_value={"mac": "AA:BB:CC:DD:EE:FF", "firmware": "1.0.0"})
@@ -603,8 +608,9 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_device_info_empty(self):
         """Test diagnostic sensor _device_info with None device_model."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMDiagnosticSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -621,8 +627,9 @@ class TestRoleSensorEdgeCases:
 
     def test_role_sensor_with_slave_and_master(self):
         """Test role sensor with slave and master group."""
-        from custom_components.wiim.sensor import WiiMRoleSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMRoleSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -647,8 +654,9 @@ class TestAudioQualitySensor:
 
     def test_audio_quality_sensor_initialization(self):
         """Test audio quality sensor initialization."""
-        from custom_components.wiim.sensor import WiiMAudioQualitySensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMAudioQualitySensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -660,8 +668,9 @@ class TestAudioQualitySensor:
 
     def test_audio_quality_sensor_native_value(self):
         """Test audio quality sensor native_value."""
-        from custom_components.wiim.sensor import WiiMAudioQualitySensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMAudioQualitySensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -682,8 +691,9 @@ class TestAudioQualitySensor:
 
     def test_audio_quality_sensor_handles_missing_data(self):
         """Test audio quality sensor handles missing data."""
-        from custom_components.wiim.sensor import WiiMAudioQualitySensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMAudioQualitySensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -700,8 +710,9 @@ class TestBluetoothOutputSensor:
 
     def test_bluetooth_output_sensor_initialization(self):
         """Test Bluetooth output sensor initialization."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -713,8 +724,9 @@ class TestBluetoothOutputSensor:
 
     def test_bluetooth_output_sensor_native_value_on(self):
         """Test Bluetooth output sensor returns 'on' when active."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -728,8 +740,9 @@ class TestBluetoothOutputSensor:
 
     def test_bluetooth_output_sensor_native_value_off(self):
         """Test Bluetooth output sensor returns 'off' when inactive."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
@@ -743,8 +756,9 @@ class TestBluetoothOutputSensor:
 
     def test_bluetooth_output_sensor_extra_state_attributes(self):
         """Test Bluetooth output sensor extra_state_attributes."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
         from unittest.mock import MagicMock
+
+        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
 
         mock_speaker = MagicMock()
         mock_speaker.uuid = "test-uuid"
