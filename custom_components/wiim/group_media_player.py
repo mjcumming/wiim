@@ -197,11 +197,15 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
-            | MediaPlayerEntityFeature.NEXT_TRACK
-            | MediaPlayerEntityFeature.PREVIOUS_TRACK
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
         )
+
+        # Only include next/previous track if master's source supports them
+        # This ensures consistency with the individual master player entity
+        if self._next_track_supported():
+            features |= MediaPlayerEntityFeature.NEXT_TRACK
+            features |= MediaPlayerEntityFeature.PREVIOUS_TRACK
 
         # Only include shuffle/repeat if master's source supports them
         if self._shuffle_supported():
@@ -430,6 +434,22 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.async_request_refresh()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play media: {err}") from err
+
+    # ===== NEXT/PREVIOUS TRACK =====
+
+    def _next_track_supported(self) -> bool:
+        """Check if next/previous track is supported by master's current source.
+
+        Next/previous track availability depends on the content being played (local files,
+        streaming services, etc.). pywiim's Player automatically determines this.
+        """
+        if not self.available:
+            return False
+        player = self._get_player()
+        if not player:
+            return False
+        # Use pywiim's next_track_supported property (per integration guide)
+        return bool(getattr(player, "next_track_supported", False))
 
     # ===== SHUFFLE & REPEAT =====
 

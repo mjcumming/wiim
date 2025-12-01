@@ -1,21 +1,36 @@
 # Changelog
 
-## [1.0.30] - 2025-11-30
-
-### Changed
-
-- Release version 1.0.30
-
-
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
-## [Unreleased]
+## [1.0.31] - 2025-12-01
+
+### Fixed
+
+- **Translation Error**: Fixed translation error in onboarding message for Zeroconf discovery
+
+  - Removed unused `{audio_pro_note}` placeholder from `discovery_confirm` step translations
+  - Resolves GitHub issue #130
+
+- **Onboarding Flow**: Improved onboarding experience for discovered devices
+  - Devices discovered via Zeroconf/SSDP during initial Home Assistant setup now auto-add without confirmation dialog
+  - After onboarding, users still see confirmation dialog before adding devices
+  - Follows Home Assistant best practices and matches behavior of other integrations
+
+## [1.0.30] - 2025-11-30
 
 ### Added
 
 - **Announcement Support**: Added support for Home Assistant's `announce` parameter in `play_media`
   - Uses device's built-in `playPromptUrl` endpoint via `player.play_notification()`
   - Works with NETWORK, USB, and AirPlay sources
+
+### Fixed
+
+- **Group Coordinator Next/Previous Track**: Fixed inconsistency in next/previous track controls between master player and group coordinator
+
+  - Group coordinator now checks `next_track_supported` before showing next/previous track controls
+  - Ensures both master player and group coordinator show/hide controls consistently based on source support
+  - Both entities now stay synchronized when controlling group playback
 
 ### Changed
 
