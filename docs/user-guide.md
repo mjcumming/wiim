@@ -85,8 +85,10 @@ service: wiim.play_url
 target:
   entity_id: media_player.living_room
 data:
-  url: "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two"
+  url: "http://ice2.somafm.com/groovesalad-128-mp3"
 ```
+
+> **⚠️ Note:** WiiM devices accept play commands silently even if the stream fails (geo-blocked, invalid URL, etc.). If nothing plays, check that the device state changed to "playing". HTTP streams are more reliable than HTTPS. See [FAQ](faq-and-troubleshooting.md#q-i-sent-a-play-command-but-nothing-happened---no-error-shown) for troubleshooting.
 
 **Play Preset** (configured in WiiM app)
 

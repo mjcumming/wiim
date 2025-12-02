@@ -189,7 +189,7 @@ class TestWiiMMediaPlayerPlayback:
 
     @pytest.mark.asyncio
     async def test_media_stop(self, media_player, mock_coordinator):
-        """Test stop command clears media content ID."""
+        """Test stop command."""
         player = mock_coordinator.data["player"]
         player.stop = AsyncMock(return_value=True)
         player.source = "spotify"  # Not streaming
@@ -197,11 +197,6 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_stop()
 
         player.stop.assert_called_once()
-        # State updates automatically via callback - no manual refresh needed
-
-        # Should call stop and clear media_content_id
-        player.stop.assert_called_once()
-        assert media_player._attr_media_content_id is None
         # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
@@ -687,8 +682,7 @@ class TestWiiMMediaPlayerPlayMedia:
         await media_player.async_play_media("music", "http://example.com/song.mp3")
 
         mock_coordinator.player.play_url.assert_called_once_with("http://example.com/song.mp3")
-        assert media_player._attr_media_content_id == "http://example.com/song.mp3"
-        # State updates automatically via callback - no manual refresh needed
+        # pywiim now tracks the URL via play_url() - state updates automatically via callback
 
     @pytest.mark.asyncio
     async def test_play_media_preset(self, media_player, mock_coordinator):
@@ -699,7 +693,6 @@ class TestWiiMMediaPlayerPlayMedia:
         await media_player.async_play_media("preset", "1")
 
         mock_coordinator.player.play_preset.assert_called_once_with(1)
-        assert media_player._attr_media_content_id is None
         # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
@@ -746,38 +739,42 @@ class TestWiiMMediaPlayerMediaContent:
 
         assert media_player.media_content_type == MediaType.MUSIC
 
-    def test_media_content_id_returns_url_when_playing(self, media_player):
-        """Test media_content_id returns URL when playing."""
+    def test_media_content_id_returns_url_when_playing(self, media_player, mock_coordinator):
+        """Test media_content_id returns URL from pywiim when playing."""
         from homeassistant.components.media_player import MediaPlayerState
 
+        player = mock_coordinator.data["player"]
+        player.play_state = "play"
+        player.is_slave = False
+        player.group = None
+        player.media_content_id = "http://example.com/song.mp3"
         media_player._attr_state = MediaPlayerState.PLAYING
-        media_player._attr_media_content_id = "http://example.com/song.mp3"
 
         assert media_player.media_content_id == "http://example.com/song.mp3"
 
-    def test_media_content_id_returns_none_when_idle(self, media_player):
-        """Test media_content_id returns None when idle."""
+    def test_media_content_id_returns_none_when_idle(self, media_player, mock_coordinator):
+        """Test media_content_id returns None when idle (regardless of pywiim value)."""
         from homeassistant.components.media_player import MediaPlayerState
 
+        player = mock_coordinator.data["player"]
+        player.media_content_id = "http://example.com/song.mp3"
         media_player._attr_state = MediaPlayerState.IDLE
-        media_player._attr_media_content_id = "http://example.com/song.mp3"
 
+        # Should return None when idle even if pywiim has a URL
         assert media_player.media_content_id is None
 
-    def test_media_content_id_cleared_on_state_change(self, media_player, mock_coordinator):
-        """Test media_content_id is cleared when state becomes IDLE."""
+    def test_media_content_id_returns_none_for_non_url_sources(self, media_player, mock_coordinator):
+        """Test media_content_id returns None for non-URL sources (Spotify, etc.)."""
         from homeassistant.components.media_player import MediaPlayerState
 
+        player = mock_coordinator.data["player"]
+        player.play_state = "play"
+        player.is_slave = False
+        player.group = None
+        player.media_content_id = None  # pywiim returns None for non-URL sources
         media_player._attr_state = MediaPlayerState.PLAYING
-        media_player._attr_media_content_id = "http://example.com/song.mp3"
-        media_player.hass = MagicMock()
 
-        # Simulate state change to IDLE
-        mock_coordinator.data["player"].play_state = "stop"
-        with patch.object(media_player, "async_write_ha_state"):
-            media_player._handle_coordinator_update()
-
-        assert media_player._attr_media_content_id is None
+        assert media_player.media_content_id is None
 
 
 class TestWiiMMediaPlayerJoinUnjoin:
@@ -1218,7 +1215,7 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
         )
 
         mock_coordinator.player.play_url.assert_called_once_with("http://example.com/song.mp3")
-        assert media_player._attr_media_content_id == "http://example.com/song.mp3"
+        # pywiim now tracks the URL via play_url() - state updates automatically via callback
 
     @pytest.mark.asyncio
     async def test_play_media_announce_with_media_source(self, media_player, mock_coordinator):

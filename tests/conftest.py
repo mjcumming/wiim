@@ -269,6 +269,7 @@ def wiim_coordinator(wiim_client):
     mock_player.media_duration = None
     mock_player.media_position = None
     mock_player.media_image_url = None
+    mock_player.media_content_id = None  # URL if playing URL-based media
     mock_player.source = None
 
     # Audio quality properties

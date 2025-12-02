@@ -151,6 +151,46 @@ Check in order:
 3. Network reachable from speaker?
 4. Use media browser to test known-good content
 
+**Q: I sent a play command but nothing happened - no error shown?**
+
+⚠️ **This is a known device limitation.** WiiM/LinkPlay devices accept play commands silently even when playback fails. The device returns "success" to the integration, but the stream may fail to play due to:
+
+- **Geo-restrictions** - Stream blocked in your region
+- **Invalid URL** - Stream moved or no longer available
+- **HTTPS issues** - Some HTTPS streams have certificate problems
+- **Network issues** - Device can't reach the stream server
+- **Format issues** - Unsupported codec or container
+
+**How to troubleshoot:**
+
+1. Check the device state - is it showing "playing"?
+2. Try a known-working stream: `http://ice2.somafm.com/groovesalad-128-mp3`
+3. Try HTTP instead of HTTPS (more reliable)
+4. Check if the stream works in a browser
+5. Enable debug logging to see device responses
+
+**Note:** This is a firmware limitation, not an integration bug. The device simply doesn't report stream failures back to Home Assistant.
+
+**Q: What streams are known to work reliably?**
+
+These HTTP streams are tested and reliable:
+
+```yaml
+# SomaFM (Various genres)
+http://ice2.somafm.com/groovesalad-128-mp3   # Ambient/Chill
+http://ice2.somafm.com/secretagent-128-mp3   # Lounge
+http://ice2.somafm.com/dronezone-128-mp3     # Ambient
+http://ice2.somafm.com/indiepop-128-mp3      # Indie Pop
+
+# BBC (UK)
+http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two
+
+# NPR (US)
+http://npr-ice.streamguys1.com/live.mp3
+```
+
+HTTP streams are generally more reliable than HTTPS on WiiM devices.
+
 **Q: How do I play TuneIn/Radio stations?**
 
 Get the direct stream URL (not the web player page):

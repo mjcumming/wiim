@@ -369,9 +369,7 @@ class TestActionYAMLSync:
         for action_name, action_def in services_yaml_content.items():
             assert isinstance(action_def, dict), f"Action '{action_name}' should be a dictionary"
             # Each action should have a target (for entity selection in UI)
-            assert "target" in action_def, (
-                f"Action '{action_name}' should have a 'target' for entity selection"
-            )
+            assert "target" in action_def, f"Action '{action_name}' should have a 'target' for entity selection"
 
     def test_strings_json_services_structure(self, strings_json_content):
         """Test that strings.json services section has correct structure."""

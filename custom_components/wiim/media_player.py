@@ -195,7 +195,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         super().__init__(speaker)
         self._attr_unique_id = speaker.uuid
         self._attr_name = None  # Use device name
-        self._attr_media_content_id: str | None = None  # Track URL for scene restoration
 
     def _derive_state_from_player(self, player) -> MediaPlayerState | None:
         """Map pywiim's play_state to MediaPlayerState."""
@@ -502,8 +501,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await player.stop()
-            # Clear media_content_id when stopped (not paused, as pause preserves state)
-            self._attr_media_content_id = None
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop playback: {err}") from err
@@ -665,8 +662,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.set_source(device_source)
-            # Clear media_content_id when source changes (new source may not be a URL)
-            self._attr_media_content_id = None
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to select source '{source}': {err}") from err
@@ -683,19 +678,18 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Return the content ID (URL) of currently playing media.
 
         This is used by Home Assistant for scene restoration. When a URL is played
-        via async_play_media(), we store it here so scenes can restore it.
+        via play_url(), pywiim tracks it and exposes it here.
 
-        Returns the URL if we have one tracked and the player is in a state where
-        media could be playing (PLAYING or PAUSED). This allows scenes to restore
-        the URL that was playing when the scene was saved.
+        Returns the URL if playing URL-based media and in PLAYING or PAUSED state.
+        Returns None for other sources (Spotify, Bluetooth, etc.) or when idle.
         """
         # Only return URL if we're in a state where media could be playing
         if self.state not in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
             return None
 
-        # Return tracked URL if available
-        # This will be set when async_play_media() is called with a URL
-        return self._attr_media_content_id
+        # Use pywiim's tracked URL (set when play_url() is called)
+        player = self._get_metadata_player()
+        return player.media_content_id if player else None
 
     @property
     def media_title(self) -> str | None:
@@ -719,12 +713,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         self._update_position_from_coordinator()
-
-        # Clear media_content_id if state becomes IDLE (nothing playing)
-        # This handles cases where playback stops externally (not via our stop method)
-        if self.state == MediaPlayerState.IDLE:
-            self._attr_media_content_id = None
-
         super()._handle_coordinator_update()
 
     # Properties now use _attr values set during coordinator update
@@ -896,8 +884,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             preset_num = int(media_id)
             try:
                 await self.coordinator.player.play_preset(preset_num)
-                # Clear media_content_id when playing preset (not a URL)
-                self._attr_media_content_id = None
                 # State updates automatically via callback - no manual refresh needed
             except WiiMError as err:
                 raise HomeAssistantError(f"Failed to play preset: {err}") from err
@@ -953,8 +939,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             if enqueue == MediaPlayerEnqueue.PLAY:
                 try:
                     await self.coordinator.player.play_url(media_id)
-                    # Store URL for scene restoration
-                    self._attr_media_content_id = media_id
                     # State updates automatically via callback - no manual refresh needed
                 except WiiMError as err:
                     raise HomeAssistantError(f"Failed to play media immediately: {err}") from err
@@ -962,8 +946,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.play_url(media_id)
-            # Store URL for scene restoration
-            self._attr_media_content_id = media_id
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play media: {err}") from err

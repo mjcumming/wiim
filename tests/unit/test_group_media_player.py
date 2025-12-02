@@ -51,6 +51,7 @@ def mock_master_player():
     player.media_duration = 180
     player.media_position = 60
     player.media_image_url = "http://example.com/cover.jpg"
+    player.media_content_id = None  # URL if playing URL-based media
 
     # Methods
     player.set_volume = AsyncMock(return_value=True)
@@ -544,24 +545,25 @@ class TestWiiMGroupMediaPlayerMediaContent:
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
         assert entity.media_content_type == MediaType.MUSIC
 
-    def test_media_content_id_returns_url_when_playing(self, mock_group_speaker):
-        """Test media_content_id returns URL when playing."""
+    def test_media_content_id_returns_url_when_playing(self, mock_group_speaker, mock_master_player):
+        """Test media_content_id returns URL from pywiim when playing."""
         from homeassistant.components.media_player import MediaPlayerState
 
+        mock_master_player.media_content_id = "http://example.com/song.mp3"
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
         entity._attr_state = MediaPlayerState.PLAYING
-        entity._attr_media_content_id = "http://example.com/song.mp3"
 
         assert entity.media_content_id == "http://example.com/song.mp3"
 
-    def test_media_content_id_returns_none_when_idle(self, mock_group_speaker):
-        """Test media_content_id returns None when idle."""
+    def test_media_content_id_returns_none_when_idle(self, mock_group_speaker, mock_master_player):
+        """Test media_content_id returns None when idle (regardless of pywiim value)."""
         from homeassistant.components.media_player import MediaPlayerState
 
+        mock_master_player.media_content_id = "http://example.com/song.mp3"
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
         entity._attr_state = MediaPlayerState.IDLE
-        entity._attr_media_content_id = "http://example.com/song.mp3"
 
+        # Should return None when idle even if pywiim has a URL
         assert entity.media_content_id is None
 
 
@@ -808,16 +810,15 @@ class TestWiiMGroupMediaPlayerUpdatePosition:
 class TestWiiMGroupMediaPlayerHandleUpdate:
     """Test group media player coordinator update handling."""
 
-    def test_handle_coordinator_update_clears_media_content_id_on_idle(self, mock_group_speaker, mock_master_player):
-        """Test _handle_coordinator_update clears media_content_id when state becomes IDLE."""
-        from homeassistant.components.media_player import MediaPlayerState
-
-        mock_master_player.play_state = "stop"
+    def test_handle_coordinator_update_updates_position(self, mock_group_speaker, mock_master_player):
+        """Test _handle_coordinator_update updates position from coordinator."""
+        mock_master_player.play_state = "play"
+        mock_master_player.media_position = 60
+        mock_master_player.media_duration = 180
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
-        entity._attr_media_content_id = "http://example.com/song.mp3"
-        entity._attr_state = MediaPlayerState.IDLE
 
         with patch.object(entity, "async_write_ha_state"):
             entity._handle_coordinator_update()
 
-        assert entity._attr_media_content_id is None
+        assert entity._attr_media_position == 60
+        assert entity._attr_media_duration == 180
