@@ -253,38 +253,58 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
         preset: "rock"
 ```
 
-## Services & Platforms
+## Actions (Services)
 
-### Official Services
+> **Note**: Home Assistant now calls "services" as "actions" in the UI. Both terms refer to the same functionality.
 
-| Service                  | Description                                         |
+### Media Playback Actions
+
+| Action                   | Description                                       |
+| ------------------------ | ------------------------------------------------- |
+| `wiim.play_preset`       | Play hardware preset (device dependent, up to 20) |
+| `wiim.play_url`          | Play audio from URL (radio streams, files)        |
+| `wiim.play_playlist`     | Play M3U playlist from URL                        |
+| `wiim.play_notification` | Play notification sound with auto volume restore  |
+
+### Queue Management Actions
+
+| Action                   | Description                                         |
 | ------------------------ | --------------------------------------------------- |
-| `wiim.play_preset`       | Play hardware preset (device dependent, up to 20)   |
-| `wiim.play_url`          | Play audio from URL (radio streams, files)          |
-| `wiim.play_playlist`     | Play M3U playlist from URL                          |
-| `wiim.set_eq`            | Set equalizer presets or custom 10-band values      |
-| `wiim.play_notification` | Play notification sound from URL                    |
-| `wiim.reboot_device`     | Reboot device                                       |
-| `wiim.sync_time`         | Synchronize device time with Home Assistant         |
-| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds, WiiM devices only) |
-| `wiim.clear_sleep_timer` | Clear sleep timer (WiiM devices only)               |
-| `wiim.update_alarm`      | Create/update alarm (3 slots, WiiM devices only)    |
+| `wiim.play_queue`        | Play from queue at specific position (requires UPnP)|
+| `wiim.remove_from_queue` | Remove item from queue at position (requires UPnP)  |
+| `wiim.get_queue`         | Get queue contents with metadata (requires UPnP)    |
 
-### Unofficial API Services
+### Audio & EQ Actions
 
-⚠️ **Advanced users only** - These services use reverse-engineered API endpoints that may not work on all firmware versions:
+| Action                  | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `wiim.set_eq`           | Set equalizer presets or custom 10-band values |
 
-| Service                     | Description                         |
-| --------------------------- | ----------------------------------- |
-| `wiim.scan_bluetooth`       | Scan for nearby Bluetooth devices   |
-| `wiim.set_channel_balance`  | Adjust left/right channel balance   |
-| `wiim.set_spdif_delay`      | Set SPDIF sample rate switch delay  |
-| `wiim.discover_lms_servers` | Search for LMS servers on network   |
-| `wiim.connect_lms_server`   | Connect to Lyrion Music Server      |
-| `wiim.set_auto_connect_lms` | Enable/disable LMS auto-connect     |
-| `wiim.set_touch_buttons`    | Enable/disable device touch buttons |
+### Timer & Alarm Actions (WiiM Devices Only)
 
-See the [Unofficial/Undocumented Endpoints](development/API_GUIDE.md#-unofficialundocumented-endpoints) section in the API Guide for complete documentation.
+| Action                   | Description                                         |
+| ------------------------ | --------------------------------------------------- |
+| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds)                    |
+| `wiim.clear_sleep_timer` | Clear active sleep timer                            |
+| `wiim.update_alarm`      | Create/update alarm (3 slots, UTC time)             |
+
+### Device Management Actions
+
+| Action               | Description                                 |
+| -------------------- | ------------------------------------------- |
+| `wiim.reboot_device` | Reboot device (temporarily unavailable)     |
+| `wiim.sync_time`     | Synchronize device time with Home Assistant |
+
+### Unofficial API Actions
+
+⚠️ **Advanced users only** - These actions use reverse-engineered API endpoints that may not work on all firmware versions:
+
+| Action                     | Description                       |
+| -------------------------- | --------------------------------- |
+| `wiim.scan_bluetooth`      | Scan for nearby Bluetooth devices |
+| `wiim.set_channel_balance` | Adjust left/right channel balance |
+
+See the [User Guide](docs/user-guide.md) for complete action documentation with examples.
 
 ## Source Customization
 

@@ -416,9 +416,42 @@ automation:
         message: "Living Room is now controlling a speaker group"
 ```
 
-### ⚠️ Unofficial API Services
+### 📋 Queue Management
 
-These services use reverse-engineered endpoints that may not work on all firmware versions. Test thoroughly before using in production.
+Queue management requires UPnP support. Check device capabilities in the entity attributes.
+
+**Play from Queue Position**
+
+```yaml
+service: wiim.play_queue
+target:
+  entity_id: media_player.living_room
+data:
+  queue_position: 0  # 0-based index
+```
+
+**Remove from Queue**
+
+```yaml
+service: wiim.remove_from_queue
+target:
+  entity_id: media_player.living_room
+data:
+  queue_position: 3  # Remove item at position 3
+```
+
+**Get Queue Contents**
+
+```yaml
+service: wiim.get_queue
+target:
+  entity_id: media_player.living_room
+# Returns: queue items with title, artist, album, URL
+```
+
+### ⚠️ Unofficial API Actions
+
+These actions use reverse-engineered endpoints that may not work on all firmware versions. Test thoroughly before using in production.
 
 **Audio Settings**
 
@@ -428,48 +461,18 @@ service: wiim.set_channel_balance
 target:
   entity_id: media_player.living_room
 data:
-  balance: 0.2
-
-# SPDIF delay (0-3000 ms)
-service: wiim.set_spdif_delay
-target:
-  entity_id: media_player.living_room
-data:
-  delay_ms: 800
+  balance: 0.2  # Slightly right
 ```
 
-**LMS/Squeezelite Integration**
+**Bluetooth Scanning**
 
 ```yaml
-# Discover LMS servers
-service: wiim.discover_lms_servers
-target:
-  entity_id: media_player.living_room
-
-# Connect to LMS server
-service: wiim.connect_lms_server
+# Scan for nearby Bluetooth devices
+service: wiim.scan_bluetooth
 target:
   entity_id: media_player.living_room
 data:
-  server_address: "192.168.1.123:3483"
-
-# Auto-connect to LMS
-service: wiim.set_auto_connect_lms
-target:
-  entity_id: media_player.living_room
-data:
-  enabled: true
-```
-
-**Device Controls**
-
-```yaml
-# Enable/disable touch buttons
-service: wiim.set_touch_buttons
-target:
-  entity_id: media_player.living_room
-data:
-  enabled: false
+  duration: 5  # Scan for 5 seconds (3-10 recommended)
 ```
 
 ---

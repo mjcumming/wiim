@@ -1,27 +1,28 @@
-# Service Test Coverage
+# Action (Service) Test Coverage
 
-This document lists all registered services and their test coverage status.
+This document lists all registered actions and their test coverage status.
 
-## Service Test Coverage Summary
+> **Note**: Home Assistant now calls "services" as "actions" in the UI. Both terms refer to the same functionality.
 
-### ✅ Fully Tested Services
+## Action Test Coverage Summary
 
-#### Core Services (in `services.py`)
+### ✅ Fully Tested Actions
 
-- ✅ **`set_sleep_timer`** - Tested in `test_services.py::TestServiceExecution`
-- ✅ **`clear_sleep_timer`** - Tested in `test_services.py::TestServiceExecution`
-- ✅ **`update_alarm`** - Tested in `test_services.py::TestServiceExecution`
+#### Platform Entity Actions (in `services.py`)
 
-#### Global Services (in `__init__.py`)
+- ✅ **`set_sleep_timer`** - Tested in `test_services.py`
+- ✅ **`clear_sleep_timer`** - Tested in `test_services.py`
+- ✅ **`update_alarm`** - Tested in `test_services.py`
+- ✅ **`reboot_device`** - Tested in `test_services.py`
+- ✅ **`sync_time`** - Tested in `test_services.py`
+- ✅ **`scan_bluetooth`** - Tested in `test_services.py`
+- ✅ **`set_channel_balance`** - Tested in `test_services.py`
 
-- ✅ **`reboot_device`** - Tested in `test_init_integration.py::test_reboot_device_service`
-- ✅ **`sync_time`** - Tested in `test_init_integration.py::test_sync_time_service`
+#### Media Player Entity Actions (in `media_player.py`)
 
-#### Media Player Services (in `media_player.py`)
-
-- ✅ **`play_url`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers::test_async_play_url`
-- ✅ **`play_preset`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers::test_async_play_preset`
-- ✅ **`play_playlist`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers::test_async_play_playlist`
+- ✅ **`play_url`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
+- ✅ **`play_preset`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
+- ✅ **`play_playlist`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
 - ✅ **`set_eq`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`:
   - `test_async_set_eq_preset` - EQ preset selection
   - `test_async_set_eq_custom_list` - Custom EQ with list values
@@ -29,40 +30,59 @@ This document lists all registered services and their test coverage status.
   - `test_async_set_eq_requires_custom_values` - Validation when preset is custom
   - `test_async_set_eq_not_supported` - Error when EQ not supported
   - `test_async_set_eq_handles_error` - Error handling
-- ✅ **`play_notification`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers::test_async_play_notification`
-- ✅ **`play_queue`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`:
-  - `test_async_play_queue_no_upnp` - Error when UPnP not available
-  - `test_async_play_queue_not_implemented` - Error until pywiim implements
-- ✅ **`remove_from_queue`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`:
-  - `test_async_remove_from_queue_no_upnp` - Error when UPnP not available
-  - `test_async_remove_from_queue_not_implemented` - Error until pywiim implements
-- ✅ **`get_queue`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`:
-  - `test_async_get_queue_no_upnp` - Error when UPnP not available
-  - `test_async_get_queue_not_implemented` - Error until pywiim implements
+- ✅ **`play_notification`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
+- ✅ **`play_queue`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
+- ✅ **`remove_from_queue`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
+- ✅ **`get_queue`** - Tested in `test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
 
 ## Test Coverage Details
 
-### Service Registration Tests
+### Action Sync Tests
 
-**Location**: `tests/unit/test_services.py::TestAllServicesRegistered`
+**Location**: `tests/unit/test_services.py::TestActionYAMLSync`
 
-- ✅ `test_all_services_from_yaml_registered` - Ensures all YAML services are registered
-- ✅ `test_services_yaml_matches_registered_services` - Ensures registered services have YAML
+These tests ensure all actions are properly synchronized across Python, YAML, and strings.json:
+
+- ✅ `test_all_yaml_actions_registered_in_python` - Ensures all YAML actions are registered
+- ✅ `test_all_registered_actions_have_yaml_definition` - Ensures registered actions have YAML
+- ✅ `test_all_yaml_actions_have_strings_translations` - Ensures all actions have translations
+- ✅ `test_strings_json_actions_match_yaml` - Ensures no orphaned translations
 - ✅ `test_services_yaml_structure` - Validates YAML structure
+- ✅ `test_strings_json_services_structure` - Validates strings.json structure
+- ✅ `test_yaml_fields_have_string_translations` - Ensures fields have translations
 
-### Service Execution Tests
+### Action Registration Tests
 
-**Location**: `tests/unit/test_services.py::TestServiceExecution`
+**Location**: `tests/unit/test_services.py::TestActionRegistration`
+
+- ✅ `test_all_platform_actions_registered` - All platform actions are registered
+- ✅ `test_set_sleep_timer_action_schema`
+- ✅ `test_clear_sleep_timer_action_schema`
+- ✅ `test_update_alarm_action_schema`
+- ✅ `test_reboot_device_action_schema`
+- ✅ `test_sync_time_action_schema`
+- ✅ `test_scan_bluetooth_action_schema`
+- ✅ `test_set_channel_balance_action_schema`
+
+### Action Execution Tests
+
+**Location**: `tests/unit/test_services.py::TestActionExecution`
 
 - ✅ `test_set_sleep_timer_calls_entity_method`
 - ✅ `test_clear_sleep_timer_calls_entity_method`
 - ✅ `test_update_alarm_calls_entity_method`
 
-### Service Handler Tests
+### Handler Method Tests
+
+**Location**: `tests/unit/test_services.py::TestMediaPlayerEntityActionHandlers`
+
+- ✅ `test_entity_has_required_handler_methods` - Verifies all handler methods exist
+
+### Action Handler Tests
 
 **Location**: `tests/unit/test_media_player.py::TestWiiMMediaPlayerServiceHandlers`
 
-All service handler methods are tested with:
+All action handler methods are tested with:
 
 - ✅ Happy path (successful execution)
 - ✅ Error cases (when features not supported)
@@ -71,49 +91,67 @@ All service handler methods are tested with:
 
 ## Test Statistics
 
-- **Total Services**: 13 registered services
-- **Tested Services**: 13 (100% coverage)
-- **Test Classes**: 4
-  - `TestServiceRegistration` - Registration and schema tests (4 tests)
-  - `TestServiceExecution` - Service execution tests (3 tests)
-  - `TestServiceValidation` - Parameter validation tests (2 tests)
-  - `TestAllServicesRegistered` - Comprehensive registration checks (3 tests)
-  - `TestWiiMMediaPlayerServiceHandlers` - Handler method tests (16 tests)
-- **Total Test Methods**: 28 service-specific tests
+- **Total Actions**: 15 registered actions
+- **Tested Actions**: 15 (100% coverage)
+- **Test Classes**: 5
+  - `TestActionRegistration` - Registration and schema tests (8 tests)
+  - `TestActionExecution` - Action execution tests (3 tests)
+  - `TestActionValidation` - Parameter validation tests (4 tests)
+  - `TestActionYAMLSync` - Comprehensive sync checks (7 tests)
+  - `TestMediaPlayerEntityActionHandlers` - Handler method tests (1 test)
+  - `TestWiiMMediaPlayerServiceHandlers` - Handler method tests (16+ tests)
+- **Total Test Methods**: 39+ action-specific tests
 - **All Tests Passing**: ✅ Yes
 
-## Services Not Registered (Intentionally)
+## Action Categories
 
-These services are defined in `services.yaml` but intentionally not registered:
+### Official Actions (15 total)
 
-- `scan_bluetooth` - Unofficial API
-- `set_channel_balance` - Unofficial API
-- `set_spdif_delay` - Unofficial API
-- `discover_lms_servers` - Unofficial API
-- `connect_lms_server` - Unofficial API
-- `set_auto_connect_lms` - Unofficial API
-- `set_touch_buttons` - Unofficial API
+| Action               | Type     | Handler Method             |
+| -------------------- | -------- | -------------------------- |
+| `play_url`           | Entity   | `async_play_url`           |
+| `play_preset`        | Entity   | `async_play_preset`        |
+| `play_playlist`      | Entity   | `async_play_playlist`      |
+| `set_eq`             | Entity   | `async_set_eq`             |
+| `play_notification`  | Entity   | `async_play_notification`  |
+| `play_queue`         | Entity   | `async_play_queue`         |
+| `remove_from_queue`  | Entity   | `async_remove_from_queue`  |
+| `get_queue`          | Entity   | `async_get_queue`          |
+| `set_sleep_timer`    | Platform | `set_sleep_timer`          |
+| `clear_sleep_timer`  | Platform | `clear_sleep_timer`        |
+| `update_alarm`       | Platform | `set_alarm`                |
+| `reboot_device`      | Platform | `async_reboot_device`      |
+| `sync_time`          | Platform | `async_sync_time`          |
+| `scan_bluetooth`     | Platform | `async_scan_bluetooth`     |
+| `set_channel_balance`| Platform | `async_set_channel_balance`|
 
-These are marked as "unofficial" and may not be fully implemented/tested.
+### Registration Methods
+
+- **Entity Actions** (`media_player.py`): `platform.async_register_entity_service()`
+- **Platform Actions** (`services.py`): `service.async_register_platform_entity_service()`
 
 ## Running Tests
 
-### Run All Service Tests
+### Run All Action Tests
 
 ```bash
 pytest tests/unit/test_services.py -v
 pytest tests/unit/test_media_player.py::TestWiiMMediaPlayerServiceHandlers -v
-pytest tests/unit/test_init_integration.py::test_reboot_device_service -v
-pytest tests/unit/test_init_integration.py::test_sync_time_service -v
 ```
 
-### Run Service Registration Tests
+### Run Action Sync Tests
 
 ```bash
-pytest tests/unit/test_services.py::TestAllServicesRegistered -v
+pytest tests/unit/test_services.py::TestActionYAMLSync -v
 ```
 
-### Run Service Handler Tests
+### Run Action Registration Tests
+
+```bash
+pytest tests/unit/test_services.py::TestActionRegistration -v
+```
+
+### Run Action Handler Tests
 
 ```bash
 pytest tests/unit/test_media_player.py::TestWiiMMediaPlayerServiceHandlers -v
@@ -121,20 +159,27 @@ pytest tests/unit/test_media_player.py::TestWiiMMediaPlayerServiceHandlers -v
 
 ## Test Coverage Goals
 
-✅ **100% Service Coverage** - All registered services have tests
-✅ **Registration Tests** - Tests ensure services are registered
-✅ **Execution Tests** - Tests verify service calls work
+✅ **100% Action Coverage** - All registered actions have tests
+✅ **Registration Tests** - Tests ensure actions are registered
+✅ **Sync Tests** - Tests ensure YAML, Python, and strings.json are in sync
+✅ **Execution Tests** - Tests verify action calls work
 ✅ **Error Handling** - Tests cover error cases
 ✅ **Edge Cases** - Tests cover validation and edge cases
 
 ## Maintenance
 
-When adding new services:
+When adding new actions:
 
-1. **Add to `services.yaml`** - Define service schema
-2. **Register in Python** - Add registration code
-3. **Add handler method** - Implement service handler
-4. **Add tests** - Create tests in `TestWiiMMediaPlayerServiceHandlers`
-5. **Update this document** - Add service to coverage list
+1. **Add to `services.yaml`** - Define action schema
+2. **Add to `strings.json`** - Add translations for name, description, and fields
+3. **Register in Python** - Add registration code in `services.py` or `media_player.py`
+4. **Add handler method** - Implement action handler in `WiiMMediaPlayer`
+5. **Add tests** - Create tests in appropriate test class
+6. **Update this document** - Add action to coverage list
 
-The `TestAllServicesRegistered` test will automatically catch if you forget to register a service!
+The `TestActionYAMLSync` tests will automatically catch if you:
+- Define an action in YAML but don't register it
+- Register an action but don't add it to YAML
+- Forget to add translations to strings.json
+- Add translations without corresponding YAML definition
+- Forget to add field translations
