@@ -45,8 +45,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pywiim import WiiMClient
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
@@ -181,20 +179,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Ensure services are registered (fallback if async_setup wasn't called)
     # This ensures services work even when reloading config entries
-    if not hass.services.has_service(DOMAIN, "reboot_device"):
-        # Register global services (using hass.services.async_register like Sonos)
-        hass.services.async_register(
-            DOMAIN,
-            "reboot_device",
-            _reboot_device_service,
-        )
-        hass.services.async_register(
-            DOMAIN,
-            "sync_time",
-            _sync_time_service,
-        )
-
-        # Register platform entity services (sleep timer and alarms)
+    if not hass.services.has_service(DOMAIN, "set_sleep_timer"):
+        # Register platform entity services (all services are now entity services)
         await async_setup_services(hass)
         _LOGGER.info("WiiM services registered in async_setup_entry (fallback)")
 
