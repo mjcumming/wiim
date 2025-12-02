@@ -7,6 +7,7 @@ import logging
 from contextlib import suppress
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.components import media_source
 from homeassistant.components.media_player import (
     ATTR_MEDIA_ANNOUNCE,
@@ -25,11 +26,10 @@ from homeassistant.components.media_player.browse_media import async_process_pla
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
@@ -1652,6 +1652,67 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             raise
         except Exception as err:
             raise HomeAssistantError(f"Failed to set alarm: {err}") from err
+
+    # ===== DEVICE MANAGEMENT =====
+
+    async def async_reboot_device(self) -> None:
+        """Reboot the WiiM device."""
+        try:
+            await self.coordinator.player.reboot()
+            _LOGGER.info("Reboot command sent to %s", self.speaker.name)
+        except WiiMError as err:
+            # Reboot may cause connection issues - this is expected
+            _LOGGER.info(
+                "Reboot command sent to %s (device may not respond): %s",
+                self.speaker.name,
+                err,
+            )
+
+    async def async_sync_time(self) -> None:
+        """Synchronize device time with Home Assistant."""
+        try:
+            await self.coordinator.player.client.sync_time()
+            _LOGGER.info("Time sync command sent to %s", self.speaker.name)
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to sync time: {err}") from err
+
+    # ===== UNOFFICIAL API ACTIONS =====
+
+    async def async_scan_bluetooth(self, duration: int = 5) -> None:
+        """Scan for nearby Bluetooth devices.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+
+        Args:
+            duration: Scan duration in seconds (3-10 recommended)
+        """
+        try:
+            await self.coordinator.player.scan_for_bluetooth_devices(duration=duration)
+            _LOGGER.info("Bluetooth scan started on %s (duration: %ds)", self.speaker.name, duration)
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to scan for Bluetooth devices: {err}") from err
+        except AttributeError as exc:
+            raise HomeAssistantError(
+                "Bluetooth scanning not available. This may require a newer version of pywiim."
+            ) from exc
+
+    async def async_set_channel_balance(self, balance: float) -> None:
+        """Adjust left/right channel balance.
+
+        WARNING: This uses unofficial API endpoints and may not work on all firmware versions.
+
+        Args:
+            balance: Balance from -1.0 (full left) to 1.0 (full right). 0.0 is center.
+        """
+        try:
+            await self.coordinator.player.set_channel_balance(balance)
+            _LOGGER.debug("Channel balance set to %s on %s", balance, self.speaker.name)
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to set channel balance: {err}") from err
+        except AttributeError as exc:
+            raise HomeAssistantError(
+                "Channel balance control not available. This may require a newer version of pywiim."
+            ) from exc
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
