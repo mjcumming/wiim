@@ -127,14 +127,14 @@ class TestWiiMMediaPlayerBasic:
         """Test setting volume level."""
         await media_player.async_set_volume_level(0.8)
         mock_coordinator.player.set_volume.assert_called_once_with(0.8)
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_mute_volume(self, media_player, mock_coordinator):
         """Test muting volume."""
         await media_player.async_mute_volume(True)
         mock_coordinator.player.set_mute.assert_called_once_with(True)
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
 
 class TestWiiMMediaPlayerGrouping:
@@ -165,7 +165,7 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_play()
 
         mock_coordinator.player.play.assert_called_once()
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_media_pause(self, media_player, mock_coordinator):
@@ -175,7 +175,7 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_pause()
 
         mock_coordinator.player.pause.assert_called_once()
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_media_play_pause(self, media_player, mock_coordinator):
@@ -185,7 +185,7 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_play_pause()
 
         mock_coordinator.player.media_play_pause.assert_called_once()
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_media_stop(self, media_player, mock_coordinator):
@@ -197,12 +197,12 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_stop()
 
         player.stop.assert_called_once()
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
         # Should call stop and clear media_content_id
         player.stop.assert_called_once()
         assert media_player._attr_media_content_id is None
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_media_next_track(self, media_player, mock_coordinator):
@@ -212,7 +212,7 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_next_track()
 
         mock_coordinator.player.next_track.assert_called_once()
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_media_previous_track(self, media_player, mock_coordinator):
@@ -222,7 +222,7 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_previous_track()
 
         mock_coordinator.player.previous_track.assert_called_once()
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_media_seek(self, media_player, mock_coordinator):
@@ -233,7 +233,7 @@ class TestWiiMMediaPlayerPlayback:
         await media_player.async_media_seek(60.0)
 
         mock_coordinator.player.seek.assert_called_once_with(60)
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_playback_handles_error(self, media_player, mock_coordinator):
@@ -287,7 +287,7 @@ class TestWiiMMediaPlayerSource:
         # Check it was called with a lowercase version
         call_args = mock_coordinator.player.set_source.call_args[0][0]
         assert call_args.lower() == "spotify"
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_select_source_handles_error(self, media_player, mock_coordinator):
@@ -419,6 +419,15 @@ class TestWiiMMediaPlayerShuffleRepeat:
         media_player.coordinator.data = None
         assert media_player._shuffle_supported() is False
 
+    def test_next_track_supported_returns_false_when_attribute_missing(self, media_player, mock_coordinator):
+        """Test _next_track_supported returns False when attribute is missing."""
+        # Remove the attribute to simulate older pywiim versions or unsupported sources
+        player = mock_coordinator.data["player"]
+        if hasattr(player, "next_track_supported"):
+            delattr(player, "next_track_supported")
+
+        assert media_player._next_track_supported() is False
+
     def test_shuffle_returns_true(self, media_player, mock_coordinator):
         """Test shuffle property returns True when enabled."""
         mock_coordinator.data["player"].shuffle = True
@@ -453,7 +462,7 @@ class TestWiiMMediaPlayerShuffleRepeat:
         await media_player.async_set_shuffle(True)
 
         mock_coordinator.player.set_shuffle.assert_called_once_with(True)
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_set_shuffle_disables(self, media_player, mock_coordinator):
@@ -463,7 +472,7 @@ class TestWiiMMediaPlayerShuffleRepeat:
         await media_player.async_set_shuffle(False)
 
         mock_coordinator.player.set_shuffle.assert_called_once_with(False)
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_set_shuffle_handles_error(self, media_player, mock_coordinator):
@@ -528,7 +537,7 @@ class TestWiiMMediaPlayerShuffleRepeat:
         await media_player.async_set_repeat(RepeatMode.OFF)
 
         mock_coordinator.player.set_repeat.assert_called_once_with("off")
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_set_repeat_one(self, media_player, mock_coordinator):
@@ -540,7 +549,7 @@ class TestWiiMMediaPlayerShuffleRepeat:
         await media_player.async_set_repeat(RepeatMode.ONE)
 
         mock_coordinator.player.set_repeat.assert_called_once_with("one")
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_set_repeat_all(self, media_player, mock_coordinator):
@@ -552,7 +561,7 @@ class TestWiiMMediaPlayerShuffleRepeat:
         await media_player.async_set_repeat(RepeatMode.ALL)
 
         mock_coordinator.player.set_repeat.assert_called_once_with("all")
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_set_repeat_handles_error(self, media_player, mock_coordinator):
@@ -583,72 +592,72 @@ class TestWiiMMediaPlayerSoundMode:
 
     def test_is_eq_supported_returns_true(self, media_player, mock_coordinator):
         """Test _is_eq_supported returns True when EQ is supported."""
-        mock_coordinator._capabilities = {"supports_eq": True}
+        mock_coordinator.data["player"].supports_eq = True
         assert media_player._is_eq_supported() is True
 
     def test_is_eq_supported_returns_false_when_not_supported(self, media_player, mock_coordinator):
         """Test _is_eq_supported returns False when EQ is not supported."""
-        mock_coordinator._capabilities = {"supports_eq": False}
+        mock_coordinator.data["player"].supports_eq = False
         assert media_player._is_eq_supported() is False
 
     def test_is_eq_supported_returns_false_when_capabilities_missing(self, media_player, mock_coordinator):
-        """Test _is_eq_supported returns False when capabilities are missing."""
-        mock_coordinator._capabilities = None
+        """Test _is_eq_supported returns False when player is missing."""
+        mock_coordinator.data = None
         assert media_player._is_eq_supported() is False
 
     def test_sound_mode_returns_current_preset(self, media_player, mock_coordinator):
         """Test sound_mode returns current EQ preset."""
-        mock_coordinator._capabilities = {"supports_eq": True}
+        mock_coordinator.data["player"].supports_eq = True
         mock_coordinator.data["player"].eq_preset = "bass"
 
         assert media_player.sound_mode == "Bass"
 
     def test_sound_mode_returns_none_when_not_supported(self, media_player, mock_coordinator):
         """Test sound_mode returns None when EQ is not supported."""
-        mock_coordinator._capabilities = {"supports_eq": False}
+        mock_coordinator.data["player"].supports_eq = False
         assert media_player.sound_mode is None
 
     def test_sound_mode_returns_none_when_player_missing(self, media_player, mock_coordinator):
         """Test sound_mode returns None when player is missing."""
-        mock_coordinator._capabilities = {"supports_eq": True}
+        mock_coordinator.data["player"].supports_eq = True
         mock_coordinator.data = None
         assert media_player.sound_mode is None
 
     def test_sound_mode_list_returns_presets(self, media_player, mock_coordinator):
         """Test sound_mode_list returns available EQ presets."""
-        mock_coordinator._capabilities = {"supports_eq": True}
+        mock_coordinator.data["player"].supports_eq = True
         mock_coordinator.data["player"].eq_presets = ["bass", "treble", "flat"]
 
         assert media_player.sound_mode_list == ["Bass", "Treble", "Flat"]
 
     def test_sound_mode_list_returns_none_when_not_supported(self, media_player, mock_coordinator):
         """Test sound_mode_list returns None when EQ is not supported."""
-        mock_coordinator._capabilities = {"supports_eq": False}
+        mock_coordinator.data["player"].supports_eq = False
         assert media_player.sound_mode_list is None
 
     def test_sound_mode_list_returns_none_when_no_presets(self, media_player, mock_coordinator):
         """Test sound_mode_list returns None when no presets available."""
-        mock_coordinator._capabilities = {"supports_eq": True}
+        mock_coordinator.data["player"].supports_eq = True
         mock_coordinator.data["player"].eq_presets = None
         assert media_player.sound_mode_list is None
 
     @pytest.mark.asyncio
     async def test_select_sound_mode(self, media_player, mock_coordinator):
         """Test selecting a sound mode."""
-        mock_coordinator._capabilities = {"supports_eq": True}
+        mock_coordinator.data["player"].supports_eq = True
         mock_coordinator.player.set_eq_preset = AsyncMock(return_value=True)
 
         await media_player.async_select_sound_mode("Bass")
 
         mock_coordinator.player.set_eq_preset.assert_called_once_with("bass")
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_select_sound_mode_handles_not_supported(self, media_player, mock_coordinator):
         """Test select_sound_mode raises error when EQ is not supported."""
         from homeassistant.exceptions import HomeAssistantError
 
-        mock_coordinator._capabilities = {"supports_eq": False}
+        mock_coordinator.data["player"].supports_eq = False
 
         with pytest.raises(HomeAssistantError, match="EQ is not supported"):
             await media_player.async_select_sound_mode("Bass")
@@ -679,7 +688,7 @@ class TestWiiMMediaPlayerPlayMedia:
 
         mock_coordinator.player.play_url.assert_called_once_with("http://example.com/song.mp3")
         assert media_player._attr_media_content_id == "http://example.com/song.mp3"
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_play_media_preset(self, media_player, mock_coordinator):
@@ -691,7 +700,7 @@ class TestWiiMMediaPlayerPlayMedia:
 
         mock_coordinator.player.play_preset.assert_called_once_with(1)
         assert media_player._attr_media_content_id is None
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_play_media_announce(self, media_player, mock_coordinator):
@@ -705,7 +714,7 @@ class TestWiiMMediaPlayerPlayMedia:
         await media_player.async_play_media("music", "http://example.com/announce.mp3", **{ATTR_MEDIA_ANNOUNCE: True})
 
         mock_coordinator.player.play_notification.assert_called_once_with("http://example.com/announce.mp3")
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
     async def test_play_media_handles_empty_media_id(self, media_player):
@@ -1382,3 +1391,218 @@ class TestWiiMMediaPlayerUpdatePosition:
         assert media_player._attr_media_position == 120
         assert media_player._attr_media_duration == 240
         assert media_player._attr_state == MediaPlayerState.PLAYING
+
+
+class TestWiiMMediaPlayerServiceHandlers:
+    """Test service handler methods."""
+
+    @pytest.mark.asyncio
+    async def test_async_play_url(self, media_player, mock_coordinator):
+        """Test async_play_url service handler."""
+        from homeassistant.components.media_player import MediaType
+
+        mock_coordinator.player.play_url = AsyncMock(return_value=True)
+        media_player.hass = MagicMock()
+        media_player.async_play_media = AsyncMock()
+
+        await media_player.async_play_url("http://example.com/song.mp3")
+
+        # Should call async_play_media with MediaType.MUSIC
+        media_player.async_play_media.assert_called_once_with(MediaType.MUSIC, "http://example.com/song.mp3")
+
+    @pytest.mark.asyncio
+    async def test_async_play_preset(self, media_player, mock_coordinator):
+        """Test async_play_preset service handler."""
+        mock_coordinator.player.play_preset = AsyncMock(return_value=True)
+        media_player.hass = MagicMock()
+        media_player.async_play_media = AsyncMock()
+
+        await media_player.async_play_preset(5)
+
+        # Should call async_play_media with preset type
+        media_player.async_play_media.assert_called_once_with("preset", "5")
+
+    @pytest.mark.asyncio
+    async def test_async_play_playlist(self, media_player, mock_coordinator):
+        """Test async_play_playlist service handler."""
+        from homeassistant.components.media_player import MediaType
+
+        mock_coordinator.player.play_url = AsyncMock(return_value=True)
+        media_player.hass = MagicMock()
+        media_player.async_play_media = AsyncMock()
+
+        await media_player.async_play_playlist("http://example.com/playlist.m3u")
+
+        # Should call async_play_media with MediaType.PLAYLIST
+        media_player.async_play_media.assert_called_once_with(MediaType.PLAYLIST, "http://example.com/playlist.m3u")
+
+    @pytest.mark.asyncio
+    async def test_async_set_eq_preset(self, media_player, mock_coordinator):
+        """Test async_set_eq service handler with preset."""
+        mock_coordinator.player.set_eq_preset = AsyncMock(return_value=True)
+        mock_coordinator.data["player"].supports_eq = True
+
+        await media_player.async_set_eq("rock")
+
+        mock_coordinator.player.set_eq_preset.assert_called_once_with("rock")
+        # State updates automatically via callback - no manual refresh needed
+
+    @pytest.mark.asyncio
+    async def test_async_set_eq_custom_list(self, media_player, mock_coordinator):
+        """Test async_set_eq service handler with custom values as list."""
+        mock_coordinator.player.set_eq_custom = AsyncMock(return_value=True)
+        mock_coordinator.data["player"].supports_eq = True
+
+        custom_values = [-2, 0, 2, 3, 1, 0, 0, -1, 2, 4]
+        await media_player.async_set_eq("custom", custom_values)
+
+        mock_coordinator.player.set_eq_custom.assert_called_once_with(custom_values)
+        # State updates automatically via callback - no manual refresh needed
+
+    @pytest.mark.asyncio
+    async def test_async_set_eq_custom_dict(self, media_player, mock_coordinator):
+        """Test async_set_eq service handler with custom values as dict."""
+        mock_coordinator.player.set_eq_custom = AsyncMock(return_value=True)
+        mock_coordinator.data["player"].supports_eq = True
+
+        custom_values = {"0": -2, "1": 0, "2": 2, "3": 3, "4": 1, "5": 0, "6": 0, "7": -1, "8": 2, "9": 4}
+        await media_player.async_set_eq("custom", custom_values)
+
+        # Should convert dict to list
+        expected_list = [-2, 0, 2, 3, 1, 0, 0, -1, 2, 4]
+        mock_coordinator.player.set_eq_custom.assert_called_once_with(expected_list)
+        # State updates automatically via callback - no manual refresh needed
+
+    @pytest.mark.asyncio
+    async def test_async_set_eq_requires_custom_values(self, media_player, mock_coordinator):
+        """Test async_set_eq requires custom_values when preset is custom."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        mock_coordinator.data["player"].supports_eq = True
+
+        with pytest.raises(HomeAssistantError, match="custom_values is required"):
+            await media_player.async_set_eq("custom", None)
+
+    @pytest.mark.asyncio
+    async def test_async_set_eq_not_supported(self, media_player, mock_coordinator):
+        """Test async_set_eq raises error when EQ not supported."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        mock_coordinator.data["player"].supports_eq = False
+
+        with pytest.raises(HomeAssistantError, match="EQ is not supported"):
+            await media_player.async_set_eq("rock")
+
+    @pytest.mark.asyncio
+    async def test_async_set_eq_handles_error(self, media_player, mock_coordinator):
+        """Test async_set_eq handles WiiMError."""
+        from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
+
+        mock_coordinator.player.set_eq_preset = AsyncMock(side_effect=WiiMError("EQ error"))
+        mock_coordinator.data["player"].supports_eq = True
+
+        with pytest.raises(HomeAssistantError, match="Failed to set EQ"):
+            await media_player.async_set_eq("rock")
+
+    @pytest.mark.asyncio
+    async def test_async_play_notification(self, media_player, mock_coordinator):
+        """Test async_play_notification service handler."""
+        from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE, MediaType
+
+        mock_coordinator.player.play_notification = AsyncMock(return_value=True)
+        media_player.hass = MagicMock()
+        media_player.async_play_media = AsyncMock()
+
+        await media_player.async_play_notification("http://example.com/notification.mp3")
+
+        # Should call async_play_media with announce=True
+        media_player.async_play_media.assert_called_once_with(
+            MediaType.MUSIC, "http://example.com/notification.mp3", announce=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_play_queue_no_upnp(self, media_player, mock_coordinator):
+        """Test async_play_queue raises error when UPnP not available."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        # No queue support
+        mock_coordinator.data["player"].supports_queue_add = False
+
+        with pytest.raises(HomeAssistantError, match="Queue playback not available"):
+            await media_player.async_play_queue(0)
+
+    @pytest.mark.asyncio
+    async def test_async_play_queue_success(self, media_player, mock_coordinator):
+        """Test async_play_queue calls pywiim method successfully."""
+        from unittest.mock import AsyncMock
+
+        mock_coordinator.data["player"].supports_queue_add = True
+        mock_coordinator.player.play_queue = AsyncMock(return_value=None)
+
+        await media_player.async_play_queue(5)
+
+        mock_coordinator.player.play_queue.assert_called_once_with(5)
+
+    @pytest.mark.asyncio
+    async def test_async_remove_from_queue_no_upnp(self, media_player, mock_coordinator):
+        """Test async_remove_from_queue raises error when UPnP not available."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        mock_coordinator.data["player"].supports_queue_add = False
+
+        with pytest.raises(HomeAssistantError, match="Queue management not available"):
+            await media_player.async_remove_from_queue(0)
+
+    @pytest.mark.asyncio
+    async def test_async_remove_from_queue_success(self, media_player, mock_coordinator):
+        """Test async_remove_from_queue calls pywiim method successfully."""
+        from unittest.mock import AsyncMock
+
+        mock_coordinator.data["player"].supports_queue_add = True
+        mock_coordinator.player.remove_from_queue = AsyncMock(return_value=None)
+
+        await media_player.async_remove_from_queue(3)
+
+        mock_coordinator.player.remove_from_queue.assert_called_once_with(3)
+
+    @pytest.mark.asyncio
+    async def test_async_get_queue_no_upnp(self, media_player, mock_coordinator):
+        """Test async_get_queue raises error when UPnP not available."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        mock_coordinator.data["player"].supports_queue_browse = False
+
+        with pytest.raises(HomeAssistantError, match="Queue browsing not available"):
+            await media_player.async_get_queue()
+
+    @pytest.mark.asyncio
+    async def test_async_get_queue_success(self, media_player, mock_coordinator):
+        """Test async_get_queue returns queue contents."""
+        from unittest.mock import AsyncMock
+
+        mock_coordinator.data["player"].supports_queue_browse = True
+        mock_queue = [
+            {
+                "media_content_id": "http://example.com/song1.mp3",
+                "title": "Song 1",
+                "artist": "Artist 1",
+                "album": "Album 1",
+                "duration": 240,
+                "position": 0,
+            },
+            {
+                "media_content_id": "http://example.com/song2.mp3",
+                "title": "Song 2",
+                "artist": "Artist 2",
+                "album": "Album 2",
+                "duration": 180,
+                "position": 1,
+            },
+        ]
+        mock_coordinator.player.get_queue = AsyncMock(return_value=mock_queue)
+
+        result = await media_player.async_get_queue()
+
+        assert result == {"queue": mock_queue}
+        mock_coordinator.player.get_queue.assert_called_once()

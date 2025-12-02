@@ -23,11 +23,13 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.components.media_player.browse_media import async_process_play_media_url
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
+import voluptuous as vol
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
@@ -126,6 +128,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up WiiM Media Player platform."""
+    from homeassistant.helpers import entity_platform
+
     speaker = get_speaker_from_config_entry(hass, config_entry)
     # Create both individual media player and virtual group coordinator
     async_add_entities(
@@ -133,6 +137,53 @@ async def async_setup_entry(
             WiiMMediaPlayer(speaker),
             WiiMGroupMediaPlayer(speaker),
         ]
+    )
+
+    # Register entity services
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "play_url",
+        {vol.Required("url"): cv.string},
+        "async_play_url",
+    )
+    platform.async_register_entity_service(
+        "play_preset",
+        {vol.Required("preset"): vol.All(vol.Coerce(int), vol.Range(min=1, max=20))},
+        "async_play_preset",
+    )
+    platform.async_register_entity_service(
+        "play_playlist",
+        {vol.Required("playlist_url"): cv.string},
+        "async_play_playlist",
+    )
+    platform.async_register_entity_service(
+        "set_eq",
+        {
+            vol.Required("preset"): cv.string,
+            vol.Optional("custom_values"): vol.Any(list, dict),
+        },
+        "async_set_eq",
+    )
+    platform.async_register_entity_service(
+        "play_notification",
+        {vol.Required("url"): cv.string},
+        "async_play_notification",
+    )
+    platform.async_register_entity_service(
+        "play_queue",
+        {vol.Optional("queue_position", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=10000))},
+        "async_play_queue",
+    )
+    platform.async_register_entity_service(
+        "remove_from_queue",
+        {vol.Optional("queue_position", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=10000))},
+        "async_remove_from_queue",
+    )
+    platform.async_register_entity_service(
+        "get_queue",
+        schema=None,
+        func="async_get_queue",
+        supports_response=SupportsResponse.ONLY,
     )
 
 
@@ -233,7 +284,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not player:
             return False
         # Use pywiim's next_track_supported property (per integration guide)
-        return bool(player.next_track_supported)
+        # Use getattr to safely handle cases where attribute may not exist
+        return bool(getattr(player, "next_track_supported", False))
 
     def _update_supported_features(self) -> None:
         """Update supported features based on current state (LinkPlay pattern)."""
@@ -296,27 +348,32 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         self._attr_supported_features = features
 
     def _is_eq_supported(self) -> bool:
-        """Check if device supports EQ - query from pywiim.
+        """Check if device supports EQ - query from pywiim Player.
 
-        pywiim detects EQ support during capability detection and caches it in
-        player.client.capabilities["supports_eq"]. The coordinator stores this
-        in _capabilities for the integration to use.
+        pywiim exposes EQ support as a boolean property on the Player class.
         """
-        if hasattr(self.coordinator, "_capabilities") and self.coordinator._capabilities:
-            return bool(self.coordinator._capabilities.get("supports_eq", False))
-        return False
+        player = self._get_player()
+        if not player:
+            return False
+        return bool(getattr(player, "supports_eq", False))
 
     def _has_queue_support(self) -> bool:
-        """Check if queue management is available - query from Player."""
-        if not hasattr(self.coordinator, "player") or self.coordinator.player is None:
+        """Check if queue management is available - query from Player.
+
+        Uses pywiim's supports_queue_add property to check if items can be added to queue.
+        """
+        player = self._get_player()
+        if not player:
             return False
-        # Check if Player has UPnP client (required for queue management)
-        return hasattr(self.coordinator.player, "_upnp_client") and self.coordinator.player._upnp_client is not None
+        return bool(getattr(player, "supports_queue_add", False))
 
     async def _ensure_upnp_ready(self) -> None:
         """Ensure UPnP client is available when queue management is requested."""
-        # PyWiim handles UPnP internally - just check if it's available
-        if not self._has_queue_support():
+        player = self._get_player()
+        if not player:
+            raise HomeAssistantError("Player is not available")
+        # Check if UPnP is supported (required for queue management)
+        if not getattr(player, "supports_upnp", False):
             raise HomeAssistantError(
                 "Queue management not available. The device may not support UPnP or it may not be initialized yet."
             )
@@ -373,7 +430,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Set volume level 0..1."""
         try:
             await self.coordinator.player.set_volume(volume)
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
@@ -393,7 +450,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Mute/unmute volume."""
         try:
             await self.coordinator.player.set_mute(mute)
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             if _is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
@@ -413,7 +470,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Start playback."""
         try:
             await self.coordinator.player.play()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to start playback: {err}") from err
 
@@ -421,7 +478,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Pause playback."""
         try:
             await self.coordinator.player.pause()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to pause playback: {err}") from err
 
@@ -429,7 +486,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Toggle play/pause."""
         try:
             await self.coordinator.player.media_play_pause()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to toggle play/pause: {err}") from err
 
@@ -447,7 +504,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             await player.stop()
             # Clear media_content_id when stopped (not paused, as pause preserves state)
             self._attr_media_content_id = None
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop playback: {err}") from err
 
@@ -455,7 +512,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Skip to next track."""
         try:
             await self.coordinator.player.next_track()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to skip to next track: {err}") from err
 
@@ -463,7 +520,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Skip to previous track."""
         try:
             await self.coordinator.player.previous_track()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to skip to previous track: {err}") from err
 
@@ -478,8 +535,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         )
         try:
             await self.coordinator.player.seek(int(position))
-            # Force immediate coordinator refresh to get new position
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             _LOGGER.error("%s: Seek failed: %s", self.name, err)
             raise HomeAssistantError(f"Failed to seek: {err}") from err
@@ -611,7 +667,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.player.set_source(device_source)
             # Clear media_content_id when source changes (new source may not be a URL)
             self._attr_media_content_id = None
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to select source '{source}': {err}") from err
 
@@ -830,7 +886,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             try:
                 _LOGGER.debug("[%s] Playing notification via device firmware: %s", self.name, media_id)
                 await self.coordinator.player.play_notification(media_id)
-                await self.coordinator.async_request_refresh()
+                # State updates automatically via callback - no manual refresh needed
             except WiiMError as err:
                 raise HomeAssistantError(f"Failed to play notification: {err}") from err
             return
@@ -842,7 +898,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 await self.coordinator.player.play_preset(preset_num)
                 # Clear media_content_id when playing preset (not a URL)
                 self._attr_media_content_id = None
-                await self.coordinator.async_request_refresh()
+                # State updates automatically via callback - no manual refresh needed
             except WiiMError as err:
                 raise HomeAssistantError(f"Failed to play preset: {err}") from err
             return
@@ -899,7 +955,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                     await self.coordinator.player.play_url(media_id)
                     # Store URL for scene restoration
                     self._attr_media_content_id = media_id
-                    await self.coordinator.async_request_refresh()
+                    # State updates automatically via callback - no manual refresh needed
                 except WiiMError as err:
                     raise HomeAssistantError(f"Failed to play media immediately: {err}") from err
                 return
@@ -908,7 +964,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             await self.coordinator.player.play_url(media_id)
             # Store URL for scene restoration
             self._attr_media_content_id = media_id
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play media: {err}") from err
 
@@ -1270,10 +1326,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Enable/disable shuffle mode - pass through to pywiim."""
         try:
             await self.coordinator.player.set_shuffle(shuffle)
-            # pywiim updates Player state immediately and pushes event via on_state_changed callback
-            # The callback triggers async_update_listeners() which notifies all entities automatically
-            # We also force a refresh to ensure UI update in case callback is delayed
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
 
@@ -1308,10 +1361,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         """Set repeat mode - pass through to pywiim."""
         try:
             await self.coordinator.player.set_repeat(repeat.value)
-            # pywiim updates Player state immediately and pushes event via on_state_changed callback
-            # The callback triggers async_update_listeners() which notifies all entities automatically
-            # We also force a refresh to ensure UI update in case callback is delayed
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except AttributeError as err:
             # Fallback if set_repeat not yet available in pywiim Player
             raise HomeAssistantError(
@@ -1374,9 +1424,99 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         try:
             # Normalize to lowercase (device API expects lowercase)
             await self.coordinator.player.set_eq_preset(sound_mode.lower())
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to select sound mode: {err}") from err
+
+    # ===== SERVICE HANDLERS =====
+
+    async def async_play_url(self, url: str) -> None:
+        """Handle play_url service call."""
+        await self.async_play_media(MediaType.MUSIC, url)
+
+    async def async_play_preset(self, preset: int) -> None:
+        """Handle play_preset service call."""
+        await self.async_play_media("preset", str(preset))
+
+    async def async_play_playlist(self, playlist_url: str) -> None:
+        """Handle play_playlist service call."""
+        await self.async_play_media(MediaType.PLAYLIST, playlist_url)
+
+    async def async_set_eq(self, preset: str, custom_values: list[float] | dict[str, Any] | None = None) -> None:
+        """Handle set_eq service call."""
+        if not self._is_eq_supported():
+            raise HomeAssistantError("EQ is not supported on this device")
+
+        try:
+            if preset.lower() == "custom":
+                if not custom_values:
+                    raise HomeAssistantError("custom_values is required when preset is 'custom'")
+                # Convert dict to list if needed, or use list directly
+                if isinstance(custom_values, dict):
+                    # If dict, extract values in order (assuming keys are band indices)
+                    eq_list = [custom_values.get(str(i), 0.0) for i in range(10)]
+                else:
+                    # Already a list
+                    eq_list = custom_values
+                # Set custom EQ values (10-band: 31.5Hz to 16kHz)
+                await self.coordinator.player.set_eq_custom(eq_list)
+            else:
+                # Set EQ preset
+                await self.coordinator.player.set_eq_preset(preset.lower())
+            # State updates automatically via callback - no manual refresh needed
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to set EQ: {err}") from err
+
+    async def async_play_notification(self, url: str) -> None:
+        """Handle play_notification service call."""
+        await self.async_play_media(MediaType.MUSIC, url, announce=True)
+
+    async def async_play_queue(self, queue_position: int = 0) -> None:
+        """Handle play_queue service call."""
+        player = self._get_player()
+        if not player:
+            raise HomeAssistantError("Player is not available")
+        if not getattr(player, "supports_queue_add", False):
+            raise HomeAssistantError(
+                "Queue playback not available. The device may not support UPnP or it may not be initialized yet."
+            )
+        try:
+            await self.coordinator.player.play_queue(queue_position)
+            # State updates automatically via callback - no manual refresh needed
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to play queue: {err}") from err
+
+    async def async_remove_from_queue(self, queue_position: int = 0) -> None:
+        """Handle remove_from_queue service call."""
+        player = self._get_player()
+        if not player:
+            raise HomeAssistantError("Player is not available")
+        if not getattr(player, "supports_queue_add", False):
+            raise HomeAssistantError(
+                "Queue management not available. The device may not support UPnP or it may not be initialized yet."
+            )
+        try:
+            await self.coordinator.player.remove_from_queue(queue_position)
+            # State updates automatically via callback - no manual refresh needed
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to remove from queue: {err}") from err
+
+    async def async_get_queue(self) -> ServiceResponse:
+        """Handle get_queue service call - returns queue contents."""
+        player = self._get_player()
+        if not player:
+            raise HomeAssistantError("Player is not available")
+        # get_queue requires supports_queue_browse (full queue retrieval via ContentDirectory)
+        if not getattr(player, "supports_queue_browse", False):
+            raise HomeAssistantError(
+                "Queue browsing not available. This feature requires UPnP ContentDirectory support (WiiM Amp/Ultra + USB only)."
+            )
+        try:
+            queue = await self.coordinator.player.get_queue()
+            # Return queue items in Home Assistant service response format
+            return {"queue": queue}
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to get queue: {err}") from err
 
     # ===== SLEEP TIMER & ALARMS =====
 
@@ -1560,5 +1700,19 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 attrs["group_state"] = "solo"
         else:
             attrs["group_state"] = "solo"
+
+        # Add capability flags for debugging/automations
+        player = self._get_player()
+        if player:
+            attrs["capabilities"] = {
+                "eq": getattr(player, "supports_eq", False),
+                "presets": getattr(player, "supports_presets", False),
+                "audio_output": getattr(player, "supports_audio_output", False),
+                "queue_browse": getattr(player, "supports_queue_browse", False),
+                "queue_add": getattr(player, "supports_queue_add", False),
+                "alarms": getattr(player, "supports_alarms", False),
+                "sleep_timer": getattr(player, "supports_sleep_timer", False),
+                "upnp": getattr(player, "supports_upnp", False),
+            }
 
         return attrs

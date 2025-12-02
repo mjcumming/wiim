@@ -27,22 +27,10 @@ async def async_setup_entry(
 
     entities = []
 
-    # Determine capabilities safely. Prefer client.capabilities if it is a dict,
-    # otherwise use coordinator._capabilities if it is a dict. Avoid treating
-    # MagicMock attributes as truthy capability containers.
-    capabilities = None
-
-    client = getattr(speaker.coordinator, "client", None)
-    client_capabilities = getattr(client, "capabilities", None)
-    if isinstance(client_capabilities, dict):
-        capabilities = client_capabilities
-    else:
-        coordinator_capabilities = getattr(speaker.coordinator, "_capabilities", None)
-        if isinstance(coordinator_capabilities, dict):
-            capabilities = coordinator_capabilities
-
-    if isinstance(capabilities, dict):
-        supports_audio_output = bool(capabilities.get("supports_audio_output", False))
+    # Check if device supports audio output mode control using pywiim's capability property
+    player = getattr(speaker.coordinator, "player", None)
+    if player:
+        supports_audio_output = bool(getattr(player, "supports_audio_output", False))
         if supports_audio_output:
             # Audio Output Mode Select
             entities.append(WiiMOutputModeSelect(speaker))

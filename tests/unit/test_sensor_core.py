@@ -215,18 +215,19 @@ class TestSensorPlatformSetupLogic:
         config_entry = MagicMock()
         config_entry.entry_id = "test-entry"
 
-        # Mock speaker without capabilities attribute (fallback)
+        # Mock speaker without player or with player that doesn't support audio output
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.uuid = "test-uuid"
         speaker.available = True
         speaker.coordinator = MagicMock()
         speaker.coordinator.data = {}
-        speaker.coordinator.player = MagicMock()
+        # Set player to None or with supports_audio_output = False
+        speaker.coordinator.player = None  # No player available
         speaker.coordinator.client = None  # No client
         speaker.coordinator._capabilities = None  # No capabilities
         speaker.coordinator._metadata_supported = None  # Metadata support not determined
-        # No capabilities attribute - should skip Bluetooth sensor
+        # No player - should skip Bluetooth sensor
 
         with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
             entities = []

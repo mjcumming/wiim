@@ -45,23 +45,10 @@ async def async_setup_entry(
     entities.append(WiiMInputSensor(speaker))
 
     # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
-    # Use same capability detection logic as select entity (audio output mode selector)
-    # Determine capabilities safely. Prefer client.capabilities if it is a dict,
-    # otherwise use coordinator._capabilities if it is a dict. Avoid treating
-    # MagicMock attributes as truthy capability containers.
-    capabilities = None
-
-    client = getattr(speaker.coordinator, "client", None)
-    client_capabilities = getattr(client, "capabilities", None)
-    if isinstance(client_capabilities, dict):
-        capabilities = client_capabilities
-    else:
-        coordinator_capabilities = getattr(speaker.coordinator, "_capabilities", None)
-        if isinstance(coordinator_capabilities, dict):
-            capabilities = coordinator_capabilities
-
-    if isinstance(capabilities, dict):
-        supports_audio_output = bool(capabilities.get("supports_audio_output", False))
+    # Check if device supports audio output mode control using pywiim's capability property
+    player = getattr(speaker.coordinator, "player", None)
+    if player:
+        supports_audio_output = bool(getattr(player, "supports_audio_output", False))
         if supports_audio_output:
             entities.append(WiiMBluetoothOutputSensor(speaker))
             _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")
@@ -71,9 +58,8 @@ async def async_setup_entry(
                 supports_audio_output,
             )
     else:
-        if capabilities is None:
-            # No capabilities available - don't create sensor (same as select entity behavior)
-            _LOGGER.debug("Skipping Bluetooth output sensor - capabilities not available")
+        # Player not available yet - don't create sensor
+        _LOGGER.debug("Skipping Bluetooth output sensor - player not available")
 
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))

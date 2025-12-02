@@ -331,3 +331,59 @@ update_alarm:
       required: false
       selector:
         text:
+
+play_queue:
+  name: Play Queue
+  description: >
+    Play from the queue at a specific position.
+
+    Requires UPnP support and queue management capabilities.
+  target:
+    entity:
+      integration: wiim
+      domain: media_player
+  fields:
+    queue_position:
+      name: Queue Position
+      description: Position in queue to start playing (0-based, defaults to 0)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 10000
+          mode: box
+          default: 0
+
+remove_from_queue:
+  name: Remove From Queue
+  description: >
+    Remove an item from the queue at a specific position.
+
+    Requires UPnP support and queue management capabilities.
+  target:
+    entity:
+      integration: wiim
+      domain: media_player
+  fields:
+    queue_position:
+      name: Queue Position
+      description: Position in queue to remove (0-based, defaults to 0)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 10000
+          mode: box
+          default: 0
+
+get_queue:
+  name: Get Queue
+  description: >
+    Get the current queue contents.
+
+    Requires UPnP support and queue management capabilities.
+    Returns queue items with metadata (title, artist, album, URL).
+  target:
+    entity:
+      integration: wiim
+      domain: media_player
