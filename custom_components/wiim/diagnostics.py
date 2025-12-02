@@ -79,9 +79,11 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 "client_host": (
                     getattr(speaker.coordinator.player, "host", None) if speaker.coordinator.player else None
                 ),
-                "capabilities": async_redact_data(speaker.coordinator._capabilities, TO_REDACT)
-                if hasattr(speaker.coordinator, "_capabilities")
-                else {},
+                "capabilities": (
+                    async_redact_data(speaker.coordinator._capabilities, TO_REDACT)
+                    if hasattr(speaker.coordinator, "_capabilities")
+                    else {}
+                ),
             }
 
         # Integration overview - use Player properties for role counting

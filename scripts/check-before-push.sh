@@ -1,31 +1,36 @@
 #!/bin/bash
-# Run all CI checks locally before pushing
+# Run EXACT same checks as CI before pushing
 # Usage: ./scripts/check-before-push.sh
+#
+# This matches .github/workflows/tests.yaml exactly
 
 set -e
+cd "$(dirname "$0")/.."
 
-echo "🔍 Running pre-push checks..."
+echo "🔍 Running CI checks locally..."
+echo "   (Same checks as .github/workflows/tests.yaml)"
 echo ""
 
-echo "1️⃣  Ruff lint check..."
+echo "1️⃣  Ruff lint..."
 ruff check custom_components/wiim --line-length 120
 echo "   ✅ Ruff passed"
 echo ""
 
-echo "2️⃣  Flake8 check..."
+echo "2️⃣  Flake8 lint..."
 flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
 echo "   ✅ Flake8 passed"
 echo ""
 
-echo "3️⃣  MyPy type check..."
+echo "3️⃣  MyPy strict..."
 mypy --strict custom_components/wiim
 echo "   ✅ MyPy passed"
 echo ""
 
-echo "4️⃣  Running tests with coverage..."
-python -m pytest tests/unit/ -q --cov=custom_components/wiim --cov-fail-under=70
-echo "   ✅ Tests passed with coverage ≥70%"
+echo "4️⃣  Pytest with coverage..."
+pytest tests/ --cov=custom_components/wiim --cov-report=term-missing -q
+echo "   ✅ Tests passed"
 echo ""
 
-echo "🎉 All checks passed! Safe to push."
-
+echo "════════════════════════════════════════════"
+echo "🎉 ALL CI CHECKS PASSED - Safe to push!"
+echo "════════════════════════════════════════════"

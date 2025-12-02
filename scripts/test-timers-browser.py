@@ -9,7 +9,8 @@ import time
 # Note: This would require browser automation setup
 # For now, let's use the API approach with token input
 
-print("""
+print(
+    """
 To test sleep timer and alarms on the master bedroom device, you need to:
 
 1. Get your Home Assistant access token:
@@ -26,4 +27,5 @@ To test sleep timer and alarms on the master bedroom device, you need to:
 
 Or provide the token directly:
    python3 scripts/test-timers-interactive.py --token YOUR_TOKEN
-""")
+"""
+)

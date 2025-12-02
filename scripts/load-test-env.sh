@@ -20,4 +20,3 @@ else
     echo "     HA_TOKEN=your_token_here"
     exit 1
 fi
-

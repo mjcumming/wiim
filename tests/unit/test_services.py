@@ -380,9 +380,9 @@ class TestActionYAMLSync:
         for action_name, action_def in services_translations.items():
             assert isinstance(action_def, dict), f"Action '{action_name}' translation should be a dictionary"
             # Each action should have at least a name or description
-            assert "name" in action_def or "description" in action_def, (
-                f"Action '{action_name}' translation should have at least a name or description"
-            )
+            assert (
+                "name" in action_def or "description" in action_def
+            ), f"Action '{action_name}' translation should have at least a name or description"
 
     def test_yaml_fields_have_string_translations(self, services_yaml_content, strings_json_content):
         """Test that action fields in services.yaml have translations in strings.json."""

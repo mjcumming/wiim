@@ -1,6 +1,8 @@
-# Pre-commit hooks configuration for catching issues before git commit
+# Pre-commit hooks configuration - runs SAME checks as CI
 # Install with: pre-commit install
 # Run manually with: pre-commit run --all-files
+#
+# These hooks ensure CI will pass before you even commit.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -20,28 +22,34 @@ repos:
         language_version: python3
         args: [--line-length=120]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.2
-    hooks:
-      - id: ruff
-        args: [--line-length=120]
-
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.2.0
-    hooks:
-      - id: flake8
-
-  # Local hooks for testing compatibility
+  # Local hooks that match CI exactly
   - repo: local
     hooks:
-      - id: python-version-check
-        name: Check Python version compatibility
-        entry: python3
+      # Ruff - matches CI: ruff check custom_components/wiim --line-length 120
+      - id: ruff-ci
+        name: Ruff lint (CI match)
+        entry: ruff check custom_components/wiim --line-length 120
         language: system
-        args:
-          ["-c", "import sys; sys.exit(0 if sys.version_info >= (3,13) else 1)"]
         pass_filenames: false
         always_run: true
+
+      # Flake8 - matches CI: flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
+      - id: flake8-ci
+        name: Flake8 lint (CI match)
+        entry: flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # MyPy - matches CI: mypy --strict custom_components/wiim
+      - id: mypy-ci
+        name: MyPy strict (CI match)
+        entry: mypy --strict custom_components/wiim
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Quick import test
       - id: test-imports
         name: Test critical imports
         entry: python3
@@ -49,23 +57,12 @@ repos:
         args:
           [
             "-c",
-            "from custom_components.wiim import DOMAIN; print('✅ Core imports working')",
+            "from custom_components.wiim import DOMAIN; print('✅ Imports OK')",
           ]
         pass_filenames: false
         always_run: true
-      - id: pytest-smoke
-        name: Pytest smoke (pre-push)
-        entry: python3 -m pytest -q tests/unit/test_data.py
-        language: system
-        stages: [pre-push]
-      - id: ruff-all
-        name: Ruff lint all files (pre-push)
-        entry: ruff check custom_components/wiim --line-length 120
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
 
 # Global settings
 default_stages: [pre-commit]
-fail_fast: false
+fail_fast: true  # Stop on first failure - faster feedback
 minimum_pre_commit_version: "2.15.0"
