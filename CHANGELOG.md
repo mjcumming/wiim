@@ -2,6 +2,22 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.33] - 2025-12-02
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.29
+  - pywiim now extracts filename from URL as fallback `media_title` when device doesn't provide one
+  - pywiim now exposes `media_content_id` property with the URL passed to `play_url()`
+  - Simplifies HA integration by using pywiim as single source of truth for media content ID
+
+### Improved
+
+- **Media Content Tracking**: Simplified `media_content_id` handling
+  - Now reads URL directly from pywiim instead of manually tracking in integration
+  - Removed redundant URL tracking code from media player entities
+  - Scene restoration still works via pywiim's tracked URL
+
 ## [1.0.32] - 2025-12-01
 
 ### Changed
