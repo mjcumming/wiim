@@ -58,6 +58,12 @@ repos:
         entry: python3 -m pytest -q tests/unit/test_data.py
         language: system
         stages: [pre-push]
+      - id: ruff-all
+        name: Ruff lint all files (pre-push)
+        entry: ruff check custom_components/wiim --line-length 120
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
 
 # Global settings
 default_stages: [pre-commit]
