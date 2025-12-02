@@ -229,10 +229,13 @@ remove_from_queue:
 get_queue:
   name: Get Queue
   description: >
-    Get the current queue contents.
+    Get the current queue contents with metadata (title, artist, album, URL).
 
-    Requires UPnP support and queue management capabilities.
-    Returns queue items with metadata (title, artist, album, URL).
+    LIMITED DEVICE SUPPORT: Only works on WiiM Amp and WiiM Ultra with a USB drive connected.
+    These devices expose the UPnP ContentDirectory service required for queue retrieval.
+    Other devices (Mini, Pro, Pro Plus) do not support this action.
+
+    Queue position and count are available on all devices via entity attributes.
   target:
     entity:
       integration: wiim

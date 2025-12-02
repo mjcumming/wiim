@@ -268,25 +268,27 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 ### Queue Management Actions
 
-| Action                   | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| `wiim.play_queue`        | Play from queue at specific position (requires UPnP)|
-| `wiim.remove_from_queue` | Remove item from queue at position (requires UPnP)  |
-| `wiim.get_queue`         | Get queue contents with metadata (requires UPnP)    |
+> **⚠️ Limited Device Support**: Queue browsing (`get_queue`) only works on **WiiM Amp and Ultra with USB drive connected**. Other devices (Mini, Pro, Pro Plus) do not support ContentDirectory service. Queue position/count is available on all devices. See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for details.
+
+| Action                   | Description                                                    |
+| ------------------------ | -------------------------------------------------------------- |
+| `wiim.play_queue`        | Play from queue at specific position (requires UPnP AVTransport) |
+| `wiim.remove_from_queue` | Remove item from queue at position (requires UPnP AVTransport)   |
+| `wiim.get_queue`         | Get queue contents with metadata (Amp/Ultra + USB only)          |
 
 ### Audio & EQ Actions
 
-| Action                  | Description                                    |
-| ----------------------- | ---------------------------------------------- |
-| `wiim.set_eq`           | Set equalizer presets or custom 10-band values |
+| Action        | Description                                    |
+| ------------- | ---------------------------------------------- |
+| `wiim.set_eq` | Set equalizer presets or custom 10-band values |
 
 ### Timer & Alarm Actions (WiiM Devices Only)
 
-| Action                   | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds)                    |
-| `wiim.clear_sleep_timer` | Clear active sleep timer                            |
-| `wiim.update_alarm`      | Create/update alarm (3 slots, UTC time)             |
+| Action                   | Description                             |
+| ------------------------ | --------------------------------------- |
+| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds)        |
+| `wiim.clear_sleep_timer` | Clear active sleep timer                |
+| `wiim.update_alarm`      | Create/update alarm (3 slots, UTC time) |
 
 ### Device Management Actions
 

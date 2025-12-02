@@ -107,23 +107,23 @@ All action handler methods are tested with:
 
 ### Official Actions (15 total)
 
-| Action               | Type     | Handler Method             |
-| -------------------- | -------- | -------------------------- |
-| `play_url`           | Entity   | `async_play_url`           |
-| `play_preset`        | Entity   | `async_play_preset`        |
-| `play_playlist`      | Entity   | `async_play_playlist`      |
-| `set_eq`             | Entity   | `async_set_eq`             |
-| `play_notification`  | Entity   | `async_play_notification`  |
-| `play_queue`         | Entity   | `async_play_queue`         |
-| `remove_from_queue`  | Entity   | `async_remove_from_queue`  |
-| `get_queue`          | Entity   | `async_get_queue`          |
-| `set_sleep_timer`    | Platform | `set_sleep_timer`          |
-| `clear_sleep_timer`  | Platform | `clear_sleep_timer`        |
-| `update_alarm`       | Platform | `set_alarm`                |
-| `reboot_device`      | Platform | `async_reboot_device`      |
-| `sync_time`          | Platform | `async_sync_time`          |
-| `scan_bluetooth`     | Platform | `async_scan_bluetooth`     |
-| `set_channel_balance`| Platform | `async_set_channel_balance`|
+| Action                | Type     | Handler Method              |
+| --------------------- | -------- | --------------------------- |
+| `play_url`            | Entity   | `async_play_url`            |
+| `play_preset`         | Entity   | `async_play_preset`         |
+| `play_playlist`       | Entity   | `async_play_playlist`       |
+| `set_eq`              | Entity   | `async_set_eq`              |
+| `play_notification`   | Entity   | `async_play_notification`   |
+| `play_queue`          | Entity   | `async_play_queue`          |
+| `remove_from_queue`   | Entity   | `async_remove_from_queue`   |
+| `get_queue`           | Entity   | `async_get_queue`           |
+| `set_sleep_timer`     | Platform | `set_sleep_timer`           |
+| `clear_sleep_timer`   | Platform | `clear_sleep_timer`         |
+| `update_alarm`        | Platform | `set_alarm`                 |
+| `reboot_device`       | Platform | `async_reboot_device`       |
+| `sync_time`           | Platform | `async_sync_time`           |
+| `scan_bluetooth`      | Platform | `async_scan_bluetooth`      |
+| `set_channel_balance` | Platform | `async_set_channel_balance` |
 
 ### Registration Methods
 
@@ -178,6 +178,7 @@ When adding new actions:
 6. **Update this document** - Add action to coverage list
 
 The `TestActionYAMLSync` tests will automatically catch if you:
+
 - Define an action in YAML but don't register it
 - Register an action but don't add it to YAML
 - Forget to add translations to strings.json

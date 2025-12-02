@@ -420,33 +420,48 @@ automation:
 
 Queue management requires UPnP support. Check device capabilities in the entity attributes.
 
-**Play from Queue Position**
+> **⚠️ Limited Device Support**: Full queue browsing (`get_queue`) only works on **WiiM Amp and WiiM Ultra with a USB drive connected**. These devices expose the UPnP ContentDirectory service required for queue retrieval. Other devices (Mini, Pro, Pro Plus) function as UPnP renderers only and do not support queue browsing. Queue position and count are available on all devices via the `queue_position` and `queue_count` entity attributes.
+>
+> See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for technical details.
+
+**Play from Queue Position** (requires UPnP AVTransport)
 
 ```yaml
 service: wiim.play_queue
 target:
   entity_id: media_player.living_room
 data:
-  queue_position: 0  # 0-based index
+  queue_position: 0 # 0-based index
 ```
 
-**Remove from Queue**
+**Remove from Queue** (requires UPnP AVTransport)
 
 ```yaml
 service: wiim.remove_from_queue
 target:
   entity_id: media_player.living_room
 data:
-  queue_position: 3  # Remove item at position 3
+  queue_position: 3 # Remove item at position 3
 ```
 
-**Get Queue Contents**
+**Get Queue Contents** (WiiM Amp/Ultra + USB only)
 
 ```yaml
 service: wiim.get_queue
 target:
   entity_id: media_player.living_room
 # Returns: queue items with title, artist, album, URL
+# Only works on WiiM Amp/Ultra with USB drive connected
+```
+
+**Check Queue Support**
+
+You can check if your device supports queue operations by looking at the `capabilities` attribute:
+
+```yaml
+# In a template or automation
+{{ state_attr('media_player.living_room', 'capabilities').queue_browse }}  # Full queue retrieval
+{{ state_attr('media_player.living_room', 'capabilities').queue_add }}     # Add/remove from queue
 ```
 
 ### ⚠️ Unofficial API Actions
@@ -461,7 +476,7 @@ service: wiim.set_channel_balance
 target:
   entity_id: media_player.living_room
 data:
-  balance: 0.2  # Slightly right
+  balance: 0.2 # Slightly right
 ```
 
 **Bluetooth Scanning**
@@ -472,7 +487,7 @@ service: wiim.scan_bluetooth
 target:
   entity_id: media_player.living_room
 data:
-  duration: 5  # Scan for 5 seconds (3-10 recommended)
+  duration: 5 # Scan for 5 seconds (3-10 recommended)
 ```
 
 ---
