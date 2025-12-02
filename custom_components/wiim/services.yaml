@@ -1,23 +1,13 @@
 # WiiM Integration Actions (Services)
-# All actions use target entity selection for proper Home Assistant UI integration
+# Human-readable names and descriptions are in strings.json
 
 play_preset:
-  name: Play Preset
-  description: >
-    Play a specific preset (device dependent).
-
-    WARNING: Due to WiiM firmware behavior, presets may automatically resume/override other sources
-    (e.g., Spotify, AirPlay) after a few seconds. If you experience this issue, use the
-    media_player.play_media action with the stream URL instead, or ensure you stop preset playback
-    before switching to external sources. See: https://github.com/mjcumming/wiim/issues/68
   target:
     entity:
       domain: media_player
       integration: wiim
   fields:
     preset:
-      name: Preset Number
-      description: Preset number to play (refer to device capability)
       required: true
       selector:
         number:
@@ -25,46 +15,34 @@ play_preset:
           max: 20
 
 play_url:
-  name: Play URL
-  description: Play media from a URL
   target:
     entity:
       domain: media_player
       integration: wiim
   fields:
     url:
-      name: URL
-      description: URL of the media to play
       required: true
       selector:
         text:
 
 play_playlist:
-  name: Play Playlist
-  description: Play an M3U playlist
   target:
     entity:
       domain: media_player
       integration: wiim
   fields:
     playlist_url:
-      name: Playlist URL
-      description: URL of the M3U playlist
       required: true
       selector:
         text:
 
 set_eq:
-  name: Set EQ
-  description: Set equalizer preset or custom values
   target:
     entity:
       domain: media_player
       integration: wiim
   fields:
     preset:
-      name: EQ Preset
-      description: EQ preset name
       required: true
       selector:
         select:
@@ -80,54 +58,40 @@ set_eq:
             - "blues"
             - "custom"
     custom_values:
-      name: Custom EQ Values
-      description: Custom EQ values (required when preset is 'custom')
       required: false
       selector:
         object:
 
 play_notification:
-  name: Play Notification
-  description: Play a notification sound
   target:
     entity:
       domain: media_player
       integration: wiim
   fields:
     url:
-      name: Notification URL
-      description: URL of the notification sound
       required: true
       selector:
         text:
 
 reboot_device:
-  name: Reboot Device
-  description: Reboot the WiiM device. The device will be temporarily unavailable during restart.
   target:
     entity:
       domain: media_player
       integration: wiim
 
 sync_time:
-  name: Sync Time
-  description: Synchronize device time with Home Assistant
   target:
     entity:
       domain: media_player
       integration: wiim
 
 set_sleep_timer:
-  name: Set Sleep Timer
-  description: Set a sleep timer on the WiiM device (WiiM devices only).
   target:
     entity:
-      integration: wiim
       domain: media_player
+      integration: wiim
   fields:
     sleep_time:
-      name: Sleep Time
-      description: Time in seconds until the device turns off (0-7200)
       required: true
       selector:
         number:
@@ -136,27 +100,18 @@ set_sleep_timer:
           unit_of_measurement: seconds
 
 clear_sleep_timer:
-  name: Clear Sleep Timer
-  description: Clear the sleep timer on the WiiM device (WiiM devices only).
   target:
     entity:
-      integration: wiim
       domain: media_player
+      integration: wiim
 
 update_alarm:
-  name: Update Alarm
-  description: >
-    Update an alarm on the WiiM device (WiiM devices only).
-
-    WiiM devices support 3 alarm slots (0-2). Alarm times must be in UTC format.
   target:
     entity:
-      integration: wiim
       domain: media_player
+      integration: wiim
   fields:
     alarm_id:
-      name: Alarm ID
-      description: The alarm slot to update (0-2)
       required: true
       selector:
         number:
@@ -164,120 +119,75 @@ update_alarm:
           max: 2
           mode: box
     time:
-      name: Time
-      description: Alarm time in UTC (HH:MM:SS format, e.g., "07:00:00")
       required: false
       selector:
         text:
     trigger:
-      name: Trigger
-      description: Alarm trigger type (e.g., "daily")
       required: false
       selector:
         text:
     operation:
-      name: Operation
-      description: Alarm operation type (e.g., "playback")
       required: false
       selector:
         text:
 
 play_queue:
-  name: Play Queue
-  description: >
-    Play from the queue at a specific position.
-
-    Requires UPnP support and queue management capabilities.
   target:
     entity:
-      integration: wiim
       domain: media_player
+      integration: wiim
   fields:
     queue_position:
-      name: Queue Position
-      description: Position in queue to start playing (0-based, defaults to 0)
       required: false
+      default: 0
       selector:
         number:
           min: 0
           max: 10000
           mode: box
-          default: 0
 
 remove_from_queue:
-  name: Remove From Queue
-  description: >
-    Remove an item from the queue at a specific position.
-
-    Requires UPnP support and queue management capabilities.
   target:
     entity:
-      integration: wiim
       domain: media_player
+      integration: wiim
   fields:
     queue_position:
-      name: Queue Position
-      description: Position in queue to remove (0-based, defaults to 0)
       required: false
+      default: 0
       selector:
         number:
           min: 0
           max: 10000
           mode: box
-          default: 0
 
 get_queue:
-  name: Get Queue
-  description: >
-    Get the current queue contents with metadata (title, artist, album, URL).
-
-    LIMITED DEVICE SUPPORT: Only works on WiiM Amp and WiiM Ultra with a USB drive connected.
-    These devices expose the UPnP ContentDirectory service required for queue retrieval.
-    Other devices (Mini, Pro, Pro Plus) do not support this action.
-
-    Queue position and count are available on all devices via entity attributes.
   target:
     entity:
-      integration: wiim
       domain: media_player
-
-# Unofficial API Actions
-# These use reverse-engineered API endpoints and may not work on all firmware versions
+      integration: wiim
 
 scan_bluetooth:
-  name: Scan for Bluetooth Devices
-  description: >
-    Scan for nearby Bluetooth devices.
-    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
-    The scan typically takes 3-10 seconds. Results are not returned by this action.
   target:
     entity:
       domain: media_player
       integration: wiim
   fields:
     duration:
-      name: Scan Duration
-      description: How long to scan in seconds (3-10 recommended)
       required: false
+      default: 5
       selector:
         number:
           min: 3
           max: 10
-      default: 5
 
 set_channel_balance:
-  name: Set Channel Balance
-  description: >
-    Adjust left/right channel balance.
-    WARNING: This uses unofficial API endpoints and may not be available on all firmware versions.
   target:
     entity:
       domain: media_player
       integration: wiim
   fields:
     balance:
-      name: Balance
-      description: Balance from -1.0 (full left) to 1.0 (full right). 0.0 is center.
       required: true
       selector:
         number:

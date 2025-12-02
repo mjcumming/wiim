@@ -359,14 +359,18 @@ class TestActionYAMLSync:
             )
 
     def test_services_yaml_structure(self, services_yaml_content):
-        """Test that services.yaml has correct structure."""
+        """Test that services.yaml has correct structure.
+
+        Note: Names and descriptions are in strings.json, not services.yaml.
+        services.yaml only contains the schema (target, fields, selectors).
+        """
         assert isinstance(services_yaml_content, dict), "services.yaml should be a dictionary"
 
         for action_name, action_def in services_yaml_content.items():
             assert isinstance(action_def, dict), f"Action '{action_name}' should be a dictionary"
-            # Each action should have at least a name or description
-            assert "name" in action_def or "description" in action_def, (
-                f"Action '{action_name}' should have at least a name or description"
+            # Each action should have a target (for entity selection in UI)
+            assert "target" in action_def, (
+                f"Action '{action_name}' should have a 'target' for entity selection"
             )
 
     def test_strings_json_services_structure(self, strings_json_content):

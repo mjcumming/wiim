@@ -270,8 +270,8 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 > **⚠️ Limited Device Support**: Queue browsing (`get_queue`) only works on **WiiM Amp and Ultra with USB drive connected**. Other devices (Mini, Pro, Pro Plus) do not support ContentDirectory service. Queue position/count is available on all devices. See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for details.
 
-| Action                   | Description                                                    |
-| ------------------------ | -------------------------------------------------------------- |
+| Action                   | Description                                                      |
+| ------------------------ | ---------------------------------------------------------------- |
 | `wiim.play_queue`        | Play from queue at specific position (requires UPnP AVTransport) |
 | `wiim.remove_from_queue` | Remove item from queue at position (requires UPnP AVTransport)   |
 | `wiim.get_queue`         | Get queue contents with metadata (Amp/Ultra + USB only)          |
