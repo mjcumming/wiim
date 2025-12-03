@@ -2,6 +2,14 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.34] - 2025-12-03
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.32
+  - **Enhanced device discovery validation** - Three-tier validation to prevent non-LinkPlay devices (Samsung TV, Sonos, Chromecast) from being incorrectly discovered
+  - **Gen1 WiFi Direct multiroom grouping fix** - Gen1 devices (Audio Pro Gen1, legacy LinkPlay) can now join groups correctly via WiFi Direct mode
+
 ## [1.0.33] - 2025-12-02
 
 ### Changed

@@ -416,7 +416,10 @@ class WiiMCompleteTestSuite:
         time.sleep(6)
 
         state = self.get_state(master)
-        group_members = state["attributes"].get("group_members", [])
+        if not state:
+            self.print_failure("Could not get master state")
+            return {"test": "Multiroom", "passed": False, "details": {"error": "state unavailable"}}
+        group_members = state["attributes"].get("group_members") or []
         joined = slave in group_members
 
         if joined:
@@ -428,7 +431,10 @@ class WiiMCompleteTestSuite:
         time.sleep(6)
 
         state = self.get_state(slave)
-        role = state["attributes"].get("group_role", "solo")
+        if not state:
+            self.print_failure("Could not get slave state")
+            return {"test": "Multiroom", "passed": False, "details": {"error": "state unavailable"}}
+        role = state["attributes"].get("group_role") or "solo"
         unjoined = role == "solo"
 
         if unjoined:
