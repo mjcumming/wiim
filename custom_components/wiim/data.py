@@ -6,8 +6,8 @@ import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
@@ -27,7 +27,7 @@ __all__ = [
 # ===== HELPER FUNCTIONS =====
 
 
-def get_coordinator_from_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> "WiiMCoordinator":
+def get_coordinator_from_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> WiiMCoordinator:
     """Get coordinator from config entry."""
     try:
         return hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
@@ -36,7 +36,7 @@ def get_coordinator_from_entry(hass: HomeAssistant, config_entry: ConfigEntry) -
         raise RuntimeError(f"Coordinator not found for {config_entry.entry_id}") from err
 
 
-def find_coordinator_by_uuid(hass: HomeAssistant, uuid: str) -> "WiiMCoordinator | None":
+def find_coordinator_by_uuid(hass: HomeAssistant, uuid: str) -> WiiMCoordinator | None:
     """Find coordinator by UUID."""
     if not uuid:
         return None
@@ -46,7 +46,7 @@ def find_coordinator_by_uuid(hass: HomeAssistant, uuid: str) -> "WiiMCoordinator
     return None
 
 
-def find_coordinator_by_ip(hass: HomeAssistant, ip: str) -> "WiiMCoordinator | None":
+def find_coordinator_by_ip(hass: HomeAssistant, ip: str) -> WiiMCoordinator | None:
     """Find coordinator by IP address."""
     if not ip:
         return None
@@ -57,7 +57,7 @@ def find_coordinator_by_ip(hass: HomeAssistant, ip: str) -> "WiiMCoordinator | N
     return None
 
 
-def get_all_coordinators(hass: HomeAssistant) -> list["WiiMCoordinator"]:
+def get_all_coordinators(hass: HomeAssistant) -> list[WiiMCoordinator]:
     """Get all registered coordinators."""
     coordinators = []
     for entry in hass.config_entries.async_entries(DOMAIN):

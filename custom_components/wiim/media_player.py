@@ -32,9 +32,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pywiim.exceptions import WiiMError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
+from .coordinator import WiiMCoordinator
 from .data import find_coordinator_by_uuid
 from .entity import WiimEntity
-from .coordinator import WiiMCoordinator
 from .group_media_player import WiiMGroupMediaPlayer
 from .media_player_base import WiiMMediaPlayerMixin
 from .utils import capitalize_source_name, wiim_command

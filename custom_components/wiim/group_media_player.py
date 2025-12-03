@@ -22,8 +22,8 @@ from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
-from .entity import WiimEntity
 from .coordinator import WiiMCoordinator
+from .entity import WiimEntity
 from .media_player_base import WiiMMediaPlayerMixin
 from .utils import is_connection_error
 

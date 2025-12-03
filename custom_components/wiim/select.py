@@ -9,11 +9,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
+from pywiim.exceptions import WiiMError
 
 from .const import DOMAIN
-from .entity import WiimEntity
 from .coordinator import WiiMCoordinator
+from .entity import WiimEntity
 from .utils import wiim_command
 
 _LOGGER = logging.getLogger(__name__)

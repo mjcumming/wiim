@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from contextlib import asynccontextmanager
-
-import hashlib
 
 from homeassistant.exceptions import HomeAssistantError
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError

@@ -13,8 +13,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_ENABLE_NETWORK_MONITORING, DOMAIN
-from .entity import WiimEntity
 from .coordinator import WiiMCoordinator
+from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
 
