@@ -278,21 +278,31 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         return self.speaker.name
 
     def _next_track_supported(self) -> bool:
-        """Check if next/previous track is supported - query from pywiim Player."""
-        player = self._get_player()
-        if not player:
-            return False
-        # Use pywiim's next_track_supported property (per integration guide)
-        # Use getattr to safely handle cases where attribute may not exist
-        return bool(getattr(player, "next_track_supported", False))
+        """Check if next/previous track is supported - query from pywiim Player.
+
+        Uses pywiim's supports_next_track property which is source-aware:
+        - Returns True for sources that support track navigation (Spotify, USB, etc.)
+        - Returns False for live radio, physical inputs where track skip doesn't apply
+        - Streaming services like Spotify return True even with queue_count=0
+        """
+        return self._get_player().supports_next_track
+
+    def _seek_supported(self) -> bool:
+        """Check if seeking is supported - query from pywiim Player.
+
+        Uses pywiim's supports_seek property which is source-aware:
+        - Returns True for sources that support seeking (USB, streaming services, etc.)
+        - Returns False for live radio, physical inputs where seeking doesn't apply
+        """
+        return self._get_player().supports_seek
 
     def _update_supported_features(self) -> None:
         """Update supported features based on current state (LinkPlay pattern)."""
         # Check if player is a slave in a multiroom group
-        player = self._get_player()
-        is_slave = player.is_slave if player else False
+        is_slave = self._get_player().is_slave
 
         # Base features available to all players (including slaves)
+        # Volume is device-specific, playback commands route to master automatically
         features = (
             MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_MUTE
@@ -302,8 +312,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.STOP
         )
 
-        # Slaves don't control their own playback/sources - master controls everything
-        # Only add these features if not a slave
+        # Features only available to non-slaves (master or solo players)
+        # These don't make sense for slaves: source selection, media initiation, browsing
         if not is_slave:
             features |= (
                 MediaPlayerEntityFeature.SELECT_SOURCE
@@ -313,9 +323,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
                 | MediaPlayerEntityFeature.CLEAR_PLAYLIST
             )
 
-        # Only include next/previous track if pywiim says they're supported and not a slave
-        # Slaves also shouldn't have track control (master controls that)
-        if not is_slave and self._next_track_supported():
+        # Track controls work for slaves - pywiim routes commands to master automatically
+        if self._next_track_supported():
             features |= MediaPlayerEntityFeature.NEXT_TRACK
             features |= MediaPlayerEntityFeature.PREVIOUS_TRACK
 
@@ -324,23 +333,21 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         # The role check is enforced in async_join_players() to prevent slaves from initiating joins
         features |= MediaPlayerEntityFeature.GROUPING
 
-        # Only include shuffle/repeat if pywiim says they're supported and not a slave
-        if not is_slave:
-            if self._shuffle_supported():
-                features |= MediaPlayerEntityFeature.SHUFFLE_SET
-            if self._repeat_supported():
-                features |= MediaPlayerEntityFeature.REPEAT_SET
+        # Shuffle/repeat work for slaves - pywiim routes commands to master automatically
+        if self._shuffle_supported():
+            features |= MediaPlayerEntityFeature.SHUFFLE_SET
+        if self._repeat_supported():
+            features |= MediaPlayerEntityFeature.REPEAT_SET
 
-        # Enable EQ (sound mode) only if device supports it and not a slave
-        if not is_slave and self._is_eq_supported():
+        # EQ is device-specific - each speaker has its own EQ settings
+        if self._is_eq_supported():
             features |= MediaPlayerEntityFeature.SELECT_SOUND_MODE
 
-        # Enable seek if we have duration and not a slave
-        # Use _attr_media_duration (set during coordinator update) not property
-        if not is_slave and self._attr_media_duration and self._attr_media_duration > 0:
+        # Seek works for slaves - pywiim routes commands to master automatically
+        if self._seek_supported():
             features |= MediaPlayerEntityFeature.SEEK
 
-        # Enable queue management if UPnP client is available and not a slave
+        # Queue management only for non-slaves (slaves shouldn't modify queue)
         if not is_slave and self._has_queue_support():
             features |= MediaPlayerEntityFeature.MEDIA_ENQUEUE
 
@@ -351,28 +358,19 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         pywiim exposes EQ support as a boolean property on the Player class.
         """
-        player = self._get_player()
-        if not player:
-            return False
-        return bool(getattr(player, "supports_eq", False))
+        return self._get_player().supports_eq
 
     def _has_queue_support(self) -> bool:
         """Check if queue management is available - query from Player.
 
         Uses pywiim's supports_queue_add property to check if items can be added to queue.
         """
-        player = self._get_player()
-        if not player:
-            return False
-        return bool(getattr(player, "supports_queue_add", False))
+        return self._get_player().supports_queue_add
 
     async def _ensure_upnp_ready(self) -> None:
         """Ensure UPnP client is available when queue management is requested."""
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not available")
         # Check if UPnP is supported (required for queue management)
-        if not getattr(player, "supports_upnp", False):
+        if not self._get_player().supports_upnp:
             raise HomeAssistantError(
                 "Queue management not available. The device may not support UPnP or it may not be initialized yet."
             )
@@ -383,10 +381,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         return self.speaker.available and self.coordinator.last_update_success
 
     def _get_player(self):
-        """Get Player object from coordinator data (always up-to-date via pywiim)."""
-        if self.coordinator.data:
-            return self.coordinator.data.get("player")
-        return None
+        """Get Player object from coordinator (always available after setup)."""
+        return self.coordinator.player
 
     # ===== STATE =====
 
@@ -404,8 +400,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def volume_level(self) -> float | None:
         """Return volume level 0..1 (already converted by Player)."""
-        player = self._get_player()
-        return player.volume_level if player else None
+        return self._get_player().volume_level
 
     @property
     def volume_step(self) -> float:
@@ -422,8 +417,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def is_volume_muted(self) -> bool | None:
         """Return True if muted."""
-        player = self._get_player()
-        return player.is_muted if player else None
+        return self._get_player().is_muted
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level 0..1."""
@@ -495,12 +489,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         For web radio streams, uses pause instead of stop as stop doesn't work reliably
         due to device firmware behavior.
         """
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not available")
-
         try:
-            await player.stop()
+            await self._get_player().stop()
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop playback: {err}") from err
@@ -601,12 +591,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         Uses available_sources from pywiim which should filter to only selectable sources.
         """
-        player = self._get_player()
-        if not player:
-            return []
-
         # Get available_sources directly from Player object
-        available_sources = getattr(player, "available_sources", None)
+        available_sources = getattr(self._get_player(), "available_sources", None)
         if available_sources:
             capitalized = [_capitalize_source_name(str(s)) for s in available_sources]
             return capitalized
@@ -1117,9 +1103,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def group_members(self) -> list[str] | None:
         """Return list of entity IDs in the current group - using pywiim Player.group."""
         player = self._get_player()
-        if not player:
-            return None
-
         # If solo, return None (not in a group)
         if player.is_solo:
             return None
@@ -1143,8 +1126,6 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
     def _get_metadata_player(self):
         """Return the player that should be used for metadata display."""
         player = self._get_player()
-        if not player:
-            return None
         # Slaves should use master's metadata - PyWiim's group.master has it
         if player.is_slave and player.group:
             master = getattr(player.group, "master", None)
@@ -1268,12 +1249,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         Calls pywiim's leave_group() regardless of player role (master/slave/solo).
         PyWiim handles the complexity of what that means for each role.
         """
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not ready")
-
         try:
-            await player.leave_group()
+            await self._get_player().leave_group()
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to leave group: {err}") from err
 
@@ -1281,21 +1258,13 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     def _shuffle_supported(self) -> bool:
         """Check if shuffle is supported - query from pywiim Player."""
-        player = self._get_player()
-        if not player:
-            return False
-        # Use pywiim's shuffle_supported property (per integration guide)
-        return bool(getattr(player, "shuffle_supported", True))
+        return self._get_player().shuffle_supported
 
     @property
     def shuffle(self) -> bool | None:
         """Return True if shuffle is enabled."""
         # Read directly from Player object (always up-to-date via pywiim)
-        player = self._get_player()
-        if not player:
-            return None
-
-        shuffle = getattr(player, "shuffle", None)
+        shuffle = getattr(self._get_player(), "shuffle", None)
         if shuffle is not None:
             # Convert string to bool if needed
             if isinstance(shuffle, bool):
@@ -1314,21 +1283,13 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     def _repeat_supported(self) -> bool:
         """Check if repeat is supported - query from pywiim Player."""
-        player = self._get_player()
-        if not player:
-            return False
-        # Use pywiim's repeat_supported property (per integration guide)
-        return bool(getattr(player, "repeat_supported", True))
+        return self._get_player().repeat_supported
 
     @property
     def repeat(self) -> RepeatMode | None:
         """Return current repeat mode."""
         # Read directly from Player object (always up-to-date via pywiim)
-        player = self._get_player()
-        if not player:
-            return None
-
-        repeat = getattr(player, "repeat", None)
+        repeat = getattr(self._get_player(), "repeat", None)
         if repeat is not None:
             repeat_str = str(repeat).lower()
             if repeat_str in ("1", "one", "track"):
@@ -1364,11 +1325,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not self._is_eq_supported():
             return None
 
-        player = self._get_player()
-        if not player:
-            return None
-
-        eq_preset = getattr(player, "eq_preset", None)
+        eq_preset = getattr(self._get_player(), "eq_preset", None)
         if eq_preset:
             return str(eq_preset).title()
         return None
@@ -1382,12 +1339,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not self._is_eq_supported():
             return None
 
-        player = self._get_player()
-        if not player:
-            return None
-
         # Get cached presets from Player object (populated during refresh())
-        eq_presets = getattr(player, "eq_presets", None)
+        eq_presets = getattr(self._get_player(), "eq_presets", None)
         if eq_presets and isinstance(eq_presets, list):
             # Return list of preset names in title case for display
             return [str(preset).title() for preset in eq_presets]
@@ -1455,10 +1408,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     async def async_play_queue(self, queue_position: int = 0) -> None:
         """Handle play_queue service call."""
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not available")
-        if not getattr(player, "supports_queue_add", False):
+        if not self._get_player().supports_queue_add:
             raise HomeAssistantError(
                 "Queue playback not available. The device may not support UPnP or it may not be initialized yet."
             )
@@ -1470,10 +1420,7 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     async def async_remove_from_queue(self, queue_position: int = 0) -> None:
         """Handle remove_from_queue service call."""
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not available")
-        if not getattr(player, "supports_queue_add", False):
+        if not self._get_player().supports_queue_add:
             raise HomeAssistantError(
                 "Queue management not available. The device may not support UPnP or it may not be initialized yet."
             )
@@ -1485,11 +1432,8 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
 
     async def async_get_queue(self) -> ServiceResponse:
         """Handle get_queue service call - returns queue contents."""
-        player = self._get_player()
-        if not player:
-            raise HomeAssistantError("Player is not available")
         # get_queue requires supports_queue_browse (full queue retrieval via ContentDirectory)
-        if not getattr(player, "supports_queue_browse", False):
+        if not self._get_player().supports_queue_browse:
             raise HomeAssistantError(
                 "Queue browsing not available. This feature requires UPnP ContentDirectory support (WiiM Amp/Ultra + USB only)."
             )
@@ -1748,14 +1692,14 @@ class WiiMMediaPlayer(WiimEntity, MediaPlayerEntity):
         player = self._get_player()
         if player:
             attrs["capabilities"] = {
-                "eq": getattr(player, "supports_eq", False),
-                "presets": getattr(player, "supports_presets", False),
-                "audio_output": getattr(player, "supports_audio_output", False),
-                "queue_browse": getattr(player, "supports_queue_browse", False),
-                "queue_add": getattr(player, "supports_queue_add", False),
-                "alarms": getattr(player, "supports_alarms", False),
-                "sleep_timer": getattr(player, "supports_sleep_timer", False),
-                "upnp": getattr(player, "supports_upnp", False),
+                "eq": player.supports_eq,
+                "presets": player.supports_presets,
+                "audio_output": player.supports_audio_output,
+                "queue_browse": player.supports_queue_browse,
+                "queue_add": player.supports_queue_add,
+                "alarms": player.supports_alarms,
+                "sleep_timer": player.supports_sleep_timer,
+                "upnp": player.supports_upnp,
             }
 
         return attrs

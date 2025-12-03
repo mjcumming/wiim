@@ -28,22 +28,12 @@ async def async_setup_entry(
     entities = []
 
     # Check if device supports audio output mode control using pywiim's capability property
-    player = getattr(speaker.coordinator, "player", None)
-    if not player:
-        # No player available yet, skip select entities
-        _LOGGER.debug("Skipping select entities - player not available")
-        return
-
-    supports_audio_output = bool(getattr(player, "supports_audio_output", False))
-    if supports_audio_output:
+    if speaker.coordinator.player.supports_audio_output:
         # Audio Output Mode Select
         entities.append(WiiMOutputModeSelect(speaker))
         _LOGGER.debug("Creating audio output select entity - device supports audio output")
     else:
-        _LOGGER.debug(
-            "Skipping audio output select entity - device does not support audio output (capability=%s)",
-            supports_audio_output,
-        )
+        _LOGGER.debug("Skipping audio output select entity - device does not support audio output")
 
     # Bluetooth device selection is now integrated into Audio Output Mode select
     # No separate Bluetooth device select entity needed

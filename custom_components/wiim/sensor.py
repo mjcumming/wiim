@@ -46,20 +46,11 @@ async def async_setup_entry(
 
     # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
     # Check if device supports audio output mode control using pywiim's capability property
-    player = getattr(speaker.coordinator, "player", None)
-    if player:
-        supports_audio_output = bool(getattr(player, "supports_audio_output", False))
-        if supports_audio_output:
-            entities.append(WiiMBluetoothOutputSensor(speaker))
-            _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")
-        else:
-            _LOGGER.debug(
-                "Skipping Bluetooth output sensor - device does not support audio output (capability=%s)",
-                supports_audio_output,
-            )
+    if speaker.coordinator.player.supports_audio_output:
+        entities.append(WiiMBluetoothOutputSensor(speaker))
+        _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")
     else:
-        # Player not available yet - don't create sensor
-        _LOGGER.debug("Skipping Bluetooth output sensor - player not available")
+        _LOGGER.debug("Skipping Bluetooth output sensor - device does not support audio output")
 
     # Always add diagnostic sensor
     entities.append(WiiMDiagnosticSensor(speaker))

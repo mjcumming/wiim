@@ -672,9 +672,9 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
         # Should not have playback features when unavailable
         assert MediaPlayerEntityFeature.PLAY not in features
 
-    def test_supported_features_with_next_track_supported(self, mock_group_speaker, mock_master_player):
+    def test_supported_features_with_supports_next_track(self, mock_group_speaker, mock_master_player):
         """Test supported_features includes NEXT_TRACK and PREVIOUS_TRACK when supported."""
-        mock_master_player.next_track_supported = True
+        mock_master_player.supports_next_track = True
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
 
         features = entity.supported_features
@@ -682,20 +682,9 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
         assert MediaPlayerEntityFeature.NEXT_TRACK in features
         assert MediaPlayerEntityFeature.PREVIOUS_TRACK in features
 
-    def test_supported_features_without_next_track_supported(self, mock_group_speaker, mock_master_player):
+    def test_supported_features_without_supports_next_track(self, mock_group_speaker, mock_master_player):
         """Test supported_features excludes NEXT_TRACK and PREVIOUS_TRACK when not supported."""
-        mock_master_player.next_track_supported = False
-        entity = WiiMGroupMediaPlayer(mock_group_speaker)
-
-        features = entity.supported_features
-
-        assert MediaPlayerEntityFeature.NEXT_TRACK not in features
-        assert MediaPlayerEntityFeature.PREVIOUS_TRACK not in features
-
-    def test_supported_features_next_track_missing_attribute(self, mock_group_speaker, mock_master_player):
-        """Test supported_features when next_track_supported attribute is missing."""
-        # Remove the attribute to simulate older pywiim versions or unsupported sources
-        delattr(mock_master_player, "next_track_supported")
+        mock_master_player.supports_next_track = False
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
 
         features = entity.supported_features
@@ -705,14 +694,14 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
 
     def test_next_track_supported_returns_true(self, mock_group_speaker, mock_master_player):
         """Test _next_track_supported returns True when supported."""
-        mock_master_player.next_track_supported = True
+        mock_master_player.supports_next_track = True
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
 
         assert entity._next_track_supported() is True
 
     def test_next_track_supported_returns_false_when_not_supported(self, mock_group_speaker, mock_master_player):
         """Test _next_track_supported returns False when not supported."""
-        mock_master_player.next_track_supported = False
+        mock_master_player.supports_next_track = False
         entity = WiiMGroupMediaPlayer(mock_group_speaker)
 
         assert entity._next_track_supported() is False
@@ -741,14 +730,6 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
             return_value=True,
         ):
             assert entity._next_track_supported() is False
-
-    def test_next_track_supported_returns_false_when_attribute_missing(self, mock_group_speaker, mock_master_player):
-        """Test _next_track_supported returns False when attribute is missing."""
-        # Remove the attribute to simulate older pywiim versions
-        delattr(mock_master_player, "next_track_supported")
-        entity = WiiMGroupMediaPlayer(mock_group_speaker)
-
-        assert entity._next_track_supported() is False
 
 
 class TestWiiMGroupMediaPlayerStateEdgeCases:

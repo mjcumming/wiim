@@ -435,16 +435,17 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     def _next_track_supported(self) -> bool:
         """Check if next/previous track is supported by master's current source.
 
-        Next/previous track availability depends on the content being played (local files,
-        streaming services, etc.). pywiim's Player automatically determines this.
+        Uses pywiim's supports_next_track property which is source-aware:
+        - Returns True for sources that support track navigation (Spotify, USB, etc.)
+        - Returns False for live radio, physical inputs where track skip doesn't apply
+        - Streaming services like Spotify return True even with queue_count=0
         """
         if not self.available:
             return False
         player = self._get_player()
         if not player:
             return False
-        # Use pywiim's next_track_supported property (per integration guide)
-        return bool(getattr(player, "next_track_supported", False))
+        return player.supports_next_track
 
     # ===== SHUFFLE & REPEAT =====
 
@@ -459,8 +460,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         player = self._get_player()
         if not player:
             return False
-        # Use pywiim's shuffle_supported property (per integration guide)
-        return bool(getattr(player, "shuffle_supported", True))
+        return player.shuffle_supported
 
     @property
     def shuffle(self) -> bool | None:
@@ -508,8 +508,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         player = self._get_player()
         if not player:
             return False
-        # Use pywiim's repeat_supported property (per integration guide)
-        return bool(getattr(player, "repeat_supported", True))
+        return player.repeat_supported
 
     @property
     def repeat(self) -> RepeatMode | None:

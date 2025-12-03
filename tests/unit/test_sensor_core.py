@@ -207,7 +207,7 @@ class TestSensorPlatformSetupLogic:
             assert "WiiMBitRateSensor" not in entity_types
 
     async def test_get_sensor_entities_without_capabilities(self):
-        """Test sensor entity creation when capabilities are not available."""
+        """Test sensor entity creation when device doesn't support audio output."""
         from custom_components.wiim.sensor import async_setup_entry
 
         # Mock dependencies
@@ -215,19 +215,20 @@ class TestSensorPlatformSetupLogic:
         config_entry = MagicMock()
         config_entry.entry_id = "test-entry"
 
-        # Mock speaker without player or with player that doesn't support audio output
+        # Mock speaker with player that doesn't support audio output
         speaker = MagicMock()
         speaker.name = "Test WiiM"
         speaker.uuid = "test-uuid"
         speaker.available = True
         speaker.coordinator = MagicMock()
         speaker.coordinator.data = {}
-        # Set player to None or with supports_audio_output = False
-        speaker.coordinator.player = None  # No player available
+        # Player exists but doesn't support audio output (e.g., WiiM Mini)
+        speaker.coordinator.player = MagicMock()
+        speaker.coordinator.player.supports_audio_output = False
         speaker.coordinator.client = None  # No client
         speaker.coordinator._capabilities = None  # No capabilities
         speaker.coordinator._metadata_supported = None  # Metadata support not determined
-        # No player - should skip Bluetooth sensor
+        # No audio output support - should skip Bluetooth sensor
 
         with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
             entities = []

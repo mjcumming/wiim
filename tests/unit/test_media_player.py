@@ -66,20 +66,15 @@ class TestWiiMMediaPlayerVolume:
 
     def test_volume_level_returns_player_volume(self, media_player, mock_coordinator):
         """Test that volume_level returns player's volume_level."""
-        mock_coordinator.data["player"].volume_level = 0.75
+        mock_coordinator.player.volume_level = 0.75
         assert media_player.volume_level == 0.75
-
-    def test_volume_level_returns_none_when_player_missing(self, media_player, mock_coordinator):
-        """Test that volume_level returns None when player is missing."""
-        mock_coordinator.data = None
-        assert media_player.volume_level is None
 
     def test_volume_level_for_slave_in_group(self, media_player, mock_coordinator):
         """Test that volume_level works for slaves in a group (Issue #126)."""
         # Setup slave player
-        mock_coordinator.data["player"].is_slave = True
-        mock_coordinator.data["player"].is_master = False
-        mock_coordinator.data["player"].volume_level = 0.3  # Slave has its own volume
+        mock_coordinator.player.is_slave = True
+        mock_coordinator.player.is_master = False
+        mock_coordinator.player.volume_level = 0.3  # Slave has its own volume
 
         # Volume should still be accessible for slaves
         assert media_player.volume_level == 0.3
@@ -142,15 +137,15 @@ class TestWiiMMediaPlayerGrouping:
 
     def test_volume_level_for_master_in_group(self, media_player, mock_coordinator):
         """Test volume_level for master in group."""
-        mock_coordinator.data["player"].is_master = True
-        mock_coordinator.data["player"].is_slave = False
-        mock_coordinator.data["player"].volume_level = 0.6
+        mock_coordinator.player.is_master = True
+        mock_coordinator.player.is_slave = False
+        mock_coordinator.player.volume_level = 0.6
         assert media_player.volume_level == 0.6
 
     def test_volume_level_for_solo_speaker(self, media_player, mock_coordinator):
         """Test volume_level for solo speaker."""
-        mock_coordinator.data["player"].is_solo = True
-        mock_coordinator.data["player"].volume_level = 0.4
+        mock_coordinator.player.is_solo = True
+        mock_coordinator.player.volume_level = 0.4
         assert media_player.volume_level == 0.4
 
 
@@ -190,7 +185,7 @@ class TestWiiMMediaPlayerPlayback:
     @pytest.mark.asyncio
     async def test_media_stop(self, media_player, mock_coordinator):
         """Test stop command."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.stop = AsyncMock(return_value=True)
         player.source = "spotify"  # Not streaming
 
@@ -248,28 +243,28 @@ class TestWiiMMediaPlayerSource:
 
     def test_source_returns_current_source(self, media_player, mock_coordinator):
         """Test source property returns current source."""
-        mock_coordinator.data["player"].source = "spotify"
-        mock_coordinator.data["player"].available_sources = ["Spotify", "Bluetooth"]
+        mock_coordinator.player.source = "spotify"
+        mock_coordinator.player.available_sources = ["Spotify", "Bluetooth"]
 
         assert media_player.source == "Spotify"  # Capitalized
 
     def test_source_returns_none_when_no_source(self, media_player, mock_coordinator):
         """Test source returns None when no source set."""
-        mock_coordinator.data["player"].source = None
-        mock_coordinator.data["player"].available_sources = []
+        mock_coordinator.player.source = None
+        mock_coordinator.player.available_sources = []
 
         assert media_player.source is None
 
     def test_source_list_returns_available_sources(self, media_player, mock_coordinator):
         """Test source_list returns available sources."""
-        mock_coordinator.data["player"].available_sources = ["Spotify", "Bluetooth", "Optical"]
+        mock_coordinator.player.available_sources = ["Spotify", "Bluetooth", "Optical"]
 
         assert media_player.source_list == ["Spotify", "Bluetooth", "Optical"]
 
     @pytest.mark.asyncio
     async def test_select_source(self, media_player, mock_coordinator, mock_speaker):
         """Test selecting a source."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.available_sources = ["Spotify", "Bluetooth"]
         mock_coordinator.player.set_source = AsyncMock(return_value=True)
         mock_speaker.input_list = ["spotify", "bluetooth"]
@@ -301,7 +296,7 @@ class TestWiiMMediaPlayerMediaInfo:
 
     def test_media_title(self, media_player, mock_coordinator):
         """Test media title property."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_title = "Test Song"
         player.is_slave = False  # Not a slave, so uses player directly
         player.group = None
@@ -311,7 +306,7 @@ class TestWiiMMediaPlayerMediaInfo:
 
     def test_media_artist(self, media_player, mock_coordinator):
         """Test media artist property."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_artist = "Test Artist"
         player.is_slave = False
         player.group = None
@@ -320,7 +315,7 @@ class TestWiiMMediaPlayerMediaInfo:
 
     def test_media_album_name(self, media_player, mock_coordinator):
         """Test media album name property."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_album = "Test Album"
         player.is_slave = False
         player.group = None
@@ -329,7 +324,7 @@ class TestWiiMMediaPlayerMediaInfo:
 
     def test_media_image_url(self, media_player, mock_coordinator):
         """Test media image URL property."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_image_url = "http://example.com/cover.jpg"
         player.is_slave = False
         player.group = None
@@ -342,7 +337,7 @@ class TestWiiMMediaPlayerMediaInfo:
 
     def test_media_duration(self, media_player, mock_coordinator):
         """Test media duration property."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_duration = 180
         player.play_state = "play"
         player.is_slave = False
@@ -356,7 +351,7 @@ class TestWiiMMediaPlayerMediaInfo:
         """Test media position property."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_position = 60
         player.play_state = "play"  # Need playing state for position
         player.is_slave = False
@@ -401,52 +396,33 @@ class TestWiiMMediaPlayerShuffleRepeat:
 
     def test_shuffle_supported_returns_true(self, media_player, mock_coordinator):
         """Test shuffle_supported returns True when supported."""
-        mock_coordinator.data["player"].shuffle_supported = True
+        mock_coordinator.player.shuffle_supported = True
         assert media_player._shuffle_supported() is True
 
     def test_shuffle_supported_returns_false_when_not_supported(self, media_player, mock_coordinator):
         """Test shuffle_supported returns False when not supported."""
-        mock_coordinator.data["player"].shuffle_supported = False
+        mock_coordinator.player.shuffle_supported = False
         assert media_player._shuffle_supported() is False
-
-    def test_shuffle_supported_returns_false_when_player_missing(self, media_player):
-        """Test shuffle_supported returns False when player is missing."""
-        media_player.coordinator.data = None
-        assert media_player._shuffle_supported() is False
-
-    def test_next_track_supported_returns_false_when_attribute_missing(self, media_player, mock_coordinator):
-        """Test _next_track_supported returns False when attribute is missing."""
-        # Remove the attribute to simulate older pywiim versions or unsupported sources
-        player = mock_coordinator.data["player"]
-        if hasattr(player, "next_track_supported"):
-            delattr(player, "next_track_supported")
-
-        assert media_player._next_track_supported() is False
 
     def test_shuffle_returns_true(self, media_player, mock_coordinator):
         """Test shuffle property returns True when enabled."""
-        mock_coordinator.data["player"].shuffle = True
+        mock_coordinator.player.shuffle = True
         assert media_player.shuffle is True
 
     def test_shuffle_returns_false(self, media_player, mock_coordinator):
         """Test shuffle property returns False when disabled."""
-        mock_coordinator.data["player"].shuffle = False
+        mock_coordinator.player.shuffle = False
         assert media_player.shuffle is False
-
-    def test_shuffle_returns_none_when_player_missing(self, media_player):
-        """Test shuffle property returns None when player is missing."""
-        media_player.coordinator.data = None
-        assert media_player.shuffle is None
 
     def test_shuffle_handles_string_values(self, media_player, mock_coordinator):
         """Test shuffle property handles string values."""
-        mock_coordinator.data["player"].shuffle = "1"
+        mock_coordinator.player.shuffle = "1"
         assert media_player.shuffle is True
 
-        mock_coordinator.data["player"].shuffle = "true"
+        mock_coordinator.player.shuffle = "true"
         assert media_player.shuffle is True
 
-        mock_coordinator.data["player"].shuffle = "off"
+        mock_coordinator.player.shuffle = "off"
         assert media_player.shuffle is False
 
     @pytest.mark.asyncio
@@ -482,45 +458,40 @@ class TestWiiMMediaPlayerShuffleRepeat:
 
     def test_repeat_supported_returns_true(self, media_player, mock_coordinator):
         """Test repeat_supported returns True when supported."""
-        mock_coordinator.data["player"].repeat_supported = True
+        mock_coordinator.player.repeat_supported = True
         assert media_player._repeat_supported() is True
 
     def test_repeat_supported_returns_false_when_not_supported(self, media_player, mock_coordinator):
         """Test repeat_supported returns False when not supported."""
-        mock_coordinator.data["player"].repeat_supported = False
+        mock_coordinator.player.repeat_supported = False
         assert media_player._repeat_supported() is False
 
     def test_repeat_returns_off(self, media_player, mock_coordinator):
         """Test repeat property returns OFF."""
         from homeassistant.components.media_player import RepeatMode
 
-        mock_coordinator.data["player"].repeat = "off"
+        mock_coordinator.player.repeat = "off"
         assert media_player.repeat == RepeatMode.OFF
 
     def test_repeat_returns_one(self, media_player, mock_coordinator):
         """Test repeat property returns ONE."""
         from homeassistant.components.media_player import RepeatMode
 
-        mock_coordinator.data["player"].repeat = "1"
+        mock_coordinator.player.repeat = "1"
         assert media_player.repeat == RepeatMode.ONE
 
-        mock_coordinator.data["player"].repeat = "track"
+        mock_coordinator.player.repeat = "track"
         assert media_player.repeat == RepeatMode.ONE
 
     def test_repeat_returns_all(self, media_player, mock_coordinator):
         """Test repeat property returns ALL."""
         from homeassistant.components.media_player import RepeatMode
 
-        mock_coordinator.data["player"].repeat = "all"
+        mock_coordinator.player.repeat = "all"
         assert media_player.repeat == RepeatMode.ALL
 
-        mock_coordinator.data["player"].repeat = "playlist"
+        mock_coordinator.player.repeat = "playlist"
         assert media_player.repeat == RepeatMode.ALL
-
-    def test_repeat_returns_none_when_player_missing(self, media_player):
-        """Test repeat property returns None when player is missing."""
-        media_player.coordinator.data = None
-        assert media_player.repeat is None
 
     @pytest.mark.asyncio
     async def test_set_repeat_off(self, media_player, mock_coordinator):
@@ -587,59 +558,48 @@ class TestWiiMMediaPlayerSoundMode:
 
     def test_is_eq_supported_returns_true(self, media_player, mock_coordinator):
         """Test _is_eq_supported returns True when EQ is supported."""
-        mock_coordinator.data["player"].supports_eq = True
+        mock_coordinator.player.supports_eq = True
         assert media_player._is_eq_supported() is True
 
     def test_is_eq_supported_returns_false_when_not_supported(self, media_player, mock_coordinator):
         """Test _is_eq_supported returns False when EQ is not supported."""
-        mock_coordinator.data["player"].supports_eq = False
-        assert media_player._is_eq_supported() is False
-
-    def test_is_eq_supported_returns_false_when_capabilities_missing(self, media_player, mock_coordinator):
-        """Test _is_eq_supported returns False when player is missing."""
-        mock_coordinator.data = None
+        mock_coordinator.player.supports_eq = False
         assert media_player._is_eq_supported() is False
 
     def test_sound_mode_returns_current_preset(self, media_player, mock_coordinator):
         """Test sound_mode returns current EQ preset."""
-        mock_coordinator.data["player"].supports_eq = True
-        mock_coordinator.data["player"].eq_preset = "bass"
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_preset = "bass"
 
         assert media_player.sound_mode == "Bass"
 
     def test_sound_mode_returns_none_when_not_supported(self, media_player, mock_coordinator):
         """Test sound_mode returns None when EQ is not supported."""
-        mock_coordinator.data["player"].supports_eq = False
-        assert media_player.sound_mode is None
-
-    def test_sound_mode_returns_none_when_player_missing(self, media_player, mock_coordinator):
-        """Test sound_mode returns None when player is missing."""
-        mock_coordinator.data["player"].supports_eq = True
-        mock_coordinator.data = None
+        mock_coordinator.player.supports_eq = False
         assert media_player.sound_mode is None
 
     def test_sound_mode_list_returns_presets(self, media_player, mock_coordinator):
         """Test sound_mode_list returns available EQ presets."""
-        mock_coordinator.data["player"].supports_eq = True
-        mock_coordinator.data["player"].eq_presets = ["bass", "treble", "flat"]
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_presets = ["bass", "treble", "flat"]
 
         assert media_player.sound_mode_list == ["Bass", "Treble", "Flat"]
 
     def test_sound_mode_list_returns_none_when_not_supported(self, media_player, mock_coordinator):
         """Test sound_mode_list returns None when EQ is not supported."""
-        mock_coordinator.data["player"].supports_eq = False
+        mock_coordinator.player.supports_eq = False
         assert media_player.sound_mode_list is None
 
     def test_sound_mode_list_returns_none_when_no_presets(self, media_player, mock_coordinator):
         """Test sound_mode_list returns None when no presets available."""
-        mock_coordinator.data["player"].supports_eq = True
-        mock_coordinator.data["player"].eq_presets = None
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_presets = None
         assert media_player.sound_mode_list is None
 
     @pytest.mark.asyncio
     async def test_select_sound_mode(self, media_player, mock_coordinator):
         """Test selecting a sound mode."""
-        mock_coordinator.data["player"].supports_eq = True
+        mock_coordinator.player.supports_eq = True
         mock_coordinator.player.set_eq_preset = AsyncMock(return_value=True)
 
         await media_player.async_select_sound_mode("Bass")
@@ -652,7 +612,7 @@ class TestWiiMMediaPlayerSoundMode:
         """Test select_sound_mode raises error when EQ is not supported."""
         from homeassistant.exceptions import HomeAssistantError
 
-        mock_coordinator.data["player"].supports_eq = False
+        mock_coordinator.player.supports_eq = False
 
         with pytest.raises(HomeAssistantError, match="EQ is not supported"):
             await media_player.async_select_sound_mode("Bass")
@@ -743,7 +703,7 @@ class TestWiiMMediaPlayerMediaContent:
         """Test media_content_id returns URL from pywiim when playing."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.play_state = "play"
         player.is_slave = False
         player.group = None
@@ -756,7 +716,7 @@ class TestWiiMMediaPlayerMediaContent:
         """Test media_content_id returns None when idle (regardless of pywiim value)."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_content_id = "http://example.com/song.mp3"
         media_player._attr_state = MediaPlayerState.IDLE
 
@@ -767,7 +727,7 @@ class TestWiiMMediaPlayerMediaContent:
         """Test media_content_id returns None for non-URL sources (Spotify, etc.)."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.play_state = "play"
         player.is_slave = False
         player.group = None
@@ -793,7 +753,7 @@ class TestWiiMMediaPlayerJoinUnjoin:
     @pytest.mark.asyncio
     async def test_async_unjoin_player(self, media_player, mock_coordinator):
         """Test async_unjoin_player leaves group."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.leave_group = AsyncMock(return_value=True)
         player.group = MagicMock()
         media_player.hass = MagicMock()
@@ -808,7 +768,7 @@ class TestWiiMMediaPlayerJoinUnjoin:
         from homeassistant.exceptions import HomeAssistantError
         from pywiim.exceptions import WiiMError
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.leave_group = AsyncMock(side_effect=WiiMError("Leave error"))
         player.group = MagicMock()
         media_player.hass = MagicMock()
@@ -818,7 +778,7 @@ class TestWiiMMediaPlayerJoinUnjoin:
 
     def test_group_members_returns_none_when_no_group(self, media_player, mock_coordinator):
         """Test group_members returns None when not in a group."""
-        mock_coordinator.data["player"].group = None
+        mock_coordinator.player.group = None
         assert media_player.group_members is None
 
     def test_group_members_returns_entity_ids(self, media_player, mock_coordinator):
@@ -839,7 +799,7 @@ class TestWiiMMediaPlayerJoinUnjoin:
         mock_player2.uuid = "uuid2"  # Direct uuid attribute
         mock_group.all_players = [mock_player1, mock_player2]
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.group = mock_group
         player.is_solo = False  # Not solo, so in a group
         media_player.hass = MagicMock()
@@ -949,7 +909,7 @@ class TestWiiMMediaPlayerExtraState:
         mock_speaker.ip_address = "192.168.1.100"
         mock_speaker.mac_address = "AA:BB:CC:DD:EE:FF"
         mock_speaker.role = "master"
-        mock_coordinator.data["player"].is_master = True
+        mock_coordinator.player.is_master = True
 
         attrs = media_player.extra_state_attributes
 
@@ -1025,7 +985,7 @@ class TestWiiMMediaPlayerSourceEdgeCases:
 
     def test_source_uses_input_list_fallback(self, media_player, mock_coordinator, mock_speaker):
         """Test source property falls back to input_list when available_sources doesn't match."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.source = "bluetooth"  # Lowercase from device
         player.available_sources = ["Spotify"]  # Doesn't include bluetooth
         mock_speaker.input_list = ["bluetooth", "optical"]
@@ -1035,7 +995,7 @@ class TestWiiMMediaPlayerSourceEdgeCases:
 
     def test_source_returns_none_when_no_match(self, media_player, mock_coordinator, mock_speaker):
         """Test source returns None when source doesn't match any available source."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.source = "unknown_source"
         player.available_sources = ["Spotify"]
         mock_speaker.input_list = ["bluetooth"]
@@ -1044,7 +1004,7 @@ class TestWiiMMediaPlayerSourceEdgeCases:
 
     def test_source_list_falls_back_to_input_list(self, media_player, mock_coordinator, mock_speaker):
         """Test source_list falls back to input_list when available_sources is None."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.available_sources = None
         mock_speaker.input_list = ["bluetooth", "optical"]
 
@@ -1052,7 +1012,7 @@ class TestWiiMMediaPlayerSourceEdgeCases:
 
     def test_source_list_returns_empty_when_no_sources(self, media_player, mock_coordinator, mock_speaker):
         """Test source_list returns empty list when no sources available."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.available_sources = None
         mock_speaker.input_list = None
 
@@ -1061,7 +1021,7 @@ class TestWiiMMediaPlayerSourceEdgeCases:
     @pytest.mark.asyncio
     async def test_select_source_uses_fallback_to_lowercase(self, media_player, mock_coordinator, mock_speaker):
         """Test select_source uses lowercase fallback when not found."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.available_sources = None
         mock_speaker.input_list = ["bluetooth"]
         mock_coordinator.player.set_source = AsyncMock(return_value=True)
@@ -1102,7 +1062,7 @@ class TestWiiMMediaPlayerGetMediaImage:
     @pytest.mark.asyncio
     async def test_get_media_image_returns_cover_art(self, media_player, mock_coordinator):
         """Test async_get_media_image returns cover art when available."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_image_url = "http://example.com/cover.jpg"
         player.fetch_cover_art = AsyncMock(return_value=(b"image_data", "image/jpeg"))
         player.is_slave = False
@@ -1115,19 +1075,9 @@ class TestWiiMMediaPlayerGetMediaImage:
         player.fetch_cover_art.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_media_image_returns_none_when_no_player(self, media_player):
-        """Test async_get_media_image returns None when player is missing."""
-        media_player.coordinator.data = None
-        media_player.hass = MagicMock()
-
-        result = await media_player.async_get_media_image()
-
-        assert result == (None, None)
-
-    @pytest.mark.asyncio
     async def test_get_media_image_handles_missing_fetch_method(self, media_player, mock_coordinator):
         """Test async_get_media_image handles missing fetch_cover_art method."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.media_image_url = "http://example.com/cover.jpg"
         # Don't set fetch_cover_art attribute
         player.is_slave = False
@@ -1141,7 +1091,7 @@ class TestWiiMMediaPlayerGetMediaImage:
     @pytest.mark.asyncio
     async def test_get_media_image_handles_empty_result(self, media_player, mock_coordinator):
         """Test async_get_media_image handles empty result."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.fetch_cover_art = AsyncMock(return_value=(b"", "image/jpeg"))
         player.is_slave = False
         player.group = None
@@ -1156,7 +1106,7 @@ class TestWiiMMediaPlayerGetMediaImage:
         """Test async_get_media_image handles WiiMError gracefully."""
         from pywiim.exceptions import WiiMError
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.fetch_cover_art = AsyncMock(side_effect=WiiMError("Cover art error"))
         player.is_slave = False
         player.group = None
@@ -1262,7 +1212,7 @@ class TestWiiMMediaPlayerGroupMembersEdgeCases:
 
     def test_group_members_returns_none_when_solo(self, media_player, mock_coordinator):
         """Test group_members returns None when player is solo."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.is_solo = True
         player.group = None
 
@@ -1270,7 +1220,7 @@ class TestWiiMMediaPlayerGroupMembersEdgeCases:
 
     def test_group_members_returns_none_when_group_is_none(self, media_player, mock_coordinator):
         """Test group_members returns None when group is None."""
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.is_solo = False
         player.group = None
 
@@ -1288,7 +1238,7 @@ class TestWiiMMediaPlayerGroupMembersEdgeCases:
         mock_player.mac = None  # No uuid or mac
         mock_group.all_players = [mock_player]
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.group = mock_group
         player.is_solo = False
         media_player.hass = MagicMock()
@@ -1305,7 +1255,7 @@ class TestWiiMMediaPlayerStateDerivation:
         """Test state derives PLAYING from 'play'."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.play_state = "play"
         media_player._attr_state = None
 
@@ -1315,7 +1265,7 @@ class TestWiiMMediaPlayerStateDerivation:
         """Test state derives PLAYING from 'playing'."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.play_state = "playing"
         media_player._attr_state = None
 
@@ -1325,7 +1275,7 @@ class TestWiiMMediaPlayerStateDerivation:
         """Test state derives PLAYING from 'load'."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.play_state = "load"
         media_player._attr_state = None
 
@@ -1335,18 +1285,11 @@ class TestWiiMMediaPlayerStateDerivation:
         """Test state derives IDLE when play_state is None."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.play_state = None
         media_player._attr_state = None
 
         assert media_player.state == MediaPlayerState.IDLE
-
-    def test_state_returns_none_when_unavailable(self, media_player):
-        """Test state returns None when unavailable."""
-        media_player.coordinator.data = None
-        media_player._attr_state = None
-
-        assert media_player.state is None
 
     def test_state_uses_attr_state_when_set(self, media_player):
         """Test state uses _attr_state when set."""
@@ -1360,21 +1303,11 @@ class TestWiiMMediaPlayerStateDerivation:
 class TestWiiMMediaPlayerUpdatePosition:
     """Test _update_position_from_coordinator edge cases."""
 
-    def test_update_position_handles_missing_player(self, media_player):
-        """Test _update_position_from_coordinator handles missing player."""
-        media_player.coordinator.data = None
-
-        # Should not raise
-        media_player._update_position_from_coordinator()
-
-        assert media_player._attr_media_position is None
-        assert media_player._attr_media_duration is None
-
     def test_update_position_handles_slave_with_group(self, media_player, mock_coordinator):
         """Test _update_position_from_coordinator handles slave with group."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        player = mock_coordinator.data["player"]
+        player = mock_coordinator.player
         player.is_slave = True
         player.group = MagicMock()
         master = MagicMock()
@@ -1437,7 +1370,7 @@ class TestWiiMMediaPlayerServiceHandlers:
     async def test_async_set_eq_preset(self, media_player, mock_coordinator):
         """Test async_set_eq service handler with preset."""
         mock_coordinator.player.set_eq_preset = AsyncMock(return_value=True)
-        mock_coordinator.data["player"].supports_eq = True
+        mock_coordinator.player.supports_eq = True
 
         await media_player.async_set_eq("rock")
 
@@ -1448,7 +1381,7 @@ class TestWiiMMediaPlayerServiceHandlers:
     async def test_async_set_eq_custom_list(self, media_player, mock_coordinator):
         """Test async_set_eq service handler with custom values as list."""
         mock_coordinator.player.set_eq_custom = AsyncMock(return_value=True)
-        mock_coordinator.data["player"].supports_eq = True
+        mock_coordinator.player.supports_eq = True
 
         custom_values = [-2, 0, 2, 3, 1, 0, 0, -1, 2, 4]
         await media_player.async_set_eq("custom", custom_values)
@@ -1460,7 +1393,7 @@ class TestWiiMMediaPlayerServiceHandlers:
     async def test_async_set_eq_custom_dict(self, media_player, mock_coordinator):
         """Test async_set_eq service handler with custom values as dict."""
         mock_coordinator.player.set_eq_custom = AsyncMock(return_value=True)
-        mock_coordinator.data["player"].supports_eq = True
+        mock_coordinator.player.supports_eq = True
 
         custom_values = {"0": -2, "1": 0, "2": 2, "3": 3, "4": 1, "5": 0, "6": 0, "7": -1, "8": 2, "9": 4}
         await media_player.async_set_eq("custom", custom_values)
@@ -1475,7 +1408,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         """Test async_set_eq requires custom_values when preset is custom."""
         from homeassistant.exceptions import HomeAssistantError
 
-        mock_coordinator.data["player"].supports_eq = True
+        mock_coordinator.player.supports_eq = True
 
         with pytest.raises(HomeAssistantError, match="custom_values is required"):
             await media_player.async_set_eq("custom", None)
@@ -1485,7 +1418,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         """Test async_set_eq raises error when EQ not supported."""
         from homeassistant.exceptions import HomeAssistantError
 
-        mock_coordinator.data["player"].supports_eq = False
+        mock_coordinator.player.supports_eq = False
 
         with pytest.raises(HomeAssistantError, match="EQ is not supported"):
             await media_player.async_set_eq("rock")
@@ -1497,7 +1430,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         from pywiim.exceptions import WiiMError
 
         mock_coordinator.player.set_eq_preset = AsyncMock(side_effect=WiiMError("EQ error"))
-        mock_coordinator.data["player"].supports_eq = True
+        mock_coordinator.player.supports_eq = True
 
         with pytest.raises(HomeAssistantError, match="Failed to set EQ"):
             await media_player.async_set_eq("rock")
@@ -1524,7 +1457,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         from homeassistant.exceptions import HomeAssistantError
 
         # No queue support
-        mock_coordinator.data["player"].supports_queue_add = False
+        mock_coordinator.player.supports_queue_add = False
 
         with pytest.raises(HomeAssistantError, match="Queue playback not available"):
             await media_player.async_play_queue(0)
@@ -1534,7 +1467,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         """Test async_play_queue calls pywiim method successfully."""
         from unittest.mock import AsyncMock
 
-        mock_coordinator.data["player"].supports_queue_add = True
+        mock_coordinator.player.supports_queue_add = True
         mock_coordinator.player.play_queue = AsyncMock(return_value=None)
 
         await media_player.async_play_queue(5)
@@ -1546,7 +1479,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         """Test async_remove_from_queue raises error when UPnP not available."""
         from homeassistant.exceptions import HomeAssistantError
 
-        mock_coordinator.data["player"].supports_queue_add = False
+        mock_coordinator.player.supports_queue_add = False
 
         with pytest.raises(HomeAssistantError, match="Queue management not available"):
             await media_player.async_remove_from_queue(0)
@@ -1556,7 +1489,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         """Test async_remove_from_queue calls pywiim method successfully."""
         from unittest.mock import AsyncMock
 
-        mock_coordinator.data["player"].supports_queue_add = True
+        mock_coordinator.player.supports_queue_add = True
         mock_coordinator.player.remove_from_queue = AsyncMock(return_value=None)
 
         await media_player.async_remove_from_queue(3)
@@ -1568,7 +1501,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         """Test async_get_queue raises error when UPnP not available."""
         from homeassistant.exceptions import HomeAssistantError
 
-        mock_coordinator.data["player"].supports_queue_browse = False
+        mock_coordinator.player.supports_queue_browse = False
 
         with pytest.raises(HomeAssistantError, match="Queue browsing not available"):
             await media_player.async_get_queue()
@@ -1578,7 +1511,7 @@ class TestWiiMMediaPlayerServiceHandlers:
         """Test async_get_queue returns queue contents."""
         from unittest.mock import AsyncMock
 
-        mock_coordinator.data["player"].supports_queue_browse = True
+        mock_coordinator.player.supports_queue_browse = True
         mock_queue = [
             {
                 "media_content_id": "http://example.com/song1.mp3",
