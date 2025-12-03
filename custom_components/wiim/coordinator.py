@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pywiim import Player, PollingStrategy, WiiMClient
 from pywiim.exceptions import WiiMError
 
-from .data import find_speaker_by_ip
+from .data import find_coordinator_by_ip
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,9 +78,9 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         This callback allows pywiim to automatically link Player objects when
         groups are detected, enabling group.all_players to be populated.
         """
-        speaker = find_speaker_by_ip(self.hass, host)
-        if speaker and speaker.coordinator and speaker.coordinator.player:
-            return speaker.coordinator.player
+        coordinator = find_coordinator_by_ip(self.hass, host)
+        if coordinator and coordinator.player:
+            return coordinator.player
         return None
 
     @callback
@@ -110,8 +110,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Update polling interval using pywiim's PollingStrategy
             role = self.player.role
-            play_state = self.player.play_state or ""
-            is_playing = play_state.lower() in ("play", "playing", "load")
+            is_playing = self.player.is_playing  # pywiim v2.1.37+ provides bool directly
             optimal_interval = self._polling_strategy.get_optimal_interval(role, is_playing)
             current_interval = self.update_interval.total_seconds() if self.update_interval else 5.0
             if current_interval != optimal_interval:
@@ -122,7 +121,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug(
                     "Poll result for %s: state=%s, pos=%s, dur=%s, title='%s'",
                     self.player.host,
-                    play_state,
+                    self.player.play_state,
                     self.player.media_position,
                     self.player.media_duration,
                     self.player.media_title,

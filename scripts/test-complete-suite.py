@@ -53,6 +53,9 @@ class WiiMCompleteTestSuite:
     def print_warning(self, text: str):
         print(f"{Colors.YELLOW}⚠️  {text}{Colors.RESET}")
 
+    def print_info(self, text: str):
+        print(f"{Colors.BLUE}ℹ️  {text}{Colors.RESET}")
+
     def call_service(self, domain: str, service: str, entity_id: str, **data) -> bool:
         try:
             url = f"{self.ha_url}/api/services/{domain}/{service}"
@@ -401,6 +404,27 @@ class WiiMCompleteTestSuite:
 
         return {"test": "TTS", "passed": success, "details": {}}
 
+    def _are_on_same_subnet(self, ip1: str, ip2: str) -> bool:
+        """Check if two IP addresses are on the same subnet."""
+        try:
+            from ipaddress import IPv4Address, ip_address
+
+            addr1 = ip_address(ip1)
+            addr2 = ip_address(ip2)
+
+            # Both must be same IP version
+            if isinstance(addr1, IPv4Address) != isinstance(addr2, IPv4Address):
+                return False
+
+            if isinstance(addr1, IPv4Address):
+                # For IPv4, check if first 3 octets match (/24 subnet)
+                return str(addr1).rsplit(".", 1)[0] == str(addr2).rsplit(".", 1)[0]
+            else:
+                # For IPv6, check if first 64 bits match (/64 subnet)
+                return addr1.exploded[:19] == addr2.exploded[:19]
+        except (ValueError, AttributeError):
+            return False
+
     def test_multiroom(self, devices: list[dict]) -> dict:
         if len(devices) < 2:
             return {"test": "Multiroom", "passed": None, "details": {"skipped": True}}
@@ -410,8 +434,36 @@ class WiiMCompleteTestSuite:
         master = devices[0]["entity_id"]
         slave = devices[1]["entity_id"]
 
+        # Check if devices are on the same subnet
+        master_ip = devices[0].get("attributes", {}).get("ip_address")
+        slave_ip = devices[1].get("attributes", {}).get("ip_address")
+
+        if not master_ip or not slave_ip:
+            self.print_warning("Cannot check subnet - IP addresses not available")
+            return {
+                "test": "Multiroom",
+                "passed": None,
+                "details": {"skipped": True, "reason": "IP addresses not available"},
+            }
+
+        if not self._are_on_same_subnet(master_ip, slave_ip):
+            self.print_warning(f"Devices are not on the same subnet (Master: {master_ip}, Slave: {slave_ip})")
+            self.print_info("Multiroom grouping only works for devices on the same subnet - skipping test")
+            return {
+                "test": "Multiroom",
+                "passed": None,
+                "details": {
+                    "skipped": True,
+                    "reason": "Different subnets",
+                    "master_ip": master_ip,
+                    "slave_ip": slave_ip,
+                },
+            }
+
         # JOIN
         print(f"{Colors.BOLD}Creating group...{Colors.RESET}")
+        print(f"  Master: {devices[0].get('attributes', {}).get('friendly_name')} ({master_ip})")
+        print(f"  Slave: {devices[1].get('attributes', {}).get('friendly_name')} ({slave_ip})")
         self.call_service("media_player", "join", master, group_members=[slave])
         time.sleep(6)
 

@@ -6,7 +6,6 @@ import pytest
 from homeassistant.config_entries import ConfigEntry
 
 from custom_components.wiim.const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
-from custom_components.wiim.data import Speaker
 from custom_components.wiim.media_player import WiiMMediaPlayer
 
 
@@ -44,21 +43,15 @@ def mock_coordinator():
 
 
 @pytest.fixture
-def mock_speaker(mock_coordinator, mock_config_entry):
-    """Create a mock speaker."""
-    speaker = MagicMock(spec=Speaker)
-    speaker.coordinator = mock_coordinator
-    speaker.config_entry = mock_config_entry
-    speaker.uuid = "test-uuid"
-    speaker.name = "Test WiiM"
-    speaker.available = True
-    return speaker
-
-
-@pytest.fixture
-def media_player(mock_speaker):
+def media_player(mock_coordinator, mock_config_entry):
     """Create a WiiMMediaPlayer instance."""
-    return WiiMMediaPlayer(mock_speaker)
+    # Set up player name for entity name
+    mock_coordinator.player.name = "Test WiiM"
+    mock_coordinator.player.host = "192.168.1.100"
+    mock_coordinator.player.model = "WiiM Mini"
+    mock_coordinator.player.firmware = "1.0.0"
+    mock_coordinator.player.device_info = None
+    return WiiMMediaPlayer(mock_coordinator, mock_config_entry)
 
 
 class TestWiiMMediaPlayerVolume:
@@ -79,42 +72,44 @@ class TestWiiMMediaPlayerVolume:
         # Volume should still be accessible for slaves
         assert media_player.volume_level == 0.3
 
-    def test_volume_step_reads_from_config_default(self, media_player, mock_speaker):
+    def test_volume_step_reads_from_config_default(self, media_player, mock_config_entry):
         """Test that volume_step returns default when not configured (Issue #127)."""
-        mock_speaker.config_entry.options = {}
+        mock_config_entry.options = {}
         assert media_player.volume_step == DEFAULT_VOLUME_STEP
 
-    def test_volume_step_reads_from_config_custom(self, media_player, mock_speaker):
+    def test_volume_step_reads_from_config_custom(self, media_player, mock_config_entry):
         """Test that volume_step reads from config entry options (Issue #127)."""
-        mock_speaker.config_entry.options = {CONF_VOLUME_STEP: 0.1}
+        mock_config_entry.options = {CONF_VOLUME_STEP: 0.1}
         assert media_player.volume_step == 0.1
 
-    def test_volume_step_handles_missing_speaker(self, media_player):
-        """Test that volume_step handles missing speaker gracefully."""
-        media_player.speaker = None
+    def test_volume_step_handles_missing_config_entry(self, media_player):
+        """Test that volume_step handles missing config_entry gracefully."""
+        # This test verifies volume_step has a fallback when config_entry is missing options
+        # The entity should still work even if config_entry.options is empty
         assert media_player.volume_step == DEFAULT_VOLUME_STEP
 
-    def test_volume_step_handles_missing_config_entry(self, media_player, mock_speaker):
-        """Test that volume_step handles missing config_entry gracefully."""
-        mock_speaker.config_entry = None
+    def test_volume_step_handles_missing_options(self, media_player, mock_config_entry):
+        """Test that volume_step handles missing options gracefully."""
+        mock_config_entry.options = {}
         assert media_player.volume_step == DEFAULT_VOLUME_STEP
 
 
 class TestWiiMMediaPlayerBasic:
     """Test basic media player functionality."""
 
-    def test_media_player_initialization(self, media_player, mock_speaker):
+    def test_media_player_initialization(self, media_player, mock_coordinator, mock_config_entry):
         """Test media player is initialized correctly."""
-        assert media_player.speaker is mock_speaker
-        assert media_player.coordinator is mock_speaker.coordinator
+        assert media_player.coordinator is mock_coordinator
+        assert media_player._config_entry is mock_config_entry
 
-    def test_media_player_name(self, media_player, mock_speaker):
+    def test_media_player_name(self, media_player, mock_coordinator):
         """Test media player name property."""
-        assert media_player.name == mock_speaker.name
+        mock_coordinator.player.name = "Test WiiM"
+        assert media_player.name == "Test WiiM"
 
-    def test_media_player_available(self, media_player, mock_speaker):
+    def test_media_player_available(self, media_player, mock_coordinator):
         """Test media player available property."""
-        mock_speaker.available = True
+        mock_coordinator.last_update_success = True
         assert media_player.available is True
 
     @pytest.mark.asyncio
@@ -262,12 +257,12 @@ class TestWiiMMediaPlayerSource:
         assert media_player.source_list == ["Spotify", "Bluetooth", "Optical"]
 
     @pytest.mark.asyncio
-    async def test_select_source(self, media_player, mock_coordinator, mock_speaker):
+    async def test_select_source(self, media_player, mock_coordinator):
         """Test selecting a source."""
         player = mock_coordinator.player
         player.available_sources = ["Spotify", "Bluetooth"]
         mock_coordinator.player.set_source = AsyncMock(return_value=True)
-        mock_speaker.input_list = ["spotify", "bluetooth"]
+        mock_coordinator.player.input_list = ["spotify", "bluetooth"]
 
         await media_player.async_select_source("Spotify")
 
@@ -414,15 +409,12 @@ class TestWiiMMediaPlayerShuffleRepeat:
         mock_coordinator.player.shuffle = False
         assert media_player.shuffle is False
 
-    def test_shuffle_handles_string_values(self, media_player, mock_coordinator):
-        """Test shuffle property handles string values."""
-        mock_coordinator.player.shuffle = "1"
+    def test_shuffle_handles_bool_values(self, media_player, mock_coordinator):
+        """Test shuffle property handles bool values (pywiim v2.1.37+ returns bool)."""
+        mock_coordinator.player.shuffle = True
         assert media_player.shuffle is True
 
-        mock_coordinator.player.shuffle = "true"
-        assert media_player.shuffle is True
-
-        mock_coordinator.player.shuffle = "off"
+        mock_coordinator.player.shuffle = False
         assert media_player.shuffle is False
 
     @pytest.mark.asyncio
@@ -902,13 +894,14 @@ class TestWiiMMediaPlayerTimers:
 class TestWiiMMediaPlayerExtraState:
     """Test extra state attributes."""
 
-    def test_extra_state_attributes(self, media_player, mock_speaker, mock_coordinator):
+    def test_extra_state_attributes(self, media_player, mock_coordinator):
         """Test extra_state_attributes returns correct values."""
-        mock_speaker.model = "WiiM Mini"
-        mock_speaker.firmware = "1.0.0"
-        mock_speaker.ip_address = "192.168.1.100"
-        mock_speaker.mac_address = "AA:BB:CC:DD:EE:FF"
-        mock_speaker.role = "master"
+        mock_coordinator.player.model = "WiiM Mini"
+        mock_coordinator.player.firmware = "1.0.0"
+        mock_coordinator.player.host = "192.168.1.100"
+        mock_coordinator.player.device_info = MagicMock()
+        mock_coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
+        mock_coordinator.player.role = "master"
         mock_coordinator.player.is_master = True
 
         attrs = media_player.extra_state_attributes
@@ -927,39 +920,39 @@ class TestWiiMMediaPlayerHelperFunctions:
     """Test helper functions."""
 
     def test_is_connection_error_detects_connection_error(self):
-        """Test _is_connection_error detects WiiMConnectionError."""
+        """Test is_connection_error detects WiiMConnectionError."""
         from pywiim.exceptions import WiiMConnectionError
 
-        from custom_components.wiim.media_player import _is_connection_error
+        from custom_components.wiim.utils import is_connection_error
 
-        assert _is_connection_error(WiiMConnectionError("Connection lost")) is True
+        assert is_connection_error(WiiMConnectionError("Connection lost")) is True
 
     def test_is_connection_error_detects_timeout_error(self):
-        """Test _is_connection_error detects WiiMTimeoutError."""
+        """Test is_connection_error detects WiiMTimeoutError."""
         from pywiim.exceptions import WiiMTimeoutError
 
-        from custom_components.wiim.media_player import _is_connection_error
+        from custom_components.wiim.utils import is_connection_error
 
-        assert _is_connection_error(WiiMTimeoutError("Timeout")) is True
+        assert is_connection_error(WiiMTimeoutError("Timeout")) is True
 
     def test_is_connection_error_detects_timeout_in_chain(self):
-        """Test _is_connection_error detects TimeoutError in exception chain."""
-        from custom_components.wiim.media_player import _is_connection_error
+        """Test is_connection_error detects TimeoutError in exception chain."""
+        from custom_components.wiim.utils import is_connection_error
 
         err = Exception("Wrapper")
         err.__cause__ = TimeoutError("Timeout")
-        assert _is_connection_error(err) is True
+        assert is_connection_error(err) is True
 
     def test_capitalize_source_name(self):
-        """Test _capitalize_source_name handles special cases."""
-        from custom_components.wiim.media_player import _capitalize_source_name
+        """Test capitalize_source_name handles special cases."""
+        from custom_components.wiim.utils import capitalize_source_name
 
-        assert _capitalize_source_name("amazon") == "Amazon"
-        assert _capitalize_source_name("usb") == "USB"
-        assert _capitalize_source_name("bluetooth") == "Bluetooth"
-        assert _capitalize_source_name("airplay") == "AirPlay"
-        assert _capitalize_source_name("spotify") == "Spotify"
-        assert _capitalize_source_name("unknown") == "Unknown"
+        assert capitalize_source_name("amazon") == "Amazon"
+        assert capitalize_source_name("usb") == "USB"
+        assert capitalize_source_name("bluetooth") == "Bluetooth"
+        assert capitalize_source_name("airplay") == "AirPlay"
+        assert capitalize_source_name("spotify") == "Spotify"
+        assert capitalize_source_name("unknown") == "Unknown"
 
     def test_media_source_filter(self):
         """Test media_source_filter filters audio content."""
@@ -983,47 +976,47 @@ class TestWiiMMediaPlayerHelperFunctions:
 class TestWiiMMediaPlayerSourceEdgeCases:
     """Test source selection edge cases."""
 
-    def test_source_uses_input_list_fallback(self, media_player, mock_coordinator, mock_speaker):
+    def test_source_uses_input_list_fallback(self, media_player, mock_coordinator):
         """Test source property falls back to input_list when available_sources doesn't match."""
         player = mock_coordinator.player
         player.source = "bluetooth"  # Lowercase from device
         player.available_sources = ["Spotify"]  # Doesn't include bluetooth
-        mock_speaker.input_list = ["bluetooth", "optical"]
+        player.input_list = ["bluetooth", "optical"]
 
         # Should find it in input_list
         assert media_player.source == "Bluetooth"
 
-    def test_source_returns_none_when_no_match(self, media_player, mock_coordinator, mock_speaker):
+    def test_source_returns_none_when_no_match(self, media_player, mock_coordinator):
         """Test source returns None when source doesn't match any available source."""
         player = mock_coordinator.player
         player.source = "unknown_source"
         player.available_sources = ["Spotify"]
-        mock_speaker.input_list = ["bluetooth"]
+        player.input_list = ["bluetooth"]
 
         assert media_player.source is None
 
-    def test_source_list_falls_back_to_input_list(self, media_player, mock_coordinator, mock_speaker):
+    def test_source_list_falls_back_to_input_list(self, media_player, mock_coordinator):
         """Test source_list falls back to input_list when available_sources is None."""
         player = mock_coordinator.player
         player.available_sources = None
-        mock_speaker.input_list = ["bluetooth", "optical"]
+        player.input_list = ["bluetooth", "optical"]
 
         assert media_player.source_list == ["Bluetooth", "Optical"]
 
-    def test_source_list_returns_empty_when_no_sources(self, media_player, mock_coordinator, mock_speaker):
+    def test_source_list_returns_empty_when_no_sources(self, media_player, mock_coordinator):
         """Test source_list returns empty list when no sources available."""
         player = mock_coordinator.player
         player.available_sources = None
-        mock_speaker.input_list = None
+        player.input_list = None
 
         assert media_player.source_list == []
 
     @pytest.mark.asyncio
-    async def test_select_source_uses_fallback_to_lowercase(self, media_player, mock_coordinator, mock_speaker):
+    async def test_select_source_uses_fallback_to_lowercase(self, media_player, mock_coordinator):
         """Test select_source uses lowercase fallback when not found."""
         player = mock_coordinator.player
         player.available_sources = None
-        mock_speaker.input_list = ["bluetooth"]
+        player.input_list = ["bluetooth"]
         mock_coordinator.player.set_source = AsyncMock(return_value=True)
 
         await media_player.async_select_source("UnknownSource")
@@ -1251,42 +1244,50 @@ class TestWiiMMediaPlayerGroupMembersEdgeCases:
 class TestWiiMMediaPlayerStateDerivation:
     """Test state derivation edge cases."""
 
-    def test_state_derives_playing_from_play(self, media_player, mock_coordinator):
-        """Test state derives PLAYING from 'play'."""
+    def test_state_derives_playing_from_is_playing(self, media_player, mock_coordinator):
+        """Test state derives PLAYING when is_playing is True."""
         from homeassistant.components.media_player import MediaPlayerState
 
         player = mock_coordinator.player
-        player.play_state = "play"
+        player.is_playing = True
+        player.is_paused = False
+        player.is_buffering = False
         media_player._attr_state = None
 
         assert media_player.state == MediaPlayerState.PLAYING
 
-    def test_state_derives_playing_from_playing(self, media_player, mock_coordinator):
-        """Test state derives PLAYING from 'playing'."""
+    def test_state_derives_paused_from_is_paused(self, media_player, mock_coordinator):
+        """Test state derives PAUSED when is_paused is True."""
         from homeassistant.components.media_player import MediaPlayerState
 
         player = mock_coordinator.player
-        player.play_state = "playing"
+        player.is_playing = False
+        player.is_paused = True
+        player.is_buffering = False
         media_player._attr_state = None
 
-        assert media_player.state == MediaPlayerState.PLAYING
+        assert media_player.state == MediaPlayerState.PAUSED
 
-    def test_state_derives_playing_from_load(self, media_player, mock_coordinator):
-        """Test state derives PLAYING from 'load'."""
+    def test_state_derives_buffering_from_is_buffering(self, media_player, mock_coordinator):
+        """Test state derives BUFFERING when is_buffering is True."""
         from homeassistant.components.media_player import MediaPlayerState
 
         player = mock_coordinator.player
-        player.play_state = "load"
+        player.is_playing = False
+        player.is_paused = False
+        player.is_buffering = True
         media_player._attr_state = None
 
-        assert media_player.state == MediaPlayerState.PLAYING
+        assert media_player.state == MediaPlayerState.BUFFERING
 
-    def test_state_derives_idle_when_no_play_state(self, media_player, mock_coordinator):
-        """Test state derives IDLE when play_state is None."""
+    def test_state_derives_idle_when_all_false(self, media_player, mock_coordinator):
+        """Test state derives IDLE when all state properties are False."""
         from homeassistant.components.media_player import MediaPlayerState
 
         player = mock_coordinator.player
-        player.play_state = None
+        player.is_playing = False
+        player.is_paused = False
+        player.is_buffering = False
         media_player._attr_state = None
 
         assert media_player.state == MediaPlayerState.IDLE

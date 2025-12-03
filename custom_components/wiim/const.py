@@ -18,3 +18,4 @@ CONF_ENABLE_NETWORK_MONITORING = "enable_network_monitoring"
 
 # HA-specific defaults (not from pywiim)
 DEFAULT_VOLUME_STEP = 0.05
+DEFAULT_DEVICE_NAME = "WiiM Speaker"

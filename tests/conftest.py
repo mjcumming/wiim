@@ -19,7 +19,6 @@ if str(STUBS_DIR) not in sys.path:
 
 # Import WiiM components at module level
 from custom_components.wiim.const import DOMAIN  # noqa: E402
-from custom_components.wiim.data import Speaker  # noqa: E402
 
 from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE  # noqa: E402
 
@@ -308,39 +307,20 @@ def wiim_coordinator(wiim_client):
 
 
 @pytest.fixture
-def wiim_speaker(hass, wiim_coordinator):
-    """Create a test Speaker instance with proper Home Assistant integration."""
-    # Set up coordinator.player.host for ip_address property
-    wiim_coordinator.player.host = "192.168.1.100"
-
-    # Set up coordinator.data for other properties
-    wiim_coordinator.data = {
-        "device_name": "Test WiiM",
-        "model": "WiiM Mini",
-        "role": "solo",
-        "firmware": "1.0.0",
-    }
-
-    # Create a mock config entry
+def wiim_config_entry():
+    """Create a test config entry."""
     config_entry = MagicMock(spec=ConfigEntry)
     config_entry.entry_id = "test_wiim_entry"
     config_entry.unique_id = "test-speaker-uuid"
     config_entry.data = {"host": "192.168.1.100"}
     config_entry.options = {}
     config_entry.title = "Test WiiM"
-
-    speaker = Speaker(hass, wiim_coordinator, config_entry)
-
-    # Emulate the data structure the integration uses at runtime so helper
-    # functions (e.g. find_speaker_by_uuid) work inside the tests.
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {"speaker": speaker}
-
-    return speaker
+    return config_entry
 
 
 @pytest.fixture
-def wiim_speaker_slave(hass):
-    """Create a test slave Speaker instance for group testing."""
+def wiim_coordinator_slave(hass):
+    """Create a test slave coordinator for group testing."""
     # Create mock Player object for slave
     slave_player = MagicMock()
     slave_player.host = "192.168.1.101"
@@ -362,7 +342,6 @@ def wiim_speaker_slave(hass):
 
     # Create mock coordinator for slave
     slave_coordinator = MagicMock()
-    slave_coordinator.player = slave_player.client
     slave_coordinator.player = slave_player
     slave_coordinator.data = {"player": slave_player}
     slave_coordinator.last_update_success = True
@@ -370,21 +349,19 @@ def wiim_speaker_slave(hass):
 
     # Create a mock config entry for slave
     config_entry = MagicMock(spec=ConfigEntry)
+    config_entry.entry_id = "test_slave_entry"
     config_entry.unique_id = "test-slave-uuid"
     config_entry.data = {"host": "192.168.1.101"}
     config_entry.options = {}
     config_entry.title = "Test Slave"
 
-    speaker = Speaker(hass, slave_coordinator, config_entry)
-    speaker.ip_address = "192.168.1.101"  # Use correct attribute name
-    speaker.name = "Test Slave"
-    speaker.model = "WiiM Pro"
-    speaker.role = "slave"
+    # Register slave coordinator in hass.data for helper lookups
+    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {
+        "coordinator": slave_coordinator,
+        "entry": config_entry,
+    }
 
-    # Register slave speaker in hass.data for helper lookups
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {"speaker": speaker}
-
-    return speaker
+    return slave_coordinator
 
 
 # ============================================================================

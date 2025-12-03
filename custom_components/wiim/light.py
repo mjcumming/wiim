@@ -10,8 +10,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .data import Speaker, get_speaker_from_config_entry
+from .const import DOMAIN
 from .entity import WiimEntity
+from .coordinator import WiiMCoordinator
+from .utils import wiim_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,13 +24,14 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up WiiM Light platform."""
-    speaker = get_speaker_from_config_entry(hass, config_entry)
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
     # Create LED light entity for all devices
     # Device-specific LED commands are handled in the API layer
-    entities = [WiiMLEDLight(speaker)]
+    entities = [WiiMLEDLight(coordinator, config_entry)]
     async_add_entities(entities)
-    _LOGGER.info("Created LED light entity for %s", speaker.name)
+    device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
+    _LOGGER.info("Created LED light entity for %s", device_name)
 
 
 class WiiMLEDLight(WiimEntity, LightEntity):
@@ -40,10 +43,11 @@ class WiiMLEDLight(WiimEntity, LightEntity):
     # No GET endpoint exists – operate optimistically.
     _attr_assumed_state = True
 
-    def __init__(self, speaker: Speaker) -> None:
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialise the LED light entity."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_led"
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_led"
         self._attr_name = "LED"
         # Remember best-guess state so the UI has feedback.
         self._is_on: bool | None = None
@@ -54,11 +58,11 @@ class WiiMLEDLight(WiimEntity, LightEntity):
     # ------------------------------------------------------------------
     @property
     def available(self) -> bool:
-        """Return entity availability (mirrors speaker availability)."""
+        """Return entity availability."""
         # Also check if device supports LED control
         try:
             # This is a simple check - in practice, the entity won't be created for unsupported devices
-            return self.speaker.available
+            return self.coordinator.last_update_success
         except Exception:
             return False
 
@@ -81,43 +85,38 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         brightness_255: int = int(kwargs.get(ATTR_BRIGHTNESS, 255))
         brightness_pct: int = max(0, min(100, round(brightness_255 * 100 / 255)))
 
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         _LOGGER.debug(
             "Setting LED on %s to brightness %d%% (raw %d)",
-            self.speaker.name,
+            device_name,
             brightness_pct,
             brightness_255,
         )
-        try:
-            await self.speaker.coordinator.player.set_led(True)
+        async with wiim_command(device_name, "turn on LED"):
+            await self.coordinator.player.set_led(True)
             # Only send brightness command when different from 100 % to
             # avoid unnecessary round-trip on most devices.
             if brightness_pct != 100:
-                await self.speaker.coordinator.player.set_led_brightness(brightness_pct)
-        except Exception as err:
-            _LOGGER.error("Failed to turn on LED for %s: %s", self.speaker.name, err)
-            raise
+                await self.coordinator.player.set_led_brightness(brightness_pct)
 
         # Update optimistic local state
         self._is_on = True
         self._brightness = brightness_255
         self.async_write_ha_state()
 
-        # Request coordinator refresh so other entities pick up any side-effects
-        await self._async_execute_command_with_refresh("led_on")
+        # State updates automatically via callback - no manual refresh needed
 
     async def async_turn_off(self, **kwargs: Any) -> None:  # type: ignore[override]
         """Turn LED off."""
-        try:
-            await self.speaker.coordinator.player.set_led(False)
-        except Exception as err:
-            _LOGGER.error("Failed to turn off LED for %s: %s", self.speaker.name, err)
-            raise
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
+        async with wiim_command(device_name, "turn off LED"):
+            await self.coordinator.player.set_led(False)
 
         # Update optimistic local state
         self._is_on = False
         self.async_write_ha_state()
 
-        await self._async_execute_command_with_refresh("led_off")
+        # State updates automatically via callback - no manual refresh needed
 
     async def async_set_brightness(self, brightness: int) -> None:
         """Helper to set brightness directly from service call (0-255)."""
@@ -125,18 +124,16 @@ class WiiMLEDLight(WiimEntity, LightEntity):
             raise ValueError("Brightness must be between 0 and 255")
 
         brightness_pct = max(0, min(100, round(brightness * 100 / 255)))
-        _LOGGER.debug("Setting LED brightness for %s: %d%% (raw %d)", self.speaker.name, brightness_pct, brightness)
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
+        _LOGGER.debug("Setting LED brightness for %s: %d%% (raw %d)", device_name, brightness_pct, brightness)
 
-        try:
+        async with wiim_command(device_name, "set LED brightness"):
             # Ensure LED is on when setting brightness (matches device behaviour)
-            await self.speaker.coordinator.player.set_led(True)
-            await self.speaker.coordinator.player.set_led_brightness(brightness_pct)
-        except Exception as err:
-            _LOGGER.error("Failed to set LED brightness for %s: %s", self.speaker.name, err)
-            raise
+            await self.coordinator.player.set_led(True)
+            await self.coordinator.player.set_led_brightness(brightness_pct)
 
         self._is_on = True
         self._brightness = brightness
         self.async_write_ha_state()
 
-        await self._async_execute_command_with_refresh("led_brightness")
+        # State updates automatically via callback - no manual refresh needed

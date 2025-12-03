@@ -11,49 +11,59 @@ class TestNumberPlatformSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry_currently_empty(self):
         """Test number platform setup when no number entities are implemented."""
+        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.number import async_setup_entry
 
         # Mock dependencies
         hass = MagicMock()
         config_entry = MagicMock()
+        config_entry.entry_id = "test-entry"
 
-        # Mock speaker
-        speaker = MagicMock()
-        speaker.name = "Test WiiM"
+        # Mock coordinator
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.name = "Test WiiM"
 
-        with patch("custom_components.wiim.number.get_speaker_from_config_entry", return_value=speaker):
-            entities = []
-            async_add_entities = MagicMock()
+        # Set up hass.data structure
+        hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
 
-            await async_setup_entry(hass, config_entry, async_add_entities)
+        entities = []
+        async_add_entities = MagicMock()
 
-            # Verify entities were created
-            async_add_entities.assert_called_once()
-            entities = async_add_entities.call_args[0][0]
+        await async_setup_entry(hass, config_entry, async_add_entities)
 
-            # Should create no number entities (currently empty implementation)
-            assert len(entities) == 0
+        # Verify entities were created
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+
+        # Should create no number entities (currently empty implementation)
+        assert len(entities) == 0
 
     @pytest.mark.asyncio
     async def test_async_setup_entry_logging(self):
         """Test number platform setup logging."""
+        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.number import async_setup_entry
 
         # Mock dependencies
         hass = MagicMock()
         config_entry = MagicMock()
+        config_entry.entry_id = "test-entry"
 
-        # Mock speaker
-        speaker = MagicMock()
-        speaker.name = "Test WiiM"
+        # Mock coordinator
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.name = "Test WiiM"
 
-        with patch("custom_components.wiim.number.get_speaker_from_config_entry", return_value=speaker):
-            async_add_entities = MagicMock()
+        # Set up hass.data structure
+        hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
 
-            await async_setup_entry(hass, config_entry, async_add_entities)
+        async_add_entities = MagicMock()
 
-            # Verify no entities created but setup completed successfully
-            async_add_entities.assert_called_once_with([])
+        await async_setup_entry(hass, config_entry, async_add_entities)
+
+        # Verify no entities created but setup completed successfully
+        async_add_entities.assert_called_once_with([])
 
 
 class TestNumberPlatformConstants:
@@ -84,15 +94,19 @@ class TestWiiMChannelBalance:
 
     def test_channel_balance_initialization(self):
         """Test channel balance entity initialization."""
-        from unittest.mock import MagicMock
-
+        from homeassistant.config_entries import ConfigEntry
         from custom_components.wiim.number import WiiMChannelBalance
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.name = "Test WiiM"
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.name = "Test WiiM"
 
-        entity = WiiMChannelBalance(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        entity = WiiMChannelBalance(coordinator, config_entry)
 
         assert entity.unique_id == "test-uuid_channel_balance"
         assert entity.name == "Channel Balance"
@@ -103,14 +117,18 @@ class TestWiiMChannelBalance:
 
     def test_channel_balance_native_value(self):
         """Test channel balance native_value property."""
-        from unittest.mock import MagicMock
-
+        from homeassistant.config_entries import ConfigEntry
         from custom_components.wiim.number import WiiMChannelBalance
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
 
-        entity = WiiMChannelBalance(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        entity = WiiMChannelBalance(coordinator, config_entry)
         entity._balance = 0.5
 
         assert entity.native_value == 0.5
@@ -118,54 +136,68 @@ class TestWiiMChannelBalance:
     @pytest.mark.asyncio
     async def test_channel_balance_set_native_value(self):
         """Test setting channel balance value."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
+        from unittest.mock import AsyncMock, patch
+        from homeassistant.config_entries import ConfigEntry
         from custom_components.wiim.number import WiiMChannelBalance
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.name = "Test WiiM"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.player = MagicMock()
-        mock_speaker.coordinator.player.set_channel_balance = AsyncMock(return_value=True)
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.name = "Test WiiM"
+        coordinator.player.set_channel_balance = AsyncMock(return_value=True)
 
-        entity = WiiMChannelBalance(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+        config_entry.title = "Test WiiM"
+
+        entity = WiiMChannelBalance(coordinator, config_entry)
 
         with patch.object(entity, "async_write_ha_state"):
             await entity.async_set_native_value(0.3)
 
-        mock_speaker.coordinator.player.set_channel_balance.assert_called_once_with(0.3)
+        coordinator.player.set_channel_balance.assert_called_once_with(0.3)
         assert entity._balance == 0.3
 
     @pytest.mark.asyncio
     async def test_channel_balance_set_native_value_handles_error(self):
         """Test channel balance handles errors when setting value."""
-        from unittest.mock import AsyncMock, MagicMock
-
+        from unittest.mock import AsyncMock
+        from homeassistant.config_entries import ConfigEntry
+        from homeassistant.exceptions import HomeAssistantError
+        from pywiim.exceptions import WiiMError
         from custom_components.wiim.number import WiiMChannelBalance
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.name = "Test WiiM"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.player = MagicMock()
-        mock_speaker.coordinator.player.set_channel_balance = AsyncMock(side_effect=Exception("Error"))
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.name = "Test WiiM"
+        coordinator.player.set_channel_balance = AsyncMock(side_effect=WiiMError("Error"))
 
-        entity = WiiMChannelBalance(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+        config_entry.title = "Test WiiM"
 
-        with pytest.raises(Exception, match="Error"):
+        entity = WiiMChannelBalance(coordinator, config_entry)
+
+        with pytest.raises(HomeAssistantError):
             await entity.async_set_native_value(0.3)
 
     def test_channel_balance_extra_state_attributes(self):
         """Test channel balance extra_state_attributes."""
-        from unittest.mock import MagicMock
-
+        from homeassistant.config_entries import ConfigEntry
         from custom_components.wiim.number import WiiMChannelBalance
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
 
-        entity = WiiMChannelBalance(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        entity = WiiMChannelBalance(coordinator, config_entry)
         entity._balance = -0.5
 
         attrs = entity.extra_state_attributes

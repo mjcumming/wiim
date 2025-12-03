@@ -290,7 +290,7 @@ class TestIntegrationServices:
         """Test sync_time service."""
         from unittest.mock import AsyncMock
 
-        from custom_components.wiim.data import get_all_speakers
+        from custom_components.wiim.data import get_all_coordinators
 
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -311,14 +311,10 @@ class TestIntegrationServices:
 
         entity_id = media_player_entities[0].entity_id
 
-        # Get actual speakers and mock sync_time on client
-        speakers = get_all_speakers(hass)
-        if (
-            speakers
-            and hasattr(speakers[0].coordinator, "player")
-            and hasattr(speakers[0].coordinator.player, "client")
-        ):
-            speakers[0].coordinator.player.client.sync_time = AsyncMock()
+        # Get actual coordinators and mock sync_time on client
+        coordinators = get_all_coordinators(hass)
+        if coordinators and hasattr(coordinators[0], "player") and hasattr(coordinators[0].player, "client"):
+            coordinators[0].player.client.sync_time = AsyncMock()
 
             # Call the service
             await hass.services.async_call(
@@ -328,9 +324,9 @@ class TestIntegrationServices:
                 blocking=True,
             )
 
-            # Verify sync_time was called if speaker found
-            if hasattr(speakers[0].coordinator.player.client, "sync_time"):
-                speakers[0].coordinator.player.client.sync_time.assert_called_once()
+            # Verify sync_time was called if coordinator found
+            if hasattr(coordinators[0].player.client, "sync_time"):
+                coordinators[0].player.client.sync_time.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reboot_service_handles_missing_entity(self, hass: HomeAssistant) -> None:
@@ -408,9 +404,9 @@ class TestIntegrationServices:
         # Core platforms should be present
         assert Platform.MEDIA_PLAYER in platforms
         assert Platform.SENSOR in platforms
-        # NUMBER, SWITCH, LIGHT should also be in core
+        # NUMBER, LIGHT should also be in core
+        # Note: SWITCH was removed as it was empty (no switch entities implemented)
         assert Platform.NUMBER in platforms
-        assert Platform.SWITCH in platforms
         assert Platform.LIGHT in platforms
 
 

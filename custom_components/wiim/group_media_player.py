@@ -15,35 +15,22 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
 )
 from homeassistant.components.media_player.const import MediaType, RepeatMode
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
-from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
+from pywiim.exceptions import WiiMError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
-from .data import Speaker
 from .entity import WiimEntity
+from .coordinator import WiiMCoordinator
+from .media_player_base import WiiMMediaPlayerMixin
+from .utils import is_connection_error
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _is_connection_error(err: Exception) -> bool:
-    """Check if error is a connection or timeout error (including in exception chain)."""
-    if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
-        return True
-    # Check exception chain for wrapped connection errors
-    cause = getattr(err, "__cause__", None)
-    if cause and isinstance(cause, (WiiMConnectionError, WiiMTimeoutError)):
-        return True
-    # Check for TimeoutError in chain (common underlying cause)
-    if isinstance(err, TimeoutError):
-        return True
-    if cause and isinstance(cause, TimeoutError):
-        return True
-    return False
-
-
-class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
+class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     """Virtual group coordinator media player for WiiM multiroom groups.
 
     This entity dynamically appears when a speaker becomes master with slaves,
@@ -61,30 +48,16 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     - All state management handled by pywiim via callbacks (no manual sync needed)
     """
 
-    def __init__(self, speaker: Speaker) -> None:
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize the group coordinator media player."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_group_coordinator"
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_group_coordinator"
         self._attr_name = None  # Use dynamic name property
-
-    def _derive_state_from_player(self, player) -> MediaPlayerState | None:
-        """Map pywiim's play_state to MediaPlayerState."""
-        if not self.available or not player:
-            return None
-
-        play_state = getattr(player, "play_state", None)
-        if not play_state:
-            return MediaPlayerState.IDLE
-
-        play_state_str = str(play_state).lower()
-        if play_state_str in ("play", "playing", "load"):
-            return MediaPlayerState.PLAYING
-        if play_state_str == "pause":
-            return MediaPlayerState.PAUSED
-        return MediaPlayerState.IDLE
 
     def _update_position_from_coordinator(self) -> None:
         """Update media position attributes from coordinator data (LinkPlay pattern)."""
+        # Override mixin to skip feature updates (group player doesn't need them)
         if not self.available:
             self._attr_state = None
             self._attr_media_position = None
@@ -132,15 +105,10 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     @property
     def name(self) -> str:
         """Return dynamic name based on role."""
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         if self.available:
-            return f"{self.speaker.name} Group Master"
-        return self.speaker.name
-
-    def _get_player(self):
-        """Get Player object from coordinator data (always up-to-date via pywiim)."""
-        if self.coordinator.data:
-            return self.coordinator.data.get("player")
-        return None
+            return f"{device_name} Group Master"
+        return device_name
 
     @property
     def available(self) -> bool:
@@ -153,7 +121,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         Uses player.role (device API source of truth), NOT group.all_players which
         may be empty even if device has slaves.
         """
-        if not self.speaker.available or not self.coordinator.last_update_success:
+        if not self.coordinator.last_update_success:
             return False
 
         player = self._get_player()
@@ -232,13 +200,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not self.available:
             return None
         player = self._get_player()
-        if not player:
+        if not player or not player.group:
             return None
-        group = getattr(player, "group", None)
-        if not group:
-            return None
-        # Use pywiim's group.volume_level property (returns MAX of all devices)
-        return getattr(group, "volume_level", None)
+        return player.group.volume_level
 
     @property
     def is_volume_muted(self) -> bool | None:
@@ -249,13 +213,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         if not self.available:
             return None
         player = self._get_player()
-        if not player:
+        if not player or not player.group:
             return None
-        group = getattr(player, "group", None)
-        if not group:
-            return None
-        # Use pywiim's group.is_muted property (True only if ALL devices are muted)
-        return getattr(group, "is_muted", None)
+        return player.group.is_muted
 
     @property
     def volume_step(self) -> float:
@@ -264,10 +224,8 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         Reads the configured volume step from the config entry options.
         Defaults to 5% (0.05) if not configured.
         """
-        if hasattr(self, "speaker") and hasattr(self.speaker, "config_entry"):
-            volume_step = self.speaker.config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
-            return float(volume_step)
-        return DEFAULT_VOLUME_STEP
+        volume_step = self._config_entry.options.get(CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP)
+        return float(volume_step)
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level for all group members proportionally.
@@ -281,18 +239,14 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return
 
         player = self._get_player()
-        if not player:
-            return
-        group = getattr(player, "group", None)
-        if not group:
+        if not player or not player.group:
             return
 
         try:
-            # Use pywiim's group.set_volume_all() which sets volume on all members proportionally
-            await group.set_volume_all(volume)
-            await self.coordinator.async_request_refresh()
+            await player.group.set_volume_all(volume)
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
-            if _is_connection_error(err):
+            if is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
                 _LOGGER.warning(
                     "Connection issue setting group volume on %s: %s. The device may be temporarily unreachable.",
@@ -315,18 +269,14 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return
 
         player = self._get_player()
-        if not player:
-            return
-        group = getattr(player, "group", None)
-        if not group:
+        if not player or not player.group:
             return
 
         try:
-            # Use pywiim's group.mute_all() which sets mute on all members
-            await group.mute_all(mute)
-            await self.coordinator.async_request_refresh()
+            await player.group.mute_all(mute)
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
-            if _is_connection_error(err):
+            if is_connection_error(err):
                 # Connection/timeout errors are transient - log at warning level
                 _LOGGER.warning(
                     "Connection issue setting group mute on %s: %s. The device may be temporarily unreachable.",
@@ -351,7 +301,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.play()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play: {err}") from err
 
@@ -366,7 +316,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.pause()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to pause: {err}") from err
 
@@ -381,7 +331,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.stop()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop: {err}") from err
 
@@ -396,7 +346,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.next_track()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to skip track: {err}") from err
 
@@ -411,7 +361,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.previous_track()
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to go to previous track: {err}") from err
 
@@ -426,59 +376,11 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
 
         try:
             await self.coordinator.player.play_url(media_id)
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play media: {err}") from err
 
-    # ===== NEXT/PREVIOUS TRACK =====
-
-    def _next_track_supported(self) -> bool:
-        """Check if next/previous track is supported by master's current source.
-
-        Uses pywiim's supports_next_track property which is source-aware:
-        - Returns True for sources that support track navigation (Spotify, USB, etc.)
-        - Returns False for live radio, physical inputs where track skip doesn't apply
-        - Streaming services like Spotify return True even with queue_count=0
-        """
-        if not self.available:
-            return False
-        player = self._get_player()
-        if not player:
-            return False
-        return player.supports_next_track
-
     # ===== SHUFFLE & REPEAT =====
-
-    def _shuffle_supported(self) -> bool:
-        """Check if shuffle is supported by master's current source.
-
-        Shuffle availability depends on the content being played (local files,
-        streaming services, etc.). pywiim's Player automatically determines this.
-        """
-        if not self.available:
-            return False
-        player = self._get_player()
-        if not player:
-            return False
-        return player.shuffle_supported
-
-    @property
-    def shuffle(self) -> bool | None:
-        """Return True if shuffle is enabled."""
-        if not self.available:
-            return None
-        player = self._get_player()
-        if not player:
-            return None
-
-        shuffle = getattr(player, "shuffle", None)
-        if shuffle is not None:
-            # Convert string to bool if needed
-            if isinstance(shuffle, bool):
-                return shuffle
-            shuffle_str = str(shuffle).lower()
-            return shuffle_str in ("1", "true", "on", "yes", "shuffle")
-        return None
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Enable/disable shuffle mode on master (affects group playback).
@@ -490,45 +392,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return
         try:
             await self.coordinator.player.set_shuffle(shuffle)
-            # pywiim updates Player state immediately and pushes event via on_state_changed callback
-            # The callback triggers async_update_listeners() which notifies all entities automatically
-            # Force refresh to ensure immediate UI update
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to set shuffle: {err}") from err
-
-    def _repeat_supported(self) -> bool:
-        """Check if repeat is supported by master's current source.
-
-        Repeat availability depends on the content being played (local files,
-        streaming services, etc.). pywiim's Player automatically determines this.
-        """
-        if not self.available:
-            return False
-        player = self._get_player()
-        if not player:
-            return False
-        return player.repeat_supported
-
-    @property
-    def repeat(self) -> RepeatMode | None:
-        """Return current repeat mode."""
-        if not self.available:
-            return None
-        player = self._get_player()
-        if not player:
-            return None
-
-        repeat = getattr(player, "repeat", None)
-        if repeat is not None:
-            repeat_str = str(repeat).lower()
-            if repeat_str in ("1", "one", "track"):
-                return RepeatMode.ONE
-            elif repeat_str in ("all", "playlist"):
-                return RepeatMode.ALL
-            else:
-                return RepeatMode.OFF
-        return None
 
     async def async_set_repeat(self, repeat: RepeatMode) -> None:
         """Set repeat mode on master (affects group playback).
@@ -540,10 +406,7 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
             return
         try:
             await self.coordinator.player.set_repeat(repeat.value)
-            # pywiim updates Player state immediately and pushes event via on_state_changed callback
-            # The callback triggers async_update_listeners() which notifies all entities automatically
-            # Force refresh to ensure immediate UI update
-            await self.coordinator.async_request_refresh()
+            # State updates automatically via callback - no manual refresh needed
         except AttributeError as err:
             # Fallback if set_repeat not yet available in pywiim Player
             raise HomeAssistantError(
@@ -613,82 +476,6 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
     # No mutation in property getters - following LinkPlay pattern
 
     @property
-    def media_image_url(self) -> str | None:
-        """Return cover art URL from master.
-
-        Returns a placeholder URL to ensure Home Assistant calls async_get_media_image(),
-        which allows pywiim to serve its default WiiM logo when nothing is playing
-        or no cover art is available.
-        """
-        if not self.available:
-            return None
-        player = self._get_player()
-        if not player:
-            return None
-
-        # If pywiim has a URL, use it
-        if hasattr(player, "media_image_url") and player.media_image_url:
-            return player.media_image_url
-
-        # Always return a placeholder URL to trigger async_get_media_image()
-        # This ensures HA calls our override in all states (including IDLE)
-        import hashlib
-
-        # Create a unique identifier based on current state and metadata
-        title = getattr(player, "media_title", "") or ""
-        artist = getattr(player, "media_artist", "") or ""
-        state = str(self.state or "idle")
-
-        # Use state + metadata to generate hash
-        track_id = f"{state}|{title}|{artist}".encode()
-        track_hash = hashlib.sha256(track_id).hexdigest()[:16]
-        return f"wiim://group-cover-art/{track_hash}"
-
-    @property
-    def media_image_remotely_accessible(self) -> bool:
-        """Return False to force Home Assistant to use our async_get_media_image() override.
-
-        Per pywiim HA integration guide: using fetch_cover_art() is more reliable than
-        passing URLs directly to HA, especially for handling expired URLs and caching.
-        """
-        return False
-
-    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
-        """Return image bytes and content type of current playing media.
-
-        Per pywiim HA integration guide: fetch_cover_art() provides more reliable
-        cover art serving with automatic caching and graceful handling of expired URLs.
-        """
-        _LOGGER.debug("async_get_media_image() called for group player %s", self.name)
-
-        # Group player only shows cover art when available (in group mode)
-        if not self.available:
-            _LOGGER.debug("Group player not available, skipping cover art")
-            return None, None
-
-        player = self._get_player()
-        if not player:
-            _LOGGER.debug("No player object available for group cover art fetch")
-            return None, None
-
-        try:
-            if not hasattr(player, "fetch_cover_art"):
-                _LOGGER.warning("Player object does not have fetch_cover_art method")
-                return None, None
-
-            _LOGGER.debug("Calling player.fetch_cover_art() for group player %s", self.name)
-            result = await player.fetch_cover_art()
-            if result:
-                _LOGGER.debug("Group cover art fetched successfully: %d bytes, type=%s", len(result[0]), result[1])
-                return result  # (image_bytes, content_type)
-            else:
-                _LOGGER.debug("fetch_cover_art() returned None for group player")
-        except Exception as e:
-            _LOGGER.error("Error fetching group cover art: %s", e, exc_info=True)
-
-        return None, None
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes for the virtual group coordinator.
 
@@ -696,8 +483,9 @@ class WiiMGroupMediaPlayer(WiimEntity, MediaPlayerEntity):
         - group_leader: Name of the physical master device
         - group_status: "active" when coordinating, "inactive" otherwise
         """
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         attrs = {
-            "group_leader": self.speaker.name,
+            "group_leader": device_name,
             "group_status": "active" if self.available else "inactive",
         }
         return attrs

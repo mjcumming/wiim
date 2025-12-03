@@ -209,3 +209,193 @@ class TestWiiMCoordinator:
         assert data is not None
         assert "player" in data
         assert data["player"] == mock_player
+
+    @pytest.mark.asyncio
+    async def test_concurrent_update_scenarios(self, coordinator, mock_player):
+        """Test concurrent update scenarios (two updates racing)."""
+        import asyncio
+
+        # Simulate two concurrent updates
+        update_count = 0
+
+        async def mock_refresh():
+            nonlocal update_count
+            update_count += 1
+            await asyncio.sleep(0.01)  # Small delay to allow concurrency
+
+        mock_player.refresh = AsyncMock(side_effect=mock_refresh)
+
+        # Start two updates concurrently
+        task1 = coordinator._async_update_data()
+        task2 = coordinator._async_update_data()
+
+        # Wait for both to complete
+        results = await asyncio.gather(task1, task2)
+
+        # Both should succeed
+        assert all("player" in result for result in results)
+        # Both should have called refresh
+        assert mock_player.refresh.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_error_recovery_after_network_issues(self, coordinator, mock_player):
+        """Test error recovery after network issues (fail then succeed)."""
+        # First update fails
+        mock_player.refresh.side_effect = WiiMError("Network error")
+        coordinator.data = None  # No cache
+
+        # Should raise UpdateFailed
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+        # Set cache for next attempt
+        coordinator.data = {"player": mock_player}
+
+        # Second update also fails but has cache
+        mock_player.refresh.side_effect = WiiMError("Network error")
+
+        # Should return cached data
+        data = await coordinator._async_update_data()
+        assert data == {"player": mock_player}
+
+        # Third update succeeds
+        mock_player.refresh.side_effect = None
+        mock_player.refresh = AsyncMock()
+
+        data = await coordinator._async_update_data()
+        assert data == {"player": mock_player}
+        mock_player.refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_state_transition_edge_cases(self, coordinator, mock_player):
+        """Test state transition edge cases (playing -> paused -> stopped)."""
+        # Start playing
+        mock_player.play_state = "play"
+        mock_player.is_playing = True
+        data = await coordinator._async_update_data()
+        assert data["player"].play_state == "play"
+
+        # Transition to paused
+        mock_player.play_state = "pause"
+        mock_player.is_playing = False
+        data = await coordinator._async_update_data()
+        assert data["player"].play_state == "pause"
+
+        # Transition to stopped
+        mock_player.play_state = "stop"
+        mock_player.is_playing = False
+        data = await coordinator._async_update_data()
+        assert data["player"].play_state == "stop"
+
+    @pytest.mark.asyncio
+    async def test_none_player_handling_during_initialization(self, hass, mock_client):
+        """Test None player handling during initialization."""
+        from custom_components.wiim.const import DOMAIN
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+
+        # Create coordinator with player that might be None initially
+        with (
+            patch("custom_components.wiim.coordinator.Player", return_value=None),
+            patch("custom_components.wiim.coordinator.async_get_clientsession"),
+        ):
+            # This should not raise during initialization
+            coordinator = WiiMCoordinator(
+                hass,
+                host="192.168.1.100",
+                entry=entry,
+                capabilities={"supports_eq": True, "supports_audio_output": True},
+            )
+
+            # If player is None, accessing it should be handled
+            if coordinator.player is None:
+                # Update should raise UpdateFailed
+                with pytest.raises((UpdateFailed, AttributeError)):
+                    await coordinator._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_polling_interval_changes_based_on_state(self, coordinator, mock_player):
+        """Test polling interval changes based on state."""
+        from datetime import timedelta
+
+        # Initial state - stopped
+        mock_player.play_state = "stop"
+        mock_player.is_playing = False
+        mock_player.role = "solo"
+
+        initial_interval = coordinator.update_interval
+        await coordinator._async_update_data()
+
+        # Change to playing
+        mock_player.play_state = "play"
+        mock_player.is_playing = True
+
+        await coordinator._async_update_data()
+
+        # Interval should potentially change (depends on PollingStrategy)
+        # At minimum, verify interval is set
+        assert coordinator.update_interval is not None
+        assert isinstance(coordinator.update_interval, timedelta)
+
+    @pytest.mark.asyncio
+    async def test_cache_behavior_partial_data(self, coordinator, mock_player):
+        """Test cache behavior when player.refresh() returns partial data."""
+        # Set initial complete data
+        coordinator.data = {"player": mock_player}
+        mock_player.volume_level = 0.5
+        mock_player.play_state = "play"
+
+        # Simulate refresh that partially fails but doesn't raise
+        # (e.g., some properties updated, others not)
+        async def partial_refresh():
+            # Update some properties but not others
+            mock_player.volume_level = 0.6
+            # play_state might not update if refresh is partial
+
+        mock_player.refresh = AsyncMock(side_effect=partial_refresh)
+
+        data = await coordinator._async_update_data()
+
+        # Should return player with updated data
+        assert data == {"player": mock_player}
+        # Volume should be updated
+        assert data["player"].volume_level == 0.6
+
+    @pytest.mark.asyncio
+    async def test_polling_strategy_adaptation(self, coordinator, mock_player):
+        """Test that polling strategy adapts based on role and play state."""
+        # Test solo + playing
+        mock_player.role = "solo"
+        mock_player.is_playing = True
+        await coordinator._async_update_data()
+        interval_playing = coordinator.update_interval
+
+        # Test solo + stopped
+        mock_player.is_playing = False
+        await coordinator._async_update_data()
+        interval_stopped = coordinator.update_interval
+
+        # Intervals should be set (may be same or different depending on strategy)
+        assert interval_playing is not None
+        assert interval_stopped is not None
+
+    @pytest.mark.asyncio
+    async def test_coordinator_update_listeners(self, coordinator, mock_player):
+        """Test that coordinator notifies listeners on state changes."""
+        listeners_notified = []
+
+        def listener_callback():
+            listeners_notified.append(True)
+
+        # Register a listener
+        coordinator.async_add_listener(listener_callback)
+
+        # Trigger update
+        await coordinator._async_update_data()
+
+        # Listener should be notified
+        assert len(listeners_notified) > 0

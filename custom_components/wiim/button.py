@@ -13,8 +13,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .data import Speaker, get_speaker_from_config_entry
+from .const import DOMAIN
 from .entity import WiimEntity
+from .coordinator import WiiMCoordinator
+from .utils import wiim_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,21 +31,22 @@ async def async_setup_entry(
     Only creates useful maintenance buttons that users actually need.
     All buttons are optional and controlled by user preferences.
     """
-    speaker = get_speaker_from_config_entry(hass, config_entry)
-    entry = hass.data["wiim"][config_entry.entry_id]["entry"]
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    entry = hass.data[DOMAIN][config_entry.entry_id]["entry"]
 
     entities = []
     # Only create maintenance buttons if the option is enabled
     if entry.options.get("enable_maintenance_buttons", False):
         entities.extend(
             [
-                WiiMRebootButton(speaker),
-                WiiMSyncTimeButton(speaker),
+                WiiMRebootButton(coordinator, config_entry),
+                WiiMSyncTimeButton(coordinator, config_entry),
             ]
         )
 
     async_add_entities(entities)
-    _LOGGER.info("Created %d button entities for %s", len(entities), speaker.name)
+    device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
+    _LOGGER.info("Created %d button entities for %s", len(entities), device_name)
 
 
 class WiiMRebootButton(WiimEntity, ButtonEntity):
@@ -56,10 +59,11 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
     _attr_icon = "mdi:restart"
     _attr_has_entity_name = True
 
-    def __init__(self, speaker: Speaker) -> None:
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize reboot button."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_reboot"
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_reboot"
         self._attr_name = "Reboot"
 
     async def async_press(self) -> None:
@@ -68,23 +72,24 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
         Sends reboot command to the device. If the device has downloaded a firmware
         update, the reboot will trigger the installation process.
         """
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         try:
-            _LOGGER.info("Initiating reboot for %s", self.speaker.name)
-            await self.speaker.coordinator.player.reboot()
-            _LOGGER.info("Reboot command sent successfully to %s", self.speaker.name)
-            await self._async_execute_command_with_refresh("reboot")
+            _LOGGER.info("Initiating reboot for %s", device_name)
+            await self.coordinator.player.reboot()
+            _LOGGER.info("Reboot command sent successfully to %s", device_name)
+            # State updates automatically via callback - no manual refresh needed
 
         except Exception as err:
             # Reboot commands often don't return proper responses
             # Log the attempt but don't fail the button press
             _LOGGER.info(
                 "Reboot command sent to %s (device may not respond): %s",
-                self.speaker.name,
+                device_name,
                 err,
             )
             # Don't raise - reboot command was sent successfully
             # The device will reboot even if the response parsing fails
-            await self._async_execute_command_with_refresh("reboot")
+            # State updates automatically via callback - no manual refresh needed
 
 
 class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
@@ -96,10 +101,11 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
     _attr_icon = "mdi:clock-sync"
     _attr_has_entity_name = True
 
-    def __init__(self, speaker: Speaker) -> None:
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize time sync button."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_sync_time"
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_sync_time"
         self._attr_name = "Sync Time"
 
     async def async_press(self) -> None:
@@ -108,11 +114,8 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
         Synchronizes the device's internal clock with network time,
         ensuring accurate timestamps for media metadata and logs.
         """
-        try:
-            _LOGGER.info("Synchronizing time for %s", self.speaker.name)
-            await self.speaker.coordinator.player.sync_time()
-            await self._async_execute_command_with_refresh("sync_time")
-
-        except Exception as err:
-            _LOGGER.error("Failed to sync time for %s: %s", self.speaker.name, err)
-            raise
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
+        async with wiim_command(device_name, "sync time"):
+            _LOGGER.info("Synchronizing time for %s", device_name)
+            await self.coordinator.player.sync_time()
+            # State updates automatically via callback - no manual refresh needed

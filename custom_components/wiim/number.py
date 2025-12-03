@@ -13,8 +13,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .data import Speaker, get_speaker_from_config_entry
+from .const import DOMAIN
 from .entity import WiimEntity
+from .coordinator import WiiMCoordinator
+from .utils import wiim_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,17 +27,17 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up WiiM number entities from a config entry."""
-    speaker = get_speaker_from_config_entry(hass, config_entry)
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
     entities = []
 
     # Channel Balance Number Entity
-    # WARNING: This uses unofficial API endpoints and may not work on all firmware versions
-    # TODO: Enable when ready for production use
-    # entities.append(WiiMChannelBalance(speaker))
+    # WARNING: Uses unofficial API endpoints - may not work on all firmware versions
+    entities.append(WiiMChannelBalance(coordinator, config_entry))
 
     async_add_entities(entities)
-    _LOGGER.info("Created %d number entities for %s", len(entities), speaker.name)
+    device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
+    _LOGGER.info("Created %d number entities for %s", len(entities), device_name)
 
 
 class WiiMChannelBalance(WiimEntity, NumberEntity):
@@ -52,10 +54,11 @@ class WiiMChannelBalance(WiimEntity, NumberEntity):
     _attr_native_step = 0.1
     _attr_icon = "mdi:sine-wave"
 
-    def __init__(self, speaker: Speaker) -> None:
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize the channel balance entity."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_channel_balance"
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_channel_balance"
         self._attr_name = "Channel Balance"
         # Track current value optimistically
         self._balance = 0.0
@@ -71,18 +74,16 @@ class WiiMChannelBalance(WiimEntity, NumberEntity):
         Args:
             value: Balance value from -1.0 (left) to 1.0 (right), 0.0 is center
         """
-        try:
-            _LOGGER.info("Setting channel balance to %s for %s", value, self.speaker.name)
-            await self.speaker.coordinator.player.set_channel_balance(value)
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
+        async with wiim_command(device_name, "set channel balance"):
+            _LOGGER.info("Setting channel balance to %s for %s", value, device_name)
+            await self.coordinator.player.set_channel_balance(value)
 
             # Update optimistic state
             self._balance = value
             self.async_write_ha_state()
 
-            _LOGGER.info("Channel balance set successfully for %s", self.speaker.name)
-        except Exception as err:
-            _LOGGER.error("Failed to set channel balance for %s: %s", self.speaker.name, err)
-            raise
+            _LOGGER.info("Channel balance set successfully for %s", device_name)
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
