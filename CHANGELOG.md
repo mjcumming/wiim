@@ -2,6 +2,17 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.35] - 2025-12-03
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.33
+  - **Bluetooth metadata now displays correctly** (enhanced fix for Issue #138)
+  - When `getPlayerStatusEx` returns "Unknown" for title/artist/album (common with Bluetooth AVRCP), the library now fetches metadata from `getMetaInfo` endpoint
+  - This ensures Bluetooth track information (title, artist, album) is displayed correctly
+  - The WiiM device receives AVRCP metadata from the Bluetooth source, but only exposes it via `getMetaInfo`, not `getPlayerStatusEx`
+  - Fix applies to both HTTP polling and UPnP event handling
+
 ## [1.0.34] - 2025-12-03
 
 ### Changed
