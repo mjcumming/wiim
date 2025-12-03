@@ -185,6 +185,8 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState | None:
         """Return the current state."""
+        if not self.available:
+            return None
         if self._attr_state is not None:
             return self._attr_state
 

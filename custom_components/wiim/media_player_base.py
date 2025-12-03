@@ -152,7 +152,10 @@ class WiiMMediaPlayerMixin:
         """
         if not self.available:
             return False
-        return self._get_player().supports_next_track
+        player = self._get_player()
+        if not player:
+            return False
+        return player.supports_next_track
 
     def _shuffle_supported(self) -> bool:
         """Check if shuffle is supported - query from pywiim Player."""
@@ -171,7 +174,10 @@ class WiiMMediaPlayerMixin:
         """Return True if shuffle is enabled (pywiim v2.1.37+ returns bool)."""
         if not self.available:
             return None
-        return self._get_player().shuffle
+        player = self._get_player()
+        if not player:
+            return None
+        return player.shuffle
 
     @property
     def repeat(self) -> RepeatMode | None:

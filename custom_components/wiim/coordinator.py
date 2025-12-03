@@ -127,7 +127,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.player.media_title,
                 )
 
-            return {"player": self.player}
+            result = {"player": self.player}
+            # Notify listeners after successful update
+            self.async_update_listeners()
+            return result
 
         except WiiMError as err:
             _LOGGER.warning("Update failed for %s: %s", self.player.host, err)

@@ -33,7 +33,8 @@ async def async_setup_entry(
 
     # Channel Balance Number Entity
     # WARNING: Uses unofficial API endpoints - may not work on all firmware versions
-    entities.append(WiiMChannelBalance(coordinator, config_entry))
+    # TODO: Re-enable when channel balance API is stable
+    # entities.append(WiiMChannelBalance(coordinator, config_entry))
 
     async_add_entities(entities)
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"

@@ -103,6 +103,8 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
     @property
     def native_value(self) -> str:
         """Return the current multiroom role of the device."""
+        if not self.available or not self.player:
+            return "Unknown"
         role = self.player.role
         if role is None:
             return "Unknown"
