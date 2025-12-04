@@ -436,6 +436,58 @@ automation:
           message: "Bluetooth connected to Living Room speaker"
 ```
 
+### Bluetooth Output Detection
+
+**Recommended**: Use the **Audio Output Mode** select entity to detect when Bluetooth output is active. This entity shows "BT: [Device Name]" when outputting audio to a Bluetooth device (e.g., headphones, soundbar).
+
+```yaml
+automation:
+  - alias: "Bluetooth Output Active"
+    description: "Notify when audio is being sent to Bluetooth device"
+    trigger:
+      platform: state
+      entity_id: select.living_room_audio_output_mode
+    condition:
+      - condition: template
+        value_template: "{{ trigger.to_state.state.startswith('BT:') }}"
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "Audio now playing to: {{ trigger.to_state.state }}"
+
+  - alias: "Bluetooth Output Deactivated"
+    description: "Notify when switching away from Bluetooth output"
+    trigger:
+      platform: state
+      entity_id: select.living_room_audio_output_mode
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.from_state.state.startswith('BT:') and
+             not trigger.to_state.state.startswith('BT:') }}
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "Switched from Bluetooth to {{ trigger.to_state.state }}"
+```
+
+**Check Specific Bluetooth Device:**
+
+```yaml
+condition:
+  - condition: state
+    entity_id: select.living_room_audio_output_mode
+    state: "BT: Sony WH-1000XM4"
+```
+
+**Check Any Bluetooth Output (Template):**
+
+```yaml
+condition:
+  - condition: template
+    value_template: "{{ states('select.living_room_audio_output_mode').startswith('BT:') }}"
+```
+
 **Alternative: Template Trigger for Any Source Change**
 
 ```yaml

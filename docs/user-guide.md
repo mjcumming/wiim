@@ -345,10 +345,34 @@ service: select.select_option
 target:
   entity_id: select.living_room_audio_output_mode
 data:
-  option: "BT Device 1 - TOZO-T6"
+  option: "BT: TOZO-T6"
 ```
 
 **Note:** Bluetooth pairing must be done via the WiiM app. Home Assistant can only connect to already-paired devices.
+
+**Detecting Bluetooth Output Status**
+
+The **Audio Output Mode** select entity (`select.{device}_audio_output_mode`) is the recommended way to check if Bluetooth output is active:
+
+- Shows "Line Out", "Optical Out", etc. when those outputs are active
+- Shows "BT: [Device Name]" when audio is being sent to a Bluetooth device
+
+Use this in automations to detect Bluetooth output:
+
+```yaml
+# Check if ANY Bluetooth output is active
+condition:
+  - condition: template
+    value_template: "{{ states('select.living_room_audio_output_mode').startswith('BT:') }}"
+
+# Check for a specific Bluetooth device
+condition:
+  - condition: state
+    entity_id: select.living_room_audio_output_mode
+    state: "BT: Sony WH-1000XM4"
+```
+
+See the [Automation Cookbook](automation-cookbook.md#bluetooth-output-detection) for complete automation examples.
 
 ### 🎤 Text-to-Speech
 
@@ -521,7 +545,8 @@ Complete reference for all entities, configuration options, and technical detail
 
 **Bluetooth Sensor** (when supported)
 
-- `sensor.{device_name}_bluetooth_output` - Bluetooth output status
+- `sensor.{device_name}_bluetooth_output` - Bluetooth output status (on/off)
+  - **Tip**: For automations, the `select.{device}_audio_output_mode` entity is often more useful as it shows the specific Bluetooth device name (e.g., "BT: Sony WH-1000XM4")
 
 **Selects**
 

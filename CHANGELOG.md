@@ -6,9 +6,10 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ### Fixed
 
-- **Bluetooth Output State Reporting**: Fixed issue where Bluetooth output mode would show "unknown" in Home Assistant even when correctly active on the device
+- **Bluetooth Output State Reporting** (GitHub Issue #123): Fixed issue where Bluetooth output mode would show "unknown" in Home Assistant even when correctly active on the device
   - Root cause: pywiim's `audio_output_mode` returns "Bluetooth Out" but `available_outputs` contains "BT: DeviceName" format
   - Now correctly maps "Bluetooth Out" mode to the corresponding "BT: DeviceName" option
+  - **Tip**: The **Audio Output Mode** select entity (`select.<device>_audio_output_mode`) is the recommended way to check Bluetooth output status - it shows "BT: [Device Name]" when Bluetooth is active and can be used in automations
 
 ### Changed
 
