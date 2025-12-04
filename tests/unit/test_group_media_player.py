@@ -187,7 +187,7 @@ class TestWiiMGroupMediaPlayerVolume:
 
     def test_volume_level_returns_none_when_unavailable(self, mock_group_coordinator_setup):
         """Test volume level returns None when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
@@ -196,7 +196,7 @@ class TestWiiMGroupMediaPlayerVolume:
 
     def test_volume_step_reads_from_config(self, mock_group_coordinator_setup):
         """Test volume step reads from config entry options."""
-        mock_config_entry.options = {CONF_VOLUME_STEP: 0.10}  # Stored as decimal (10% = 0.10)
+        mock_group_coordinator_setup.config_entry.options = {CONF_VOLUME_STEP: 0.10}  # Stored as decimal (10% = 0.10)
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
@@ -353,7 +353,7 @@ class TestWiiMGroupMediaPlayerPlayback:
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
-        mock_group_coordinator.player.play = AsyncMock(side_effect=WiiMConnectionError("Connection lost"))
+        mock_group_coordinator_setup.coordinator.player.play = AsyncMock(side_effect=WiiMConnectionError("Connection lost"))
 
         # Playback methods raise generic HomeAssistantError (not "temporarily unreachable" like volume/mute)
         with pytest.raises(HomeAssistantError, match="Failed to play"):
@@ -365,7 +365,7 @@ class TestWiiMGroupMediaPlayerPlayback:
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
-        mock_group_coordinator.player.play = AsyncMock(side_effect=WiiMTimeoutError("Timeout"))
+        mock_group_coordinator_setup.coordinator.player.play = AsyncMock(side_effect=WiiMTimeoutError("Timeout"))
 
         # Playback methods raise generic HomeAssistantError (not "temporarily unreachable" like volume/mute)
         with pytest.raises(HomeAssistantError, match="Failed to play"):
