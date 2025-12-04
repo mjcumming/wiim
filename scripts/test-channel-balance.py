@@ -22,7 +22,7 @@ async def test_channel_balance(host: str, timeout: int = 10) -> None:
         print(f"\n1️⃣  Connecting to {host}...")
         client = WiiMClient(host=host, timeout=timeout)
         player = Player(client)
-        
+
         # Refresh to get current state
         print("2️⃣  Refreshing device state...")
         await player.refresh()
@@ -53,10 +53,10 @@ async def test_channel_balance(host: str, timeout: int = 10) -> None:
                 print(f"\n   Testing: {description} (value: {value})")
                 await player.set_channel_balance(value)
                 print(f"   ✅ Successfully set balance to {value}")
-                
+
                 # Small delay to allow device to process
                 await asyncio.sleep(0.5)
-                
+
             except Exception as e:
                 print(f"   ❌ Failed to set balance to {value}: {e}")
                 print(f"   ⚠️  This firmware may not support channel balance")
@@ -66,6 +66,10 @@ async def test_channel_balance(host: str, timeout: int = 10) -> None:
         print("✅ All channel balance tests passed!")
         print("\n💡 The channel balance number entity should work in Home Assistant")
         print("   Look for: <device_name> Channel Balance")
+
+        # Clean up session
+        if hasattr(client, "_session") and client._session:
+            await client._session.close()
 
     except Exception as e:
         print(f"\n❌ Test failed: {e}")
