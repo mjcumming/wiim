@@ -353,7 +353,9 @@ class TestWiiMGroupMediaPlayerPlayback:
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
-        mock_group_coordinator_setup.coordinator.player.play = AsyncMock(side_effect=WiiMConnectionError("Connection lost"))
+        mock_group_coordinator_setup.coordinator.player.play = AsyncMock(
+            side_effect=WiiMConnectionError("Connection lost")
+        )
 
         # Playback methods raise generic HomeAssistantError (not "temporarily unreachable" like volume/mute)
         with pytest.raises(HomeAssistantError, match="Failed to play"):
