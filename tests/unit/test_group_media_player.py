@@ -421,7 +421,7 @@ class TestWiiMGroupMediaPlayerState:
 
     def test_state_none_when_unavailable(self, mock_group_coordinator_setup):
         """Test state is None when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
@@ -530,7 +530,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
 
     def test_shuffle_returns_none_when_player_missing(self, mock_group_coordinator_setup):
         """Test shuffle property returns None when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
@@ -698,7 +698,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
 
     def test_media_image_url_returns_none_when_unavailable(self, mock_group_coordinator_setup):
         """Test media_image_url returns None when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
@@ -741,7 +741,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
     @pytest.mark.asyncio
     async def test_get_media_image_returns_none_when_unavailable(self, mock_group_coordinator_setup):
         """Test async_get_media_image returns None when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
@@ -789,7 +789,7 @@ class TestWiiMGroupMediaPlayerExtraState:
 
     def test_extra_state_attributes_when_unavailable(self, mock_group_coordinator_setup):
         """Test extra_state_attributes when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
@@ -805,7 +805,7 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
 
     def test_supported_features_when_unavailable(self, mock_group_coordinator_setup):
         """Test supported_features returns basic features when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
@@ -864,7 +864,7 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
 
     def test_next_track_supported_returns_false_when_unavailable(self, mock_group_coordinator_setup):
         """Test _next_track_supported returns False when entity is unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
@@ -919,7 +919,7 @@ class TestWiiMGroupMediaPlayerStateEdgeCases:
 
     def test_state_returns_none_when_unavailable(self, mock_group_coordinator_setup):
         """Test state returns None when unavailable."""
-        mock_group_coordinator.last_update_success = False
+        mock_group_coordinator_setup.coordinator.last_update_success = False
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
