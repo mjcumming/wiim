@@ -561,7 +561,7 @@ class TestWiiMMediaPlayerSoundMode:
     def test_sound_mode_returns_current_preset(self, media_player, mock_coordinator):
         """Test sound_mode returns current EQ preset."""
         mock_coordinator.player.supports_eq = True
-        mock_coordinator.player.eq_preset = "bass"
+        mock_coordinator.player.eq_preset = "Bass"  # pywiim 2.1.43+ normalizes to Title Case
 
         assert media_player.sound_mode == "Bass"
 
@@ -573,7 +573,8 @@ class TestWiiMMediaPlayerSoundMode:
     def test_sound_mode_list_returns_presets(self, media_player, mock_coordinator):
         """Test sound_mode_list returns available EQ presets."""
         mock_coordinator.player.supports_eq = True
-        mock_coordinator.player.eq_presets = ["bass", "treble", "flat"]
+        # pywiim 2.1.43+ normalizes EQ presets to Title Case
+        mock_coordinator.player.eq_presets = ["Bass", "Treble", "Flat"]
 
         assert media_player.sound_mode_list == ["Bass", "Treble", "Flat"]
 
@@ -1537,3 +1538,75 @@ class TestWiiMMediaPlayerServiceHandlers:
 
         assert result == {"queue": mock_queue}
         mock_coordinator.player.get_queue.assert_called_once()
+
+
+class TestWiiMMediaPlayerEdgeCases:
+    """Test edge cases and error conditions."""
+
+    def test_volume_level_handles_none(self, media_player, mock_coordinator):
+        """Test volume_level handles None value gracefully."""
+        mock_coordinator.player.volume_level = None
+        assert media_player.volume_level is None
+
+    def test_media_duration_handles_none(self, media_player, mock_coordinator):
+        """Test media_duration handles None value (live streams)."""
+        mock_coordinator.player.media_duration = None
+        assert media_player.media_duration is None
+
+    def test_media_position_handles_none(self, media_player, mock_coordinator):
+        """Test media_position handles None value."""
+        mock_coordinator.player.media_position = None
+        assert media_player.media_position is None
+
+    def test_media_title_handles_none(self, media_player, mock_coordinator):
+        """Test media_title handles None value."""
+        mock_coordinator.player.media_title = None
+        assert media_player.media_title is None
+
+    def test_source_handles_none(self, media_player, mock_coordinator):
+        """Test source handles None value."""
+        mock_coordinator.player.source = None
+        assert media_player.source is None
+
+    def test_play_state_handles_none(self, media_player, mock_coordinator):
+        """Test play_state handles None value."""
+        mock_coordinator.player.play_state = None
+        # State should default to 'unknown' or handle None gracefully
+        state = media_player.state
+        assert state is not None  # Should have a valid state even if play_state is None
+
+    def test_is_muted_handles_none(self, media_player, mock_coordinator):
+        """Test is_volume_muted handles None value."""
+        mock_coordinator.player.is_muted = None
+        assert media_player.is_volume_muted is None
+
+    def test_available_sources_handles_empty_list(self, media_player, mock_coordinator):
+        """Test available_sources handles empty list."""
+        mock_coordinator.player.available_sources = []
+        assert media_player.source_list == []
+
+    def test_available_sources_handles_none(self, media_player, mock_coordinator):
+        """Test available_sources handles None value."""
+        mock_coordinator.player.available_sources = None
+        # Should return empty list or handle None gracefully
+        sources = media_player.source_list
+        assert sources is not None  # Should not raise, may be empty list
+
+    def test_eq_preset_handles_none(self, media_player, mock_coordinator):
+        """Test sound_mode handles None EQ preset."""
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_preset = None
+        assert media_player.sound_mode is None
+
+    def test_group_members_handles_none_group(self, media_player, mock_coordinator):
+        """Test group_members handles None group."""
+        mock_coordinator.player.group = None
+        # Per HA convention, returns None when not in a group
+        assert media_player.group_members is None
+
+    def test_group_members_handles_empty_group(self, media_player, mock_coordinator):
+        """Test group_members handles empty group with no players."""
+        mock_coordinator.player.group = MagicMock()
+        mock_coordinator.player.group.all_players = []
+        # Returns None when no members can be resolved
+        assert media_player.group_members is None

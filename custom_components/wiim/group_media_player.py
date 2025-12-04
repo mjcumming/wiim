@@ -42,7 +42,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     - Mute only true if ALL devices are muted (LinkPlay firmware behavior)
     - All playback commands (play/pause/stop/next/previous) delegate to physical master
     - Media metadata (title/artist/album/cover art) comes from physical master
-    - Shuffle/repeat available only if master's source supports them
+    - Shuffle/repeat capabilities determined by pywiim (source-aware detection handled internally)
     - Source selection and sound mode/EQ must use individual speaker entities
     - Join/unjoin operations must use individual speaker entities (blocked here)
     - All state management handled by pywiim via callbacks (no manual sync needed)
@@ -168,13 +168,13 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
         )
 
-        # Only include next/previous track if master's source supports them
+        # Track controls - pywiim handles source-aware capability detection
         # This ensures consistency with the individual master player entity
         if self._next_track_supported():
             features |= MediaPlayerEntityFeature.NEXT_TRACK
             features |= MediaPlayerEntityFeature.PREVIOUS_TRACK
 
-        # Only include shuffle/repeat if master's source supports them
+        # Shuffle/repeat - pywiim handles source-aware capability detection
         if self._shuffle_supported():
             features |= MediaPlayerEntityFeature.SHUFFLE_SET
         if self._repeat_supported():
@@ -441,32 +441,28 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             return None
 
         # Use pywiim's tracked URL (set when play_url() is called)
-        player = self._get_player()
-        return player.media_content_id if player else None
+        return self._get_player().media_content_id
 
     @property
     def media_title(self) -> str | None:
         """Return media title from master."""
         if not self.available:
             return None
-        player = self._get_player()
-        return player.media_title if player else None
+        return self._get_player().media_title
 
     @property
     def media_artist(self) -> str | None:
         """Return media artist from master."""
         if not self.available:
             return None
-        player = self._get_player()
-        return player.media_artist if player else None
+        return self._get_player().media_artist
 
     @property
     def media_album_name(self) -> str | None:
         """Return media album from master."""
         if not self.available:
             return None
-        player = self._get_player()
-        return player.media_album if player else None
+        return self._get_player().media_album
 
     @callback
     def _handle_coordinator_update(self) -> None:

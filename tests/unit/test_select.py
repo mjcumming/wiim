@@ -98,6 +98,8 @@ class TestWiiMOutputModeSelectCurrentOption:
     def test_current_option_returns_bt_device_when_active(self, mock_coordinator, mock_config_entry):
         """Test current option returns BT device when Bluetooth is active."""
         mock_coordinator.player.is_bluetooth_output_active = True
+        # pywiim returns "Bluetooth Out" for audio_output_mode when BT is active
+        mock_coordinator.player.audio_output_mode = "Bluetooth Out"
         mock_coordinator.player.bluetooth_output_devices = [{"name": "Speaker", "connected": True}]
         mock_coordinator.player.available_outputs = ["Analog", "BT: Speaker"]
 

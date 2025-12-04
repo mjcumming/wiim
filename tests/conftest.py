@@ -22,6 +22,16 @@ from custom_components.wiim.const import DOMAIN  # noqa: E402
 
 from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE  # noqa: E402
 
+# Import realistic player fixtures
+from .fixtures.realistic_player import (  # noqa: E402
+    realistic_group,
+    realistic_player,
+    realistic_player_master,
+    realistic_player_slave,
+    realistic_player_solo,
+    player_with_state,
+)
+
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 

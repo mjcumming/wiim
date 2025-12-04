@@ -399,3 +399,58 @@ class TestWiiMCoordinator:
 
         # Listener should be notified
         assert len(listeners_notified) > 0
+
+    @pytest.mark.asyncio
+    async def test_refresh_returns_none_handling(self, coordinator, mock_player):
+        """Test coordinator handles player.refresh() returning None gracefully."""
+        # Simulate refresh that doesn't raise but returns None
+        async def refresh_none():
+            return None
+
+        mock_player.refresh = AsyncMock(side_effect=refresh_none)
+        coordinator.data = {"player": mock_player}
+
+        # Should still return player object (from cache)
+        data = await coordinator._async_update_data()
+        assert data is not None
+        assert "player" in data
+
+    @pytest.mark.asyncio
+    async def test_rapid_state_changes(self, coordinator, mock_player):
+        """Test coordinator handles rapid state changes correctly."""
+        # Simulate rapid play/pause/play transitions
+        states = ["play", "pause", "play", "stop"]
+        state_index = [0]
+
+        async def rapid_refresh():
+            mock_player.play_state = states[state_index[0]]
+            state_index[0] = (state_index[0] + 1) % len(states)
+
+        mock_player.refresh = AsyncMock(side_effect=rapid_refresh)
+
+        # Multiple rapid updates
+        for _ in range(4):
+            data = await coordinator._async_update_data()
+            assert data["player"] is mock_player
+
+    @pytest.mark.asyncio
+    async def test_player_object_replacement(self, coordinator, mock_player):
+        """Test coordinator handles player object being replaced during update."""
+        original_player = mock_player
+        coordinator.data = {"player": original_player}
+
+        # Create new player object
+        new_player = MagicMock(spec=Player)
+        new_player.refresh = AsyncMock()
+        new_player.role = "solo"
+        new_player.group = None
+
+        # Replace player during update
+        async def replace_player():
+            coordinator.player = new_player
+
+        original_player.refresh = AsyncMock(side_effect=replace_player)
+
+        data = await coordinator._async_update_data()
+        # Should handle replacement gracefully
+        assert data is not None

@@ -54,4 +54,4 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2025-12-03._
+_Last reviewed against upstream on 2025-01-15 (pywiim 2.1.43 - State management and refresh() guidance updates)._

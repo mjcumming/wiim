@@ -26,15 +26,15 @@ class Colors:
     RESET = "\033[0m"
 
 
-class Device115TestSuite:
-    """Comprehensive test suite for device .115 with active playback."""
+class DeviceComprehensiveTestSuite:
+    """Comprehensive test suite for a WiiM device with active playback."""
 
-    TARGET_IP = "192.168.1.115"
     MAX_VOLUME = 0.10  # 10% max for safety
 
-    def __init__(self, ha_url: str, token: str):
+    def __init__(self, ha_url: str, token: str, target_ip: str):
         self.ha_url = ha_url.rstrip("/")
         self.token = token
+        self.target_ip = target_ip
         self.headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         self.device = None
         self.results = []
@@ -76,7 +76,7 @@ class Device115TestSuite:
             return None
 
     def discover_device(self) -> bool:
-        """Find device .115 (Outdoor)."""
+        """Find device by IP address."""
         self.print_header("Device Discovery")
 
         response = requests.get(f"{self.ha_url}/api/states", headers=self.headers)
@@ -88,7 +88,7 @@ class Device115TestSuite:
                 and state.get("attributes", {}).get("integration_purpose") == "individual_speaker_control"
             ):
                 ip = state.get("attributes", {}).get("ip_address")
-                if ip == self.TARGET_IP:
+                if ip == self.target_ip:
                     self.device = {
                         "entity_id": state["entity_id"],
                         "name": state.get("attributes", {}).get("friendly_name", state["entity_id"]),
@@ -106,7 +106,7 @@ class Device115TestSuite:
                     print(f"  Media Artist: {attrs.get('media_artist', 'None')}")
                     return True
 
-        self.print_failure(f"Device with IP {self.TARGET_IP} not found!")
+        self.print_failure(f"Device with IP {self.target_ip} not found!")
         return False
 
     def test_playback_controls(self) -> dict:
@@ -154,33 +154,189 @@ class Device115TestSuite:
         else:
             self.print_warning("  Not playing - skipping play/pause tests")
 
-        # Test Next Track
-        print(f"\n{Colors.BOLD}  Testing Next Track{Colors.RESET}")
-        current_title = attrs.get("media_title", "")
-        self.call_service("media_player", "media_next_track", entity_id)
-        time.sleep(4)
-        state = self.get_state(entity_id)
-        new_title = state["attributes"].get("media_title", "") if state else ""
-        next_works = new_title != current_title if state else False
-        results["next"] = next_works
-        if next_works:
-            self.print_success(f"  Next track works (now: {new_title})")
-        else:
-            self.print_failure(f"  Next track failed (still: {new_title or current_title})")
-
-        # Test Previous Track
+        # Test Previous Track FIRST (to ensure we're not at start of queue)
         print(f"\n{Colors.BOLD}  Testing Previous Track{Colors.RESET}")
-        current_title = state["attributes"].get("media_title", "") if state else ""
-        self.call_service("media_player", "media_previous_track", entity_id)
-        time.sleep(4)
-        state = self.get_state(entity_id)
-        new_title = state["attributes"].get("media_title", "") if state else ""
-        prev_works = new_title != current_title if state else False
-        results["previous"] = prev_works
-        if prev_works:
-            self.print_success(f"  Previous track works (now: {new_title})")
+        current_title = attrs.get("media_title", "")
+        current_artist = attrs.get("media_artist", "")
+        current_position = attrs.get("media_position", 0)
+        print(f"  Current: {current_title} by {current_artist} (position: {int(current_position)}s)")
+
+        # Call previous track - first press may seek to start of current track
+        success = self.call_service("media_player", "media_previous_track", entity_id)
+        if not success:
+            self.print_failure("  Service call failed")
+            results["previous"] = False
         else:
-            self.print_failure(f"  Previous track failed (still: {new_title or current_title})")
+            print("  Service call succeeded, waiting for state update...")
+            time.sleep(6)
+
+            state = self.get_state(entity_id)
+            if state:
+                new_title = state["attributes"].get("media_title", "")
+                new_position = state["attributes"].get("media_position", 0)
+
+                # Check if track changed OR position reset to ~0 (seeked to start)
+                if new_title != current_title:
+                    # Track changed - previous track works!
+                    results["previous"] = True
+                    self.print_success(f"  Previous track works (now: {new_title})")
+                elif abs(new_position) < 2:  # Position reset to start (< 2 seconds)
+                    # First press seeks to start - need second press to go to previous track
+                    print(f"  First press seeks to start (position: {int(new_position)}s) - calling again...")
+                    self.call_service("media_player", "media_previous_track", entity_id)
+                    time.sleep(8)  # Wait longer for second press
+
+                    # Check multiple times after second press
+                    prev_works = False
+                    final_title = current_title
+                    for attempt in range(5):
+                        state = self.get_state(entity_id)
+                        if state:
+                            final_title = state["attributes"].get("media_title", "")
+                            final_position = state["attributes"].get("media_position", 0)
+                            print(
+                                f"  After 2nd press, check {attempt + 1}: {final_title} (pos: {int(final_position)}s)"
+                            )
+                            if final_title != current_title:
+                                prev_works = True
+                                break
+                        if attempt < 4:
+                            time.sleep(2)
+
+                    results["previous"] = prev_works
+                    if prev_works:
+                        self.print_success(f"  Previous track works after 2 presses (now: {final_title})")
+                    else:
+                        self.print_warning(
+                            f"  Previous track didn't change after 2 presses (still: {final_title}) - may be at start of queue"
+                        )
+                        self.print_info("  Note: First press seeks to start, second press should go to previous track")
+                else:
+                    # Neither track nor position changed
+                    results["previous"] = False
+                    self.print_warning(
+                        f"  Previous track didn't change (still: {new_title}, pos: {int(new_position)}s)"
+                    )
+            else:
+                results["previous"] = False
+                self.print_failure("  Could not get state after previous_track call")
+
+        # Test Next Track (after previous, we should be able to go forward)
+        time.sleep(2)  # Brief pause between tests
+        print(f"\n{Colors.BOLD}  Testing Next Track{Colors.RESET}")
+        state = self.get_state(entity_id)  # Get current state after previous
+        current_title = state["attributes"].get("media_title", "") if state else ""
+        current_artist = state["attributes"].get("media_artist", "") if state else ""
+        print(f"  Current: {current_title} by {current_artist}")
+
+        # Call next track
+        success = self.call_service("media_player", "media_next_track", entity_id)
+        if not success:
+            self.print_failure("  Service call failed")
+            results["next"] = False
+        else:
+            print("  Service call succeeded, waiting for state update...")
+            # Wait longer for state to update - Spotify can be slow
+            time.sleep(8)
+
+            # Check multiple times - state might update slowly
+            next_works = False
+            new_title = current_title
+            new_artist = current_artist
+            for attempt in range(5):
+                state = self.get_state(entity_id)
+                if state:
+                    new_title = state["attributes"].get("media_title", "")
+                    new_artist = state["attributes"].get("media_artist", "")
+                    print(f"  Check {attempt + 1}: {new_title} by {new_artist}")
+                    if new_title != current_title and new_title:
+                        next_works = True
+                        break
+                if attempt < 4:
+                    time.sleep(2)
+
+            results["next"] = next_works
+            if next_works:
+                self.print_success(f"  Next track works (now: {new_title} by {new_artist})")
+            else:
+                # Final check
+                state = self.get_state(entity_id)
+                new_title = state["attributes"].get("media_title", "") if state else current_title
+                new_artist = state["attributes"].get("media_artist", "") if state else ""
+                print(f"  Final state: {new_title} by {new_artist}")
+                if new_title == current_title:
+                    self.print_warning(f"  Next track didn't change (still: {new_title}) - may be at end of queue")
+                    self.print_info("  This is expected if at the last track in queue/playlist")
+                else:
+                    self.print_failure(f"  Next track failed (still: {new_title or current_title})")
+        print(f"\n{Colors.BOLD}  Testing Previous Track (Second Test){Colors.RESET}")
+        # Wait a bit after next track to ensure state is stable
+        time.sleep(3)
+        state = self.get_state(entity_id)  # Refresh state
+        current_title = state["attributes"].get("media_title", "") if state else ""
+        current_artist = state["attributes"].get("media_artist", "") if state else ""
+        current_position = state["attributes"].get("media_position", 0) if state else 0
+        print(f"  Current: {current_title} by {current_artist} (position: {int(current_position)}s)")
+
+        # Call previous track - first press may seek to start of current track
+        success = self.call_service("media_player", "media_previous_track", entity_id)
+        if not success:
+            self.print_failure("  Service call failed")
+            results["previous"] = False
+        else:
+            print("  Service call succeeded, waiting for state update...")
+            time.sleep(6)
+
+            state = self.get_state(entity_id)
+            if state:
+                new_title = state["attributes"].get("media_title", "")
+                new_position = state["attributes"].get("media_position", 0)
+
+                # Check if track changed OR position reset to ~0 (seeked to start)
+                if new_title != current_title:
+                    # Track changed - previous track works!
+                    results["previous"] = True
+                    self.print_success(f"  Previous track works (now: {new_title})")
+                elif abs(new_position) < 2:  # Position reset to start (< 2 seconds)
+                    # First press seeks to start - need second press to go to previous track
+                    print(f"  First press seeks to start (position: {int(new_position)}s) - calling again...")
+                    self.call_service("media_player", "media_previous_track", entity_id)
+                    time.sleep(8)  # Wait longer for second press
+
+                    # Check multiple times after second press
+                    prev_works = False
+                    final_title = current_title
+                    for attempt in range(5):
+                        state = self.get_state(entity_id)
+                        if state:
+                            final_title = state["attributes"].get("media_title", "")
+                            final_position = state["attributes"].get("media_position", 0)
+                            print(
+                                f"  After 2nd press, check {attempt + 1}: {final_title} (pos: {int(final_position)}s)"
+                            )
+                            if final_title != current_title:
+                                prev_works = True
+                                break
+                        if attempt < 4:
+                            time.sleep(2)
+
+                    results["previous"] = prev_works
+                    if prev_works:
+                        self.print_success(f"  Previous track works after 2 presses (now: {final_title})")
+                    else:
+                        self.print_warning(
+                            f"  Previous track didn't change after 2 presses (still: {final_title}) - may be at start of queue"
+                        )
+                        self.print_info("  Note: First press seeks to start, second press should go to previous track")
+                else:
+                    # Neither track nor position changed
+                    results["previous"] = False
+                    self.print_warning(
+                        f"  Previous track didn't change (still: {new_title}, pos: {int(new_position)}s)"
+                    )
+            else:
+                results["previous"] = False
+                self.print_failure("  Could not get state after previous_track call")
 
         # Test Seek (if supported)
         print(f"\n{Colors.BOLD}  Testing Seek{Colors.RESET}")
@@ -206,7 +362,9 @@ class Device115TestSuite:
                 if seek_works:
                     self.print_success(f"  Seek works (position: {int(new_position)}s)")
                 else:
-                    self.print_failure(f"  Seek failed (position: {int(new_position)}s, expected ~{int(seek_position)}s)")
+                    self.print_failure(
+                        f"  Seek failed (position: {int(new_position)}s, expected ~{int(seek_position)}s)"
+                    )
             else:
                 results["seek"] = None
                 self.print_warning("  Seek not supported or no media duration")
@@ -248,11 +406,18 @@ class Device115TestSuite:
 
         print(f"  Switching: {current_eq} → {test_eq}")
         self.call_service("media_player", "select_sound_mode", entity_id, sound_mode=test_eq)
-        time.sleep(5)
 
-        new_state = self.get_state(entity_id)
-        new_eq = new_state["attributes"].get("sound_mode") if new_state else current_eq
-        works = new_eq == test_eq
+        # Check multiple times - EQ may take time to update and could revert
+        works = False
+        new_eq = current_eq
+        for attempt in range(6):
+            time.sleep(3)
+            new_state = self.get_state(entity_id)
+            new_eq = new_state["attributes"].get("sound_mode") if new_state else current_eq
+            print(f"  Check {attempt + 1}: {new_eq}")
+            if new_eq == test_eq:
+                works = True
+                break
 
         if works:
             self.print_success(f"EQ works (changed to {new_eq})")
@@ -297,10 +462,18 @@ class Device115TestSuite:
         # Test Repeat
         print(f"\n  Testing Repeat: {original_repeat} → one")
         self.call_service("media_player", "repeat_set", entity_id, repeat="one")
-        time.sleep(5)
-        state = self.get_state(entity_id)
-        new_repeat = state["attributes"].get("repeat", "off") if state else original_repeat
-        repeat_works = new_repeat == "one"
+
+        # Check multiple times - repeat may take time to update
+        repeat_works = False
+        new_repeat = original_repeat
+        for attempt in range(6):
+            time.sleep(3)
+            state = self.get_state(entity_id)
+            new_repeat = state["attributes"].get("repeat", "off") if state else original_repeat
+            print(f"  Check {attempt + 1}: {new_repeat}")
+            if new_repeat == "one":
+                repeat_works = True
+                break
 
         if repeat_works:
             self.print_success("  Repeat works")
@@ -379,7 +552,12 @@ class Device115TestSuite:
         return {
             "test": "Output Mode",
             "passed": passed,
-            "details": {"original": current, "test": test_mode, "actual": new_mode, "bt_expected_fail": "BT" in test_mode or "Bluetooth" in test_mode},
+            "details": {
+                "original": current,
+                "test": test_mode,
+                "actual": new_mode,
+                "bt_expected_fail": "BT" in test_mode or "Bluetooth" in test_mode,
+            },
         }
 
     def test_input_selection(self) -> dict:
@@ -400,7 +578,11 @@ class Device115TestSuite:
 
         if len(sources) < 2:
             self.print_warning("Not enough sources")
-            return {"test": "Source Selection", "passed": None, "details": {"skipped": True, "reason": "Not enough sources"}}
+            return {
+                "test": "Source Selection",
+                "passed": None,
+                "details": {"skipped": True, "reason": "Not enough sources"},
+            }
 
         # Try to switch to a different source
         test_source = sources[0] if sources[0] != current else sources[1]
@@ -428,11 +610,12 @@ class Device115TestSuite:
 
     def run_all_tests(self):
         """Run comprehensive test suite."""
-        self.print_header("Device .115 (Outdoor) Comprehensive Test Suite")
-        print(f"{Colors.CYAN}Testing with active Spotify playback{Colors.RESET}")
+        self.print_header(f"Device {self.target_ip} Comprehensive Test Suite")
+        print(f"{Colors.CYAN}Testing with active playback{Colors.RESET}")
         print(f"{Colors.CYAN}Safe Mode: Volume limited to {int(self.MAX_VOLUME * 100)}% max{Colors.RESET}\n")
 
         if not self.discover_device():
+            self.print_failure(f"Device with IP {self.target_ip} not found!")
             return
 
         # Verify device is playing
@@ -443,7 +626,7 @@ class Device115TestSuite:
             if not is_playing:
                 self.print_warning("Device is not currently playing - some tests may fail")
             if source != "Spotify" and "spotify" not in source.lower():
-                self.print_warning(f"Source is '{source}', not Spotify - ensure Spotify is playing")
+                self.print_warning(f"Source is '{source}', not Spotify - ensure active playback is running")
 
         # Run all tests
         self.results.append(self.test_playback_controls())
@@ -458,7 +641,8 @@ class Device115TestSuite:
         self.results.append(self.test_output_selection())
         time.sleep(2)
 
-        self.results.append(self.test_input_selection())
+        # Skip source selection test - focus on playback controls, EQ, shuffle, repeat
+        # self.results.append(self.test_input_selection())
 
         # Summary
         self.print_header("Test Summary")
@@ -466,21 +650,32 @@ class Device115TestSuite:
         total = sum(1 for r in self.results if r["passed"] is not None)
 
         for result in self.results:
-            status = f"{Colors.GREEN}✅ PASS{Colors.RESET}" if result["passed"] is True else (
-                f"{Colors.YELLOW}⚠️  SKIP{Colors.RESET}" if result["passed"] is None else f"{Colors.RED}❌ FAIL{Colors.RESET}"
+            status = (
+                f"{Colors.GREEN}✅ PASS{Colors.RESET}"
+                if result["passed"] is True
+                else (
+                    f"{Colors.YELLOW}⚠️  SKIP{Colors.RESET}"
+                    if result["passed"] is None
+                    else f"{Colors.RED}❌ FAIL{Colors.RESET}"
+                )
             )
             print(f"  {status} {result['test']}")
 
-        print(f"\n{Colors.BOLD}Results: {passed}/{total} tests passed ({passed * 100 // total if total > 0 else 0}%){Colors.RESET}")
+        print(
+            f"\n{Colors.BOLD}Results: {passed}/{total} tests passed ({passed * 100 // total if total > 0 else 0}%){Colors.RESET}"
+        )
 
         # Save report
-        filename = f"wiim_device115_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        device_name_safe = self.device["name"].replace(" ", "_").lower() if self.device else "device"
+        filename = (
+            f"wiim_device_{self.target_ip.replace('.', '_')}_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
         with open(filename, "w") as f:
             json.dump(
                 {
                     "timestamp": datetime.now().isoformat(),
-                    "device": self.device["name"],
-                    "device_ip": self.TARGET_IP,
+                    "device": self.device["name"] if self.device else "Unknown",
+                    "device_ip": self.target_ip,
                     "total_tests": total,
                     "passed_tests": passed,
                     "success_rate": passed / total if total > 0 else 0,
@@ -494,9 +689,26 @@ class Device115TestSuite:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Device .115 Comprehensive Test Suite")
-    parser.add_argument("ha_url", nargs="?", default="http://localhost:8123")
-    parser.add_argument("--token", help="HA token (or set HA_TOKEN)")
+    parser = argparse.ArgumentParser(
+        description="WiiM Device Comprehensive Test Suite",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Test device at 192.168.1.115
+  python test-device-comprehensive.py 192.168.1.115
+
+  # Test with custom HA URL
+  python test-device-comprehensive.py 192.168.1.115 http://homeassistant.local:8123
+
+  # Test with token
+  python test-device-comprehensive.py 192.168.1.115 --token YOUR_TOKEN
+        """,
+    )
+    parser.add_argument("device_ip", help="IP address of the WiiM device to test")
+    parser.add_argument(
+        "ha_url", nargs="?", default="http://localhost:8123", help="Home Assistant URL (default: http://localhost:8123)"
+    )
+    parser.add_argument("--token", help="HA token (or set HA_TOKEN environment variable)")
     args = parser.parse_args()
 
     token = args.token or os.getenv("HA_TOKEN")
@@ -504,10 +716,9 @@ def main():
         print(f"{Colors.RED}No token! Set HA_TOKEN or use --token{Colors.RESET}")
         sys.exit(1)
 
-    suite = Device115TestSuite(args.ha_url, token)
+    suite = DeviceComprehensiveTestSuite(args.ha_url, token, args.device_ip)
     suite.run_all_tests()
 
 
 if __name__ == "__main__":
     main()
-

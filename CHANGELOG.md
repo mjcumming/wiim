@@ -2,6 +2,55 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.38] - 2025-12-04
+
+### Fixed
+
+- **Bluetooth Output State Reporting**: Fixed issue where Bluetooth output mode would show "unknown" in Home Assistant even when correctly active on the device
+  - Root cause: pywiim's `audio_output_mode` returns "Bluetooth Out" but `available_outputs` contains "BT: DeviceName" format
+  - Now correctly maps "Bluetooth Out" mode to the corresponding "BT: DeviceName" option
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.43
+
+  - Major improvements from pywiim 2.1.37 → 2.1.43:
+
+  **UI Stability (2.1.43)**:
+
+  - EQ preset state preserved during refresh (no more flickering back to old values)
+  - Shuffle/repeat state preserved during refresh (optimistic updates held for 60 seconds)
+
+  **Display Improvements (2.1.42)**:
+
+  - EQ presets normalized to Title Case ("Flat", "Acoustic" instead of "flat", "acoustic")
+  - Source names normalized to Title Case ("AirPlay", "Spotify", "Line In", "Bluetooth")
+
+  **Playback Improvements (2.1.39)**:
+
+  - Track change debouncing - no more false "stopped" states between tracks
+  - Stream metadata enrichment - raw URLs now show proper artist/title from Icecast/M3U streams
+  - Group metadata propagation - slaves always receive latest metadata from master
+
+  **Device Support (2.1.38)**:
+
+  - Device profiles system for better Audio Pro, Arylic, and LinkPlay device support
+  - Profile-driven state management (UPnP vs HTTP source selection per device type)
+
+  **Cleaner State Properties (2.1.37)**:
+
+  - New `is_playing`, `is_paused`, `is_idle`, `is_buffering` properties
+  - Normalized `state` property for consistent state mapping
+
+### Improved
+
+- **Test Suite**: Comprehensive testing overhaul
+  - Fixed 15+ failing unit tests with proper mock setups
+  - Added new tests for Bluetooth output, sync time, presets, announcements, queue management
+  - Added multiroom automated tests (10 scenarios)
+  - Cleaned up deprecated test scripts
+  - Updated test fixtures to match pywiim 2.1.43 behaviors
+
 ## [1.0.36] - 2025-12-03
 
 ### Fixed

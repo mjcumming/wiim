@@ -964,3 +964,140 @@ class TestWiiMGroupMediaPlayerHandleUpdate:
 
         assert entity._attr_media_position == 60
         assert entity._attr_media_duration == 180
+
+
+class TestWiiMGroupMediaPlayerRoleTransitions:
+    """Test role transition edge cases."""
+
+    def test_role_transition_solo_to_master(self, mock_group_coordinator_setup, mock_master_player):
+        """Test entity handles transition from solo to master."""
+        coordinator = mock_group_coordinator_setup.coordinator
+        coordinator.data = {"player": mock_master_player}
+        entity = WiiMGroupMediaPlayer(coordinator, mock_group_coordinator_setup.config_entry)
+
+        # Start as solo
+        mock_master_player.role = "solo"
+        mock_master_player.is_solo = True
+        mock_master_player.is_master = False
+        mock_master_player.group = None
+
+        # Entity should not be available when solo
+        assert entity.available is False
+
+        # Transition to master with slaves
+        mock_master_player.role = "master"
+        mock_master_player.is_solo = False
+        mock_master_player.is_master = True
+        mock_master_player.group = MagicMock()
+        mock_master_player.group.slaves = [MagicMock()]
+
+        # Entity should become available
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is True
+
+    def test_role_transition_master_to_solo(self, mock_group_coordinator_setup, mock_master_player):
+        """Test entity handles transition from master to solo."""
+        coordinator = mock_group_coordinator_setup.coordinator
+        coordinator.data = {"player": mock_master_player}
+        entity = WiiMGroupMediaPlayer(coordinator, mock_group_coordinator_setup.config_entry)
+
+        # Start as master
+        mock_master_player.role = "master"
+        mock_master_player.is_master = True
+        mock_master_player.is_solo = False
+        mock_master_player.group = MagicMock()
+        mock_master_player.group.slaves = [MagicMock()]
+
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is True
+
+        # Transition to solo (group disbanded)
+        mock_master_player.role = "solo"
+        mock_master_player.is_solo = True
+        mock_master_player.is_master = False
+        mock_master_player.group = None
+
+        # Entity should become unavailable
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is False
+
+    def test_role_transition_master_to_slave(self, mock_group_coordinator_setup, mock_master_player):
+        """Test entity handles transition from master to slave (unusual but possible)."""
+        coordinator = mock_group_coordinator_setup.coordinator
+        coordinator.data = {"player": mock_master_player}
+        entity = WiiMGroupMediaPlayer(coordinator, mock_group_coordinator_setup.config_entry)
+
+        # Start as master
+        mock_master_player.role = "master"
+        mock_master_player.is_master = True
+        mock_master_player.is_slave = False
+        mock_master_player.group = MagicMock()
+        mock_master_player.group.slaves = [MagicMock()]
+
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is True
+
+        # Transition to slave (joined another group)
+        mock_master_player.role = "slave"
+        mock_master_player.is_slave = True
+        mock_master_player.is_master = False
+        mock_master_player.group = MagicMock()
+        mock_master_player.group.master = MagicMock()
+
+        # Entity should become unavailable (slaves don't have virtual entities)
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is False
+
+    def test_group_slaves_empty_to_populated(self, mock_group_coordinator_setup, mock_master_player):
+        """Test entity handles group going from empty to having slaves."""
+        coordinator = mock_group_coordinator_setup.coordinator
+        coordinator.data = {"player": mock_master_player}
+        entity = WiiMGroupMediaPlayer(coordinator, mock_group_coordinator_setup.config_entry)
+
+        # Start as master with no slaves
+        mock_master_player.role = "master"
+        mock_master_player.is_master = True
+        mock_master_player.group = MagicMock()
+        mock_master_player.group.slaves = []
+
+        # Entity should be available even with no slaves (still a master)
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is True
+
+        # Add slaves
+        mock_master_player.group.slaves = [MagicMock(), MagicMock()]
+
+        # Entity should still be available
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is True
+
+    def test_group_slaves_populated_to_empty(self, mock_group_coordinator_setup, mock_master_player):
+        """Test entity handles group going from having slaves to empty."""
+        coordinator = mock_group_coordinator_setup.coordinator
+        coordinator.data = {"player": mock_master_player}
+        entity = WiiMGroupMediaPlayer(coordinator, mock_group_coordinator_setup.config_entry)
+
+        # Start as master with slaves
+        mock_master_player.role = "master"
+        mock_master_player.is_master = True
+        mock_master_player.group = MagicMock()
+        mock_master_player.group.slaves = [MagicMock(), MagicMock()]
+
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is True
+
+        # Remove all slaves (but still master)
+        mock_master_player.group.slaves = []
+
+        # Entity should still be available (still a master)
+        with patch.object(entity, "async_write_ha_state"):
+            entity._handle_coordinator_update()
+        assert entity.available is True

@@ -74,16 +74,21 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
         if not available:
             return None
 
-        # Check if BT output is active and which device is connected
-        if player.is_bluetooth_output_active:
-            for device in player.bluetooth_output_devices:
+        # Get current hardware output mode
+        current_mode = player.audio_output_mode
+
+        # Check if Bluetooth output is active
+        # audio_output_mode returns "Bluetooth Out" when BT is active,
+        # but available_outputs has "BT: DeviceName" format
+        if current_mode and current_mode.lower() in ("bluetooth out", "bt"):
+            # Find which BT device is connected
+            for device in player.bluetooth_output_devices or []:
                 if device.get("connected"):
                     bt_option = f"BT: {device['name']}"
                     if bt_option in available:
                         return bt_option
 
-        # Get current hardware output mode
-        current_mode = player.audio_output_mode
+        # Direct match
         if current_mode and current_mode in available:
             return current_mode
 

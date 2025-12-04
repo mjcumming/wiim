@@ -136,9 +136,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     def _seek_supported(self) -> bool:
         """Check if seeking is supported - query from pywiim Player.
 
-        Uses pywiim's supports_seek property which is source-aware:
-        - Returns True for sources that support seeking (USB, streaming services, etc.)
-        - Returns False for live radio, physical inputs where seeking doesn't apply
+        Delegates to pywiim's supports_seek property, which handles all source-aware
+        capability detection internally.
         """
         return self._get_player().supports_seek
 
@@ -179,7 +178,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         # The role check is enforced in async_join_players() to prevent slaves from initiating joins
         features |= MediaPlayerEntityFeature.GROUPING
 
-        # Shuffle/repeat work for slaves - pywiim routes commands to master automatically
+        # Shuffle/repeat - pywiim handles source-aware capability detection and routes
+        # commands to master automatically for slaves
         if self._shuffle_supported():
             features |= MediaPlayerEntityFeature.SHUFFLE_SET
         if self._repeat_supported():
@@ -417,13 +417,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         device_source = None
 
         # Try available_sources first (smart detection by pywiim)
-        player = self._get_player()
-        if player:
-            available_sources = player.available_sources
-            if available_sources:
-                # Create a mapping of lowercase to original
-                available_sources_map = {str(s).lower(): str(s) for s in available_sources}
-                device_source = available_sources_map.get(source_lower)
+        available_sources = self._get_player().available_sources
+        if available_sources:
+            # Create a mapping of lowercase to original
+            available_sources_map = {str(s).lower(): str(s) for s in available_sources}
+            device_source = available_sources_map.get(source_lower)
 
         # Fallback to input_list if not found in available_sources
         if device_source is None:
@@ -468,26 +466,22 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             return None
 
         # Use pywiim's tracked URL (set when play_url() is called)
-        player = self._get_metadata_player()
-        return player.media_content_id if player else None
+        return self._get_metadata_player().media_content_id
 
     @property
     def media_title(self) -> str | None:
         """Return media title."""
-        player = self._get_metadata_player()
-        return player.media_title if player else None
+        return self._get_metadata_player().media_title
 
     @property
     def media_artist(self) -> str | None:
         """Return media artist."""
-        player = self._get_metadata_player()
-        return player.media_artist if player else None
+        return self._get_metadata_player().media_artist
 
     @property
     def media_album_name(self) -> str | None:
         """Return media album."""
-        player = self._get_metadata_player()
-        return player.media_album if player else None
+        return self._get_metadata_player().media_album
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -917,45 +911,27 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     @property
     def sound_mode(self) -> str | None:
-        """Return current sound mode (EQ preset) from Player.
-
-        pywiim provides the current preset in player.eq_preset.
-        Returns in title case to match sound_mode_list format.
-        """
+        """Return current sound mode (EQ preset) from Player."""
         if not self._is_eq_supported():
             return None
-
-        player = self._get_player()
-        if player.eq_preset:
-            return str(player.eq_preset).title()
-        return None
+        eq_preset = self._get_player().eq_preset
+        return str(eq_preset) if eq_preset else None
 
     @property
     def sound_mode_list(self) -> list[str] | None:
-        """Return list of available sound modes (EQ presets) from Player object.
-
-        pywiim caches EQ presets in player.eq_presets during refresh().
-        """
+        """Return list of available sound modes (EQ presets) from Player."""
         if not self._is_eq_supported():
             return None
-
-        # Get cached presets from Player object (populated during refresh())
-        player = self._get_player()
-        if player.eq_presets and isinstance(player.eq_presets, list):
-            return [str(preset).title() for preset in player.eq_presets]
-
-        return None
+        eq_presets = self._get_player().eq_presets
+        return [str(preset) for preset in eq_presets] if eq_presets else None
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
-        """Select sound mode (EQ preset) - pass through to pywiim.
-
-        pywiim's player.set_eq_preset() handles the preset selection.
-        We pass lowercase preset names as that's what the device API expects.
-        """
+        """Select sound mode (EQ preset) - pass through to pywiim."""
         if not self._is_eq_supported():
             raise HomeAssistantError("EQ is not supported on this device")
 
-        # Normalize to lowercase (device API expects lowercase)
+        # pywiim requires lowercase for set_eq_preset() even in 2.1.42+
+        # (normalization only applies to reading eq_preset, not setting)
         async with wiim_command(self.name, "select sound mode"):
             await self.coordinator.player.set_eq_preset(sound_mode.lower())
             # State updates automatically via callback - no manual refresh needed
@@ -994,6 +970,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 await self.coordinator.player.set_eq_custom(eq_list)
         else:
             # Set EQ preset
+            # pywiim requires lowercase for set_eq_preset() even in 2.1.42+
+            # (normalization only applies to reading eq_preset, not setting)
             async with wiim_command(self.name, "set EQ preset"):
                 await self.coordinator.player.set_eq_preset(preset.lower())
         # State updates automatically via callback - no manual refresh needed
@@ -1255,34 +1233,36 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
         # Add group members if in a group
         group_members = self.group_members
+        player = self._get_player()
         if group_members:
             attrs["group_members"] = group_members
             # Determine group state
-            player = self._get_player()
-            if player:
-                if player.is_master:
-                    attrs["group_state"] = "coordinator"
-                elif player.is_slave:
-                    attrs["group_state"] = "member"
-                else:
-                    attrs["group_state"] = "solo"
+            if player.is_master:
+                attrs["group_state"] = "coordinator"
+            elif player.is_slave:
+                attrs["group_state"] = "member"
             else:
                 attrs["group_state"] = "solo"
         else:
             attrs["group_state"] = "solo"
 
         # Add capability flags for debugging/automations
-        player = self._get_player()
-        if player:
-            attrs["capabilities"] = {
-                "eq": player.supports_eq,
-                "presets": player.supports_presets,
-                "audio_output": player.supports_audio_output,
-                "queue_browse": player.supports_queue_browse,
-                "queue_add": player.supports_queue_add,
-                "alarms": player.supports_alarms,
-                "sleep_timer": player.supports_sleep_timer,
-                "upnp": player.supports_upnp,
-            }
+        attrs["capabilities"] = {
+            "eq": player.supports_eq,
+            "presets": player.supports_presets,
+            "audio_output": player.supports_audio_output,
+            "queue_browse": player.supports_queue_browse,
+            "queue_add": player.supports_queue_add,
+            "alarms": player.supports_alarms,
+            "sleep_timer": player.supports_sleep_timer,
+            "upnp": player.supports_upnp,
+        }
+
+        # Add playback state attributes for debugging/automations
+        # These match what _derive_state_from_player uses internally
+        attrs["is_playing"] = player.is_playing if hasattr(player, "is_playing") else None
+        attrs["is_paused"] = player.is_paused if hasattr(player, "is_paused") else None
+        attrs["is_buffering"] = player.is_buffering if hasattr(player, "is_buffering") else None
+        attrs["play_state"] = player.play_state if hasattr(player, "play_state") else None
 
         return attrs

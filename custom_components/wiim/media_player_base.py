@@ -145,10 +145,8 @@ class WiiMMediaPlayerMixin:
     def _next_track_supported(self) -> bool:
         """Check if next/previous track is supported - query from pywiim Player.
 
-        Uses pywiim's supports_next_track property which is source-aware:
-        - Returns True for sources that support track navigation (Spotify, USB, etc.)
-        - Returns False for live radio, physical inputs where track skip doesn't apply
-        - Streaming services like Spotify return True even with queue_count=0
+        Delegates to pywiim's supports_next_track property, which handles all source-aware
+        capability detection internally.
         """
         if not self.available:
             return False

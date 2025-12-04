@@ -134,8 +134,9 @@ class TestWiimEntity:
         # Should not raise when removed
         await entity.async_will_remove_from_hass()
 
-        # Verify cleanup completed
-        assert True  # If no exception, cleanup succeeded
+        # Verify cleanup completed - method should complete without exception
+        # The base CoordinatorEntity handles cleanup, we just verify it works
+        assert entity.hass is hass  # Entity still has hass reference until fully removed
 
     def test_entity_availability_state_changes(self, entity, mock_coordinator):
         """Test availability state changes when coordinator fails/recovers."""
