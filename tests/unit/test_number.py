@@ -12,7 +12,7 @@ class TestNumberPlatformSetup:
     async def test_async_setup_entry_currently_empty(self):
         """Test number platform setup creates channel balance entity."""
         from custom_components.wiim.const import DOMAIN
-        from custom_components.wiim.number import WiiMChannelBalance, async_setup_entry
+        from custom_components.wiim.number import async_setup_entry, WiiMChannelBalance
 
         # Mock dependencies
         hass = MagicMock()
@@ -44,7 +44,7 @@ class TestNumberPlatformSetup:
     async def test_async_setup_entry_logging(self):
         """Test number platform setup logging."""
         from custom_components.wiim.const import DOMAIN
-        from custom_components.wiim.number import WiiMChannelBalance, async_setup_entry
+        from custom_components.wiim.number import async_setup_entry, WiiMChannelBalance
 
         # Mock dependencies
         hass = MagicMock()
@@ -99,7 +99,6 @@ class TestWiiMChannelBalance:
     def test_channel_balance_initialization(self):
         """Test channel balance entity initialization."""
         from homeassistant.config_entries import ConfigEntry
-
         from custom_components.wiim.number import WiiMChannelBalance
 
         coordinator = MagicMock()
@@ -123,7 +122,6 @@ class TestWiiMChannelBalance:
     def test_channel_balance_native_value(self):
         """Test channel balance native_value property."""
         from homeassistant.config_entries import ConfigEntry
-
         from custom_components.wiim.number import WiiMChannelBalance
 
         coordinator = MagicMock()
@@ -142,10 +140,8 @@ class TestWiiMChannelBalance:
     @pytest.mark.asyncio
     async def test_channel_balance_set_native_value(self):
         """Test setting channel balance value."""
-        from unittest.mock import AsyncMock
-
+        from unittest.mock import AsyncMock, patch
         from homeassistant.config_entries import ConfigEntry
-
         from custom_components.wiim.number import WiiMChannelBalance
 
         coordinator = MagicMock()
@@ -171,11 +167,9 @@ class TestWiiMChannelBalance:
     async def test_channel_balance_set_native_value_handles_error(self):
         """Test channel balance handles errors when setting value."""
         from unittest.mock import AsyncMock
-
         from homeassistant.config_entries import ConfigEntry
         from homeassistant.exceptions import HomeAssistantError
         from pywiim.exceptions import WiiMError
-
         from custom_components.wiim.number import WiiMChannelBalance
 
         coordinator = MagicMock()
@@ -197,7 +191,6 @@ class TestWiiMChannelBalance:
     def test_channel_balance_extra_state_attributes(self):
         """Test channel balance extra_state_attributes."""
         from homeassistant.config_entries import ConfigEntry
-
         from custom_components.wiim.number import WiiMChannelBalance
 
         coordinator = MagicMock()
