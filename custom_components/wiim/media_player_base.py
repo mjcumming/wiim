@@ -32,7 +32,7 @@ class WiiMMediaPlayerMixin:
     """
 
     # Type hints for attributes expected from the class using this mixin
-    coordinator: WiiMCoordinator
+    coordinator: "WiiMCoordinator"
     name: str
     available: bool
     state: MediaPlayerState | None

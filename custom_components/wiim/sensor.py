@@ -16,8 +16,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
+from .coordinator import WiiMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
