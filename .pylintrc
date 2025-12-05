@@ -23,4 +23,3 @@ ignored-classes=HomeAssistant,ConfigEntry,HomeAssistantError
 
 [FORMAT]
 max-line-length=120
-

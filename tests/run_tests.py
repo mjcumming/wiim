@@ -2,7 +2,7 @@
 """
 WiiM Integration Test Runner
 
-Runs comprehensive unit and integration tests for the WiiM integration.
+Runs unit tests for the WiiM integration.
 This replaces the old phase-based validation tests with proper pytest-based testing.
 """
 
@@ -103,22 +103,6 @@ def run_unit_tests(verbose: bool = False) -> bool:
     return run_command(cmd, "Unit tests")
 
 
-def run_integration_tests(verbose: bool = False) -> bool:
-    """Run integration tests."""
-    print_header("Running Integration Tests", Colors.BLUE)
-
-    cmd = [
-        get_python_executable(),
-        "-m",
-        "pytest",
-        "tests/integration/",
-        "-v" if verbose else "-q",
-        "--tb=short",
-    ]
-
-    return run_command(cmd, "Integration tests")
-
-
 def run_specific_test_file(test_file: str, verbose: bool = False) -> bool:
     """Run a specific test file."""
     print_header(f"Running {test_file}", Colors.YELLOW)
@@ -181,9 +165,6 @@ def run_all_tests(verbose: bool = False) -> bool:
     # Run unit tests
     results.append(("Unit Tests", run_unit_tests(verbose)))
 
-    # Run integration tests
-    results.append(("Integration Tests", run_integration_tests(verbose)))
-
     # Run linting
     results.append(("Linting", run_linting()))
 
@@ -204,7 +185,7 @@ def run_all_tests(verbose: bool = False) -> bool:
 
     if passed == total:
         print_success("🎉 All tests passed! WiiM integration is production-ready.")
-        print_info("Testing approach: Integration tests + unit tests for integration glue code + code style checks")
+        print_info("Testing approach: Unit tests for integration glue code + code style checks")
         return True
     else:
         print_error("❌ Some tests failed. Please fix issues before deployment.")
@@ -238,13 +219,12 @@ def show_test_structure() -> None:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="WiiM Integration Test Runner",
+        description="WiiM Unit Test Runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python tests/run_tests.py                    # Run all tests
   python tests/run_tests.py --unit            # Run only unit tests
-  python tests/run_tests.py --integration     # Run only integration tests
   python tests/run_tests.py --lint            # Run only linting
   python tests/run_tests.py --file tests/unit/test_data.py  # Run specific file
   python tests/run_tests.py --verbose         # Verbose output
@@ -253,7 +233,6 @@ Examples:
     )
 
     parser.add_argument("--unit", action="store_true", help="Run unit tests only")
-    parser.add_argument("--integration", action="store_true", help="Run integration tests only")
     parser.add_argument("--lint", action="store_true", help="Run linting only")
     parser.add_argument("--file", type=str, help="Run specific test file")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
@@ -273,8 +252,6 @@ Examples:
 
     if args.unit:
         success = run_unit_tests(args.verbose)
-    elif args.integration:
-        success = run_integration_tests(args.verbose)
     elif args.lint:
         success = run_linting()
     elif args.file:

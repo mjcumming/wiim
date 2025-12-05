@@ -19,7 +19,7 @@ class TestSystemHealth:
         mock_entry.domain = "wiim"
 
         with patch.object(hass.config_entries, "async_entries", return_value=[mock_entry]):
-            with patch("custom_components.wiim.system_health.get_all_speakers", return_value=[]):
+            with patch("custom_components.wiim.system_health.get_all_coordinators", return_value=[]):
                 # Call the system health info function
                 health_info = await system_health_info(hass)
 
@@ -35,29 +35,35 @@ class TestSystemHealth:
     async def test_system_health_with_speakers(self, hass: HomeAssistant):
         """Test system health with actual speakers."""
         from unittest.mock import MagicMock, patch
+
         from custom_components.wiim.system_health import system_health_info
 
-        # Create mock speakers
-        mock_speaker1 = MagicMock()
-        mock_speaker1.available = True
-        mock_speaker1.coordinator = MagicMock()
-        mock_speaker1.coordinator.data = {"player": MagicMock()}
-        mock_speaker1.coordinator.data["player"].is_master = True
-        mock_speaker1.coordinator.data["player"].is_slave = False
+        # Create mock coordinators
+        mock_coordinator1 = MagicMock()
+        mock_coordinator1.last_update_success = True
+        mock_coordinator1.data = {}
+        mock_player1 = MagicMock()
+        mock_player1.is_master = True
+        mock_player1.is_slave = False
+        mock_coordinator1.data["player"] = mock_player1
+        mock_coordinator1.player = mock_player1  # Also set directly for compatibility
 
-        mock_speaker2 = MagicMock()
-        mock_speaker2.available = False
-        mock_speaker2.coordinator = MagicMock()
-        mock_speaker2.coordinator.data = {"player": MagicMock()}
-        mock_speaker2.coordinator.data["player"].is_master = False
-        mock_speaker2.coordinator.data["player"].is_slave = True
+        mock_coordinator2 = MagicMock()
+        mock_coordinator2.last_update_success = False
+        mock_coordinator2.data = {}
+        mock_player2 = MagicMock()
+        mock_player2.is_master = False
+        mock_player2.is_slave = True
+        mock_coordinator2.data["player"] = mock_player2
+        mock_coordinator2.player = mock_player2  # Also set directly for compatibility
 
         mock_entry = MagicMock()
         mock_entry.domain = "wiim"
 
         with patch.object(hass.config_entries, "async_entries", return_value=[mock_entry]):
             with patch(
-                "custom_components.wiim.system_health.get_all_speakers", return_value=[mock_speaker1, mock_speaker2]
+                "custom_components.wiim.system_health.get_all_coordinators",
+                return_value=[mock_coordinator1, mock_coordinator2],
             ):
                 health_info = await system_health_info(hass)
 
@@ -70,33 +76,37 @@ class TestSystemHealth:
     async def test_system_health_device_health_check(self, hass: HomeAssistant):
         """Test system health device health check."""
         from unittest.mock import AsyncMock, MagicMock
+
         from custom_components.wiim.system_health import _check_device_health
 
-        mock_speaker = MagicMock()
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.player = MagicMock()
-        mock_speaker.coordinator.player.get_device_info = AsyncMock()
-        mock_speaker.coordinator.update_interval = MagicMock()
-        mock_speaker.coordinator.update_interval.total_seconds = MagicMock(return_value=5.0)
+        mock_coordinator = MagicMock()
+        mock_coordinator.player = MagicMock()
+        mock_coordinator.player.get_device_info = AsyncMock()
+        from datetime import timedelta
 
-        health = await _check_device_health(mock_speaker)
+        mock_coordinator.update_interval = timedelta(seconds=5.0)
+
+        health = await _check_device_health(mock_coordinator)
 
         assert "OK" in health
         assert "polling" in health
-        mock_speaker.coordinator.player.get_device_info.assert_called_once()
+        mock_coordinator.player.get_device_info.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_system_health_device_health_check_error(self, hass: HomeAssistant):
         """Test system health device health check with error."""
         from unittest.mock import AsyncMock, MagicMock
+
         from custom_components.wiim.system_health import _check_device_health
 
-        mock_speaker = MagicMock()
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.player = MagicMock()
-        mock_speaker.coordinator.player.get_device_info = AsyncMock(side_effect=Exception("Connection error"))
+        mock_coordinator = MagicMock()
+        mock_coordinator.player = MagicMock()
+        mock_coordinator.player.get_device_info = AsyncMock(side_effect=Exception("Connection error"))
+        from datetime import timedelta
 
-        health = await _check_device_health(mock_speaker)
+        mock_coordinator.update_interval = timedelta(seconds=5.0)
+
+        health = await _check_device_health(mock_coordinator)
 
         assert "Error" in health
         assert "Connection error" in health
@@ -105,13 +115,14 @@ class TestSystemHealth:
     async def test_system_health_pywiim_version(self, hass: HomeAssistant):
         """Test system health includes pywiim version."""
         from unittest.mock import MagicMock, patch
+
         from custom_components.wiim.system_health import system_health_info
 
         mock_entry = MagicMock()
         mock_entry.domain = "wiim"
 
         with patch.object(hass.config_entries, "async_entries", return_value=[mock_entry]):
-            with patch("custom_components.wiim.system_health.get_all_speakers", return_value=[]):
+            with patch("custom_components.wiim.system_health.get_all_coordinators", return_value=[]):
                 with patch("importlib.metadata.version", return_value="1.0.0"):
                     health_info = await system_health_info(hass)
 
@@ -120,15 +131,16 @@ class TestSystemHealth:
     @pytest.mark.asyncio
     async def test_system_health_pywiim_version_not_found(self, hass: HomeAssistant):
         """Test system health handles missing pywiim version."""
-        from unittest.mock import MagicMock, patch
         from importlib.metadata import PackageNotFoundError
+        from unittest.mock import MagicMock, patch
+
         from custom_components.wiim.system_health import system_health_info
 
         mock_entry = MagicMock()
         mock_entry.domain = "wiim"
 
         with patch.object(hass.config_entries, "async_entries", return_value=[mock_entry]):
-            with patch("custom_components.wiim.system_health.get_all_speakers", return_value=[]):
+            with patch("custom_components.wiim.system_health.get_all_coordinators", return_value=[]):
                 with patch("importlib.metadata.version", side_effect=PackageNotFoundError("pywiim")):
                     health_info = await system_health_info(hass)
 

@@ -3,17 +3,22 @@
 # This Makefile provides commands for testing, linting, and building
 # the WiiM Home Assistant integration.
 
-.PHONY: help test test-phase test-quick lint format clean install install-dev build check-all check-python check-ha-compat pre-run
+.PHONY: help test test-integration test-smoke test-multiroom test-all test-phase test-quick pre-release lint format clean install install-dev build check-all check-python check-ha-compat pre-run
 
 # Default target
 help:
 	@echo "WiiM Integration - Available Commands:"
 	@echo ""
 	@echo "Testing:"
-	@echo "  test           - Run all integration tests"
+	@echo "  test           - Run all unit tests"
+	@echo "  test-integration - Run integration tests (pywiim integration)"
+	@echo "  test-smoke     - Run smoke tests (requires HA_URL and HA_TOKEN)"
+	@echo "  test-multiroom - Run comprehensive multiroom tests (requires 3 devices)"
+	@echo "  test-all       - Run all automated tests (unit + integration)"
 	@echo "  test-phase N   - Run specific phase test (1-5)"
 	@echo "  test-verbose   - Run tests with verbose output"
-	@echo "  test-quick     - Run tests without coverage (faster)"
+	@echo "  test-quick     - Run unit tests without coverage (faster)"
+	@echo "  pre-release    - Run pre-release validation checklist"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  pre-run        - Quick checks before running HA (syntax, lint, imports)"
@@ -56,12 +61,39 @@ install-dev: check-ha-compat
 
 # Quick test run without coverage (faster for development)
 test-quick: check-python
-	pytest tests/ -v
+	pytest tests/unit/ -v
 
 # Testing targets
 test:
 	@echo "🧪 Running WiiM Integration Tests..."
 	python tests/run_tests.py
+
+test-integration:
+	@echo "🧪 Running Integration Tests..."
+	pytest tests/integration/ -v
+
+test-smoke:
+	@echo "🧪 Running Smoke Tests (requires HA and devices)..."
+	@if [ -z "$$HA_URL" ] || [ -z "$$HA_TOKEN" ]; then \
+		echo "⚠️  Set HA_URL and HA_TOKEN environment variables"; \
+		exit 1; \
+	fi
+	python scripts/test-smoke.py --ha-url $$HA_URL --token $$HA_TOKEN
+
+test-multiroom:
+	@echo "🧪 Running Comprehensive Multiroom Tests (requires HA and 3 devices)..."
+	@if [ -z "$$HA_URL" ] || [ -z "$$HA_TOKEN" ]; then \
+		echo "⚠️  Set HA_URL and HA_TOKEN environment variables"; \
+		exit 1; \
+	fi
+	python scripts/test-multiroom-comprehensive.py
+
+test-all: test test-integration
+	@echo "✅ All automated tests completed"
+
+pre-release:
+	@echo "🔍 Running Pre-Release Validation..."
+	python scripts/pre-release-check.py
 
 test-phase:
 	@echo "🧪 Running Phase $(PHASE) Tests..."

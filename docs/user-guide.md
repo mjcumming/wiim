@@ -85,8 +85,10 @@ service: wiim.play_url
 target:
   entity_id: media_player.living_room
 data:
-  url: "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two"
+  url: "http://ice2.somafm.com/groovesalad-128-mp3"
 ```
+
+> **⚠️ Note:** WiiM devices accept play commands silently even if the stream fails (geo-blocked, invalid URL, etc.). If nothing plays, check that the device state changed to "playing". HTTP streams are more reliable than HTTPS. See [FAQ](faq-and-troubleshooting.md#q-i-sent-a-play-command-but-nothing-happened---no-error-shown) for troubleshooting.
 
 **Play Preset** (configured in WiiM app)
 
@@ -416,9 +418,57 @@ automation:
         message: "Living Room is now controlling a speaker group"
 ```
 
-### ⚠️ Unofficial API Services
+### 📋 Queue Management
 
-These services use reverse-engineered endpoints that may not work on all firmware versions. Test thoroughly before using in production.
+Queue management requires UPnP support. Check device capabilities in the entity attributes.
+
+> **⚠️ Limited Device Support**: Full queue browsing (`get_queue`) only works on **WiiM Amp and WiiM Ultra with a USB drive connected**. These devices expose the UPnP ContentDirectory service required for queue retrieval. Other devices (Mini, Pro, Pro Plus) function as UPnP renderers only and do not support queue browsing. Queue position and count are available on all devices via the `queue_position` and `queue_count` entity attributes.
+>
+> See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for technical details.
+
+**Play from Queue Position** (requires UPnP AVTransport)
+
+```yaml
+service: wiim.play_queue
+target:
+  entity_id: media_player.living_room
+data:
+  queue_position: 0 # 0-based index
+```
+
+**Remove from Queue** (requires UPnP AVTransport)
+
+```yaml
+service: wiim.remove_from_queue
+target:
+  entity_id: media_player.living_room
+data:
+  queue_position: 3 # Remove item at position 3
+```
+
+**Get Queue Contents** (WiiM Amp/Ultra + USB only)
+
+```yaml
+service: wiim.get_queue
+target:
+  entity_id: media_player.living_room
+# Returns: queue items with title, artist, album, URL
+# Only works on WiiM Amp/Ultra with USB drive connected
+```
+
+**Check Queue Support**
+
+You can check if your device supports queue operations by looking at the `capabilities` attribute:
+
+```yaml
+# In a template or automation
+{{ state_attr('media_player.living_room', 'capabilities').queue_browse }}  # Full queue retrieval
+{{ state_attr('media_player.living_room', 'capabilities').queue_add }}     # Add/remove from queue
+```
+
+### ⚠️ Unofficial API Actions
+
+These actions use reverse-engineered endpoints that may not work on all firmware versions. Test thoroughly before using in production.
 
 **Audio Settings**
 
@@ -428,48 +478,18 @@ service: wiim.set_channel_balance
 target:
   entity_id: media_player.living_room
 data:
-  balance: 0.2
-
-# SPDIF delay (0-3000 ms)
-service: wiim.set_spdif_delay
-target:
-  entity_id: media_player.living_room
-data:
-  delay_ms: 800
+  balance: 0.2 # Slightly right
 ```
 
-**LMS/Squeezelite Integration**
+**Bluetooth Scanning**
 
 ```yaml
-# Discover LMS servers
-service: wiim.discover_lms_servers
-target:
-  entity_id: media_player.living_room
-
-# Connect to LMS server
-service: wiim.connect_lms_server
+# Scan for nearby Bluetooth devices
+service: wiim.scan_bluetooth
 target:
   entity_id: media_player.living_room
 data:
-  server_address: "192.168.1.123:3483"
-
-# Auto-connect to LMS
-service: wiim.set_auto_connect_lms
-target:
-  entity_id: media_player.living_room
-data:
-  enabled: true
-```
-
-**Device Controls**
-
-```yaml
-# Enable/disable touch buttons
-service: wiim.set_touch_buttons
-target:
-  entity_id: media_player.living_room
-data:
-  enabled: false
+  duration: 5 # Scan for 5 seconds (3-10 recommended)
 ```
 
 ---

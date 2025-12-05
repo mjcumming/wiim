@@ -37,4 +37,3 @@ except Exception as e:
 " || exit 1
 
 echo "✅ All pre-run checks passed! Safe to start Home Assistant."
-

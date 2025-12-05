@@ -253,38 +253,60 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
         preset: "rock"
 ```
 
-## Services & Platforms
+## Actions (Services)
 
-### Official Services
+> **Note**: Home Assistant now calls "services" as "actions" in the UI. Both terms refer to the same functionality.
 
-| Service                  | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| `wiim.play_preset`       | Play hardware preset (device dependent, up to 20)   |
-| `wiim.play_url`          | Play audio from URL (radio streams, files)          |
-| `wiim.play_playlist`     | Play M3U playlist from URL                          |
-| `wiim.set_eq`            | Set equalizer presets or custom 10-band values      |
-| `wiim.play_notification` | Play notification sound from URL                    |
-| `wiim.reboot_device`     | Reboot device                                       |
-| `wiim.sync_time`         | Synchronize device time with Home Assistant         |
-| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds, WiiM devices only) |
-| `wiim.clear_sleep_timer` | Clear sleep timer (WiiM devices only)               |
-| `wiim.update_alarm`      | Create/update alarm (3 slots, WiiM devices only)    |
+### Media Playback Actions
 
-### Unofficial API Services
+| Action                   | Description                                       |
+| ------------------------ | ------------------------------------------------- |
+| `wiim.play_preset`       | Play hardware preset (device dependent, up to 20) |
+| `wiim.play_url`          | Play audio from URL (radio streams, files)        |
+| `wiim.play_playlist`     | Play M3U playlist from URL                        |
+| `wiim.play_notification` | Play notification sound with auto volume restore  |
 
-⚠️ **Advanced users only** - These services use reverse-engineered API endpoints that may not work on all firmware versions:
+### Queue Management Actions
 
-| Service                     | Description                         |
-| --------------------------- | ----------------------------------- |
-| `wiim.scan_bluetooth`       | Scan for nearby Bluetooth devices   |
-| `wiim.set_channel_balance`  | Adjust left/right channel balance   |
-| `wiim.set_spdif_delay`      | Set SPDIF sample rate switch delay  |
-| `wiim.discover_lms_servers` | Search for LMS servers on network   |
-| `wiim.connect_lms_server`   | Connect to Lyrion Music Server      |
-| `wiim.set_auto_connect_lms` | Enable/disable LMS auto-connect     |
-| `wiim.set_touch_buttons`    | Enable/disable device touch buttons |
+> **⚠️ Limited Device Support**: Queue browsing (`get_queue`) only works on **WiiM Amp and Ultra with USB drive connected**. Other devices (Mini, Pro, Pro Plus) do not support ContentDirectory service. Queue position/count is available on all devices. See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for details.
 
-See the [Unofficial/Undocumented Endpoints](development/API_GUIDE.md#-unofficialundocumented-endpoints) section in the API Guide for complete documentation.
+| Action                   | Description                                                      |
+| ------------------------ | ---------------------------------------------------------------- |
+| `wiim.play_queue`        | Play from queue at specific position (requires UPnP AVTransport) |
+| `wiim.remove_from_queue` | Remove item from queue at position (requires UPnP AVTransport)   |
+| `wiim.get_queue`         | Get queue contents with metadata (Amp/Ultra + USB only)          |
+
+### Audio & EQ Actions
+
+| Action        | Description                                    |
+| ------------- | ---------------------------------------------- |
+| `wiim.set_eq` | Set equalizer presets or custom 10-band values |
+
+### Timer & Alarm Actions (WiiM Devices Only)
+
+| Action                   | Description                             |
+| ------------------------ | --------------------------------------- |
+| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds)        |
+| `wiim.clear_sleep_timer` | Clear active sleep timer                |
+| `wiim.update_alarm`      | Create/update alarm (3 slots, UTC time) |
+
+### Device Management Actions
+
+| Action               | Description                                 |
+| -------------------- | ------------------------------------------- |
+| `wiim.reboot_device` | Reboot device (temporarily unavailable)     |
+| `wiim.sync_time`     | Synchronize device time with Home Assistant |
+
+### Unofficial API Actions
+
+⚠️ **Advanced users only** - These actions use reverse-engineered API endpoints that may not work on all firmware versions:
+
+| Action                     | Description                       |
+| -------------------------- | --------------------------------- |
+| `wiim.scan_bluetooth`      | Scan for nearby Bluetooth devices |
+| `wiim.set_channel_balance` | Adjust left/right channel balance |
+
+See the [User Guide](docs/user-guide.md) for complete action documentation with examples.
 
 ## Source Customization
 
@@ -397,13 +419,26 @@ The diagnostics include:
 
 **All sensitive data (IP addresses, MAC addresses, network names) is automatically redacted.**
 
+### Real-time Device Monitoring
+
+For real-time device monitoring and debugging, use the `monitor_cli` tool from the `pywiim` library:
+
+```bash
+# Install pywiim
+pip3 install pywiim
+
+# Monitor a device (replace with your device IP)
+python3 -m pywiim.cli.monitor_cli YOUR_DEVICE_IP
+```
+
+This shows real-time device state including audio output mode, playback state, and multiroom status. Use `--verbose` for detailed logging or `--no-tui` for scrolling log output. Press `Ctrl+C` to stop.
+
 ## Documentation
 
 - **[📚 Quick Start Guide](docs/README.md)** - Installation and basic setup
 - **[🎛️ User Guide](docs/user-guide.md)** - Complete features and configuration
 - **[🤖 Automation Cookbook](docs/automation-cookbook.md)** - Ready-to-use automation patterns
-- **[❓ FAQ](docs/FAQ.md)** - Quick answers to common questions
-- **[🔧 Troubleshooting](docs/troubleshooting.md)** - Fix common issues and network problems
+- **[❓ FAQ & Troubleshooting](docs/faq-and-troubleshooting.md)** - Quick answers to common questions and solutions to common problems
 
 ## Support & Community
 

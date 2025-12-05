@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components import onboarding
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
@@ -290,7 +291,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Confirm discovery."""
-        if user_input is not None:
+        # Auto-create entry during onboarding or when user confirms
+        if user_input is not None or not onboarding.async_is_onboarded(self.hass):
             # Preserve SSDP info for UPnP subscriptions (Samsung/DLNA pattern)
             entry_data = {CONF_HOST: self.data[CONF_HOST]}
             if "ssdp_info" in self.data:
@@ -304,6 +306,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=entry_data,
             )
 
+        # Show confirmation form only after onboarding is complete
         # Set title placeholders here where the UI actually processes them
         self.context["title_placeholders"] = {"name": self.data["name"]}
         _LOGGER.info(

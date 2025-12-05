@@ -1,6 +1,6 @@
-# WiiM Test Scripts - Complete Guide
+# WiiM Test Scripts Guide
 
-**Automated testing with saved token**
+**Real-device testing with saved token**
 
 ---
 
@@ -10,261 +10,148 @@
 # Load saved token (once per session)
 source scripts/load-test-env.sh
 
-# Run complete test suite
-python scripts/test-complete-suite.py
-```
+# Run smoke tests (fast validation)
+python scripts/test-smoke.py --config scripts/test.config
 
-**Done!** Results in ~60 seconds.
+# Run full automated suite
+python scripts/test-automated.py --config scripts/test.config --mode full
+```
 
 ---
 
-## 📁 Saved Configuration
+## 📁 Configuration
 
 ### File: `scripts/test.config`
 
-**Contains:**
+Contains:
 
-- ✅ Home Assistant URL: `http://localhost:8123`
-- ✅ Access Token: Saved from 2025-11-17
-- ✅ Device Information: IPs, MACs, models
-- ✅ Token Expiration: 2035-11-15 (10 years)
+- ✅ Home Assistant URL
+- ✅ Access Token
+- ✅ Device Information (IPs, MACs, models)
 
-**Security:**
-
-- ✅ Added to `.gitignore`
-- ✅ Won't be committed to git
-- ⚠️ Contains admin access token - keep secure!
+**Security:** Added to `.gitignore` - won't be committed.
 
 ---
 
-## 🧪 Available Test Scripts
+## 🧪 Test Scripts
 
-### 1. test-complete-suite.py ⭐ RECOMMENDED
+### Core Tests
 
-**Best for:** Complete validation
+| Script                            | Purpose                         | Duration |
+| --------------------------------- | ------------------------------- | -------- |
+| `test-smoke.py`                   | Quick validation (4 tests)      | ~2 min   |
+| `test-automated.py`               | Full automated suite (9 tests)  | ~5 min   |
+| `test-multiroom-comprehensive.py` | Multiroom edge cases (10 tests) | ~10 min  |
 
-**Tests:**
+### Specialized Tests
 
-- Device discovery & availability
-- Volume & mute (safe - max 10%)
-- Multiroom join/unjoin
-- TTS
-- EQ, Shuffle, Repeat (if playing)
-- Source & output mode (if not AirPlay)
+| Script                             | Purpose                                |
+| ---------------------------------- | -------------------------------------- |
+| `test-device-115-comprehensive.py` | Deep testing of specific device        |
+| `test-channel-balance.py`          | Channel balance (uses pywiim directly) |
+| `test-timers-quick.py`             | Sleep timer and alarm tests            |
+| `test-timers-interactive.py`       | Interactive timer testing              |
 
-**Features:**
+---
 
-- ✅ AirPlay detection
-- ✅ Safe volume limits
-- ✅ Proper timing (4-6s waits)
-- ✅ Skips blocked tests
-- ✅ JSON reports
+## 📋 Test Coverage
 
-**Usage:**
+### ✅ Covered by Automated Suite
 
-```bash
-source scripts/load-test-env.sh
-python scripts/test-complete-suite.py
-```
-
-**Expected:** 14/21 tests (66.7%) with idle/AirPlay devices
-
-### 2. test-real-devices.py (Basic)
-
-**Best for:** Quick validation
-
-**Tests:**
-
-- Device availability
-- Device information
-- Volume control
-- Mute control
+- Device discovery
+- Playback controls (play/pause/stop/next/prev)
+- Volume control (set/mute)
 - Source selection
+- Multiroom basic
+- EQ presets
+- Shuffle/repeat
+- Output mode
 
-**Duration:** ~45 seconds
+### ✅ Covered by Multiroom Suite
 
-**Usage:**
+- 2-device join/unjoin
+- 3-device join/unjoin
+- Virtual group entity
+- Metadata propagation
+- Group controls
+- Edge cases (unjoin master, join already joined, etc.)
 
-```bash
-source scripts/load-test-env.sh
-python scripts/test-real-devices.py http://localhost:8123
-```
+### ✅ Covered by Specialized Tests
 
-### 3. test-advanced-features.py (Advanced)
+- Channel balance
+- Sleep timers
+- Alarms
+- Deep device testing
 
-**Best for:** Comprehensive feature testing
+### 🔄 Manual Testing Recommended
 
-**Tests:**
-
-- EQ control (24 presets)
-- Shuffle & repeat
-- Multiroom grouping
-- TTS
-- Preset playback
+- Bluetooth output
+- Media browsing
+- Announcements/TTS
 - URL playback
-- Audio output modes
+- Preset playback
 
-**Duration:** ~60 seconds
+---
 
-**Usage:**
+## 🔧 Running Tests
+
+### Smoke Tests (Fast)
 
 ```bash
-source scripts/load-test-env.sh
-python scripts/test-advanced-features.py http://localhost:8123
+python scripts/test-smoke.py --config scripts/test.config
 ```
 
----
-
-## 📊 Current Test Results
-
-**Latest:** 2025-11-17 16:45
-**Script:** test-complete-suite.py
-**Results:** 14/21 tests (66.7%)
-
-**Devices Tested:**
-
-1. Main Floor Speakers (192.168.1.68) - Idle + AirPlay
-2. Outdoor (192.168.1.115) - Idle
-3. Master Bedroom (192.168.1.116) - Playing + AirPlay
-
-**Working:**
-
-- ✅ All core features
-- ✅ Multiroom ⭐ PERFECT!
-- ✅ Volume (user confirmed by hearing!)
-
-**Blocked:**
-
-- 🔒 EQ/Shuffle/Repeat (need active playback)
-
----
-
-## 🔧 Environment Setup
-
-### Load Configuration
+### Full Automated Suite
 
 ```bash
-# Method 1: Use loader script (recommended)
-source scripts/load-test-env.sh
-
-# Method 2: Manual export
-export HA_URL="http://localhost:8123"
-export HA_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+python scripts/test-automated.py --config scripts/test.config --mode full
 ```
 
-### Verify Loaded
+### Critical Path Only
 
 ```bash
-echo $HA_URL
-echo ${HA_TOKEN:0:20}...  # First 20 chars
+python scripts/test-automated.py --config scripts/test.config --mode critical
 ```
 
----
-
-## 📝 Test Report Files
-
-**Auto-generated after each test run:**
-
-- `wiim_test_report_YYYYMMDD_HHMMSS.json` - Basic tests
-- `wiim_advanced_test_report_YYYYMMDD_HHMMSS.json` - Advanced
-- `wiim_complete_test_YYYYMMDD_HHMMSS.json` - Complete suite
-
-**View latest:**
+### Multiroom Tests
 
 ```bash
-ls -lht wiim_*test*.json | head -1
-cat wiim_complete_test_*.json | jq '.success_rate'
+export HA_TOKEN=$(grep HA_TOKEN scripts/test.config | cut -d'=' -f2)
+export HA_URL=http://localhost:8123
+python scripts/test-multiroom-comprehensive.py
 ```
 
----
-
-## 🔄 Running Tests Regularly
-
-### One-Time Test
+### Timer Tests
 
 ```bash
-source scripts/load-test-env.sh && python scripts/test-complete-suite.py
+python scripts/test-timers-quick.py --entity media_player.outdoor
 ```
 
-### Scheduled (Cron)
+---
+
+## 📊 Pre-Release Checklist
 
 ```bash
-# Every 6 hours
-0 */6 * * * cd /workspaces/wiim && source scripts/load-test-env.sh && python scripts/test-complete-suite.py >> /tmp/wiim-tests.log 2>&1
-```
+# Run all validation
+make pre-release
 
-### CI/CD (GitHub Actions)
-
-```yaml
-- name: Test WiiM Integration
-  env:
-    HA_TOKEN: ${{ secrets.HA_TOKEN }}
-  run: |
-    cd /workspaces/wiim
-    python scripts/test-complete-suite.py http://homeassistant.local:8123
+# Or manually:
+make test                    # Unit tests
+make lint                    # Code quality
+python scripts/test-smoke.py --config scripts/test.config
+python scripts/test-automated.py --config scripts/test.config --mode full
 ```
 
 ---
 
-## 🎯 To Reach 97% Success Rate
+## 🔌 Device Requirements
 
-**Current:** 66.7% (limited by device state)
-**Potential:** 97.2% (with active playback)
+### Minimum (Smoke/Automated)
 
-**Steps:**
+- 1 WiiM device with active source
+- Home Assistant running
 
-1. Play music on Outdoor device (USB/Bluetooth)
-2. Run: `source scripts/load-test-env.sh && python scripts/test-complete-suite.py`
-3. Result: 35/36 tests pass! 🎉
+### Full Testing
 
----
-
-## 🔐 Security Notes
-
-### Token Safety
-
-- ✅ Saved in `scripts/test.config`
-- ✅ Added to `.gitignore`
-- ✅ Won't be committed to repository
-- ⚠️ Has admin access to Home Assistant
-- ⚠️ Keep secure, don't share publicly
-
-### Revoke Token
-
-If compromised:
-
-1. Go to Home Assistant Profile
-2. Long-Lived Access Tokens
-3. Delete "wiim testing" token
-4. Create new token
-5. Update `scripts/test.config`
-
----
-
-## 📚 Documentation
-
-| File                | Purpose           |
-| ------------------- | ----------------- |
-| `test.config`       | Saved token & URL |
-| `load-test-env.sh`  | Load environment  |
-| `README.TESTING.md` | Complete guide    |
-| `TESTING.SETUP.md`  | Detailed setup    |
-| `FINAL.STATUS.md`   | Test results      |
-
----
-
-## ✅ Summary
-
-**Token:** ✅ Saved in `scripts/test.config`
-**Loader:** ✅ `scripts/load-test-env.sh`
-**Security:** ✅ In `.gitignore`
-**Tests:** ✅ 3 scripts ready
-**Docs:** ✅ Complete guides
-
-**Run tests anytime:**
-
-```bash
-source scripts/load-test-env.sh && python scripts/test-complete-suite.py
-```
-
-🎉 **All set for automated testing!**
+- 3 WiiM devices for multiroom
+- Active playback source (Spotify, etc.)

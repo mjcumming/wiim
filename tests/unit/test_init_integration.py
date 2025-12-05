@@ -1,4 +1,4 @@
-"""Integration tests for WiiM integration setup and teardown."""
+"""Unit tests for WiiM integration setup and teardown."""
 
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -288,8 +288,9 @@ class TestIntegrationServices:
     @pytest.mark.asyncio
     async def test_sync_time_service(self, hass: HomeAssistant, bypass_get_data) -> None:
         """Test sync_time service."""
-        from unittest.mock import AsyncMock, patch
-        from custom_components.wiim.data import get_all_speakers
+        from unittest.mock import AsyncMock
+
+        from custom_components.wiim.data import get_all_coordinators
 
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -310,14 +311,10 @@ class TestIntegrationServices:
 
         entity_id = media_player_entities[0].entity_id
 
-        # Get actual speakers and mock sync_time on client
-        speakers = get_all_speakers(hass)
-        if (
-            speakers
-            and hasattr(speakers[0].coordinator, "player")
-            and hasattr(speakers[0].coordinator.player, "client")
-        ):
-            speakers[0].coordinator.player.client.sync_time = AsyncMock()
+        # Get actual coordinators and mock sync_time on client
+        coordinators = get_all_coordinators(hass)
+        if coordinators and hasattr(coordinators[0], "player") and hasattr(coordinators[0].player, "client"):
+            coordinators[0].player.client.sync_time = AsyncMock()
 
             # Call the service
             await hass.services.async_call(
@@ -327,9 +324,9 @@ class TestIntegrationServices:
                 blocking=True,
             )
 
-            # Verify sync_time was called if speaker found
-            if hasattr(speakers[0].coordinator.player.client, "sync_time"):
-                speakers[0].coordinator.player.client.sync_time.assert_called_once()
+            # Verify sync_time was called if coordinator found
+            if hasattr(coordinators[0].player.client, "sync_time"):
+                coordinators[0].player.client.sync_time.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reboot_service_handles_missing_entity(self, hass: HomeAssistant) -> None:
@@ -351,8 +348,9 @@ class TestIntegrationServices:
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_capabilities(self, hass: HomeAssistant) -> None:
         """Test get_enabled_platforms with capabilities."""
-        from custom_components.wiim import get_enabled_platforms
         from homeassistant.const import Platform
+
+        from custom_components.wiim import get_enabled_platforms
 
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -379,9 +377,10 @@ class TestIntegrationServices:
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:
         """Test get_enabled_platforms with optional features enabled."""
+        from homeassistant.const import Platform
+
         from custom_components.wiim import get_enabled_platforms
         from custom_components.wiim.const import CONF_ENABLE_MAINTENANCE_BUTTONS
-        from homeassistant.const import Platform
 
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -405,9 +404,9 @@ class TestIntegrationServices:
         # Core platforms should be present
         assert Platform.MEDIA_PLAYER in platforms
         assert Platform.SENSOR in platforms
-        # NUMBER, SWITCH, LIGHT should also be in core
+        # NUMBER, LIGHT should also be in core
+        # Note: SWITCH was removed as it was empty (no switch entities implemented)
         assert Platform.NUMBER in platforms
-        assert Platform.SWITCH in platforms
         assert Platform.LIGHT in platforms
 
 

@@ -1,6 +1,19 @@
 """Unit tests for WiiM sensor platform core logic."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+from homeassistant.config_entries import ConfigEntry
+
+from custom_components.wiim.const import DOMAIN
+from custom_components.wiim.sensor import (
+    WiiMAudioQualitySensor,
+    WiiMBluetoothOutputSensor,
+    WiiMDiagnosticSensor,
+    WiiMRoleSensor,
+    _to_bool,
+    _to_int,
+    async_setup_entry,
+)
 
 
 class TestSensorUtilityFunctions:
@@ -8,7 +21,6 @@ class TestSensorUtilityFunctions:
 
     async def test_to_bool_function_comprehensive(self):
         """Test _to_bool utility function with comprehensive inputs."""
-        from custom_components.wiim.sensor import _to_bool
 
         # Test boolean values
         assert _to_bool(True) is True
@@ -48,7 +60,6 @@ class TestSensorUtilityFunctions:
 
     def test_to_int_function_comprehensive(self):
         """Test _to_int utility function with comprehensive inputs."""
-        from custom_components.wiim.sensor import _to_int
 
         # Test valid integers
         assert _to_int(42) == 42
@@ -78,171 +89,161 @@ class TestSensorPlatformSetupLogic:
 
     async def test_get_sensor_entities_list_core_sensors(self):
         """Test sensor entity creation with core sensors only."""
-        from custom_components.wiim.sensor import async_setup_entry
-
         # Mock dependencies
         hass = MagicMock()
         config_entry = MagicMock()
         config_entry.entry_id = "test-entry"
 
-        # Mock speaker with basic setup
-        speaker = MagicMock()
-        speaker.name = "Test WiiM"
-        speaker.coordinator = MagicMock()
-        speaker.coordinator.player = MagicMock()
-        speaker.coordinator.player.capabilities = {"supports_audio_output": False}
+        # Mock coordinator with basic setup
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.name = "Test WiiM"
+        coordinator.player.supports_audio_output = False
 
-        with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
-            entities = []
-            async_add_entities = MagicMock()
+        # Set up hass.data structure
+        hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
+        entities = []
+        async_add_entities = MagicMock()
 
-            await async_setup_entry(hass, config_entry, async_add_entities)
+        await async_setup_entry(hass, config_entry, async_add_entities)
 
-            # Verify entities were created
-            async_add_entities.assert_called_once()
-            entities = async_add_entities.call_args[0][0]
+        # Verify entities were created
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
 
-            # Should create core sensors (role, input, diagnostic, bluetooth)
-            assert len(entities) >= 4
+        # Should create core sensors (role, input, diagnostic, bluetooth)
+        assert len(entities) >= 4
 
     async def test_get_sensor_entities_with_audio_output_support(self):
         """Test sensor entity creation when device supports audio output."""
-        from custom_components.wiim.sensor import async_setup_entry
-
         # Mock dependencies
         hass = MagicMock()
         config_entry = MagicMock()
         config_entry.entry_id = "test-entry"
 
-        # Mock speaker with audio output support
-        speaker = MagicMock()
-        speaker.name = "Test WiiM"
-        speaker.coordinator = MagicMock()
-        speaker.coordinator.player = MagicMock()
-        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
+        # Mock coordinator with audio output support
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.name = "Test WiiM"
+        coordinator.player.supports_audio_output = True
 
-        with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
-            entities = []
-            async_add_entities = MagicMock()
+        # Set up hass.data structure
+        hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
+        entities = []
+        async_add_entities = MagicMock()
 
-            await async_setup_entry(hass, config_entry, async_add_entities)
+        await async_setup_entry(hass, config_entry, async_add_entities)
 
-            # Verify entities were created
-            async_add_entities.assert_called_once()
-            entities = async_add_entities.call_args[0][0]
+        # Verify entities were created
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
 
-            # Should create additional audio quality sensors
-            entity_types = [type(entity).__name__ for entity in entities]
-            assert "WiiMAudioQualitySensor" in entity_types
-            assert "WiiMSampleRateSensor" in entity_types
-            assert "WiiMBitDepthSensor" in entity_types
-            assert "WiiMBitRateSensor" in entity_types
+        # Should create additional audio quality sensors
+        entity_types = [type(entity).__name__ for entity in entities]
+        assert "WiiMAudioQualitySensor" in entity_types
+        assert "WiiMSampleRateSensor" in entity_types
+        assert "WiiMBitDepthSensor" in entity_types
+        assert "WiiMBitRateSensor" in entity_types
 
     async def test_get_sensor_entities_with_metadata_support(self):
         """Test sensor entity creation when metadata support is enabled."""
-        from custom_components.wiim.sensor import async_setup_entry
-
         # Mock dependencies
         hass = MagicMock()
         config_entry = MagicMock()
         config_entry.entry_id = "test-entry"
 
-        # Mock speaker with metadata support
-        speaker = MagicMock()
-        speaker.name = "Test WiiM"
-        speaker.coordinator = MagicMock()
-        speaker.coordinator.player = MagicMock()
-        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
-        speaker.coordinator._metadata_supported = True
+        # Mock coordinator with metadata support
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.name = "Test WiiM"
+        coordinator.player.supports_audio_output = True
+        coordinator._metadata_supported = True
 
-        with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
-            entities = []
-            async_add_entities = MagicMock()
+        # Set up hass.data structure
+        hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
+        entities = []
+        async_add_entities = MagicMock()
 
-            await async_setup_entry(hass, config_entry, async_add_entities)
+        await async_setup_entry(hass, config_entry, async_add_entities)
 
-            # Verify entities were created
-            async_add_entities.assert_called_once()
-            entities = async_add_entities.call_args[0][0]
+        # Verify entities were created
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
 
-            # Should create audio quality sensors when metadata is supported
-            entity_types = [type(entity).__name__ for entity in entities]
-            assert "WiiMAudioQualitySensor" in entity_types
-            assert "WiiMSampleRateSensor" in entity_types
-            assert "WiiMBitDepthSensor" in entity_types
-            assert "WiiMBitRateSensor" in entity_types
+        # Should create audio quality sensors when metadata is supported
+        entity_types = [type(entity).__name__ for entity in entities]
+        assert "WiiMAudioQualitySensor" in entity_types
+        assert "WiiMSampleRateSensor" in entity_types
+        assert "WiiMBitDepthSensor" in entity_types
+        assert "WiiMBitRateSensor" in entity_types
 
     async def test_get_sensor_entities_without_metadata_support(self):
         """Test sensor entity creation when metadata support is disabled."""
-        from custom_components.wiim.sensor import async_setup_entry
-
         # Mock dependencies
         hass = MagicMock()
         config_entry = MagicMock()
         config_entry.entry_id = "test-entry"
 
-        # Mock speaker without metadata support
-        speaker = MagicMock()
-        speaker.name = "Test WiiM"
-        speaker.coordinator = MagicMock()
-        speaker.coordinator.player = MagicMock()
-        speaker.coordinator.player.capabilities = {"supports_audio_output": True}
-        speaker.coordinator._metadata_supported = False
+        # Mock coordinator without metadata support
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.name = "Test WiiM"
+        coordinator.player.supports_audio_output = True
+        coordinator._metadata_supported = False
 
-        with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
-            entities = []
-            async_add_entities = MagicMock()
+        # Set up hass.data structure
+        hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
+        entities = []
+        async_add_entities = MagicMock()
 
-            await async_setup_entry(hass, config_entry, async_add_entities)
+        await async_setup_entry(hass, config_entry, async_add_entities)
 
-            # Verify entities were created
-            async_add_entities.assert_called_once()
-            entities = async_add_entities.call_args[0][0]
+        # Verify entities were created
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
 
-            # Should not create audio quality sensors when metadata is not supported
-            entity_types = [type(entity).__name__ for entity in entities]
-            assert "WiiMAudioQualitySensor" not in entity_types
-            assert "WiiMSampleRateSensor" not in entity_types
-            assert "WiiMBitDepthSensor" not in entity_types
-            assert "WiiMBitRateSensor" not in entity_types
+        # Should not create audio quality sensors when metadata is not supported
+        entity_types = [type(entity).__name__ for entity in entities]
+        assert "WiiMAudioQualitySensor" not in entity_types
+        assert "WiiMSampleRateSensor" not in entity_types
+        assert "WiiMBitDepthSensor" not in entity_types
+        assert "WiiMBitRateSensor" not in entity_types
 
     async def test_get_sensor_entities_without_capabilities(self):
-        """Test sensor entity creation when capabilities are not available."""
-        from custom_components.wiim.sensor import async_setup_entry
-
+        """Test sensor entity creation when device doesn't support audio output."""
         # Mock dependencies
         hass = MagicMock()
         config_entry = MagicMock()
         config_entry.entry_id = "test-entry"
 
-        # Mock speaker without capabilities attribute (fallback)
-        speaker = MagicMock()
-        speaker.name = "Test WiiM"
-        speaker.uuid = "test-uuid"
-        speaker.available = True
-        speaker.coordinator = MagicMock()
-        speaker.coordinator.data = {}
-        speaker.coordinator.player = MagicMock()
-        speaker.coordinator.client = None  # No client
-        speaker.coordinator._capabilities = None  # No capabilities
-        speaker.coordinator._metadata_supported = None  # Metadata support not determined
-        # No capabilities attribute - should skip Bluetooth sensor
+        # Mock coordinator with player that doesn't support audio output
+        coordinator = MagicMock()
+        coordinator.data = {}
+        # Player exists but doesn't support audio output (e.g., WiiM Mini)
+        coordinator.player = MagicMock()
+        coordinator.player.name = "Test WiiM"
+        coordinator.player.supports_audio_output = False
+        coordinator.client = None  # No client
+        coordinator._capabilities = None  # No capabilities
+        coordinator._metadata_supported = None  # Metadata support not determined
+        # No audio output support - should skip Bluetooth sensor
 
-        with patch("custom_components.wiim.sensor.get_speaker_from_config_entry", return_value=speaker):
-            entities = []
-            async_add_entities = MagicMock()
+        # Set up hass.data structure
+        hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
+        entities = []
+        async_add_entities = MagicMock()
 
-            await async_setup_entry(hass, config_entry, async_add_entities)
+        await async_setup_entry(hass, config_entry, async_add_entities)
 
-            # Verify entities were created
-            async_add_entities.assert_called_once()
-            entities = async_add_entities.call_args[0][0]
+        # Verify entities were created
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
 
-            # Should create core sensors but NOT Bluetooth sensor when capabilities not available
-            entity_types = [type(entity).__name__ for entity in entities]
-            assert "WiiMBluetoothOutputSensor" not in entity_types
-            # Should still have core sensors (Role, Input, Diagnostic, Firmware, and audio quality sensors)
-            assert len(entities) >= 5  # Role, Input, Diagnostic, Firmware, and audio quality sensors
+        # Should create core sensors but NOT Bluetooth sensor when capabilities not available
+        entity_types = [type(entity).__name__ for entity in entities]
+        assert "WiiMBluetoothOutputSensor" not in entity_types
+        # Should still have core sensors (Role, Input, Diagnostic, Firmware, and audio quality sensors)
+        assert len(entities) >= 5  # Role, Input, Diagnostic, Firmware, and audio quality sensors
 
 
 class TestSensorDataProcessing:
@@ -397,37 +398,45 @@ class TestSensorErrorHandling:
 
     def test_sensor_with_missing_coordinator_data(self):
         """Test sensor behavior with missing coordinator data."""
-        # Test how sensors handle missing or incomplete data
-        test_cases = [
-            ({}, "should handle empty data gracefully"),
-            ({"partial": "data"}, "should handle partial data"),
-            (None, "should handle None data"),
-        ]
 
-        for data, _description in test_cases:
-            # Simulate sensor handling missing data
-            if data is None:
-                # Should return None or default values
-                assert True  # Placeholder - would depend on specific sensor logic
-            else:
-                # Should extract available data
-                assert True  # Placeholder - would depend on specific sensor logic
+        # Test with coordinator that has no player data
+        coordinator = MagicMock()
+        coordinator.player = None
+        coordinator.last_update_success = False
+
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        # Sensor should handle missing player gracefully
+        sensor = WiiMRoleSensor(coordinator, config_entry)
+        # native_value should handle None player without raising
+        value = sensor.native_value
+        # Should return None or a default value, not raise exception
+        assert value is None or isinstance(value, str)
 
     def test_sensor_with_device_communication_errors(self):
         """Test sensor behavior during device communication errors."""
-        # Test how sensors handle communication failures
-        error_scenarios = [
-            "connection_timeout",
-            "network_unreachable",
-            "ssl_handshake_failure",
-            "http_404",
-            "http_500",
-        ]
 
-        for _error_type in error_scenarios:
-            # Simulate error handling
-            # Sensors should gracefully handle errors and return appropriate states
-            assert True  # Placeholder - would depend on specific sensor logic
+        # Test sensor when coordinator has communication errors
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.wifi_rssi = None
+        coordinator.last_update_success = False  # Communication error
+
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        # Sensor should handle communication errors gracefully
+        sensor = WiiMDiagnosticSensor(coordinator, config_entry)
+        # Should return a state indicating offline/unavailable, not raise
+        value = sensor.native_value
+        assert value is not None
+        assert isinstance(value, str)
+        # Should indicate offline/unavailable state
+        assert "Offline" in value or "unavailable" in value.lower()
 
     def test_sensor_state_persistence_during_errors(self):
         """Test sensor state persistence during temporary errors."""
@@ -458,6 +467,7 @@ class TestSensorPlatformIntegration:
 
         for speaker_name, _uuid, expected_name in test_cases:
             # Simulate name generation logic
+            name = None
             if "Multiroom Role" in expected_name:
                 name = f"{speaker_name} Multiroom Role"
             elif "Device Status" in expected_name:
@@ -510,88 +520,91 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_initialization(self):
         """Test diagnostic sensor initialization."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.available = True
-        mock_speaker.device_model = None
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.last_update_success = True
 
-        sensor = WiiMDiagnosticSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMDiagnosticSensor(coordinator, config_entry)
 
         assert sensor.unique_id == "test-uuid_diagnostic"
         assert sensor.name == "Device Status"
 
     def test_diagnostic_sensor_native_value_with_rssi(self):
         """Test diagnostic sensor native_value with RSSI."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.available = True
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        mock_speaker.coordinator.data["player"].wifi_rssi = -65
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.wifi_rssi = -65
+        coordinator.last_update_success = True
 
-        sensor = WiiMDiagnosticSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMDiagnosticSensor(coordinator, config_entry)
 
         assert sensor.native_value == "Wi-Fi -65 dBm"
 
     def test_diagnostic_sensor_native_value_online(self):
         """Test diagnostic sensor native_value when online."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.available = True
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        mock_speaker.coordinator.data["player"].wifi_rssi = None
-        # Ensure has_recent_command_failures returns False
-        mock_speaker.coordinator.has_recent_command_failures = MagicMock(return_value=False)
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.wifi_rssi = None
+        coordinator.last_update_success = True
 
-        sensor = WiiMDiagnosticSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMDiagnosticSensor(coordinator, config_entry)
 
         assert sensor.native_value == "Online"
 
     def test_diagnostic_sensor_native_value_offline(self):
         """Test diagnostic sensor native_value when offline."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.available = False
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = None
-        # Ensure has_recent_command_failures is not called when data is None
-        mock_speaker.coordinator.has_recent_command_failures = MagicMock(return_value=False)
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.wifi_rssi = None
+        coordinator.last_update_success = False
 
-        sensor = WiiMDiagnosticSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMDiagnosticSensor(coordinator, config_entry)
 
         assert sensor.native_value == "Offline"
 
     def test_diagnostic_sensor_extra_state_attributes(self):
         """Test diagnostic sensor extra_state_attributes."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
-        from unittest.mock import MagicMock
 
-        mock_device_model = MagicMock()
-        mock_device_model.model_dump = MagicMock(return_value={"mac": "AA:BB:CC:DD:EE:FF", "firmware": "1.0.0"})
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.wifi_rssi = -65
+        coordinator.player.device_info = MagicMock()
+        coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
+        coordinator.player.firmware = "1.0.0"
+        coordinator.player.role = "master"
+        coordinator.update_interval = None
+        coordinator.last_update_success = True
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.device_model = mock_device_model
-        mock_speaker.ip_address = "192.168.1.100"
-        mock_speaker.role = "master"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        mock_speaker.coordinator.data["player"].wifi_rssi = -65
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
 
-        sensor = WiiMDiagnosticSensor(mock_speaker)
+        sensor = WiiMDiagnosticSensor(coordinator, config_entry)
 
         attrs = sensor.extra_state_attributes
 
@@ -603,14 +616,18 @@ class TestDiagnosticSensor:
 
     def test_diagnostic_sensor_device_info_empty(self):
         """Test diagnostic sensor _device_info with None device_model."""
-        from custom_components.wiim.sensor import WiiMDiagnosticSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.device_model = None
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.device_info = None
+        coordinator.last_update_success = True
 
-        sensor = WiiMDiagnosticSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMDiagnosticSensor(coordinator, config_entry)
 
         device_info = sensor._device_info()
         assert device_info == {}
@@ -621,21 +638,21 @@ class TestRoleSensorEdgeCases:
 
     def test_role_sensor_with_slave_and_master(self):
         """Test role sensor with slave and master group."""
-        from custom_components.wiim.sensor import WiiMRoleSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        player = mock_speaker.coordinator.data["player"]
-        player.is_slave = True
-        player.is_master = False
-        player.group = MagicMock()
-        player.group.master = MagicMock()
-        player.group.master.name = "Master Device"
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.is_slave = True
+        coordinator.player.is_master = False
+        coordinator.player.group = MagicMock()
+        coordinator.player.group.master = MagicMock()
+        coordinator.player.group.master.name = "Master Device"
 
-        sensor = WiiMRoleSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMRoleSensor(coordinator, config_entry)
 
         attrs = sensor.extra_state_attributes
         assert "coordinator_name" in attrs
@@ -647,33 +664,35 @@ class TestAudioQualitySensor:
 
     def test_audio_quality_sensor_initialization(self):
         """Test audio quality sensor initialization."""
-        from custom_components.wiim.sensor import WiiMAudioQualitySensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
 
-        sensor = WiiMAudioQualitySensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMAudioQualitySensor(coordinator, config_entry)
 
         assert sensor.unique_id == "test-uuid_audio_quality"
         assert sensor.name == "Audio Quality"
 
     def test_audio_quality_sensor_native_value(self):
         """Test audio quality sensor native_value."""
-        from custom_components.wiim.sensor import WiiMAudioQualitySensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        player = mock_speaker.coordinator.data["player"]
-        # Use correct property names from sensor.py
-        player.media_sample_rate = 44100
-        player.media_bit_depth = 16
-        player.media_bit_rate = 320
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.media_sample_rate = 44100
+        coordinator.player.media_bit_depth = 16
+        coordinator.player.media_bit_rate = 320
 
-        sensor = WiiMAudioQualitySensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMAudioQualitySensor(coordinator, config_entry)
 
         value = sensor.native_value
         assert "44100" in value
@@ -681,16 +700,20 @@ class TestAudioQualitySensor:
         assert "320" in value
 
     def test_audio_quality_sensor_handles_missing_data(self):
-        """Test audio quality sensor handles missing data."""
-        from custom_components.wiim.sensor import WiiMAudioQualitySensor
-        from unittest.mock import MagicMock
+        """Test audio quality sensor handles missing data (returns Unknown when all None)."""
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = None
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.media_sample_rate = None
+        coordinator.player.media_bit_depth = None
+        coordinator.player.media_bit_rate = None
 
-        sensor = WiiMAudioQualitySensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMAudioQualitySensor(coordinator, config_entry)
 
         assert sensor.native_value == "Unknown"
 
@@ -700,61 +723,66 @@ class TestBluetoothOutputSensor:
 
     def test_bluetooth_output_sensor_initialization(self):
         """Test Bluetooth output sensor initialization."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
 
-        sensor = WiiMBluetoothOutputSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMBluetoothOutputSensor(coordinator, config_entry)
 
         assert sensor.unique_id == "test-uuid_bluetooth_output"
         assert sensor.name == "Bluetooth Output"
 
     def test_bluetooth_output_sensor_native_value_on(self):
         """Test Bluetooth output sensor returns 'on' when active."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        mock_speaker.coordinator.data["player"].is_bluetooth_output_active = True
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.is_bluetooth_output_active = True
 
-        sensor = WiiMBluetoothOutputSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMBluetoothOutputSensor(coordinator, config_entry)
 
         assert sensor.native_value == "on"
 
     def test_bluetooth_output_sensor_native_value_off(self):
         """Test Bluetooth output sensor returns 'off' when inactive."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        mock_speaker.coordinator.data["player"].is_bluetooth_output_active = False
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.is_bluetooth_output_active = False
 
-        sensor = WiiMBluetoothOutputSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMBluetoothOutputSensor(coordinator, config_entry)
 
         assert sensor.native_value == "off"
 
     def test_bluetooth_output_sensor_extra_state_attributes(self):
         """Test Bluetooth output sensor extra_state_attributes."""
-        from custom_components.wiim.sensor import WiiMBluetoothOutputSensor
-        from unittest.mock import MagicMock
 
-        mock_speaker = MagicMock()
-        mock_speaker.uuid = "test-uuid"
-        mock_speaker.coordinator = MagicMock()
-        mock_speaker.coordinator.data = {"player": MagicMock()}
-        player = mock_speaker.coordinator.data["player"]
-        player.audio_output_mode = "Bluetooth"
-        player.is_bluetooth_output_active = True
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.audio_output_mode = "Bluetooth"
+        coordinator.player.is_bluetooth_output_active = True
 
-        sensor = WiiMBluetoothOutputSensor(mock_speaker)
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        sensor = WiiMBluetoothOutputSensor(coordinator, config_entry)
 
         attrs = sensor.extra_state_attributes
         assert "hardware_output_mode" in attrs
