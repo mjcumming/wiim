@@ -1,0 +1,21 @@
+{
+  "timestamp": "20251204_171636",
+  "version": "1.0.37b0",
+  "results": {
+    "device_discovery": {
+      "passed": true,
+      "details": {
+        "device_count": 4
+      }
+    },
+    "playback_controls": {
+      "passed": true
+    },
+    "volume_control": {
+      "passed": true
+    },
+    "state_synchronization": {
+      "passed": true
+    }
+  }
+}

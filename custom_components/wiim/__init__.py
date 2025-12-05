@@ -45,7 +45,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from pywiim import WiiMClient
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
@@ -56,7 +58,6 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import WiiMCoordinator
-from .data import Speaker
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,7 +67,6 @@ CORE_PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,  # Always enabled - core functionality
     Platform.SENSOR,  # Always enabled - role sensor is essential for multiroom
     Platform.NUMBER,  # Always enabled - group volume control for multiroom
-    Platform.SWITCH,  # Always enabled - group mute control for multiroom
     Platform.LIGHT,  # Always enabled - front-panel LED control
     Platform.SELECT,  # Always enabled - audio output mode control and Bluetooth device selection
     Platform.BUTTON,  # Always enabled - Bluetooth scan button (maintenance buttons are optional)
@@ -89,42 +89,6 @@ def get_enabled_platforms(
         capabilities: Device capabilities dict (if not provided, will try to get from coordinator)
     """
     platforms = CORE_PLATFORMS.copy()
-
-    # Remove SELECT platform from core list (we'll add it conditionally based on capabilities)
-    if Platform.SELECT in platforms:
-        platforms.remove(Platform.SELECT)
-
-    # Conditionally add SELECT platform based on device audio output capabilities
-    if capabilities is None:
-        # Get capabilities from coordinator
-        if entry.entry_id in hass.data.get(DOMAIN, {}):
-            coordinator_data = hass.data[DOMAIN][entry.entry_id]
-            if "coordinator" in coordinator_data:
-                coordinator = coordinator_data["coordinator"]
-                capabilities = getattr(coordinator, "_capabilities", {})
-
-    if capabilities:
-        supports_audio_output = capabilities.get("supports_audio_output", True)  # Keep original default
-        _LOGGER.debug(
-            "Audio output capability check for %s: supports_audio_output=%s",
-            entry.data.get("host"),
-            supports_audio_output,
-        )
-        if supports_audio_output:
-            platforms.append(Platform.SELECT)
-            _LOGGER.info("Enabling SELECT platform - device supports audio output control")
-        else:
-            _LOGGER.info("Skipping audio output select entity - device does not support audio output control")
-            # Still enable SELECT platform for Bluetooth device selection
-            platforms.append(Platform.SELECT)
-            _LOGGER.info("Enabling SELECT platform for Bluetooth device selection")
-    else:
-        _LOGGER.warning(
-            "Capabilities not available for %s - enabling SELECT platform for Bluetooth device selection",
-            entry.data.get("host"),
-        )
-        # Still enable SELECT platform for Bluetooth device selection
-        platforms.append(Platform.SELECT)
 
     # Add optional platforms based on user preferences
     # Note: BUTTON is in CORE_PLATFORMS (for Bluetooth scan), but maintenance buttons are optional
@@ -150,6 +114,56 @@ def get_enabled_platforms(
 async def _update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options updates by reloading the entry."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def _register_ha_device(hass: HomeAssistant, coordinator: WiiMCoordinator, entry: ConfigEntry) -> None:
+    """Register device in HA registry.
+
+    Device Info display:
+    - Hardware: Device firmware version (e.g., "Linkplay 4.8.731953")
+    - Software: PyWiiM library version (e.g., "pywiim 2.0.17")
+    - Serial Number: Device IP address
+    - Connections: Device MAC address
+    """
+    dev_reg = dr.async_get(hass)
+    uuid = entry.unique_id or coordinator.player.host
+    identifiers = {(DOMAIN, uuid)}
+
+    # Get pywiim library version
+    try:
+        import pywiim
+
+        pywiim_version = f"pywiim {getattr(pywiim, '__version__', 'unknown')}"
+    except (ImportError, AttributeError):
+        pywiim_version = "pywiim unknown"
+
+    # Get device info from player
+    player = coordinator.player
+    device_name = player.name or entry.title or "WiiM Speaker"
+    device_model = player.model or "WiiM Speaker"
+    firmware = player.firmware
+
+    # Get MAC address from device_info if available
+    mac_address = None
+    if player.device_info and hasattr(player.device_info, "mac"):
+        mac_address = player.device_info.mac
+
+    # Build connections set with MAC address if available
+    connections: set[tuple[str, str]] = set()
+    if mac_address:
+        connections.add((CONNECTION_NETWORK_MAC, mac_address))
+
+    dev_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers=identifiers,
+        manufacturer="WiiM",
+        name=device_name,
+        model=device_model,
+        hw_version=firmware,  # Device firmware (LinkPlay)
+        sw_version=pywiim_version,  # Integration library version
+        serial_number=player.host,  # IP address as serial number
+        connections=connections if connections else None,  # MAC address as connection
+    )
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -286,21 +300,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         timeout=entry.data.get("timeout", 10),
     )
 
-    # ------------------------------------------------------------------
-    # Early Speaker creation & registry setup (before first refresh)
-    # ------------------------------------------------------------------
-    # We need the Speaker object to exist BEFORE the first coordinator
-    # refresh because the coordinator callbacks reference it via
-    # get_speaker_from_config_entry(). Creating and storing it early
-    # prevents transient "Speaker not found" errors at startup.
-    # NOTE: async_setup() is *deferred* until after the first refresh so
-    # that _populate_device_info() can rely on fresh coordinator data.
-    speaker = Speaker(hass, coordinator, entry)
-
-    # Store minimal references immediately so helper look-ups succeed
+    # Store coordinator and entry directly in hass.data
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
-        "speaker": speaker,
         "entry": entry,  # platform access to options
     }
 
@@ -333,14 +335,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     data={**entry.data, "endpoint": discovered_endpoint},
                 )
 
-        # Complete speaker setup now that we have fresh coordinator data
-        _LOGGER.info("🚀 Starting speaker.async_setup() for %s", entry.data["host"])
+        # Register device in HA registry now that we have fresh coordinator data
+        _LOGGER.info("Registering device for %s", entry.data["host"])
         try:
-            await speaker.async_setup(entry)
-            _LOGGER.info("✅ speaker.async_setup() completed for %s", entry.data["host"])
+            await _register_ha_device(hass, coordinator, entry)
+            _LOGGER.info("Device registration completed for %s", entry.data["host"])
         except Exception as setup_err:  # noqa: BLE001
             _LOGGER.error(
-                "❌ speaker.async_setup() failed for %s: %s",
+                "Device registration failed for %s: %s",
                 entry.data["host"],
                 setup_err,
                 exc_info=True,
@@ -451,9 +453,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set up only enabled platforms
     await hass.config_entries.async_forward_entry_setups(entry, enabled_platforms)
 
+    device_name = coordinator.player.name or entry.title or "WiiM Speaker"
     _LOGGER.info(
         "WiiM integration setup complete for %s (UUID: %s) with %d platforms",
-        speaker.name,
+        device_name,
         entry.unique_id or "unknown",
         len(enabled_platforms),
     )
@@ -467,9 +470,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, enabled_platforms):
         entry_data = hass.data[DOMAIN].pop(entry.entry_id, {})
-        speaker = entry_data.get("speaker")
-        if speaker:
-            _LOGGER.info("Unloaded WiiM integration for %s", speaker.name)
+        coordinator = entry_data.get("coordinator")
+        if coordinator:
+            device_name = coordinator.player.name or entry.title or "WiiM Speaker"
+            _LOGGER.info("Unloaded WiiM integration for %s", device_name)
     return unload_ok
 
 

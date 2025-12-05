@@ -6,7 +6,6 @@ import pytest
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode
 from homeassistant.config_entries import ConfigEntry
 
-from custom_components.wiim.data import Speaker
 from custom_components.wiim.light import WiiMLEDLight
 
 
@@ -35,76 +34,79 @@ def mock_coordinator():
 
 
 @pytest.fixture
-def mock_speaker(mock_coordinator, mock_config_entry):
-    """Create a mock speaker."""
-    speaker = MagicMock(spec=Speaker)
-    speaker.coordinator = mock_coordinator
-    speaker.config_entry = mock_config_entry
-    speaker.uuid = "test-uuid"
-    speaker.name = "Test WiiM"
-    speaker.available = True
-    speaker.model = "WiiM Mini"
-    speaker.firmware = "1.0.0"
-    speaker.role = "solo"
-    speaker.ip_address = "192.168.1.100"
-    speaker.mac_address = "AA:BB:CC:DD:EE:FF"
-    speaker.input_list = ["spotify", "bluetooth"]
-    speaker.device_model = None
-    return speaker
+def mock_coordinator_setup(mock_coordinator, mock_config_entry):
+    """Set up mock_coordinator with player properties."""
+    # Set up player properties
+    mock_coordinator.player.name = "Test WiiM"
+    mock_coordinator.player.model = "WiiM Mini"
+    mock_coordinator.player.firmware = "1.0.0"
+    mock_coordinator.player.host = "192.168.1.100"
+    mock_coordinator.player.device_info = MagicMock()
+    mock_coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
+    mock_coordinator.player.input_list = ["spotify", "bluetooth"]
+    return mock_coordinator, mock_config_entry
 
 
 class TestWiiMLEDLightBasic:
     """Test basic LED light functionality."""
 
-    def test_initialization(self, mock_speaker):
+    def test_initialization(self, mock_coordinator_setup):
         """Test LED light initialization."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity.unique_id == "test-uuid_led"
         assert entity.name == "LED"
-        assert entity.speaker == mock_speaker
+        assert entity.coordinator == mock_coordinator
 
-    def test_supported_color_modes(self, mock_speaker):
+    def test_supported_color_modes(self, mock_coordinator_setup):
         """Test supported color modes."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity.supported_color_modes == {ColorMode.BRIGHTNESS}
 
-    def test_has_entity_name(self, mock_speaker):
+    def test_has_entity_name(self, mock_coordinator_setup):
         """Test has_entity_name property."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity._attr_has_entity_name is True
 
-    def test_assumed_state(self, mock_speaker):
+    def test_assumed_state(self, mock_coordinator_setup):
         """Test assumed_state property."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity._attr_assumed_state is True
 
-    def test_available_mirrors_speaker(self, mock_speaker):
-        """Test availability mirrors speaker availability."""
-        mock_speaker.available = True
-        entity = WiiMLEDLight(mock_speaker)
+    def test_available_mirrors_coordinator(self, mock_coordinator_setup):
+        """Test availability mirrors coordinator last_update_success."""
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        mock_coordinator.last_update_success = True
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity.available is True
 
-        mock_speaker.available = False
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator.last_update_success = False
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity.available is False
 
-    def test_is_on_initial_state(self, mock_speaker):
+    def test_is_on_initial_state(self, mock_coordinator_setup):
         """Test initial is_on state."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity.is_on is None  # Optimistic state starts as None
 
-    def test_brightness_initial_state(self, mock_speaker):
+    def test_brightness_initial_state(self, mock_coordinator_setup):
         """Test initial brightness state."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity.brightness is None  # Optimistic state starts as None
 
 
 class TestWiiMLEDLightTurnOn:
     """Test LED turn on functionality."""
 
-    async def test_turn_on_default_brightness(self, mock_speaker, mock_coordinator):
+    async def test_turn_on_default_brightness(self, mock_coordinator_setup, mock_coordinator):
         """Test turn on with default brightness (100%)."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         # Mock the async_write_ha_state method
         entity.async_write_ha_state = MagicMock()
 
@@ -118,12 +120,12 @@ class TestWiiMLEDLightTurnOn:
         # Optimistic state should be updated
         assert entity.is_on is True
         assert entity.brightness == 255
-        # Should call async_request_refresh via _async_execute_command_with_refresh
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # No manual refresh - pywiim manages state updates via callbacks
 
-    async def test_turn_on_with_brightness(self, mock_speaker, mock_coordinator):
+    async def test_turn_on_with_brightness(self, mock_coordinator_setup, mock_coordinator):
         """Test turn on with specific brightness."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         # Brightness 128 (50%)
@@ -136,11 +138,12 @@ class TestWiiMLEDLightTurnOn:
         # Optimistic state should be updated
         assert entity.is_on is True
         assert entity.brightness == 128
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # No manual refresh - pywiim manages state updates via callbacks
 
-    async def test_turn_on_brightness_conversion(self, mock_speaker, mock_coordinator):
+    async def test_turn_on_brightness_conversion(self, mock_coordinator_setup, mock_coordinator):
         """Test brightness conversion from 0-255 to 0-100%."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         # Test various brightness values
@@ -164,13 +167,14 @@ class TestWiiMLEDLightTurnOn:
             else:
                 # 100% should not call set_led_brightness
                 mock_coordinator.player.set_led_brightness.assert_not_called()
-            mock_coordinator.async_request_refresh.assert_called_once()
+            # No manual refresh - pywiim manages state updates via callbacks
 
-    async def test_turn_on_handles_error(self, mock_speaker, mock_coordinator):
+    async def test_turn_on_handles_error(self, mock_coordinator_setup, mock_coordinator):
         """Test turn on handles errors."""
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
         mock_coordinator.player.set_led.side_effect = Exception("LED error")
 
-        entity = WiiMLEDLight(mock_speaker)
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
 
         with pytest.raises(Exception, match="LED error"):
             await entity.async_turn_on()
@@ -182,9 +186,10 @@ class TestWiiMLEDLightTurnOn:
 class TestWiiMLEDLightTurnOff:
     """Test LED turn off functionality."""
 
-    async def test_turn_off(self, mock_speaker, mock_coordinator):
+    async def test_turn_off(self, mock_coordinator_setup, mock_coordinator):
         """Test turn off LED."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         # First turn on
@@ -199,13 +204,14 @@ class TestWiiMLEDLightTurnOff:
 
         # Optimistic state should be updated
         assert entity.is_on is False
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # No manual refresh - pywiim manages state updates via callbacks
 
-    async def test_turn_off_handles_error(self, mock_speaker, mock_coordinator):
+    async def test_turn_off_handles_error(self, mock_coordinator_setup, mock_coordinator):
         """Test turn off handles errors."""
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
         mock_coordinator.player.set_led.side_effect = Exception("LED error")
 
-        entity = WiiMLEDLight(mock_speaker)
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
 
         with pytest.raises(Exception, match="LED error"):
             await entity.async_turn_off()
@@ -214,9 +220,10 @@ class TestWiiMLEDLightTurnOff:
 class TestWiiMLEDLightSetBrightness:
     """Test LED brightness control."""
 
-    async def test_set_brightness(self, mock_speaker, mock_coordinator):
+    async def test_set_brightness(self, mock_coordinator_setup, mock_coordinator):
         """Test setting brightness directly."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         await entity.async_set_brightness(128)
@@ -228,11 +235,12 @@ class TestWiiMLEDLightSetBrightness:
         # Optimistic state should be updated
         assert entity.is_on is True
         assert entity.brightness == 128
-        mock_coordinator.async_request_refresh.assert_called_once()
+        # No manual refresh - pywiim manages state updates via callbacks
 
-    async def test_set_brightness_validation(self, mock_speaker):
+    async def test_set_brightness_validation(self, mock_coordinator_setup):
         """Test brightness validation."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
 
         # Test invalid values
         with pytest.raises(ValueError, match="Brightness must be between 0 and 255"):
@@ -241,11 +249,12 @@ class TestWiiMLEDLightSetBrightness:
         with pytest.raises(ValueError, match="Brightness must be between 0 and 255"):
             await entity.async_set_brightness(256)
 
-    async def test_set_brightness_handles_error(self, mock_speaker, mock_coordinator):
+    async def test_set_brightness_handles_error(self, mock_coordinator_setup, mock_coordinator):
         """Test set brightness handles errors."""
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
         mock_coordinator.player.set_led.side_effect = Exception("LED error")
 
-        entity = WiiMLEDLight(mock_speaker)
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
 
         with pytest.raises(Exception, match="LED error"):
             await entity.async_set_brightness(128)
@@ -254,9 +263,10 @@ class TestWiiMLEDLightSetBrightness:
 class TestWiiMLEDLightStateUpdates:
     """Test LED optimistic state updates."""
 
-    async def test_state_update_on_turn_on(self, mock_speaker, mock_coordinator):
+    async def test_state_update_on_turn_on(self, mock_coordinator_setup, mock_coordinator):
         """Test state update when turning on."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         # Initially None
@@ -270,9 +280,10 @@ class TestWiiMLEDLightStateUpdates:
         assert entity.is_on is True
         assert entity.brightness == 255
 
-    async def test_state_update_on_turn_off(self, mock_speaker, mock_coordinator):
+    async def test_state_update_on_turn_off(self, mock_coordinator_setup, mock_coordinator):
         """Test state update when turning off."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         # Turn on first
@@ -288,9 +299,10 @@ class TestWiiMLEDLightStateUpdates:
         # Brightness should remain (optimistic state)
         assert entity.brightness == 255
 
-    async def test_state_update_on_brightness_change(self, mock_speaker, mock_coordinator):
+    async def test_state_update_on_brightness_change(self, mock_coordinator_setup, mock_coordinator):
         """Test state update when changing brightness."""
-        entity = WiiMLEDLight(mock_speaker)
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         # Turn on

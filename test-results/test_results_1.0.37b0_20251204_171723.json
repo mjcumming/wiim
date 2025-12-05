@@ -1,0 +1,48 @@
+{
+  "timestamp": "20251204_171723",
+  "version": "1.0.37b0",
+  "results": {
+    "device_discovery": {
+      "passed": true,
+      "details": {
+        "device_count": 4
+      }
+    },
+    "playback_controls": {
+      "passed": true
+    },
+    "volume_control": {
+      "passed": true
+    },
+    "state_synchronization": {
+      "passed": true
+    },
+    "source_selection": {
+      "passed": true
+    },
+    "multiroom_basic": {
+      "passed": true,
+      "details": {
+        "note": "Basic check only"
+      }
+    },
+    "eq_control": {
+      "passed": true,
+      "details": {
+        "skipped": "EQ not supported"
+      }
+    },
+    "shuffle_repeat": {
+      "passed": false,
+      "details": {
+        "error": "Shuffle failed"
+      }
+    },
+    "output_mode": {
+      "passed": true,
+      "details": {
+        "note": "Basic check only"
+      }
+    }
+  }
+}

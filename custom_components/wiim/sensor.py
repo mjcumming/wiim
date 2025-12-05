@@ -15,8 +15,8 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-# from .const import DOMAIN
-from .data import Speaker, get_speaker_from_config_entry
+from .const import DOMAIN
+from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,55 +32,47 @@ async def async_setup_entry(
     CRITICAL: Role sensor is ALWAYS created - essential for multiroom understanding.
     Diagnostic sensors only created when user enables them.
     """
-    speaker = get_speaker_from_config_entry(hass, config_entry)
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
     entities = []
 
     # ALWAYS CREATE: Role sensor - ESSENTIAL for users to understand multiroom status
-    entities.append(WiiMRoleSensor(speaker))
+    entities.append(WiiMRoleSensor(coordinator, config_entry))
 
     # Current Input sensor - shows current source (including non-selectable like "Amazon Music")
     # Useful for automations that need to detect streaming service changes
     # Note: Media player source attribute also works, but sensor is simpler for automation triggers
-    entities.append(WiiMInputSensor(speaker))
+    entities.append(WiiMInputSensor(coordinator, config_entry))
 
     # Bluetooth Output sensor (shows when audio is being sent to Bluetooth device)
     # Check if device supports audio output mode control using pywiim's capability property
-    player = getattr(speaker.coordinator, "player", None)
-    if player:
-        supports_audio_output = bool(getattr(player, "supports_audio_output", False))
-        if supports_audio_output:
-            entities.append(WiiMBluetoothOutputSensor(speaker))
-            _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")
-        else:
-            _LOGGER.debug(
-                "Skipping Bluetooth output sensor - device does not support audio output (capability=%s)",
-                supports_audio_output,
-            )
+    if coordinator.player.supports_audio_output:
+        entities.append(WiiMBluetoothOutputSensor(coordinator, config_entry))
+        _LOGGER.debug("Creating Bluetooth output sensor - device supports audio output")
     else:
-        # Player not available yet - don't create sensor
-        _LOGGER.debug("Skipping Bluetooth output sensor - player not available")
+        _LOGGER.debug("Skipping Bluetooth output sensor - device does not support audio output")
 
     # Always add diagnostic sensor
-    entities.append(WiiMDiagnosticSensor(speaker))
+    entities.append(WiiMDiagnosticSensor(coordinator, config_entry))
 
     # Always add firmware version sensor (useful for support/troubleshooting)
-    entities.append(WiiMFirmwareSensor(speaker))
+    entities.append(WiiMFirmwareSensor(coordinator, config_entry))
 
     # Audio quality sensors (only if metadata is supported)
     # Check if metadata support has been determined and is not False
-    metadata_supported = getattr(speaker.coordinator, "_metadata_supported", None)
+    metadata_supported = getattr(coordinator, "_metadata_supported", None)
     if metadata_supported is not False:
-        entities.append(WiiMAudioQualitySensor(speaker))
-        entities.append(WiiMSampleRateSensor(speaker))
-        entities.append(WiiMBitDepthSensor(speaker))
-        entities.append(WiiMBitRateSensor(speaker))
+        entities.append(WiiMAudioQualitySensor(coordinator, config_entry))
+        entities.append(WiiMSampleRateSensor(coordinator, config_entry))
+        entities.append(WiiMBitDepthSensor(coordinator, config_entry))
+        entities.append(WiiMBitRateSensor(coordinator, config_entry))
 
     async_add_entities(entities)
+    device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
     _LOGGER.info(
         "Created %d sensor entities for %s (role sensor always included)",
         len(entities),
-        speaker.name,
+        device_name,
     )
 
 
@@ -94,80 +86,42 @@ class WiiMRoleSensor(WiimEntity, SensorEntity):
     _attr_icon = "mdi:account-group"
     _attr_state_class = None  # Roles are categorical, not numeric
 
-    def __init__(self, speaker: Speaker) -> None:
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize multiroom role sensor."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_multiroom_role"
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_multiroom_role"
         # Use None so entity_id is generated from the cleaned device name
         self._attr_name = None
 
     @property
     def name(self) -> str:
         """Return the name of the entity."""
-        return f"{self.speaker.name} Multiroom Role"  # Display name includes description
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
+        return f"{device_name} Multiroom Role"  # Display name includes description
 
     @property
     def native_value(self) -> str:
         """Return the current multiroom role of the device."""
-        role = self.speaker.role.title()
-        # Only log when role actually changes to reduce log spam
-        last_role = getattr(self, "_last_logged_role", None)
-        if last_role != role:
-            _LOGGER.info(
-                "🎯 ROLE SENSOR VALUE CHANGED for %s: %s -> %s",
-                self.speaker.name,
-                last_role or "unknown",
-                role,
-            )
-            self._last_logged_role = role
-        return role
+        if not self.available or not self.player:
+            return "Unknown"
+        role = self.player.role
+        if role is None:
+            return "Unknown"
+        return role.title()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return group-related information."""
-        # Get Player object from coordinator
-        player = self.coordinator.data.get("player") if self.coordinator.data else None
+        player = self.coordinator.player
 
-        attrs = {}
+        attrs = {
+            "is_group_coordinator": player.is_master,
+        }
 
-        if player:
-            # Use player.role as source of truth
-            # Note: group.all_players may be empty even if device has slaves
-            is_coordinator = player.is_master
-            group_members_count = 0
-            member_names = []
-
-            # For now, just track that we're a coordinator
-            # group.all_players is for operations, not for counting members
-            # TODO: Use player.client.get_device_group_info() to get actual slave list
-
-            attrs = {
-                "is_group_coordinator": is_coordinator,
-                "group_members_count": group_members_count,
-            }
-
-            # Only log attrs when they change to reduce log spam
-            current_attrs = (is_coordinator, group_members_count)
-            if not hasattr(self, "_last_logged_attrs"):
-                self._last_logged_attrs = None
-            if self._last_logged_attrs != current_attrs:
-                _LOGGER.info(
-                    "🎯 ROLE SENSOR ATTRS CHANGED for %s: is_coordinator=%s, group_count=%s, members=%s",
-                    self.speaker.name,
-                    is_coordinator,
-                    group_members_count,
-                    member_names,
-                )
-                self._last_logged_attrs = current_attrs
-
-            # Get coordinator name from group object if slave
-            if player.is_slave and player.group and player.group.master:
-                master_name = getattr(player.group.master, "name", None)
-                if master_name:
-                    attrs["coordinator_name"] = master_name
-
-            if group_members_count > 0:
-                attrs["group_member_names"] = member_names
+        # Get coordinator name from group object if slave
+        if player.is_slave and player.group and player.group.master:
+            attrs["coordinator_name"] = player.group.master.name
 
         return attrs
 
@@ -187,9 +141,10 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
 
-    def __init__(self, speaker: Speaker) -> None:  # noqa: D401
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_diagnostic"
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:  # noqa: D401
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_diagnostic"
         self._attr_name = "Device Status"  # HA will prefix device name automatically
 
     # registry values that might still carry a device class or unit.
@@ -210,61 +165,36 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 
     def _device_info(self) -> dict[str, Any]:
         """Return *device_info* payload as a plain dict extracted from the DeviceInfo model."""
-
-        if self.speaker.device_model is None:
+        player = self.coordinator.player
+        if not player.device_info:
             return {}
 
-        return self.speaker.device_model.model_dump(exclude_none=True)
+        return player.device_info.model_dump(exclude_none=True)
 
     # -------------------------- State ----------------------------
 
     @property  # type: ignore[override]
     def native_value(self) -> str:
         """Return Wi-Fi RSSI in dBm (negative integer)."""
-        # Read directly from Player object (always up-to-date via pywiim)
-        if self.coordinator.data:
-            player = self.coordinator.data.get("player")
-            if player:
-                rssi = getattr(player, "wifi_rssi", None)
-                if rssi is not None:
-                    try:
-                        return f"Wi-Fi {int(rssi)} dBm"
-                    except (TypeError, ValueError):
-                        pass
+        # Read directly from Player object (pywiim manages state)
+        player = self.coordinator.player
+        if player.wifi_rssi is not None:
+            return f"Wi-Fi {player.wifi_rssi} dBm"
 
         # No RSSI → show basic connectivity status
-        # Check for recent command failures for more specific status
-        if hasattr(self.speaker.coordinator, "has_recent_command_failures"):
-            if self.speaker.coordinator.has_recent_command_failures():
-                return "Command Failed"
-
-        return "Online" if self.speaker.available else "Offline"
+        return "Online" if self.coordinator.last_update_success else "Offline"
 
     # ----------------------- Attributes -------------------------
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:  # noqa: D401
         info = self._device_info()
-
-        # Get Player from coordinator
-        player = self.coordinator.data.get("player") if self.coordinator.data else None
-
-        # Read Player properties directly
-        wifi_rssi = getattr(player, "wifi_rssi", None) if player else None
-
-        # Get group info from player.group
-        group_role = self.speaker.role
-        slave_cnt = None
-        # Note: group.all_players may be empty even if device has slaves
-        # Just show role from device API
+        player = self.coordinator.player
 
         # Get pywiim library version for diagnostics
-        try:
-            import pywiim
+        import pywiim
 
-            pywiim_version = getattr(pywiim, "__version__", "unknown")
-        except (ImportError, AttributeError):
-            pywiim_version = "unknown"
+        pywiim_version = pywiim.__version__
 
         attrs: dict[str, Any] = {
             # Identifiers
@@ -280,49 +210,26 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             # Network
             "ssid": info.get("ssid"),
             "ap_mac": info.get("ap_mac"),
-            "ip_address": self.speaker.ip_address,
-            "wifi_rssi": wifi_rssi,
+            "ip_address": player.host,
+            "wifi_rssi": player.wifi_rssi,
             "internet": _to_bool(info.get("internet")),
             "netstat": _to_int(info.get("netstat")),
             # System resources
             "uptime": _to_int(info.get("uptime")),
             "free_ram": _to_int(info.get("free_ram")),
             # Multi-room context
-            "group": group_role,
+            "group": player.role,
             "master_uuid": info.get("master_uuid"),
-            "slave_cnt": slave_cnt,
             "preset_key": _to_int(info.get("preset_key")),
         }
 
-        # Add command failure diagnostics
-        if hasattr(self.speaker.coordinator, "_last_command_failure"):
-            if self.speaker.coordinator._last_command_failure is not None:
-                import time
-
-                time_since_failure = time.time() - self.speaker.coordinator._last_command_failure
-                attrs.update(
-                    {
-                        "last_command_failure": int(time_since_failure),  # seconds ago
-                        "command_failure_count": getattr(self.speaker.coordinator, "_command_failure_count", 0),
-                        "has_recent_failures": (
-                            self.speaker.coordinator.has_recent_command_failures()
-                            if hasattr(self.speaker.coordinator, "has_recent_command_failures")
-                            else False
-                        ),
-                    }
-                )
-
-        # Add adaptive polling diagnostics (computed from coordinator/player state)
-        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
-        if player and self.speaker.coordinator.update_interval:
-            polling_interval = self.speaker.coordinator.update_interval.total_seconds()
-            play_state = getattr(player, "play_state", None) or ""
-            is_playing = play_state.lower() in ("play", "playing", "load")
+        # Add adaptive polling diagnostics
+        if self.coordinator.update_interval:
+            polling_interval = self.coordinator.update_interval.total_seconds()
             attrs.update(
                 {
                     "polling_interval": polling_interval,
-                    "is_playing": is_playing,
-                    "adaptive_polling": True,  # Always true in v1.0+
+                    "is_playing": player.is_playing,  # pywiim v2.1.37+ provides bool directly
                 }
             )
 
@@ -339,23 +246,25 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
 
-    def __init__(self, speaker: Speaker) -> None:
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize firmware sensor."""
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_firmware"
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_firmware"
         self._attr_name = "Firmware"
 
     @property  # type: ignore[override]
     def native_value(self) -> str | None:
         """Return current firmware version."""
-        # Primary source: device_model firmware field
-        if self.speaker.device_model:
-            firmware = getattr(self.speaker.device_model, "firmware", None)
+        player = self.coordinator.player
+        # Primary source: device_info firmware field
+        if player.device_info:
+            firmware = getattr(player.device_info, "firmware", None)
             if firmware and str(firmware).strip() not in {"", "0", "-", "unknown"}:
                 return str(firmware)
 
-        if self.speaker.firmware and str(self.speaker.firmware).strip() not in {"", "0", "-", "unknown"}:
-            return str(self.speaker.firmware)
+        if player.firmware and str(player.firmware).strip() not in {"", "0", "-", "unknown"}:
+            return str(player.firmware)
 
         return "Unknown"
 
@@ -363,26 +272,27 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Additional firmware-related information."""
         attrs: dict[str, Any] = {}
+        player = self.coordinator.player
 
-        if self.speaker.device_model:
+        if player.device_info:
             # MCU version (microcontroller firmware)
-            if mcu_ver := getattr(self.speaker.device_model, "mcu_ver", None):
+            if mcu_ver := getattr(player.device_info, "mcu_ver", None):
                 attrs["mcu_version"] = str(mcu_ver)
 
             # DSP version (digital signal processor firmware)
-            if dsp_ver := getattr(self.speaker.device_model, "dsp_ver", None):
+            if dsp_ver := getattr(player.device_info, "dsp_ver", None):
                 attrs["dsp_version"] = str(dsp_ver)
 
             # Release/build info
-            if release := getattr(self.speaker.device_model, "release", None):
+            if release := getattr(player.device_info, "release", None):
                 attrs["release"] = str(release)
 
             # Update availability info (if present)
-            if version_update := getattr(self.speaker.device_model, "version_update", None):
+            if version_update := getattr(player.device_info, "version_update", None):
                 # VersionUpdate can be "0" (no update) or "1" (update available)
                 if str(version_update) == "1":
                     attrs["update_available"] = True
-                    if latest := getattr(self.speaker.device_model, "latest_version", None):
+                    if latest := getattr(player.device_info, "latest_version", None):
                         attrs["latest_version"] = str(latest)
 
         # Prune None values
@@ -433,20 +343,16 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     _attr_icon = "mdi:import"  # generic input symbol
     _attr_has_entity_name = True
 
-    def __init__(self, speaker: Speaker) -> None:
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_current_input"
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_current_input"
         self._attr_name = "Current Input"  # Generic label
 
     @property  # type: ignore[override]
     def native_value(self):
         """Return the current input source (can be selectable or non-selectable)."""
-        # Read directly from Player object (always up-to-date via pywiim)
-        if self.coordinator.data:
-            player = self.coordinator.data.get("player")
-            if player:
-                return player.source
-        return None
+        return self.coordinator.player.source
 
 
 # ------------------- Bluetooth Output Sensor -------------------
@@ -459,70 +365,25 @@ class WiiMBluetoothOutputSensor(WiimEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
 
-    def __init__(self, speaker: Speaker) -> None:
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_bluetooth_output"
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_bluetooth_output"
         self._attr_name = "Bluetooth Output"
 
     @property  # type: ignore[override]
     def native_value(self) -> str:
         """Return 'on' if Bluetooth output is active, 'off' if not."""
-        try:
-            # Check if core device communication is working
-            if (
-                hasattr(self.speaker.coordinator, "_device_info_working")
-                and not self.speaker.coordinator._device_info_working
-            ):
-                # Device communication is failing - return "unavailable" to indicate device issue
-                return "unavailable"
-
-            # Get player from coordinator data (v1.0+ structure)
-            player = self.coordinator.data.get("player") if self.coordinator.data else None
-            if not player:
-                return "unknown"
-
-            # Use player's is_bluetooth_output_active property (per pywiim integration guide)
-            is_bt_active = getattr(player, "is_bluetooth_output_active", False)
-            return "on" if is_bt_active else "off"
-        except Exception:
-            # Return "unknown" if we can't determine the status
-            # This prevents the entity from becoming unavailable
-            _LOGGER.debug("Could not determine Bluetooth output status for %s", self.speaker.name)
-            return "unknown"
+        return "on" if self.coordinator.player.is_bluetooth_output_active else "off"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
-        try:
-            # Get player from coordinator data (v1.0+ structure)
-            player = self.coordinator.data.get("player") if self.coordinator.data else None
-            if not player:
-                return {
-                    "hardware_output_mode": "unknown",
-                    "audio_cast_active": "unknown",
-                }
-
-            # Use player's audio_output_mode property (per pywiim integration guide)
-            audio_output_mode = getattr(player, "audio_output_mode", None)
-            hardware_output_mode = audio_output_mode if audio_output_mode else "Unknown"
-
-            # Check if Bluetooth output is active (cast_active equivalent)
-            is_bt_active = getattr(player, "is_bluetooth_output_active", False)
-
-            return {
-                "hardware_output_mode": hardware_output_mode,
-                "audio_cast_active": is_bt_active,
-            }
-        except Exception:
-            # Return minimal attributes if we can't get the full information
-            _LOGGER.debug(
-                "Could not get extra state attributes for Bluetooth output sensor on %s",
-                self.speaker.name,
-            )
-            return {
-                "hardware_output_mode": "unknown",
-                "audio_cast_active": "unknown",
-            }
+        player = self.coordinator.player
+        return {
+            "hardware_output_mode": player.audio_output_mode or "Unknown",
+            "audio_cast_active": player.is_bluetooth_output_active,
+        }
 
 
 # ------------------- Audio Quality Sensors -------------------
@@ -535,32 +396,19 @@ class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
 
-    def __init__(self, speaker: Speaker) -> None:
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_audio_quality"
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_audio_quality"
         self._attr_name = "Audio Quality"
 
     @property  # type: ignore[override]
     def native_value(self) -> str:
         """Return formatted audio quality string."""
-        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
-        if not player:
-            return "Unknown"
-
-        # Get metadata from player properties (v1.0+ structure)
-        sample_rate = getattr(player, "media_sample_rate", None)
-        bit_depth = getattr(player, "media_bit_depth", None)
-        bit_rate = getattr(player, "media_bit_rate", None)
-
-        # If all values are None/empty, check if we have previous values to persist
-        if not any([sample_rate, bit_depth, bit_rate]):
-            # Try to get previous values from coordinator to avoid flickering during track changes
-            if hasattr(self.speaker.coordinator, "_last_valid_metadata"):
-                last_metadata = self.speaker.coordinator._last_valid_metadata
-                if last_metadata:
-                    sample_rate = last_metadata.get("sample_rate")
-                    bit_depth = last_metadata.get("bit_depth")
-                    bit_rate = last_metadata.get("bit_rate")
+        player = self.coordinator.player
+        sample_rate = player.media_sample_rate
+        bit_depth = player.media_bit_depth
+        bit_rate = player.media_bit_rate
 
         if all([sample_rate, bit_depth, bit_rate]):
             return f"{sample_rate}Hz / {bit_depth}bit / {bit_rate}kbps"
@@ -573,21 +421,16 @@ class WiiMAudioQualitySensor(WiimEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed audio quality attributes."""
-        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
-        if not player:
-            return {}
-
+        player = self.coordinator.player
         attrs = {}
-        # Get metadata from player properties (v1.0+ structure)
-        if sample_rate := getattr(player, "media_sample_rate", None):
-            attrs["sample_rate"] = sample_rate
-        if bit_depth := getattr(player, "media_bit_depth", None):
-            attrs["bit_depth"] = bit_depth
-        if bit_rate := getattr(player, "media_bit_rate", None):
-            attrs["bit_rate"] = bit_rate
-        if codec := getattr(player, "media_codec", None):
-            attrs["codec"] = codec
-
+        if player.media_sample_rate:
+            attrs["sample_rate"] = player.media_sample_rate
+        if player.media_bit_depth:
+            attrs["bit_depth"] = player.media_bit_depth
+        if player.media_bit_rate:
+            attrs["bit_rate"] = player.media_bit_rate
+        if player.media_codec:
+            attrs["codec"] = player.media_codec
         return attrs
 
 
@@ -599,28 +442,16 @@ class WiiMSampleRateSensor(WiimEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "Hz"
 
-    def __init__(self, speaker: Speaker) -> None:
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_sample_rate"
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_sample_rate"
         self._attr_name = "Sample Rate"
 
     @property  # type: ignore[override]
     def native_value(self) -> int | None:
         """Return current track's sample rate in Hz."""
-        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
-        if not player:
-            return None
-
-        # Get sample rate from player property (v1.0+ structure)
-        sample_rate = getattr(player, "media_sample_rate", None)
-
-        # If no current value, try to get previous valid value to avoid flickering
-        if sample_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
-            last_metadata = self.speaker.coordinator._last_valid_metadata
-            if last_metadata:
-                sample_rate = last_metadata.get("sample_rate")
-
-        return sample_rate
+        return self.coordinator.player.media_sample_rate
 
 
 class WiiMBitDepthSensor(WiimEntity, SensorEntity):
@@ -631,28 +462,16 @@ class WiiMBitDepthSensor(WiimEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "bit"
 
-    def __init__(self, speaker: Speaker) -> None:
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_bit_depth"
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_bit_depth"
         self._attr_name = "Bit Depth"
 
     @property  # type: ignore[override]
     def native_value(self) -> int | None:
         """Return current track's bit depth."""
-        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
-        if not player:
-            return None
-
-        # Get bit depth from player property (v1.0+ structure)
-        bit_depth = getattr(player, "media_bit_depth", None)
-
-        # If no current value, try to get previous valid value to avoid flickering
-        if bit_depth is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
-            last_metadata = self.speaker.coordinator._last_valid_metadata
-            if last_metadata:
-                bit_depth = last_metadata.get("bit_depth")
-
-        return bit_depth
+        return self.coordinator.player.media_bit_depth
 
 
 class WiiMBitRateSensor(WiimEntity, SensorEntity):
@@ -663,25 +482,13 @@ class WiiMBitRateSensor(WiimEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "kbps"
 
-    def __init__(self, speaker: Speaker) -> None:
-        super().__init__(speaker)
-        self._attr_unique_id = f"{speaker.uuid}_bit_rate"
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_bit_rate"
         self._attr_name = "Bit Rate"
 
     @property  # type: ignore[override]
     def native_value(self) -> int | None:
         """Return current track's bit rate in kbps."""
-        player = self.speaker.coordinator.data.get("player") if self.speaker.coordinator.data else None
-        if not player:
-            return None
-
-        # Get bit rate from player property (v1.0+ structure)
-        bit_rate = getattr(player, "media_bit_rate", None)
-
-        # If no current value, try to get previous valid value to avoid flickering
-        if bit_rate is None and hasattr(self.speaker.coordinator, "_last_valid_metadata"):
-            last_metadata = self.speaker.coordinator._last_valid_metadata
-            if last_metadata:
-                bit_rate = last_metadata.get("bit_rate")
-
-        return bit_rate
+        return self.coordinator.player.media_bit_rate

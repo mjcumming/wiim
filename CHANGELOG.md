@@ -2,6 +2,109 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.38] - 2025-12-04
+
+### Fixed
+
+- **Bluetooth Output State Reporting**: Fixed issue where Bluetooth output mode would show "unknown" in Home Assistant even when correctly active on the device
+  - Root cause: pywiim's `audio_output_mode` returns "Bluetooth Out" but `available_outputs` contains "BT: DeviceName" format
+  - Now correctly maps "Bluetooth Out" mode to the corresponding "BT: DeviceName" option
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.43
+
+  - Major improvements from pywiim 2.1.37 → 2.1.43:
+
+  **UI Stability (2.1.43)**:
+
+  - EQ preset state preserved during refresh (no more flickering back to old values)
+  - Shuffle/repeat state preserved during refresh (optimistic updates held for 60 seconds)
+
+  **Display Improvements (2.1.42)**:
+
+  - EQ presets normalized to Title Case ("Flat", "Acoustic" instead of "flat", "acoustic")
+  - Source names normalized to Title Case ("AirPlay", "Spotify", "Line In", "Bluetooth")
+
+  **Playback Improvements (2.1.39)**:
+
+  - Track change debouncing - no more false "stopped" states between tracks
+  - Stream metadata enrichment - raw URLs now show proper artist/title from Icecast/M3U streams
+  - Group metadata propagation - slaves always receive latest metadata from master
+
+  **Device Support (2.1.38)**:
+
+  - Device profiles system for better Audio Pro, Arylic, and LinkPlay device support
+  - Profile-driven state management (UPnP vs HTTP source selection per device type)
+
+  **Cleaner State Properties (2.1.37)**:
+
+  - New `is_playing`, `is_paused`, `is_idle`, `is_buffering` properties
+  - Normalized `state` property for consistent state mapping
+
+### Improved
+
+- **Test Suite**: Comprehensive testing overhaul
+  - Fixed 15+ failing unit tests with proper mock setups
+  - Added new tests for Bluetooth output, sync time, presets, announcements, queue management
+  - Added multiroom automated tests (10 scenarios)
+  - Cleaned up deprecated test scripts
+  - Updated test fixtures to match pywiim 2.1.43 behaviors
+
+## [1.0.36] - 2025-12-03
+
+### Fixed
+
+- **Next/Previous Track Buttons Missing** (GitHub Issue #142)
+
+  - Fixed next/previous track buttons not appearing for Spotify and other streaming services
+  - Now uses pywiim's `supports_next_track` property which correctly detects source capabilities
+  - Streaming services like Spotify now show track controls even with `queue_count=0`
+  - This fix applies to both individual player and group coordinator entities
+
+- **Seek Feature Detection**: Updated seek support detection to use pywiim's source-aware `supports_seek` property
+
+  - Previously used duration-based check which could miss some cases
+  - Now correctly identifies sources that support seeking (e.g., not live radio or physical inputs)
+
+- **Slave Player Controls**: Fixed controls being hidden on slave players in multiroom groups
+  - Slaves now show next/prev, seek, shuffle, repeat controls (commands route to master via pywiim)
+  - Slaves now show EQ controls (EQ is device-specific, not group-wide)
+  - Still blocked for slaves: source selection, browse media, play media, announcements, queue management
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.36
+
+  - New source capability detection: `supports_next_track`, `supports_previous_track`, `supports_seek`
+  - These properties are source-aware and correctly handle streaming services
+
+- **Code Cleanup**: Simplified player access to use pywiim's documented API directly
+  - `_get_player()` now returns `coordinator.player` directly (always available after setup)
+  - Removed redundant null checks since pywiim's Player is guaranteed to exist
+  - Replaced defensive `getattr(player, "supports_*", False)` with direct `player.supports_*`
+  - Applies to all capability properties: `supports_eq`, `supports_upnp`, `supports_queue_add`, `supports_queue_browse`, `supports_presets`, `supports_audio_output`, `supports_alarms`, `supports_sleep_timer`, `shuffle_supported`, `repeat_supported`
+  - Cleaner, more readable code that uses pywiim's property-based API as intended
+
+## [1.0.35] - 2025-12-03
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.34
+  - **Bluetooth metadata now displays correctly** (enhanced fix for Issue #138)
+  - When `getPlayerStatusEx` returns "Unknown" for title/artist/album (common with Bluetooth AVRCP), the library now fetches metadata from `getMetaInfo` endpoint
+  - This ensures Bluetooth track information (title, artist, album) is displayed correctly
+  - The WiiM device receives AVRCP metadata from the Bluetooth source, but only exposes it via `getMetaInfo`, not `getPlayerStatusEx`
+  - Fix applies to both HTTP polling and UPnP event handling
+
+## [1.0.34] - 2025-12-03
+
+### Changed
+
+- **Dependency Update**: Updated minimum `pywiim` library version to 2.1.32
+  - **Enhanced device discovery validation** - Three-tier validation to prevent non-LinkPlay devices (Samsung TV, Sonos, Chromecast) from being incorrectly discovered
+  - **Gen1 WiFi Direct multiroom grouping fix** - Gen1 devices (Audio Pro Gen1, legacy LinkPlay) can now join groups correctly via WiFi Direct mode
+
 ## [1.0.33] - 2025-12-02
 
 ### Changed
