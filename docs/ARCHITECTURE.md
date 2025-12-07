@@ -7,9 +7,8 @@
 3. [Component Responsibilities](#component-responsibilities)
 4. [Data Flow](#data-flow)
 5. [Project Structure](#project-structure)
-6. [Development Rules](#development-rules)
-7. [Testing Strategy](#testing-strategy)
-8. [Code Patterns](#code-patterns)
+6. [Code Patterns](#code-patterns)
+7. [Decision Log](#decision-log)
 
 ## Core Principles
 
@@ -176,6 +175,14 @@
   - Manual entry
   - Options (volume step, feature toggles)
 
+### Platform Pattern
+
+Each platform file follows the same pattern:
+
+1. **Read from pywiim**: `coordinator.data["player"]`
+2. **Call pywiim**: `coordinator.player.method()`
+3. **Handle errors**: Catch WiiMError, raise HomeAssistantError
+
 ## Data Flow
 
 ### State Updates
@@ -223,147 +230,100 @@ wiim/
 │   ├── binary_sensor.py       # Binary sensor entities
 │   ├── services.py            # Custom services
 │   ├── diagnostics.py         # Diagnostics
+│   ├── system_health.py       # System health
 │   ├── const.py               # Constants
-│   └── models.py              # Data models
+│   ├── models.py              # Data models
+│   ├── manifest.json          # Integration manifest
+│   ├── strings.json           # Translation strings
+│   ├── services.yaml          # Service definitions
+│   └── translations/          # Translation files
 │
 ├── tests/                      # Automated tests (pytest)
-│   ├── unit/                   # Unit tests (fast, mocked)
-│   ├── conftest.py             # Shared fixtures
+│   ├── unit/                   # Unit tests (fast, isolated, mocked)
+│   ├── integration/            # Integration tests
+│   ├── fixtures/               # Test fixtures
+│   ├── conftest.py             # All pytest fixtures (consolidated)
 │   └── run_tests.py            # Test runner
 │
-├── scripts/                    # Manual validation tests
-│   ├── test-complete-suite.py # E2E test suite
-│   └── test-real-devices.py   # Real device tests
+├── scripts/                    # Real-device validation tests
+│   ├── test-smoke.py           # Quick smoke tests
+│   ├── test-automated.py       # Automated device tests
+│   ├── test-multiroom-comprehensive.py  # Multiroom tests
+│   └── pre-release-check.py    # Pre-release validation
 │
 ├── docs/                       # Documentation
+│   ├── INDEX.md                # Documentation index
 │   ├── ARCHITECTURE.md         # This file
-│   ├── testing-strategy.md     # Testing approach
-│   └── user-guide.md           # User documentation
+│   ├── DEVELOPMENT-RULES.md    # Development rules
+│   ├── TESTING-CONSOLIDATED.md # Testing strategy
+│   ├── user-guide.md           # User guide
+│   ├── faq-and-troubleshooting.md # FAQ
+│   ├── automation-cookbook.md  # Automation examples
+│   └── TTS_GUIDE.md            # TTS guide
 │
-└── development/                # Developer guides
-    └── README.md               # Development guide
+├── development/                # Developer guides
+│   └── HA_INTEGRATION_GUIDE.md # pywiim integration reference
+│
+├── .github/                    # GitHub configuration
+│   ├── copilot-instructions.md # AI assistant rules
+│   └── workflows/              # CI/CD workflows
+│
+├── CHANGELOG.md                # Version changelog
+├── CONTRIBUTING.md             # Contribution guide
+├── README.md                   # Project README
+├── Makefile                    # Build and test commands
+└── pyproject.toml              # Project configuration
 ```
 
 ### File Naming Rules
 
-- ✅ **DO**: Use hyphens for multi-word files: `test-complete-suite.py`
+#### Code Files
+
+- ✅ **DO**: Use lowercase with underscores: `media_player.py`
+- ✅ **DO**: Match class name: `WiiMMediaPlayer` → `media_player.py`
+- ❌ **DON'T**: Use hyphens: `media-player.py` (Python doesn't allow)
+
+#### Test Files
+
+- ✅ **DO**: Match source file: `test_media_player.py` for `media_player.py`
+- ✅ **DO**: Use `test_` prefix: `test_config_flow.py`
+
+#### Documentation Files
+
+- ✅ **DO**: Use hyphens: `testing-strategy.md`
+- ✅ **DO**: Use YYYY.MM.DD format for dated docs
+- ❌ **DON'T**: Use underscores: `testing_strategy.md`
+
+#### Script Files
+
+- ✅ **DO**: Use hyphens: `test-complete-suite.py`
 - ❌ **DON'T**: Use underscores: `test_complete_suite.py`
-- ✅ **DO**: Use lowercase: `config-flow.py`
-- ✅ **DO**: Use descriptive names: `group-media-player.py`
 
-### Code Organization Rules
+### Code Organization
 
-1. **One class per file** (when possible)
-2. **Keep files < 500 LOC** (split if larger)
-3. **Group related functionality** (e.g., all volume code together)
-4. **Import order**: stdlib → third-party → local
+#### Import Order
 
-## Development Rules
+1. **Standard library**
+2. **Third-party** (homeassistant, pywiim)
+3. **Local** (custom_components.wiim)
 
-### Rule 1: pywiim is Source of Truth
+#### Class Organization
 
-**NEVER work around pywiim issues in the integration.**
+1. **Imports**
+2. **Constants**
+3. **Helper functions**
+4. **Main class**
+   - `__init__`
+   - Properties
+   - Methods (grouped by functionality)
 
-If pywiim doesn't provide something:
+#### Method Organization (within a class)
 
-1. Fix it in pywiim
-2. Update pywiim dependency
-3. Remove any workarounds
-
-### Rule 2: Thin Glue Layer
-
-**Only code that directly glues pywiim to HA belongs here.**
-
-- ✅ Entity creation
-- ✅ Config flow
-- ✅ Reading from pywiim
-- ✅ Calling pywiim methods
-- ❌ Device communication logic
-- ❌ State management
-- ❌ Business logic
-
-### Rule 3: Test-Driven Development
-
-**Every bug fix requires a test.**
-
-1. Write failing test
-2. Verify it fails
-3. Fix the bug
-4. Verify test passes
-5. Add edge cases
-
-### Rule 4: Follow HA Patterns
-
-**Use Home Assistant's recommended patterns.**
-
-- `DataUpdateCoordinator` for polling
-- `CoordinatorEntity` for entities
-- `ConfigFlow` for setup
-- Public HA APIs only
-
-### Rule 5: Type Hints Required
-
-**All code must have type hints.**
-
-```python
-def async_set_volume_level(self, volume: float) -> None:
-    """Set volume level."""
-    pass
-```
-
-### Rule 6: Error Handling
-
-**Fail loudly with actionable messages.**
-
-```python
-# ✅ Good
-raise HomeAssistantError(f"Failed to set volume on {self.name}: {err}") from err
-
-# ❌ Bad
-raise HomeAssistantError("Error")
-```
-
-## Testing Strategy
-
-### Test Categories
-
-#### 1. Unit Tests (`tests/unit/`)
-
-- **Purpose**: Fast, isolated tests
-- **Speed**: Seconds
-- **Devices**: Mocked
-- **When**: Every commit, pre-release
-- **Coverage Target**: 80%+
-
-#### 2. Manual Validation (`scripts/`)
-
-- **Purpose**: Real device testing
-- **Speed**: Minutes
-- **Devices**: Real
-- **When**: Before major releases
-
-### Test Requirements
-
-1. **Every bug fix** → Regression test
-2. **New feature** → Unit tests
-3. **Edge cases** → Test None, missing attributes, errors
-4. **Coverage** → Aim for 80%+
-
-### Running Tests
-
-```bash
-# All tests
-make test
-
-# Unit tests only
-pytest tests/unit/ -v
-
-# Specific test
-pytest tests/unit/test_media_player.py::test_volume_step -v
-
-# With coverage
-pytest --cov=custom_components.wiim --cov-report=html
-```
+1. **Initialization** (`__init__`)
+2. **Properties** (read-only)
+3. **State methods** (read state)
+4. **Control methods** (change state)
+5. **Helper methods** (private)
 
 ## Code Patterns
 
@@ -384,7 +344,6 @@ async def async_set_volume_level(self, volume: float) -> None:
     """Set volume via pywiim."""
     try:
         await self.coordinator.player.set_volume(volume)
-        await self.coordinator.async_request_refresh()
     except WiiMError as err:
         raise HomeAssistantError(f"Failed to set volume: {err}") from err
 ```
@@ -416,7 +375,6 @@ has_upnp = coordinator.upnp_client is not None  # AttributeError!
 ```python
 try:
     await self.coordinator.player.set_volume(volume)
-    await self.coordinator.async_request_refresh()
 except WiiMConnectionError as err:
     # Connection errors are transient
     _LOGGER.warning("Connection issue: %s", err)
@@ -444,8 +402,19 @@ except WiiMError as err:
 - **Config Pattern**: ConfigFlow for setup, OptionsFlow for options
 - **Service Pattern**: Custom services in services.py
 
-## References
+## Related Documentation
 
-- [Home Assistant Developer Docs](https://developers.home-assistant.io/)
-- [pywiim Library](https://github.com/mjcumming/pywiim)
-- [LinkPlay API Docs](https://developer.arylic.com/httpapi/)
+### Internal Docs
+
+- **[DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md)** - Detailed development rules and guidelines
+- **[TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md)** - Complete testing strategy
+- **[../development/README.md](../development/README.md)** - Developer quick-start guide
+- **[../development/HA_INTEGRATION_GUIDE.md](../development/HA_INTEGRATION_GUIDE.md)** - pywiim integration patterns reference
+
+### External References
+
+- **[Home Assistant Developer Docs](https://developers.home-assistant.io/)** - Official HA development guidelines
+- **[pywiim Library](https://github.com/mjcumming/pywiim)** - Core library (all device communication)
+- **[pywiim HA Integration Guide](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md)** - Upstream integration patterns
+- **[pywiim API Reference](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md)** - Full API documentation
+- **[LinkPlay API Docs](https://developer.arylic.com/httpapi/)** - Hardware API reference

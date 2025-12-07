@@ -1,6 +1,6 @@
 # Bug Fix Testing Checklist
 
-> **Quick reference workflow for fixing bugs.** For comprehensive testing strategy, see [testing-strategy.md](testing-strategy.md). For historical test tracking, see [testing-summary.md](testing-summary.md).
+> **Quick reference workflow for fixing bugs.** For comprehensive testing strategy, see [TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md).
 
 ## Before Fixing Any Bug
 

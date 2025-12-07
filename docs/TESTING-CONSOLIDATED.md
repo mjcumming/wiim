@@ -13,6 +13,7 @@ The integration uses a 4-tier testing approach to catch issues at different leve
 **Purpose**: Catch logic errors, regressions, basic functionality
 
 **Characteristics**:
+
 - ✅ Fast (runs in seconds)
 - ✅ Uses mocks/fixtures
 - ✅ No real devices needed
@@ -21,12 +22,14 @@ The integration uses a 4-tier testing approach to catch issues at different leve
 - ✅ Regression tests for fixed bugs
 
 **When to use**:
+
 - Before every commit
 - In CI/CD pipelines
 - When fixing bugs (write test first!)
 - Pre-release validation
 
 **Run with**:
+
 ```bash
 make test              # All unit tests
 pytest tests/unit/     # Unit tests only
@@ -40,6 +43,7 @@ make test-quick        # Fast (no coverage)
 **Purpose**: Test pywiim → HA integration layer
 
 **Characteristics**:
+
 - ✅ Uses real pywiim Player objects (mocked HTTP)
 - ✅ Validates integration patterns
 - ✅ Tests callback flows
@@ -47,11 +51,13 @@ make test-quick        # Fast (no coverage)
 - ✅ Fast (runs in seconds)
 
 **When to use**:
+
 - Before every PR
 - When changing coordinator/entity patterns
 - Pre-release validation
 
 **Run with**:
+
 ```bash
 make test-integration  # Integration tests
 pytest tests/integration/ -v
@@ -64,6 +70,7 @@ pytest tests/integration/ -v
 **Purpose**: Catch device-specific issues, firmware quirks, real-world scenarios
 
 **Characteristics**:
+
 - ⚠️ Requires running Home Assistant
 - ⚠️ Requires real WiiM devices
 - ⚠️ Slower (5-15 minutes)
@@ -72,11 +79,13 @@ pytest tests/integration/ -v
 - ✅ Regression detection
 
 **When to use**:
+
 - Before major releases
 - When testing new features
 - Final validation before release
 
 **Run with**:
+
 ```bash
 # Critical path (5 min)
 python scripts/test-automated.py --mode critical --version 1.0.37
@@ -85,6 +94,41 @@ python scripts/test-automated.py --mode critical --version 1.0.37
 python scripts/test-automated.py --mode full --version 1.0.37
 ```
 
+**Automated Test Suite** (`test-automated.py`):
+
+| Test                  | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| device_discovery      | Find WiiM devices in HA                             |
+| playback_controls     | Play/pause/stop                                     |
+| volume_control        | Volume set/mute                                     |
+| state_synchronization | State updates properly                              |
+| source_selection      | Input source switching (shows available sources)    |
+| multiroom_basic       | Basic group check                                   |
+| eq_control            | EQ preset selection                                 |
+| shuffle_repeat        | Shuffle/repeat (skips if source doesn't support)    |
+| output_mode           | Audio output mode selection (Line Out/Optical/Coax) |
+| play_preset           | Preset playback                                     |
+| play_url              | URL playback                                        |
+| announcements         | Notification/TTS playback                           |
+| queue_management      | Queue info retrieval                                |
+| sync_time             | Device time synchronization                         |
+| bluetooth_output      | Bluetooth output selection                          |
+
+**Multiroom Comprehensive** (`test-multiroom-comprehensive.py`):
+
+| Test                | Description                         |
+| ------------------- | ----------------------------------- |
+| 2-device join       | Join two devices                    |
+| Unjoin slave        | Unjoin slave device                 |
+| 3-device join       | Join three devices                  |
+| Unjoin middle       | Unjoin middle device (breaks group) |
+| Rejoin 2 devices    | Rejoin two devices                  |
+| Unjoin master       | Unjoin master (slave becomes solo)  |
+| Join already joined | Replace group membership            |
+| Unjoin solo         | Unjoin when already solo            |
+| Join to self        | Edge case - device joins itself     |
+| Complex join        | Multi-step: A+B then add C          |
+
 ### Tier 4: Smoke Tests (Quick Validation)
 
 **Location**: `scripts/test-smoke.py`
@@ -92,21 +136,31 @@ python scripts/test-automated.py --mode full --version 1.0.37
 **Purpose**: Fast validation that nothing is broken
 
 **Characteristics**:
+
 - ✅ Very fast (2-3 minutes)
 - ⚠️ Requires running Home Assistant
 - ⚠️ Requires real WiiM devices
 - ✅ Quick feedback
 
 **When to use**:
+
 - Before commits (optional)
 - Quick validation after changes
 - Pre-release smoke check
 
 **Run with**:
+
 ```bash
 make test-smoke        # Requires HA_URL and HA_TOKEN env vars
 python scripts/test-smoke.py --ha-url http://localhost:8123 --token YOUR_TOKEN
 ```
+
+**Smoke Tests:**
+
+1. Device discovery
+2. Basic playback (play/pause)
+3. Volume control
+4. State synchronization
 
 ## Test Directory Structure
 
@@ -135,13 +189,25 @@ tests/
 scripts/
 ├── test-smoke.py              # Tier 4: Smoke tests (quick validation)
 ├── test-automated.py          # Tier 3: Automated real-device tests
-├── test-complete-suite.py     # Legacy: Full feature test
-├── test-real-devices.py        # Legacy: Basic device test
-├── test-advanced-features.py  # Legacy: Advanced features
+├── test-multiroom-comprehensive.py  # Multiroom edge cases
 ├── lib/
 │   └── test_tracker.py        # Result tracking utilities
 └── pre-release-check.py       # Pre-release validation
 ```
+
+## Device Requirements for Real Tests
+
+### Minimum (Smoke/Automated Tests)
+
+- 1 WiiM device (tests use first available device dynamically)
+- Home Assistant running with WiiM integration
+- Note: Some tests skip gracefully if source doesn't support feature (e.g., shuffle on Bluetooth)
+
+### Full Multiroom Testing
+
+- 3 WiiM devices on same network
+- Active audio source on at least one device
+- Note: Multiroom tests use device IPs configured in the test script
 
 ## Testing Workflow
 
@@ -175,11 +241,9 @@ make lint              # Code quality
 make pre-release       # Full validation checklist
 
 # 2. Real-device validation (RECOMMENDED)
-# Critical path (5 min)
-python scripts/test-automated.py --mode critical --version 1.0.37
-
-# Or full suite (15 min)
-python scripts/test-automated.py --mode full --version 1.0.37
+export HA_TOKEN=$(cat ~/.ha_token)
+python scripts/test-automated.py --config scripts/test.config --mode full
+make test-multiroom    # Comprehensive multiroom testing
 ```
 
 ### When Fixing Bugs
@@ -201,20 +265,43 @@ pytest tests/unit/test_media_player.py::test_new_bug -v
 make test
 ```
 
+## Key Design Decisions
+
+### 1. Capability Checks Delegated to pywiim
+
+We do NOT check source types in our code. All capability checks use pywiim's properties:
+
+```python
+# ✅ CORRECT - use pywiim capability properties
+if self._shuffle_supported():  # Uses player.shuffle_supported
+    features |= MediaPlayerEntityFeature.SHUFFLE_SET
+
+# ❌ WRONG - don't check source types
+if source != "AirPlay":  # Never do this
+    ...
+```
+
+### 2. No async_request_refresh() in Entity Methods
+
+Per pywiim guide, entities should NOT call refresh after commands:
+
+- Commands trigger callbacks automatically
+- Coordinator handles refresh scheduling
+- Callbacks update state immediately
+
+### 3. Separate Comprehensive from Automated Tests
+
+- `test-automated.py` - Fast, runs in full suite (~5 min)
+- `test-multiroom-comprehensive.py` - Thorough, runs separately (~10 min)
+
+This keeps the main test suite fast while providing thorough multiroom coverage when needed.
+
 ## Test Requirements
 
 ### Coverage Goals
 
-- **Current**: 56% (above 10% minimum)
 - **Target**: 80%+
 - **Focus**: Core functionality first, then expand to sensors, buttons, numbers
-
-### Current Test Status
-
-- **Total Test Cases**: 214+
-- **Passing Tests**: 183+
-- **Test Files**: 16 unit test files
-- **Coverage**: 56% and growing
 
 ### Test Types
 
@@ -237,12 +324,14 @@ def test_component_behavior():
 ```
 
 **Requirements**:
+
 - Fast (< 1 second per test)
 - Isolated (no side effects)
 - Mocked (no real devices)
 - Comprehensive (all code paths)
 
 **Fixtures**:
+
 - Use `realistic_player` fixture for Player mocks with callback simulation
 - Use `realistic_group` fixture for multiroom testing
 
@@ -261,27 +350,11 @@ async def test_coordinator_uses_player_refresh(coordinator_with_real_player):
 ```
 
 **Requirements**:
+
 - Use real pywiim Player objects (mocked HTTP)
 - Test integration patterns
 - Validate callback flows
 - Fast (runs in seconds)
-
-#### Tier 3: Real-Device Tests (`scripts/test-automated.py`)
-
-**Requirements**:
-- Real devices
-- Real Home Assistant instance
-- Systematic coverage
-- Result tracking
-- Before major releases
-
-#### Tier 4: Smoke Tests (`scripts/test-smoke.py`)
-
-**Requirements**:
-- Real devices
-- Real Home Assistant instance
-- Quick validation (2-3 min)
-- Before commits (optional)
 
 ## Test Naming Convention
 
@@ -326,12 +399,25 @@ All fixtures are defined in `tests/conftest.py` and organized into categories:
 - `wiim_speaker` - Test Speaker instance with HA integration
 - `wiim_speaker_slave` - Test slave Speaker for group testing
 
-### Helper Fixtures
+### Realistic Player Fixtures
 
-- `mock_wiim_device_registry` - Mock device registry
-- `mock_wiim_dispatcher` - Mock dispatcher
+Located in `tests/fixtures/realistic_player.py`:
 
-Note: Many test files define their own local fixtures for specific test scenarios. This is acceptable and encouraged when fixtures are test-specific.
+- `realistic_player` - Player mock with callback simulation
+- `realistic_player_solo` - Solo player
+- `realistic_player_master` - Master player
+- `realistic_player_slave` - Slave player
+- `realistic_group` - Group mock for multiroom testing
+- `player_with_state` - Parameterized fixture for different states
+
+These fixtures simulate real pywiim Player behavior including:
+
+- Callback firing on commands
+- State transitions
+- Group operations
+- Property access patterns
+
+See `tests/FIXTURES.md` for complete fixture documentation.
 
 ## Regression Tests
 
@@ -353,51 +439,15 @@ Note: Many test files define their own local fixtures for specific test scenario
 
 ## Running Tests
 
-### Tier 1: Unit Tests
+### Quick Reference
 
 ```bash
-make test              # All unit tests
+make test              # All unit tests with coverage
 make test-quick        # Fast (no coverage)
-pytest tests/unit/ -v  # Unit tests only
-```
-
-### Tier 2: Integration Tests
-
-```bash
-make test-integration           # Integration tests
-pytest tests/integration/ -v     # Integration tests only
-```
-
-### Tier 3: Real-Device Tests
-
-```bash
-# Critical path (5 min)
-python scripts/test-automated.py --mode critical --version 1.0.37
-
-# Full suite (15 min)
-python scripts/test-automated.py --mode full --version 1.0.37
-```
-
-### Tier 4: Smoke Tests
-
-```bash
-# Requires HA_URL and HA_TOKEN environment variables
-make test-smoke
-
-# Or directly
-python scripts/test-smoke.py --ha-url http://localhost:8123 --token YOUR_TOKEN
-```
-
-### All Automated Tests
-
-```bash
-make test-all  # Unit + Integration tests
-```
-
-### Pre-Release Validation
-
-```bash
-make pre-release  # Full validation checklist
+make test-integration  # Integration tests
+make test-smoke        # Smoke tests (requires devices)
+make test-all          # Unit + Integration tests
+make pre-release       # Full validation checklist
 ```
 
 ### Specific Test
@@ -441,23 +491,18 @@ Use `make pre-release` or `python scripts/pre-release-check.py` to validate:
 - Missing coverage areas
 - Real-device test results comparison
 
-## Test Fixtures
+## File Reference
 
-### Realistic Player Fixtures
-
-Located in `tests/fixtures/realistic_player.py`:
-
-- `realistic_player` - Player mock with callback simulation
-- `realistic_player_solo` - Solo player
-- `realistic_player_master` - Master player
-- `realistic_player_slave` - Slave player
-- `realistic_group` - Group mock for multiroom testing
-- `player_with_state` - Parameterized fixture for different states
-
-These fixtures simulate real pywiim Player behavior including:
-- Callback firing on commands
-- State transitions
-- Group operations
-- Property access patterns
-
-See `tests/FIXTURES.md` for complete fixture documentation.
+| File                                      | Purpose                  |
+| ----------------------------------------- | ------------------------ |
+| `tests/unit/`                             | Unit tests with mocks    |
+| `tests/integration/`                      | pywiim integration tests |
+| `tests/fixtures/realistic_player.py`      | Realistic Player mock    |
+| `tests/conftest.py`                       | Shared fixtures          |
+| `tests/FIXTURES.md`                       | Fixture documentation    |
+| `scripts/test-smoke.py`                   | Quick smoke tests        |
+| `scripts/test-automated.py`               | Full automated suite     |
+| `scripts/test-multiroom-comprehensive.py` | Multiroom edge cases     |
+| `scripts/pre-release-check.py`            | Pre-release validation   |
+| `scripts/test.config`                     | Test configuration       |
+| `Makefile`                                | Build/test commands      |

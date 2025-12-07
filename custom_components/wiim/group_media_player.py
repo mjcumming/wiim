@@ -56,7 +56,10 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         self._attr_name = None  # Use dynamic name property
 
     def _update_position_from_coordinator(self) -> None:
-        """Update media position attributes from coordinator data (LinkPlay pattern)."""
+        """Update media position attributes from coordinator data (LinkPlay pattern).
+
+        Uses group object properties (pywiim 2.1.45+) for virtual group media state.
+        """
         # Override mixin to skip feature updates (group player doesn't need them)
         if not self.available:
             self._attr_state = None
@@ -66,20 +69,37 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             return
 
         player = self._get_player()
-        if not player:
+        if not player or not player.group:
             self._attr_state = None
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
             self._attr_media_duration = None
             return
 
-        current_state = self._derive_state_from_player(player)
+        # Use group object for state and position (pywiim 2.1.45+)
+        group = player.group
+        # Use group's play_state for virtual group entity (pywiim 2.1.45+)
+        # Group.play_state comes from master's cached state
+        group_play_state = group.play_state
+        if not group_play_state:
+            # Fallback to player's play_state if group doesn't have it
+            group_play_state = player.play_state
+
+        # Derive state from play_state string (group uses master's play_state)
+        if group_play_state in ("play", "playing"):
+            current_state = MediaPlayerState.PLAYING
+        elif group_play_state == "pause":
+            current_state = MediaPlayerState.PAUSED
+        elif group_play_state in ("buffering", "load"):
+            current_state = MediaPlayerState.BUFFERING
+        else:
+            current_state = MediaPlayerState.IDLE
         self._attr_state = current_state
 
-        # Get values from pywiim
-        new_position = player.media_position
+        # Get values from group object (pywiim 2.1.45+ provides group media properties)
+        new_position = group.media_position
         # If duration is 0, return None (unknown) to avoid 00:00 display
-        new_duration = player.media_duration if player.media_duration else None
+        new_duration = group.media_duration if group.media_duration else None
 
         # Update duration (keep existing if new is invalid during playback)
         if new_duration:
@@ -418,8 +438,8 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(f"Failed to set repeat: {err}") from err
 
     # ===== MEDIA PROPERTIES =====
-    # All media metadata delegates to the physical master player.
-    # The master device determines what's playing and provides metadata.
+    # All media metadata uses group object properties (pywiim 2.1.45+).
+    # The group object provides unified metadata for the virtual group entity.
 
     @property
     def media_content_type(self) -> MediaType:
@@ -440,29 +460,103 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if self.state not in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED):
             return None
 
-        # Use pywiim's tracked URL (set when play_url() is called)
-        return self._get_player().media_content_id
+        # Use group object properties (pywiim 2.1.45+) for virtual group media
+        player = self._get_player()
+        if not player or not player.group:
+            return None
+        # Group object provides media_content_id directly (pywiim 2.1.45+)
+        # Note: media_content_id may not be on group, fallback to player
+        group = player.group
+        if hasattr(group, "media_content_id") and group.media_content_id is not None:
+            return group.media_content_id
+        return player.media_content_id
 
     @property
     def media_title(self) -> str | None:
-        """Return media title from master."""
+        """Return media title from group (pywiim 2.1.45+ provides group metadata)."""
         if not self.available:
             return None
-        return self._get_player().media_title
+        player = self._get_player()
+        if not player or not player.group:
+            return None
+        # Group object provides media_title directly (pywiim 2.1.45+)
+        return player.group.media_title
 
     @property
     def media_artist(self) -> str | None:
-        """Return media artist from master."""
+        """Return media artist from group (pywiim 2.1.45+ provides group metadata)."""
         if not self.available:
             return None
-        return self._get_player().media_artist
+        player = self._get_player()
+        if not player or not player.group:
+            return None
+        # Group object provides media_artist directly (pywiim 2.1.45+)
+        return player.group.media_artist
 
     @property
     def media_album_name(self) -> str | None:
-        """Return media album from master."""
+        """Return media album from group (pywiim 2.1.45+ provides group metadata)."""
         if not self.available:
             return None
-        return self._get_player().media_album
+        player = self._get_player()
+        if not player or not player.group:
+            return None
+        # Group object provides media_album directly (pywiim 2.1.45+)
+        return player.group.media_album
+
+    @property
+    def media_image_url(self) -> str | None:
+        """Image url of current playing media from group (pywiim 2.1.45+ provides group metadata)."""
+        if not self.available:
+            return None
+        player = self._get_player()
+        if not player or not player.group:
+            return None
+        group = player.group
+
+        # Use group object properties (pywiim 2.1.45+)
+        # Note: media_image_url may not be on group object, use master's URL
+        if hasattr(group, "media_image_url") and group.media_image_url:
+            return group.media_image_url
+
+        # Fallback to master player's image URL
+        if player.media_image_url:
+            return player.media_image_url
+
+        # Use mixin's placeholder URL logic (calls async_get_media_image)
+        title = self.media_title or ""
+        artist = self.media_artist or ""
+        state = str(self.state or "idle")
+        from .utils import generate_cover_art_hash
+
+        track_hash = generate_cover_art_hash(state, title, artist)
+        return f"wiim://group-cover-art/{track_hash}"
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        """Return image bytes and content type of current playing media from group.
+
+        Uses group object for metadata (pywiim 2.1.45+).
+        """
+        if not self.available:
+            return None, None
+
+        player = self._get_player()
+        if not player or not player.group:
+            return None, None
+
+        group = player.group
+
+        # Try to use group's fetch_cover_art if available (pywiim 2.1.45+)
+        if hasattr(group, "fetch_cover_art"):
+            try:
+                result = await group.fetch_cover_art()
+                if result and len(result) >= 2 and result[0] and len(result[0]) > 0:
+                    return result
+            except Exception as e:
+                _LOGGER.debug("Group fetch_cover_art failed, falling back to player: %s", e)
+
+        # Fallback to player's fetch_cover_art
+        return await super().async_get_media_image()
 
     @callback
     def _handle_coordinator_update(self) -> None:

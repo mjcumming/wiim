@@ -9,6 +9,7 @@
    - Complete architecture overview
    - Component responsibilities
    - Data flow
+   - Project structure
    - Code patterns
    - Decision log
 
@@ -17,35 +18,26 @@
    - Non-negotiable rules
    - Golden rules
    - Code quality standards
+   - Documentation guidelines
    - Mental checklist
    - PR checklist
-   - Documentation rules
 
 3. **[TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md)**
 
    - Complete testing strategy
+   - 4-tier test approach
    - Test directory structure
    - Testing workflow
    - Test requirements
    - Running tests
 
-4. **[DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md)** (includes Documentation Guidelines)
-
-   - Non-negotiable rules
-   - Golden rules
-   - Code quality standards
-   - Documentation guidelines
-
-**Note**: See [DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md) (Documentation Guidelines section) for when to create vs update documentation.
-
 ### Quick References
 
-- **[TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md)**: Complete testing strategy (includes test directory explanation)
 - **[bug-fix-testing-checklist.md](bug-fix-testing-checklist.md)**: Bug fix workflow
-- **[PROJECT-STRUCTURE.md](PROJECT-STRUCTURE.md)**: Project structure guide
 
 ## For Users
 
+- **[README.md](README.md)**: Quick start guide
 - **[user-guide.md](user-guide.md)**: Complete user guide
 - **[faq-and-troubleshooting.md](faq-and-troubleshooting.md)**: FAQ and troubleshooting
 - **[automation-cookbook.md](automation-cookbook.md)**: Automation examples
@@ -57,30 +49,10 @@
 wiim/
 ├── custom_components/wiim/    # Integration code (ONLY place to modify)
 ├── tests/                     # Automated tests (pytest)
-├── scripts/                   # Manual validation tests
+├── scripts/                   # Real-device validation tests
 ├── docs/                      # Documentation (this directory)
 └── development/               # Developer guides
 ```
-
-## Quick Links
-
-### Development
-
-- [Architecture](ARCHITECTURE.md)
-- [Development Rules](DEVELOPMENT-RULES.md)
-- [Testing Strategy](TESTING-CONSOLIDATED.md)
-- [Contributing Guide](../CONTRIBUTING.md)
-
-### Testing
-
-- [Testing Strategy](TESTING-CONSOLIDATED.md) (includes test directory explanation)
-- [Bug Fix Checklist](bug-fix-testing-checklist.md)
-
-### User Guides
-
-- [User Guide](user-guide.md)
-- [FAQ](faq-and-troubleshooting.md)
-- [Automation Cookbook](automation-cookbook.md)
 
 ## Getting Started
 

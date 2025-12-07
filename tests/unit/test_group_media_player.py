@@ -37,13 +37,22 @@ def mock_master_player():
     player.is_slave = False
     player.is_solo = False
 
-    # Group properties
+    # Group properties (pywiim 2.1.45+ provides group media properties)
     player.group = MagicMock()
     player.group.volume_level = 0.6  # MAX of all devices
     player.group.is_muted = False  # ALL muted
     player.group.all_players = [player]  # Will be expanded in group tests
+    player.group.play_state = "play"  # Master's play state
+    # Group media properties (from master's cached state)
+    player.group.media_title = "Test Song"
+    player.group.media_artist = "Test Artist"
+    player.group.media_album = "Test Album"
+    player.group.media_duration = 180
+    player.group.media_position = 60
+    player.group.media_content_id = None  # URL if playing URL-based media
+    player.group.media_image_url = None  # Not on group, fallback to player
 
-    # Media properties
+    # Media properties (on player for fallback)
     player.media_title = "Test Song"
     player.media_artist = "Test Artist"
     player.media_album = "Test Album"
@@ -435,8 +444,8 @@ class TestWiiMGroupMediaPlayerMediaInfo:
     """Test group media player media information."""
 
     def test_media_title(self, mock_group_coordinator_setup, mock_master_player):
-        """Test media title from master."""
-        mock_master_player.media_title = "Test Song"
+        """Test media title from group (pywiim 2.1.45+)."""
+        mock_master_player.group.media_title = "Test Song"
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
@@ -444,8 +453,8 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         assert entity.media_title == "Test Song"
 
     def test_media_artist(self, mock_group_coordinator_setup, mock_master_player):
-        """Test media artist from master."""
-        mock_master_player.media_artist = "Test Artist"
+        """Test media artist from group (pywiim 2.1.45+)."""
+        mock_master_player.group.media_artist = "Test Artist"
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
@@ -453,8 +462,8 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         assert entity.media_artist == "Test Artist"
 
     def test_media_album_name(self, mock_group_coordinator_setup, mock_master_player):
-        """Test media album name from master."""
-        mock_master_player.media_album = "Test Album"
+        """Test media album name from group (pywiim 2.1.45+)."""
+        mock_master_player.group.media_album = "Test Album"
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
@@ -462,18 +471,20 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         assert entity.media_album_name == "Test Album"
 
     def test_media_image_url(self, mock_group_coordinator_setup, mock_master_player):
-        """Test media image URL from master."""
+        """Test media image URL from group or master (pywiim 2.1.45+)."""
+        # Group object may not have media_image_url, so fallback to player's URL
         mock_master_player.media_image_url = "http://example.com/cover.jpg"
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
         )
+        # Should use player's image URL as fallback (group doesn't have media_image_url property)
         assert entity.media_image_url == "http://example.com/cover.jpg"
 
     def test_media_duration(self, mock_group_coordinator_setup, mock_master_player):
-        """Test media duration from master."""
-        mock_master_player.media_duration = 180
-        mock_master_player.play_state = "play"  # Need playing state for duration
+        """Test media duration from group (pywiim 2.1.45+)."""
+        mock_master_player.group.media_duration = 180
+        mock_master_player.group.play_state = "play"  # Need playing state for duration
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry
@@ -483,9 +494,9 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         assert entity.media_duration == 180
 
     def test_media_position(self, mock_group_coordinator_setup, mock_master_player):
-        """Test media position from master."""
-        mock_master_player.media_position = 60
-        mock_master_player.play_state = "play"  # Need playing state for position
+        """Test media position from group (pywiim 2.1.45+)."""
+        mock_master_player.group.media_position = 60
+        mock_master_player.group.play_state = "play"  # Need playing state for position
 
         entity = WiiMGroupMediaPlayer(
             mock_group_coordinator_setup.coordinator, mock_group_coordinator_setup.config_entry

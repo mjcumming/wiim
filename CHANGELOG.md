@@ -2,6 +2,26 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.39] - 2025-12-07
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.46
+
+  **Group Media Properties (2.1.45)**:
+
+  - Group object exposes master's media state: `media_title`, `media_artist`, `media_album`, `media_position`, `media_duration`
+  - Immediate role detection - `is_solo`, `is_master`, `is_slave` update instantly on join/unjoin (no API poll required)
+
+  **Idempotent Group Operations (2.1.44)**:
+
+  - `join_group()` handles "already in group" gracefully (returns success if already in target group)
+  - Automatically leaves current group before joining new one (no more race condition errors)
+
+### Fixed
+
+- **Unit Test**: Fixed `test_media_image_url` mock fixture (missing explicit `media_image_url` initialization)
+
 ## [1.0.38] - 2025-12-04
 
 ### Fixed
