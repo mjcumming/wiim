@@ -86,7 +86,7 @@ def get_python_executable() -> str:
     return sys.executable
 
 
-def run_unit_tests(verbose: bool = False) -> bool:
+def run_unit_tests(verbose: bool = False, parallel: bool = True) -> bool:
     """Run unit tests."""
     print_header("Running Unit Tests", Colors.GREEN)
 
@@ -99,6 +99,12 @@ def run_unit_tests(verbose: bool = False) -> bool:
         "--tb=short",
         "-x",  # Stop on first failure for faster feedback
     ]
+
+    # Add parallel execution if enabled
+    if parallel:
+        cmd.append("-n")
+        cmd.append("auto")
+        print_info("Running tests in parallel (auto-detect CPU cores)")
 
     return run_command(cmd, "Unit tests")
 
@@ -156,14 +162,14 @@ def run_linting() -> bool:
     return success
 
 
-def run_all_tests(verbose: bool = False) -> bool:
+def run_all_tests(verbose: bool = False, parallel: bool = True) -> bool:
     """Run all tests."""
     print_header("WiiM Integration - Full Test Suite", Colors.BOLD)
 
     results = []
 
     # Run unit tests
-    results.append(("Unit Tests", run_unit_tests(verbose)))
+    results.append(("Unit Tests", run_unit_tests(verbose, parallel)))
 
     # Run linting
     results.append(("Linting", run_linting()))
@@ -223,11 +229,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python tests/run_tests.py                    # Run all tests
-  python tests/run_tests.py --unit            # Run only unit tests
+  python tests/run_tests.py                    # Run all tests (parallel)
+  python tests/run_tests.py --unit            # Run only unit tests (parallel)
   python tests/run_tests.py --lint            # Run only linting
   python tests/run_tests.py --file tests/unit/test_data.py  # Run specific file
   python tests/run_tests.py --verbose         # Verbose output
+  python tests/run_tests.py --no-parallel     # Disable parallel execution (debugging)
   python tests/run_tests.py --structure       # Show test structure
         """,
     )
@@ -237,6 +244,11 @@ Examples:
     parser.add_argument("--file", type=str, help="Run specific test file")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--structure", action="store_true", help="Show test structure")
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="Disable parallel test execution (useful for debugging)",
+    )
 
     args = parser.parse_args()
 
@@ -249,15 +261,16 @@ Examples:
         return
 
     success = True
+    parallel = not args.no_parallel
 
     if args.unit:
-        success = run_unit_tests(args.verbose)
+        success = run_unit_tests(args.verbose, parallel)
     elif args.lint:
         success = run_linting()
     elif args.file:
         success = run_specific_test_file(args.file, args.verbose)
     else:
-        success = run_all_tests(args.verbose)
+        success = run_all_tests(args.verbose, parallel)
 
     sys.exit(0 if success else 1)
 

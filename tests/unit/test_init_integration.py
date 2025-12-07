@@ -14,6 +14,38 @@ from custom_components.wiim.const import DOMAIN
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
 
+@pytest.fixture
+async def setup_entry(hass: HomeAssistant, bypass_get_data):
+    """Shared fixture that sets up a WiiM entry once for reuse across tests.
+
+    This avoids redundant setup/teardown for tests that only need to verify
+    the entry is properly configured, significantly speeding up test execution.
+
+    Note: async_setup and async_unload already wait internally for critical
+    operations, so we only need one async_block_till_done() after setup to ensure
+    all platform entities are registered.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="WiiM Mini",
+        data=MOCK_CONFIG,
+        unique_id=MOCK_DEVICE_DATA["uuid"],
+    )
+    entry.add_to_hass(hass)
+
+    # async_setup waits internally for critical operations (coordinator refresh, etc.)
+    await hass.config_entries.async_setup(entry.entry_id)
+    # Single wait to ensure all platform entities are registered
+    await hass.async_block_till_done()
+
+    yield entry
+
+    # Cleanup - async_unload also waits internally
+    await hass.config_entries.async_unload(entry.entry_id)
+    # Single wait for cleanup to complete
+    await hass.async_block_till_done()
+
+
 def _setup_mock_http(hass: HomeAssistant) -> None:
     """Helper to mock hass.http for tests that need it."""
     hass.http = Mock()
@@ -41,7 +73,9 @@ class TestIntegrationSetup:
             "pywiim.WiiMClient.get_device_info",
             side_effect=Exception("Connection error"),
         ):
+            # async_setup waits internally for critical operations
             await hass.config_entries.async_setup(entry.entry_id)
+            # Only wait if we need to verify async state changes
             await hass.async_block_till_done()
 
             assert entry.state is ConfigEntryState.SETUP_RETRY
@@ -66,7 +100,9 @@ class TestIntegrationSetup:
             side_effect=WiiMConnectionError("Connection failed"),
         ):
             try:
+                # async_setup waits internally for critical operations
                 await hass.config_entries.async_setup(entry.entry_id)
+                # Wait for retry state to be set
                 await hass.async_block_till_done()
             except Exception:
                 pass  # Expected to fail
@@ -101,7 +137,9 @@ class TestIntegrationSetup:
             side_effect=wrapped_error,
         ):
             try:
+                # async_setup waits internally for critical operations
                 await hass.config_entries.async_setup(entry.entry_id)
+                # Wait for retry state to be set
                 await hass.async_block_till_done()
             except Exception:
                 pass  # Expected to fail
@@ -111,18 +149,9 @@ class TestIntegrationSetup:
             assert entry._setup_retry_count == 1
 
     @pytest.mark.asyncio
-    async def test_device_creation(self, hass: HomeAssistant, bypass_get_data) -> None:
+    async def test_device_creation(self, hass: HomeAssistant, setup_entry) -> None:
         """Test device is created in device registry."""
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            title="WiiM Mini",
-            data=MOCK_CONFIG,
-            unique_id=MOCK_DEVICE_DATA["uuid"],
-        )
-        entry.add_to_hass(hass)
-
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+        entry = setup_entry
 
         device_registry = dr.async_get(hass)
         devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
@@ -135,18 +164,9 @@ class TestIntegrationSetup:
         assert device.model == "WiiM Speaker"  # Fallback model when project not in status
 
     @pytest.mark.asyncio
-    async def test_platforms_setup(self, hass: HomeAssistant, bypass_get_data) -> None:
+    async def test_platforms_setup(self, hass: HomeAssistant, setup_entry) -> None:
         """Test all platforms are set up."""
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            title="WiiM Mini",
-            data=MOCK_CONFIG,
-            unique_id=MOCK_DEVICE_DATA["uuid"],
-        )
-        entry.add_to_hass(hass)
-
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+        entry = setup_entry
 
         # Check various entity types are created
         entity_registry = er.async_get(hass)
@@ -158,53 +178,26 @@ class TestIntegrationSetup:
         assert expected_domains.issubset(domains)
 
     @pytest.mark.asyncio
-    async def test_service_registration(self, hass: HomeAssistant, bypass_get_data) -> None:
-        """Test custom services are registered."""
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            title="WiiM Mini",
-            data=MOCK_CONFIG,
-            unique_id=MOCK_DEVICE_DATA["uuid"],
-        )
-        entry.add_to_hass(hass)
+    @pytest.mark.parametrize(
+        "service_name",
+        [
+            "reboot_device",
+            "sync_time",
+        ],
+    )
+    async def test_service_registration(self, hass: HomeAssistant, setup_entry, service_name: str) -> None:
+        """Test custom services are registered.
 
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-
-        # Check if domain services are available
-        assert hass.services.has_service(DOMAIN, "join_group") or len(hass.data[DOMAIN]) > 0
-
-    @pytest.mark.asyncio
-    async def test_reboot_service_registration(self, hass: HomeAssistant, bypass_get_data) -> None:
-        """Test reboot service is registered."""
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            title="WiiM Mini",
-            data=MOCK_CONFIG,
-            unique_id=MOCK_DEVICE_DATA["uuid"],
-        )
-        entry.add_to_hass(hass)
-
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-
-        # Check if reboot service is available
-        assert hass.services.has_service(DOMAIN, "reboot_device")
-        assert hass.services.has_service(DOMAIN, "sync_time")
+        Note: join/unjoin are built-in Home Assistant media_player services,
+        not custom wiim services, so they're not tested here.
+        """
+        # Check if service is available
+        assert hass.services.has_service(DOMAIN, service_name)
 
     @pytest.mark.asyncio
-    async def test_coordinator_creation(self, hass: HomeAssistant, bypass_get_data) -> None:
+    async def test_coordinator_creation(self, hass: HomeAssistant, setup_entry) -> None:
         """Test coordinator is created and working."""
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            title="WiiM Mini",
-            data=MOCK_CONFIG,
-            unique_id=MOCK_DEVICE_DATA["uuid"],
-        )
-        entry.add_to_hass(hass)
-
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+        entry = setup_entry
 
         # Check coordinator exists
         assert DOMAIN in hass.data
@@ -228,6 +221,7 @@ class TestIntegrationTeardown:
         )
         entry.add_to_hass(hass)
 
+        # async_setup waits internally for critical operations
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -251,6 +245,7 @@ class TestIntegrationTeardown:
         )
         entry.add_to_hass(hass)
 
+        # async_setup waits internally for critical operations
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -259,6 +254,7 @@ class TestIntegrationTeardown:
 
         # Reload the entry
         await hass.config_entries.async_reload(entry.entry_id)
+        # Wait for reload to complete
         await hass.async_block_till_done()
 
         # Check entry is still loaded after reload
@@ -269,39 +265,19 @@ class TestIntegrationServices:
     """Test integration service functionality."""
 
     @pytest.mark.asyncio
-    async def test_reboot_device_service(self, hass: HomeAssistant, bypass_get_data) -> None:
-        """Test reboot_device service is registered."""
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            title="WiiM Mini",
-            data=MOCK_CONFIG,
-            unique_id=MOCK_DEVICE_DATA["uuid"],
-        )
-        entry.add_to_hass(hass)
-
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-
-        # Verify service is registered
+    async def test_reboot_device_service(self, hass: HomeAssistant, setup_entry) -> None:
+        """Test reboot_device service is registered and callable."""
+        # Verify service is registered (already tested by parametrize, but keep for service call testing)
         assert hass.services.has_service(DOMAIN, "reboot_device")
 
     @pytest.mark.asyncio
-    async def test_sync_time_service(self, hass: HomeAssistant, bypass_get_data) -> None:
+    async def test_sync_time_service(self, hass: HomeAssistant, setup_entry) -> None:
         """Test sync_time service."""
         from unittest.mock import AsyncMock
 
         from custom_components.wiim.data import get_all_coordinators
 
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            title="WiiM Mini",
-            data=MOCK_CONFIG,
-            unique_id=MOCK_DEVICE_DATA["uuid"],
-        )
-        entry.add_to_hass(hass)
-
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+        entry = setup_entry
 
         # Get the media player entity
         entity_registry = er.async_get(hass)
@@ -424,11 +400,10 @@ class TestInitCapabilityDetection:
         )
         entry.add_to_hass(hass)
 
-        # Setup should complete successfully
+        # async_setup waits internally for critical operations
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        # Verify entry is loaded
         assert entry.state == ConfigEntryState.LOADED
 
     @pytest.mark.asyncio
@@ -442,8 +417,7 @@ class TestInitCapabilityDetection:
         )
         entry.add_to_hass(hass)
 
-        # Even with capability detection errors, setup should complete
-        # (bypass_get_data fixture handles the coordinator refresh)
+        # async_setup waits internally for critical operations
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -461,9 +435,8 @@ class TestInitCapabilityDetection:
         )
         entry.add_to_hass(hass)
 
-        # Setup should complete and endpoint caching happens internally
+        # async_setup waits internally for critical operations
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        # Verify entry is loaded
         assert entry.state == ConfigEntryState.LOADED

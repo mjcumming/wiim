@@ -125,7 +125,10 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize the media player."""
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = config_entry.unique_id or coordinator.player.host
+        # Use player's UUID if available (authoritative source), fallback to config entry unique_id or host
+        # This handles cases where manually added devices might have IP as unique_id
+        player_uuid = getattr(coordinator.player, "uuid", None) or getattr(coordinator.player, "mac", None)
+        self._attr_unique_id = player_uuid or config_entry.unique_id or coordinator.player.host
         self._attr_name = None  # Use device name
 
     @property
@@ -706,7 +709,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     @property
     def group_members(self) -> list[str] | None:
-        """Return list of entity IDs in the current group - using pywiim Player.group."""
+        """Return list of entity IDs in the current group - using pywiim Player.group.
+
+        For slaves, this ensures the master is always included so Home Assistant's
+        join dialog correctly shows the current master as selected (not OFF).
+        """
         player = self._get_player()
         # If solo, return None (not in a group)
         if player.is_solo:
@@ -720,13 +727,51 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         entity_registry = er.async_get(self.hass)
         members: list[str] = []
 
-        # PyWiim's group.all_players gives us all players (master + slaves)
-        for group_player in group.all_players:
-            entity_id = self._entity_id_from_player(group_player, entity_registry)
-            if entity_id and entity_id not in members:
-                members.append(entity_id)
+        # First, try to use group.all_players (populated when player_finder is provided)
+        if group.all_players:
+            for group_player in group.all_players:
+                entity_id = self._entity_id_from_player(group_player, entity_registry)
+                if entity_id and entity_id not in members:
+                    members.append(entity_id)
 
-        return members if members else None
+        # Ensure master is always included for slaves (critical for join dialog to show correct state)
+        # This handles cases where all_players might be empty or incomplete
+        if player.is_slave and group.master:
+            master_entity_id = self._entity_id_from_player(group.master, entity_registry)
+            if master_entity_id and master_entity_id not in members:
+                members.append(master_entity_id)
+            elif not master_entity_id:
+                _LOGGER.warning(
+                    "[%s] Failed to resolve master entity ID. Master name: %s, Master UUID: %s, Master host: %s",
+                    self.name,
+                    getattr(group.master, "name", None),
+                    getattr(group.master, "uuid", None),
+                    getattr(group.master, "host", None),
+                )
+
+        # Ensure self is always included
+        self_entity_id = self.entity_id
+        if self_entity_id and self_entity_id not in members:
+            members.append(self_entity_id)
+
+        # Fallback: If all_players was empty, also include slaves for masters
+        if not group.all_players and player.is_master and hasattr(group, "slaves"):
+            for slave_player in group.slaves:
+                slave_entity_id = self._entity_id_from_player(slave_player, entity_registry)
+                if slave_entity_id and slave_entity_id not in members:
+                    members.append(slave_entity_id)
+
+        result = members if members else None
+        if player.is_slave:
+            _LOGGER.debug(
+                "[%s] group_members for slave: %s (all_players=%s, master=%s, self=%s)",
+                self.name,
+                result,
+                bool(group.all_players),
+                bool(group.master),
+                self.entity_id,
+            )
+        return result
 
     def _get_metadata_player(self):
         """Return the player that should be used for metadata display."""
@@ -740,15 +785,29 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     @staticmethod
     def _entity_id_from_player(player_obj: Any, entity_registry: er.EntityRegistry) -> str | None:
-        """Resolve entity_id for a pywiim Player object."""
+        """Resolve entity_id for a pywiim Player object.
+
+        Tries multiple lookup methods since unique_id might be UUID, MAC, or IP address
+        depending on how the config entry was created.
+        """
         if not player_obj:
             return None
 
+        # Try UUID first (most common case)
         member_uuid = getattr(player_obj, "uuid", None) or getattr(player_obj, "mac", None)
-        if not member_uuid:
-            return None
+        if member_uuid:
+            entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, member_uuid)
+            if entity_id:
+                return entity_id
 
-        return entity_registry.async_get_entity_id("media_player", DOMAIN, member_uuid)
+        # Fallback: try host/IP address (some config entries use IP as unique_id)
+        member_host = getattr(player_obj, "host", None)
+        if member_host:
+            entity_id = entity_registry.async_get_entity_id("media_player", DOMAIN, member_host)
+            if entity_id:
+                return entity_id
+
+        return None
 
     def join_players(self, group_members: list[str]) -> None:
         """Join other players to form a group (sync version - not used)."""

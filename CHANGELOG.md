@@ -2,6 +2,26 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.40] - 2025-12-07
+
+### Fixed
+
+- **Join Dialog Shows Incorrect State for Slave Devices**: Fixed issue where slave devices showed their master as OFF (unselected) in the join dialog, even though they were already joined
+  - Root cause: Entity unique_id mismatch - manually added devices used IP address as unique_id instead of UUID, causing entity lookup to fail
+  - Fix: Entity now uses player's UUID (authoritative source) for unique_id, with fallback to config entry unique_id or host
+  - Added fallback lookup in `_entity_id_from_player` to handle both UUID and IP-based unique_ids for backward compatibility
+  - Now correctly shows master as selected (ON) in join dialog for slave devices
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.48
+
+  **Capability Detection Fixes (2.1.47)**:
+
+  - Capability detection no longer changes device settings during initialization
+  - Audio output mode and EQ preset are no longer modified during HA restart or integration reload
+  - Uses read-only probing: if a setting can be read, we assume it can be set
+
 ## [1.0.39] - 2025-12-07
 
 ### Changed

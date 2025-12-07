@@ -7,6 +7,9 @@ pre-commit>=3.0.0
 # Home Assistant development
 homeassistant>=2024.12.0
 
+# Testing
+pytest-xdist>=3.0.0
+
 # Integration runtime dependencies (matches manifest.json)
 pywiim>=2.1.43
 

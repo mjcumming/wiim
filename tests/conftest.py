@@ -161,7 +161,48 @@ def bypass_get_data_fixture(hass):
         },
     }
 
+    # Mock capabilities to avoid slow HTTP probing during setup
+    # This prevents ~100+ HTTP requests per test (probing multiple ports/protocols)
+    mock_capabilities = {
+        "firmware_version": MOCK_DEVICE_DATA.get("firmware", "4.6.328252"),
+        "device_type": MOCK_DEVICE_DATA.get("project", "UP2STREAM_MINI_V3"),
+        "vendor": "wiim",
+        "is_wiim_device": True,
+        "is_legacy_device": False,
+        "audio_pro_generation": "original",
+        "supports_enhanced_grouping": False,
+        "supports_audio_output": False,
+        "supports_alarms": False,
+        "supports_sleep_timer": False,
+        "max_alarm_slots": 0,
+        "response_timeout": 5.0,
+        "retry_count": 3,
+        "protocol_priority": ["https", "http"],
+        "supports_led_control": False,
+        "led_command_format": "wiim",
+        "supports_getstatuse": True,
+        "supports_getslavelist": True,
+        "supports_metadata": True,
+        "supports_presets": True,
+        "supports_eq": False,
+        "supports_player_status_ex": True,
+    }
+
     with (
+        # Patch at pywiim level to catch all instances, regardless of import path
+        # This MUST be first to prevent HTTP requests during capability detection
+        # Patch both the class method and the instance method to be comprehensive
+        patch(
+            "pywiim.WiiMClient._detect_capabilities",
+            new_callable=AsyncMock,
+            return_value=mock_capabilities,
+        ),
+        # Also patch where it's imported in the integration module
+        patch(
+            "custom_components.wiim.__init__.WiiMClient._detect_capabilities",
+            new_callable=AsyncMock,
+            return_value=mock_capabilities,
+        ),
         patch(
             "pywiim.WiiMClient.get_player_status",
             return_value=mock_status,  # Use merged status instead of original
