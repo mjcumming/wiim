@@ -151,11 +151,56 @@ main() {
     fi
 
     echo ""
-    print_step "Step 2: Running tests..."
-    if pytest tests/ --no-cov -q; then
+    print_step "Step 2: Running tests with coverage..."
+    # Ensure build directory exists for coverage XML
+    mkdir -p build
+    # Run tests with coverage to catch coverage drops before pushing
+    # Codecov project coverage threshold is ~77% - fail if below 75% to catch regressions early
+    if pytest tests/ --cov=custom_components.wiim --cov-report=term-missing --cov-report=xml:build/coverage.xml --cov-fail-under=75 -q; then
         print_success "All tests passed"
+
+        # Extract coverage percentage from XML report and check against Codecov threshold
+        if [[ -f "build/coverage.xml" ]]; then
+            COVERAGE_PCT=$(python3 -c "
+import xml.etree.ElementTree as ET
+try:
+    tree = ET.parse('build/coverage.xml')
+    root = tree.getroot()
+    line_rate = float(root.attrib.get('line-rate', 0))
+    coverage_pct = line_rate * 100
+    print(f'{coverage_pct:.2f}')
+except Exception as e:
+    print('0.00')
+" 2>/dev/null || echo "0.00")
+
+            # Check if coverage is significantly below Codecov project threshold (~77%)
+            # Only warn if coverage is below 72% (5% below threshold) to avoid false alarms
+            # Codecov allows small fluctuations, so we don't want to block releases over minor drops
+            COVERAGE_CHECK=$(python3 -c "
+coverage = float('${COVERAGE_PCT}')
+warning_threshold = 72.0  # Warn if below 72% (5% below Codecov threshold)
+if coverage < warning_threshold:
+    print('WARN')
+else:
+    print('OK')
+" 2>/dev/null || echo "OK")
+
+            if [[ "$COVERAGE_CHECK" == "WARN" ]]; then
+                print_warning "Coverage is ${COVERAGE_PCT}% (Codecov project threshold: ~77%)"
+                print_warning "This may fail codecov/project check on GitHub. Consider adding tests."
+                echo ""
+                read -p "Continue with release anyway? (y/N): " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    print_error "Release cancelled by user"
+                    exit 1
+                fi
+            else
+                print_success "Coverage: ${COVERAGE_PCT}% (acceptable for release)"
+            fi
+        fi
     else
-        print_error "Tests failed"
+        print_error "Tests failed or coverage below threshold"
         exit 1
     fi
 
@@ -197,10 +242,13 @@ main() {
         fi
 
         # Push to GitHub
+        # Skip pre-push hook since we already ran all checks (linting + tests) in Step 1 & 2
+        # Note: --no-verify only skips LOCAL Git hooks - GitHub Actions CI will still run automatically
         print_step "  → Pushing to GitHub..."
-        git push origin main
-        git push origin "v${NEW_VERSION}"
+        git push --no-verify origin main
+        git push --no-verify origin "v${NEW_VERSION}"
         print_success "  Pushed to GitHub"
+        print_step "  → GitHub Actions CI will run automatically on push (see .github/workflows/tests.yaml)"
     else
         echo ""
         print_warning "Skipping git operations (use --push flag to commit, tag, and push)"
