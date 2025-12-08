@@ -2,6 +2,21 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [1.0.41] - 2025-12-09
+
+### Fixed
+
+- **Pydantic Model Attribute Access**: Fixed incorrect dictionary-style access (`.get()`) on Pydantic models returned by pywiim
+  - `config_flow.py`: Fixed `DeviceGroupInfo` attribute access in `_discover_slaves()` - was using `.get("role")` instead of `.role`
+  - `sensor.py`: Fixed `DeviceInfo` attribute access in firmware sensor - using direct attribute access instead of `getattr()`
+  - `media_player.py`: Fixed `Alarm` model attribute access in alarm update handler
+  - These fixes prevent potential `AttributeError` exceptions when pywiim returns proper Pydantic models
+
+- **Unit Tests**: Fixed test fixtures and assertions
+  - Updated `bypass_get_data` fixture with complete mock player attributes (uuid, device_info, media properties, etc.)
+  - Fixed `test_sync_time_service` to mock `player.sync_time()` instead of `player.client.sync_time()`
+  - All 436 unit tests now pass with 77% coverage
+
 ## [1.0.40] - 2025-12-07
 
 ### Fixed

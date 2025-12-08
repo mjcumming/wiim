@@ -257,9 +257,9 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
     def native_value(self) -> str | None:
         """Return current firmware version."""
         player = self.coordinator.player
-        # Primary source: device_info firmware field
+        # Primary source: device_info firmware field (DeviceInfo is a Pydantic model)
         if player.device_info:
-            firmware = getattr(player.device_info, "firmware", None)
+            firmware = player.device_info.firmware
             if firmware and str(firmware).strip() not in {"", "0", "-", "unknown"}:
                 return str(firmware)
 
@@ -274,26 +274,29 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
         attrs: dict[str, Any] = {}
         player = self.coordinator.player
 
+        # DeviceInfo is a Pydantic model - access attributes directly
         if player.device_info:
+            device_info = player.device_info
+
             # MCU version (microcontroller firmware)
-            if mcu_ver := getattr(player.device_info, "mcu_ver", None):
-                attrs["mcu_version"] = str(mcu_ver)
+            if device_info.mcu_ver:
+                attrs["mcu_version"] = str(device_info.mcu_ver)
 
             # DSP version (digital signal processor firmware)
-            if dsp_ver := getattr(player.device_info, "dsp_ver", None):
-                attrs["dsp_version"] = str(dsp_ver)
+            if device_info.dsp_ver:
+                attrs["dsp_version"] = str(device_info.dsp_ver)
 
             # Release/build info
-            if release := getattr(player.device_info, "release", None):
-                attrs["release"] = str(release)
+            if device_info.release_date:
+                attrs["release"] = str(device_info.release_date)
 
             # Update availability info (if present)
-            if version_update := getattr(player.device_info, "version_update", None):
+            if device_info.version_update:
                 # VersionUpdate can be "0" (no update) or "1" (update available)
-                if str(version_update) == "1":
+                if str(device_info.version_update) == "1":
                     attrs["update_available"] = True
-                    if latest := getattr(player.device_info, "latest_version", None):
-                        attrs["latest_version"] = str(latest)
+                    if device_info.latest_version:
+                        attrs["latest_version"] = str(device_info.latest_version)
 
         # Prune None values
         return {k: v for k, v in attrs.items() if v is not None}

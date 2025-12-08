@@ -151,16 +151,6 @@ def bypass_get_data_fixture(hass):
     mock_status["uuid"] = MOCK_DEVICE_DATA["uuid"]
     mock_status["MAC"] = MOCK_DEVICE_DATA["MAC"]
 
-    mock_coordinator_data = {
-        "status": mock_status,
-        "multiroom": {"slaves": 0},
-        "role": "solo",
-        "ha_group": {
-            "is_leader": False,
-            "members": [],
-        },
-    }
-
     # Mock capabilities to avoid slow HTTP probing during setup
     # This prevents ~100+ HTTP requests per test (probing multiple ports/protocols)
     mock_capabilities = {
@@ -187,6 +177,135 @@ def bypass_get_data_fixture(hass):
         "supports_eq": False,
         "supports_player_status_ex": True,
     }
+
+    # Create a factory function for mock Player that returns properly configured mock
+    def create_mock_player(*args, **kwargs):
+        mock_player = MagicMock()
+
+        # Device identity properties - use actual strings, not MagicMock
+        mock_player.name = MOCK_DEVICE_DATA.get("DeviceName", "WiiM Mini")
+        mock_player.host = MOCK_DEVICE_DATA.get("ip", "192.168.1.100")
+        mock_player.port = 80
+        mock_player.model = "WiiM Speaker"
+        mock_player.firmware = MOCK_DEVICE_DATA.get("firmware", "4.6.328252")
+        mock_player.uuid = MOCK_DEVICE_DATA.get("uuid", "FF31F09E1A5020113B0A3918")
+        mock_player.mac_address = MOCK_DEVICE_DATA.get("MAC", "00:22:6C:33:D4:AD")
+        mock_player.discovered_endpoint = None
+        mock_player.input_list = ["bluetooth", "line_in", "optical"]
+
+        # Device info (Pydantic model) - mock with proper attributes
+        mock_player.device_info = MagicMock()
+        mock_player.device_info.mac = MOCK_DEVICE_DATA.get("MAC", "00:22:6C:33:D4:AD")
+        mock_player.device_info.uuid = MOCK_DEVICE_DATA.get("uuid", "FF31F09E1A5020113B0A3918")
+        mock_player.device_info.firmware = MOCK_DEVICE_DATA.get("firmware", "4.6.328252")
+        mock_player.device_info.mcu_ver = "1.0.0"
+        mock_player.device_info.dsp_ver = "1.0.0"
+        mock_player.device_info.release_date = "2024-01-01"
+        mock_player.device_info.version_update = "0"
+        mock_player.device_info.latest_version = None
+        mock_player.device_info.project = MOCK_DEVICE_DATA.get("project", "UP2STREAM_MINI_V3")
+        mock_player.device_info.ssid = "TestNetwork"
+        mock_player.device_info.ap_mac = "00:11:22:33:44:55"
+        # Make model_dump return a dict with proper values
+        mock_player.device_info.model_dump.return_value = {
+            "mac": MOCK_DEVICE_DATA.get("MAC", "00:22:6C:33:D4:AD"),
+            "uuid": MOCK_DEVICE_DATA.get("uuid", "FF31F09E1A5020113B0A3918"),
+            "firmware": MOCK_DEVICE_DATA.get("firmware", "4.6.328252"),
+            "project": MOCK_DEVICE_DATA.get("project", "UP2STREAM_MINI_V3"),
+            "mcu_ver": "1.0.0",
+            "dsp_ver": "1.0.0",
+            "release_date": "2024-01-01",
+            "ssid": "TestNetwork",
+            "ap_mac": "00:11:22:33:44:55",
+        }
+
+        # Playback state properties
+        mock_player.volume_level = 0.5
+        mock_player.is_muted = False
+        mock_player.play_state = "stop"
+        mock_player.is_playing = False
+        mock_player.source = "wifi"
+
+        # Role and group properties
+        mock_player.role = "solo"
+        mock_player.is_solo = True
+        mock_player.is_master = False
+        mock_player.is_slave = False
+        mock_player.group = None
+        mock_player.group_master_name = None
+
+        # Media properties - use None or actual strings, not MagicMock
+        mock_player.media_title = None
+        mock_player.media_artist = None
+        mock_player.media_album = None
+        mock_player.media_duration = None
+        mock_player.media_position = None
+        mock_player.media_position_updated_at = None
+        mock_player.media_image_url = None  # Must be None or string, not MagicMock
+        mock_player.media_content_id = None
+
+        # Audio quality properties
+        mock_player.media_sample_rate = 44100
+        mock_player.media_bit_depth = 16
+        mock_player.media_bit_rate = 320
+        mock_player.media_codec = "mp3"
+
+        # EQ properties
+        mock_player.supports_eq = True
+        mock_player.eq_preset = "Flat"
+        mock_player.eq_presets = ["Flat", "Bass", "Treble", "Acoustic", "Rock"]
+
+        # Shuffle/repeat properties
+        mock_player.shuffle = False
+        mock_player.repeat = "off"
+        mock_player.shuffle_supported = True
+        mock_player.repeat_supported = True
+
+        # Transport support
+        mock_player.supports_next_track = True
+        mock_player.supports_previous_track = True
+
+        # Available sources - use actual list, not MagicMock
+        mock_player.available_sources = ["wifi", "bluetooth", "line_in", "optical"]
+
+        # Audio output - use actual values, not MagicMock
+        mock_player.audio_output_mode = "Line Out"
+        mock_player.is_bluetooth_output_active = False
+        mock_player.available_outputs = ["Line Out", "Optical Out"]
+        mock_player.available_output_modes = ["Line Out", "Optical Out"]
+        mock_player.bluetooth_output_devices = []
+
+        # Network info
+        mock_player.wifi_rssi = -50
+
+        # Client properties
+        mock_player.client = MagicMock()
+        mock_player.client.discovered_endpoint = None
+        mock_player.client.host = MOCK_DEVICE_DATA.get("ip", "192.168.1.100")
+        mock_player.client.close = AsyncMock()
+        mock_player.client.sync_time = AsyncMock()
+        mock_player.client.reboot = AsyncMock()
+
+        # Methods
+        mock_player.refresh = AsyncMock()
+        mock_player.reboot = AsyncMock()
+        mock_player.sync_time = AsyncMock()  # Time sync method
+        mock_player.play = AsyncMock()
+        mock_player.pause = AsyncMock()
+        mock_player.stop = AsyncMock()
+        mock_player.set_volume = AsyncMock()
+        mock_player.set_mute = AsyncMock()
+        mock_player.set_source = AsyncMock()
+        mock_player.next_track = AsyncMock()
+        mock_player.previous_track = AsyncMock()
+        mock_player.seek = AsyncMock()
+        mock_player.set_eq_preset = AsyncMock()
+        mock_player.set_shuffle = AsyncMock()
+        mock_player.get_eq = AsyncMock(return_value={})
+        mock_player.get_eq_presets = AsyncMock(return_value=["Flat", "Bass", "Treble"])
+        mock_player.get_eq_status = AsyncMock(return_value=True)
+
+        return mock_player
 
     with (
         # Patch at pywiim level to catch all instances, regardless of import path
@@ -223,9 +342,15 @@ def bypass_get_data_fixture(hass):
             "pywiim.WiiMClient.sync_time",
             return_value=True,
         ),
+        # Patch Player class to return our mock with correct properties
         patch(
-            "custom_components.wiim.coordinator.WiiMCoordinator._async_update_data",
-            return_value=mock_coordinator_data,
+            "pywiim.Player",
+            side_effect=create_mock_player,
+        ),
+        # Also patch where Player is imported in coordinator
+        patch(
+            "custom_components.wiim.coordinator.Player",
+            side_effect=create_mock_player,
         ),
     ):
         yield

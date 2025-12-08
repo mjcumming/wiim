@@ -51,10 +51,15 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return WiiMOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
-        """Handle user-initiated setup - try discovery first, then manual entry."""
-        # Try to discover devices first and show them in a dropdown
-        # If no devices found or user wants manual entry, go to manual step
-        return await self.async_step_discovery()
+        """Handle user-initiated setup - go directly to manual entry for speed.
+
+        Discovery is still triggered via SSDP/Zeroconf handlers when devices broadcast,
+        so we skip the slow network scan here and let users enter the IP directly.
+        This reduces the "Add Integration" click delay from 5-10 seconds to instant.
+        """
+        # Skip slow network discovery - go directly to manual IP entry
+        # Users can enter their device IP immediately without waiting
+        return await self.async_step_manual()
 
     async def async_step_discovery(self, discovery_info: dict[str, Any] | None = None) -> ConfigFlowResult:  # type: ignore[override]
         """Handle automatic discovery."""
@@ -348,31 +353,27 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return
 
             # Check if this is a master with slaves
-            role = group_info.get("role", "solo")
-            if role != "master":
+            # DeviceGroupInfo is a Pydantic model, access attributes directly
+            if group_info.role != "master":
                 return
 
-            slave_list = group_info.get("slave_list", [])
-            if not slave_list:
+            # slave_hosts is a list of IP addresses
+            slave_hosts = group_info.slave_hosts or []
+            if not slave_hosts:
                 return
 
             _LOGGER.info(
                 "Master device at %s has %d slave(s), triggering discovery for them",
                 host,
-                len(slave_list),
+                len(slave_hosts),
             )
 
             # Check existing entries to avoid re-adding
             existing_entries = self._async_current_entries()
             known_hosts = {entry.data[CONF_HOST] for entry in existing_entries}
-            known_uuids = {entry.unique_id for entry in existing_entries if entry.unique_id}
 
             # Trigger discovery for each slave
-            for slave in slave_list:
-                slave_ip = slave.get("ip")
-                slave_uuid = slave.get("uuid")
-                slave_name = slave.get("name", f"WiiM Device ({slave_ip})")
-
+            for slave_ip in slave_hosts:
                 if not slave_ip:
                     continue
 
@@ -381,21 +382,18 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.debug("Slave %s already configured, skipping", slave_ip)
                     continue
 
-                if slave_uuid and slave_uuid in known_uuids:
-                    _LOGGER.debug("Slave %s (UUID: %s) already configured, skipping", slave_ip, slave_uuid)
-                    continue
-
-                _LOGGER.info("Triggering discovery for slave: %s (%s)", slave_name, slave_ip)
+                _LOGGER.info("Triggering discovery for slave: %s", slave_ip)
 
                 # Trigger integration discovery for this slave
+                # Note: We only have IP, UUID/name will be fetched during validation
                 self.hass.async_create_task(
                     self.hass.config_entries.flow.async_init(
                         DOMAIN,
                         context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
                         data={
                             CONF_HOST: slave_ip,
-                            "device_name": slave_name,
-                            "device_uuid": slave_uuid,
+                            "device_name": f"WiiM Device ({slave_ip})",
+                            "device_uuid": None,
                         },
                     )
                 )

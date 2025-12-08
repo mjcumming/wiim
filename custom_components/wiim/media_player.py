@@ -1126,8 +1126,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 if trigger_value is None:
                     raise HomeAssistantError(f"Unknown trigger type: {trigger}")
         elif existing_alarm:
-            # Use existing trigger if not provided
-            trigger_value = getattr(existing_alarm, "trigger", ALARM_TRIGGER_DAILY)
+            # Use existing trigger if not provided (Alarm is a Pydantic model)
+            trigger_value = existing_alarm.trigger if existing_alarm.trigger is not None else ALARM_TRIGGER_DAILY
         else:
             # Default to daily if creating new alarm
             trigger_value = ALARM_TRIGGER_DAILY
@@ -1143,8 +1143,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             else:
                 raise HomeAssistantError(f"Unknown operation type: {operation}")
         elif existing_alarm:
-            # Use existing operation if not provided
-            operation_value = getattr(existing_alarm, "operation", ALARM_OP_PLAYBACK)
+            # Use existing operation if not provided (Alarm is a Pydantic model)
+            operation_value = existing_alarm.operation if existing_alarm.operation is not None else ALARM_OP_PLAYBACK
         else:
             # Default to playback if creating new alarm
             operation_value = ALARM_OP_PLAYBACK
@@ -1160,9 +1160,9 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                     f"Invalid time format: {time}. Expected HH:MM:SS or HHMMSS (e.g., '07:00:00' or '070000')"
                 )
         elif existing_alarm:
-            # Use existing time if not provided
-            existing_time = getattr(existing_alarm, "time", None)
-            if existing_time:
+            # Use existing time if not provided (Alarm is a Pydantic model)
+            existing_time = existing_alarm.time
+            if existing_time is not None:
                 # Convert existing time to string format if needed
                 if isinstance(existing_time, str):
                     time_str = existing_time.replace(":", "")

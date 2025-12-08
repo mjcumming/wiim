@@ -47,6 +47,7 @@ Contains:
 
 | Script                             | Purpose                                |
 | ---------------------------------- | -------------------------------------- |
+| `test-device-lifecycle.py`         | Device add/remove via HA REST API      |
 | `test-device-115-comprehensive.py` | Deep testing of specific device        |
 | `test-channel-balance.py`          | Channel balance (uses pywiim directly) |
 | `test-timers-quick.py`             | Sleep timer and alarm tests            |
@@ -82,6 +83,14 @@ Contains:
 - Sleep timers
 - Alarms
 - Deep device testing
+
+### ✅ Covered by Device Lifecycle Tests
+
+- Config entry add via REST API
+- Config entry reload
+- Config entry delete
+- Cleanup verification
+- Re-add after delete
 
 ### 🔄 Manual Testing Recommended
 
@@ -125,6 +134,16 @@ python scripts/test-multiroom-comprehensive.py
 
 ```bash
 python scripts/test-timers-quick.py --entity media_player.outdoor
+```
+
+### Device Lifecycle Tests (Add/Remove)
+
+```bash
+# Test device add/remove via HA REST API
+python scripts/test-device-lifecycle.py --config scripts/test.config --device-ip 192.168.1.100
+
+# Keep device after tests (don't cleanup)
+python scripts/test-device-lifecycle.py --config scripts/test.config --device-ip 192.168.1.100 --no-cleanup
 ```
 
 ---

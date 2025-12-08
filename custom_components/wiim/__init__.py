@@ -223,70 +223,101 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # additional internal sessions for temporary operations (e.g., getting master name)
     # that aren't properly closed. This results in "Unclosed client session" warnings
     # which are harmless but should be fixed in pywiim itself.
+    #
+    # OPTIMIZATION: Check for cached capabilities first to avoid slow re-probing
+    # on every restart. Capabilities are cached after first successful detection.
+    cached_capabilities = entry.data.get("capabilities")
     capabilities = {}
-    try:
-        # Use cached endpoint if available, otherwise let pywiim probe automatically
-        temp_client_kwargs = {
-            "host": entry.data["host"],
-            "timeout": entry.data.get("timeout", 10),
-            "session": session,
-        }
-        if port is not None and protocol is not None:
-            temp_client_kwargs["port"] = port
-            temp_client_kwargs["protocol"] = protocol
-        temp_client = WiiMClient(**temp_client_kwargs)
-        # Use pywiim's _detect_capabilities() method
-        capabilities = await temp_client._detect_capabilities()
-        _LOGGER.info(
-            "Detected device capabilities for %s: %s",
+
+    if cached_capabilities:
+        # Use cached capabilities - skip slow probing
+        capabilities = cached_capabilities
+        _LOGGER.debug(
+            "Using cached capabilities for %s: %s",
             entry.data["host"],
             capabilities.get("device_type", "Unknown"),
         )
-        # Log audio output capability specifically for debugging
-        if capabilities.get("supports_audio_output"):
-            _LOGGER.info(
-                "[AUDIO OUTPUT] Device %s supports audio output control",
-                entry.data["host"],
-            )
-        else:
-            _LOGGER.info(
-                "[AUDIO OUTPUT] Device %s does not support audio output control",
-                entry.data["host"],
-            )
-        # Log EQ capability specifically for debugging
-        if capabilities.get("supports_eq") or capabilities.get("eq_supported"):
-            _LOGGER.info(
-                "[EQ] Device %s supports EQ (detected by pywiim capability detection)",
-                entry.data["host"],
-            )
-        else:
-            _LOGGER.info(
-                "[EQ] Device %s - EQ support NOT detected by pywiim capability detection. Full capabilities: %s",
-                entry.data["host"],
-                capabilities,
-            )
-    except Exception as err:
-        # Smart logging escalation for capability detection failures
-        retry_count = getattr(entry, "_capability_detection_retry_count", 0)
-        retry_count += 1
-        entry._capability_detection_retry_count = retry_count
+    else:
+        # First setup or no cache - need to detect capabilities
+        try:
+            import time
 
-        # Escalate logging based on retry count
-        if retry_count <= 2:
-            log_fn = _LOGGER.warning
-        elif retry_count <= 4:
-            log_fn = _LOGGER.debug
-        else:
-            log_fn = _LOGGER.error
+            start_time = time.monotonic()
 
-        log_fn(
-            "Failed to detect device capabilities for %s (attempt %d): %s",
-            entry.data["host"],
-            retry_count,
-            err,
-        )
-        # Use empty capabilities - WiiMClient will handle it
-        capabilities = {}
+            # Use cached endpoint if available, otherwise let pywiim probe automatically
+            temp_client_kwargs = {
+                "host": entry.data["host"],
+                "timeout": entry.data.get("timeout", 10),
+                "session": session,
+            }
+            if port is not None and protocol is not None:
+                temp_client_kwargs["port"] = port
+                temp_client_kwargs["protocol"] = protocol
+            temp_client = WiiMClient(**temp_client_kwargs)
+            # Use pywiim's _detect_capabilities() method
+            capabilities = await temp_client._detect_capabilities()
+
+            elapsed = time.monotonic() - start_time
+            _LOGGER.info(
+                "Detected device capabilities for %s in %.2fs: %s",
+                entry.data["host"],
+                elapsed,
+                capabilities.get("device_type", "Unknown"),
+            )
+
+            # Cache capabilities for faster future startups
+            if capabilities:
+                _LOGGER.debug("Caching capabilities for %s", entry.data["host"])
+                hass.config_entries.async_update_entry(
+                    entry,
+                    data={**entry.data, "capabilities": capabilities},
+                )
+
+            # Log audio output capability specifically for debugging
+            if capabilities.get("supports_audio_output"):
+                _LOGGER.info(
+                    "[AUDIO OUTPUT] Device %s supports audio output control",
+                    entry.data["host"],
+                )
+            else:
+                _LOGGER.info(
+                    "[AUDIO OUTPUT] Device %s does not support audio output control",
+                    entry.data["host"],
+                )
+            # Log EQ capability specifically for debugging
+            if capabilities.get("supports_eq") or capabilities.get("eq_supported"):
+                _LOGGER.info(
+                    "[EQ] Device %s supports EQ (detected by pywiim capability detection)",
+                    entry.data["host"],
+                )
+            else:
+                _LOGGER.info(
+                    "[EQ] Device %s - EQ support NOT detected by pywiim capability detection. Full capabilities: %s",
+                    entry.data["host"],
+                    capabilities,
+                )
+        except Exception as err:
+            # Smart logging escalation for capability detection failures
+            retry_count = getattr(entry, "_capability_detection_retry_count", 0)
+            retry_count += 1
+            entry._capability_detection_retry_count = retry_count
+
+            # Escalate logging based on retry count
+            if retry_count <= 2:
+                log_fn = _LOGGER.warning
+            elif retry_count <= 4:
+                log_fn = _LOGGER.debug
+            else:
+                log_fn = _LOGGER.error
+
+            log_fn(
+                "Failed to detect device capabilities for %s (attempt %d): %s",
+                entry.data["host"],
+                retry_count,
+                err,
+            )
+            # Use empty capabilities - WiiMClient will handle it
+            capabilities = {}
 
     # Coordinator creates client and player internally using HA's shared session
     # Pass port/protocol if we have a cached endpoint, otherwise let pywiim probe
@@ -334,6 +365,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     entry,
                     data={**entry.data, "endpoint": discovered_endpoint},
                 )
+
+        # Update config entry title if we now have the real device name
+        # This fixes manual add showing "WiiM Device (IP)" instead of actual name
+        player_name = coordinator.player.name
+        if player_name and entry.title != player_name:
+            # Only update if current title is a generic fallback name
+            host = entry.data.get("host", "")
+            is_generic_title = entry.title.startswith("WiiM Device") or entry.title == host
+            if is_generic_title:
+                _LOGGER.info(
+                    "Updating config entry title from '%s' to '%s'",
+                    entry.title,
+                    player_name,
+                )
+                hass.config_entries.async_update_entry(entry, title=player_name)
 
         # Register device in HA registry now that we have fresh coordinator data
         _LOGGER.info("Registering device for %s", entry.data["host"])

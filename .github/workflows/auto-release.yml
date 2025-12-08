@@ -81,9 +81,77 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Wait for CI tests to complete
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "⏳ Waiting for CI tests to complete before creating release..."
+          echo "This ensures the release is only created after all tests pass."
+
+          # Get the commit SHA that triggered this workflow
+          COMMIT_SHA="${{ github.sha }}"
+          WORKFLOW_NAME="CI"
+          REPO="${{ github.repository }}"
+
+          # Wait up to 15 minutes for CI to complete
+          MAX_WAIT=900
+          ELAPSED=0
+          INTERVAL=10
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            # Get the latest CI workflow run for this commit
+            RUN_ID=$(gh run list \
+              --workflow="$WORKFLOW_NAME" \
+              --commit="$COMMIT_SHA" \
+              --repo="$REPO" \
+              --json databaseId,conclusion,status \
+              --jq '.[0].databaseId' 2>/dev/null || echo "")
+
+            if [ -z "$RUN_ID" ] || [ "$RUN_ID" == "null" ]; then
+              echo "⏳ CI workflow not found yet, waiting..."
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+              continue
+            fi
+
+            # Get workflow status
+            STATUS=$(gh run view "$RUN_ID" \
+              --repo="$REPO" \
+              --json status,conclusion \
+              --jq '.status' 2>/dev/null || echo "unknown")
+
+            CONCLUSION=$(gh run view "$RUN_ID" \
+              --repo="$REPO" \
+              --json conclusion \
+              --jq '.conclusion' 2>/dev/null || echo "unknown")
+
+            echo "📊 CI Status: $STATUS, Conclusion: $CONCLUSION"
+
+            if [ "$STATUS" == "completed" ]; then
+              if [ "$CONCLUSION" == "success" ]; then
+                echo "✅ CI tests passed! Proceeding with release creation."
+                break
+              else
+                echo "❌ CI tests failed or were cancelled. Aborting release."
+                echo "Please fix the failing tests before releasing."
+                exit 1
+              fi
+            fi
+
+            echo "⏳ CI still running, waiting ${INTERVAL}s... (${ELAPSED}s elapsed)"
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "⚠️  Timeout waiting for CI to complete. Proceeding anyway, but this is unusual."
+            echo "Please verify CI status manually: https://github.com/$REPO/actions"
+          fi
 
       - name: Check if tag already exists
         id: tag-check

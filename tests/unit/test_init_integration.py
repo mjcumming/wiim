@@ -287,10 +287,11 @@ class TestIntegrationServices:
 
         entity_id = media_player_entities[0].entity_id
 
-        # Get actual coordinators and mock sync_time on client
+        # Get actual coordinators and mock sync_time on player (not client)
+        # The media_player.async_sync_time() calls coordinator.player.sync_time()
         coordinators = get_all_coordinators(hass)
-        if coordinators and hasattr(coordinators[0], "player") and hasattr(coordinators[0].player, "client"):
-            coordinators[0].player.client.sync_time = AsyncMock()
+        if coordinators and hasattr(coordinators[0], "player"):
+            coordinators[0].player.sync_time = AsyncMock()
 
             # Call the service
             await hass.services.async_call(
@@ -300,9 +301,8 @@ class TestIntegrationServices:
                 blocking=True,
             )
 
-            # Verify sync_time was called if coordinator found
-            if hasattr(coordinators[0].player.client, "sync_time"):
-                coordinators[0].player.client.sync_time.assert_called_once()
+            # Verify sync_time was called on the player
+            coordinators[0].player.sync_time.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reboot_service_handles_missing_entity(self, hass: HomeAssistant) -> None:
@@ -440,3 +440,50 @@ class TestInitCapabilityDetection:
         await hass.async_block_till_done()
 
         assert entry.state == ConfigEntryState.LOADED
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_updates_generic_title_with_player_name(
+        self, hass: HomeAssistant, bypass_get_data
+    ) -> None:
+        """Test that generic 'WiiM Device (IP)' title is updated to actual device name.
+
+        When a device is added manually, the config entry title might be generic like
+        'WiiM Device (192.168.1.100)'. After setup, when we have the real device name
+        from pywiim, the title should be updated to the actual device name.
+        """
+        # Create entry with generic title (simulates manual add without name)
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="WiiM Device (192.168.1.100)",  # Generic title from manual add
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Entry title should be updated to the device name from MOCK_DEVICE_DATA
+        # The bypass_get_data fixture provides device info with DeviceName="WiiM Mini"
+        assert entry.title == MOCK_DEVICE_DATA["DeviceName"]
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_preserves_custom_title(self, hass: HomeAssistant, bypass_get_data) -> None:
+        """Test that a custom (non-generic) title is NOT overwritten.
+
+        If the user has a custom title that doesn't match the generic pattern,
+        we should preserve it and not overwrite with the device name.
+        """
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="My Custom Device Name",  # User-provided custom title
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Custom title should be preserved (not start with "WiiM Device")
+        assert entry.title == "My Custom Device Name"
