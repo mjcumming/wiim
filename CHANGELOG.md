@@ -4,6 +4,10 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [1.0.41] - 2025-12-09
 
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.51
+
 ### Fixed
 
 - **Pydantic Model Attribute Access**: Fixed incorrect dictionary-style access (`.get()`) on Pydantic models returned by pywiim
