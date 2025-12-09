@@ -178,7 +178,7 @@ jobs:
           fi
 
       - name: Create ZIP file
-        if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
+        if: steps.release-check.outputs.exists == 'false'
         run: |
           rm -f wiim.zip
           # HACS with zip_release: true expects integration files at ZIP root
@@ -190,7 +190,7 @@ jobs:
           zip wiim.zip LICENSE README.md
 
       - name: Extract changelog for this version
-        if: steps.tag-check.outputs.exists == 'false'
+        if: steps.release-check.outputs.exists == 'false'
         id: changelog
         run: |
           if [ -f "CHANGELOG.md" ]; then
@@ -207,7 +207,7 @@ jobs:
           fi
 
       - name: Create Release with GitHub CLI
-        if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
+        if: steps.release-check.outputs.exists == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES: ${{ steps.changelog.outputs.changelog }}
@@ -232,7 +232,7 @@ jobs:
             }
 
       - name: Success notification
-        if: steps.tag-check.outputs.exists == 'false' && steps.release-check.outputs.exists == 'false'
+        if: steps.release-check.outputs.exists == 'false'
         run: |
           echo "🎉 Successfully created release v${{ needs.check-version.outputs.version }}"
           echo "📦 ZIP file uploaded as wiim.zip"
