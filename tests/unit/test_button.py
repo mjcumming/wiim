@@ -1,6 +1,6 @@
 """Unit tests for WiiM button platform."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,6 +21,7 @@ class TestWiiMRebootButton:
     def test_reboot_button_creation(self):
         """Test reboot button entity creation."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.button import WiiMRebootButton
 
         coordinator = MagicMock()
@@ -43,6 +44,7 @@ class TestWiiMRebootButton:
     async def test_async_press_reboot_success(self):
         """Test reboot button press with successful API call."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.button import WiiMRebootButton
 
         coordinator = MagicMock()
@@ -67,6 +69,7 @@ class TestWiiMRebootButton:
     async def test_async_press_reboot_with_error(self):
         """Test reboot button press when API call fails but still succeeds."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.button import WiiMRebootButton
 
         coordinator = MagicMock()
@@ -95,6 +98,7 @@ class TestWiiMSyncTimeButton:
     def test_sync_time_button_creation(self):
         """Test sync time button entity creation."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.button import WiiMSyncTimeButton
 
         coordinator = MagicMock()
@@ -117,6 +121,7 @@ class TestWiiMSyncTimeButton:
     async def test_async_press_sync_time_success(self):
         """Test sync time button press with successful API call."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.button import WiiMSyncTimeButton
 
         coordinator = MagicMock()
@@ -143,6 +148,7 @@ class TestWiiMSyncTimeButton:
         from homeassistant.config_entries import ConfigEntry
         from homeassistant.exceptions import HomeAssistantError
         from pywiim.exceptions import WiiMError
+
         from custom_components.wiim.button import WiiMSyncTimeButton
 
         coordinator = MagicMock()
@@ -171,8 +177,8 @@ class TestButtonPlatformSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry_maintenance_enabled(self):
         """Test button platform setup when maintenance buttons are enabled."""
-        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.button import async_setup_entry
+        from custom_components.wiim.const import DOMAIN
 
         # Mock dependencies
         hass = MagicMock()
@@ -207,8 +213,8 @@ class TestButtonPlatformSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry_maintenance_disabled(self):
         """Test button platform setup when maintenance buttons are disabled."""
-        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.button import async_setup_entry
+        from custom_components.wiim.const import DOMAIN
 
         # Mock dependencies
         hass = MagicMock()
@@ -239,8 +245,8 @@ class TestButtonPlatformSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry_no_options(self):
         """Test button platform setup with no options configured."""
-        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.button import async_setup_entry
+        from custom_components.wiim.const import DOMAIN
 
         # Mock dependencies
         hass = MagicMock()
@@ -271,8 +277,8 @@ class TestButtonPlatformSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry_direct_data_access(self):
         """Test button platform setup with direct hass.data access pattern."""
-        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.button import async_setup_entry
+        from custom_components.wiim.const import DOMAIN
 
         # Mock dependencies
         hass = MagicMock()

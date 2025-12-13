@@ -1,6 +1,6 @@
 """Unit tests for WiiM binary sensor platform."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,6 +21,7 @@ class TestWiiMConnectivityBinarySensor:
     def test_connectivity_sensor_creation(self):
         """Test connectivity binary sensor entity creation."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.binary_sensor import WiiMConnectivityBinarySensor
 
         coordinator = MagicMock()
@@ -42,6 +43,7 @@ class TestWiiMConnectivityBinarySensor:
     def test_connectivity_sensor_available(self):
         """Test connectivity sensor when coordinator is available."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.binary_sensor import WiiMConnectivityBinarySensor
 
         coordinator = MagicMock()
@@ -60,6 +62,7 @@ class TestWiiMConnectivityBinarySensor:
     def test_connectivity_sensor_unavailable(self):
         """Test connectivity sensor when coordinator is unavailable."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.binary_sensor import WiiMConnectivityBinarySensor
 
         coordinator = MagicMock()
@@ -78,7 +81,9 @@ class TestWiiMConnectivityBinarySensor:
     def test_connectivity_sensor_attributes_with_polling_info(self):
         """Test connectivity sensor attributes when polling info is available."""
         from datetime import timedelta
+
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.binary_sensor import WiiMConnectivityBinarySensor
 
         player = MagicMock()
@@ -104,6 +109,7 @@ class TestWiiMConnectivityBinarySensor:
     def test_connectivity_sensor_attributes_with_failure_count(self):
         """Test connectivity sensor attributes when is_playing is true."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.binary_sensor import WiiMConnectivityBinarySensor
 
         player = MagicMock()
@@ -129,6 +135,7 @@ class TestWiiMConnectivityBinarySensor:
     def test_connectivity_sensor_attributes_no_polling_info(self):
         """Test connectivity sensor attributes when no polling info is available."""
         from homeassistant.config_entries import ConfigEntry
+
         from custom_components.wiim.binary_sensor import WiiMConnectivityBinarySensor
 
         player = MagicMock()
@@ -181,8 +188,8 @@ class TestBinarySensorPlatformSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry_network_monitoring_enabled(self):
         """Test binary sensor platform setup when network monitoring is enabled."""
-        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.binary_sensor import async_setup_entry
+        from custom_components.wiim.const import DOMAIN
 
         # Mock dependencies
         hass = MagicMock()
@@ -217,8 +224,8 @@ class TestBinarySensorPlatformSetup:
     @pytest.mark.asyncio
     async def test_async_setup_entry_direct_data_access(self):
         """Test binary sensor platform setup with direct hass.data access."""
-        from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.binary_sensor import async_setup_entry
+        from custom_components.wiim.const import DOMAIN
 
         # Mock dependencies
         hass = MagicMock()

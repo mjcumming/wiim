@@ -1,6 +1,6 @@
 """Unit tests for WiiM Group Media Player - testing group coordination functionality."""
 
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.components.media_player import MediaPlayerEntityFeature, MediaPlayerState

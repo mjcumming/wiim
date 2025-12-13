@@ -1,6 +1,6 @@
 """Unit tests for WiiM Select Entity - testing output mode selection."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.config_entries import ConfigEntry

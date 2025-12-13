@@ -4,7 +4,7 @@ These fixtures provide Player mocks that behave like real pywiim Player objects,
 including callback simulation, state transitions, and Group object support.
 """
 
-from typing import Any, Callable
+from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

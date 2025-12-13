@@ -57,7 +57,6 @@ class TestDiagnosticsUPnP:
     ):
         """Test that diagnostics handles missing upnp_client gracefully (regression test)."""
         from custom_components.wiim.const import DOMAIN
-        from custom_components.wiim.data import get_coordinator_from_entry
 
         # Setup: coordinator without upnp_client attribute
         mock_coordinator.player._upnp_client = None
@@ -140,7 +139,6 @@ class TestConfigEntryDiagnostics:
     @pytest.mark.asyncio
     async def test_config_entry_diagnostics_success(self, hass, mock_config_entry, mock_coordinator):
         """Test config entry diagnostics with valid coordinator."""
-        from unittest.mock import patch
         from custom_components.wiim.const import DOMAIN
         from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
 
@@ -236,7 +234,6 @@ class TestDiagnosticsHelperFunctions:
     def test_get_pywiim_version(self):
         """Test _get_pywiim_version function."""
         from importlib.metadata import PackageNotFoundError
-        from unittest.mock import patch
 
         from custom_components.wiim.diagnostics import _get_pywiim_version
 

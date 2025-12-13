@@ -1445,7 +1445,7 @@ class TestWiiMMediaPlayerServiceHandlers:
     @pytest.mark.asyncio
     async def test_async_play_notification(self, media_player, mock_coordinator):
         """Test async_play_notification service handler."""
-        from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE, MediaType
+        from homeassistant.components.media_player import MediaType
 
         mock_coordinator.player.play_notification = AsyncMock(return_value=True)
         media_player.hass = MagicMock()

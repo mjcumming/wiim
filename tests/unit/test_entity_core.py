@@ -156,7 +156,6 @@ class TestWiimEntity:
         """Test entity handles coordinator updates."""
         # Entity should respond to coordinator updates
         # The base CoordinatorEntity handles this, but we verify it works
-        initial_available = entity.available
 
         # Trigger a coordinator update by changing last_update_success
         mock_coordinator.last_update_success = not mock_coordinator.last_update_success

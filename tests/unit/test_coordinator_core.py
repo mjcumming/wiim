@@ -327,7 +327,6 @@ class TestWiiMCoordinator:
         mock_player.is_playing = False
         mock_player.role = "solo"
 
-        initial_interval = coordinator.update_interval
         await coordinator._async_update_data()
 
         # Change to playing
