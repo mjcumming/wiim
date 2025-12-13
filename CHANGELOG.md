@@ -4,6 +4,8 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+## [1.0.43] - 2025-12-13
+
 ### Fixed
 
 - **Group Join Service**: Fixed `media_player.join` service failing with "Coordinator not available" warnings (GitHub Issue #149)
