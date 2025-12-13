@@ -4,8 +4,9 @@ black>=23.0.0
 mypy>=1.5.0
 pre-commit>=3.0.0
 
-# Home Assistant development
-homeassistant>=2024.12.0
+# Note: homeassistant is NOT included here to avoid dependency conflicts
+# The pytest-homeassistant-custom-component package provides HA test fixtures
+# For running against a real HA instance, use the HA Core dev environment
 
 # Testing
 pytest-xdist>=3.0.0

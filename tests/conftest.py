@@ -495,8 +495,7 @@ def wiim_coordinator(wiim_client):
 
     # Create coordinator with simplified data structure
     coordinator = MagicMock()
-    coordinator.player = wiim_client
-    coordinator.player = mock_player
+    coordinator.player = mock_player  # Remove dead code assignment
     coordinator.data = {"player": mock_player}
     coordinator.last_update_success = True
     coordinator.async_request_refresh = AsyncMock()
