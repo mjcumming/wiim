@@ -1,9 +1,10 @@
 # Constraint file for GitHub Actions workflow
-# These constraints ensure our CI environment matches Home Assistant Core requirements
+# CRITICAL: These constraints MUST match pytest-homeassistant-custom-component's exact requirements
+# DO NOT change pytest versions without checking what pytest-homeassistant-custom-component requires!
 
-# Home Assistant Core compatible versions for Python 3.13
+# pytest-homeassistant-custom-component exact requirements (as of 0.13.251)
 pytest-homeassistant-custom-component==0.13.251
-pytest==8.4.2
+pytest==8.3.5
 pytest-cov==6.0.0
 coverage==7.6.12
 aiohttp==3.12.15
@@ -13,9 +14,9 @@ aiohttp==3.12.15
 pycares==4.4.0
 aiodns==3.2.0
 
+# Development tools (can be newer)
 pip==25.2
 pre-commit==4.3.0
-
 black==25.11.0
 ruff==0.14.2
 flake8==7.2.0
