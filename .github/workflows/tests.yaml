@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  DEFAULT_PYTHON: "3.13"
+  DEFAULT_PYTHON: "3.12"
 
 jobs:
   tests:
@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.12"]
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v5
