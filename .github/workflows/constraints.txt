@@ -1,24 +1,12 @@
 # Constraint file for GitHub Actions workflow
-# CRITICAL: These constraints MUST match pytest-homeassistant-custom-component's exact requirements
-# DO NOT change pytest versions without checking what pytest-homeassistant-custom-component requires!
+# CRITICAL: MINIMAL constraints to avoid pip resolver depth issues
+# Only pin what's absolutely necessary to avoid conflicts
 
-# pytest-homeassistant-custom-component exact requirements (as of 0.13.251)
+# pytest-homeassistant-custom-component and its core dependencies
 pytest-homeassistant-custom-component==0.13.251
 pytest==8.3.5
-pytest-cov==6.0.0
 coverage==7.6.12
-aiohttp==3.12.15
 
 # Fix for Python 3.13 compatibility (pycares/aiodns issue)
-# See: https://github.com/aio-libs/aiodns/issues/133
-# NOTE: Updated to match homeassistant 2025.6.0 requirements
 pycares==4.4.0
 aiodns==3.4.0
-
-# Development tools (can be newer)
-pip==25.2
-pre-commit==4.3.0
-black==25.11.0
-ruff==0.14.2
-flake8==7.2.0
-reorder-python-imports==3.15.0
