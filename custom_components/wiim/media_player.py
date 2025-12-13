@@ -827,6 +827,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         < v4.2.8020, Router mode for newer devices). Audio Pro Gen1 devices
         (A26, C10, C5a) are now supported.
         """
+        from .data import get_coordinator_from_entry
+
         entity_registry = er.async_get(self.hass)
         master_player = self.coordinator.player
         if master_player is None:
@@ -870,8 +872,6 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             if not config_entry:
                 _LOGGER.warning("Config entry not found for entity %s", entity_id)
                 continue
-
-            from .data import get_coordinator_from_entry
 
             try:
                 coordinator = get_coordinator_from_entry(self.hass, config_entry)
@@ -942,8 +942,6 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             if not config_entry:
                 _LOGGER.warning("Config entry not found for entity %s", entity_id)
                 continue
-
-            from .data import get_coordinator_from_entry
 
             try:
                 coordinator = get_coordinator_from_entry(self.hass, config_entry)
