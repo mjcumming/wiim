@@ -11,8 +11,9 @@ aiohttp==3.12.15
 
 # Fix for Python 3.13 compatibility (pycares/aiodns issue)
 # See: https://github.com/aio-libs/aiodns/issues/133
+# NOTE: Updated to match homeassistant 2025.6.0 requirements
 pycares==4.4.0
-aiodns==3.2.0
+aiodns==3.4.0
 
 # Development tools (can be newer)
 pip==25.2
