@@ -7,12 +7,14 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Group Join Service**: Fixed `media_player.join` service failing with "Coordinator not available" warnings (GitHub Issue #149)
+
   - Root cause: Entity unique_id changed to UUID in v1.0.40, but coordinator lookup still used unique_id which didn't match config entry unique_id (IP address)
   - Fix: Use entity's `config_entry_id` for coordinator lookup instead of `unique_id` - this is more reliable and handles UUID/IP mismatches
   - The `media_player.join` service now works correctly when adding slaves to a multiroom group
 
 - **CI/CD**: Fixed GitHub Actions test suite failing with pycares import error
-  - Added version constraints for pycares (4.4.0) and aiodns (3.2.0) for Python 3.13 compatibility
+  - Added version constraints file (`.github/workflows/constraints.txt`) with pycares (4.4.0) and aiodns (3.2.0) for Python 3.13 compatibility
+  - Updated workflow to use constraint file: `pip install -c .github/workflows/constraints.txt`
   - Resolves `AttributeError: module 'pycares' has no attribute 'ares_query_a_result'`
 
 ### Changed
