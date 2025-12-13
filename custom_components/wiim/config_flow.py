@@ -15,10 +15,10 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components import onboarding
 from homeassistant.components.ssdp import SsdpServiceInfo
+from homeassistant.components.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
-from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pywiim.discovery import DiscoveredDevice, discover_devices, validate_device
 
 from .const import (
