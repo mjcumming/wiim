@@ -16,6 +16,12 @@ aresponses>=2.1.6
 freezegun>=1.2.2
 zeroconf
 
+# Fix for Python 3.13 compatibility (pycares/aiodns issue)
+# Without these pins, pycares 5.0+ gets installed which breaks Python 3.13
+# See: https://github.com/aio-libs/aiodns/issues/133
+pycares==4.4.0
+aiodns==3.2.0
+
 # Code quality
 flake8>=6.0.0
 ruff>=0.4.2
