@@ -2,6 +2,46 @@
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Group Join Service**: Fixed `media_player.join` service failing with "Coordinator not available" warnings (GitHub Issue #149)
+  - Root cause: Entity unique_id changed to UUID in v1.0.40, but coordinator lookup still used unique_id which didn't match config entry unique_id (IP address)
+  - Fix: Use entity's `config_entry_id` for coordinator lookup instead of `unique_id` - this is more reliable and handles UUID/IP mismatches
+  - The `media_player.join` service now works correctly when adding slaves to a multiroom group
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.52
+
+  **Slave Device Status Endpoint (2.1.52)**:
+
+  - Fixed slave devices to use capability-configured status endpoint (`get_player_status()`) instead of hardcoded `get_status()`
+  - Ensures slaves use same capability-driven endpoint selection as masters
+  - Improves consistency and device compatibility
+  - Fixes issue where HCN_BWD03 devices failed to get status in multiroom mode because `getStatusEx` returns system info instead of player status
+  - Slaves now correctly use `getPlayerStatus` via capability detection
+
+- **Group Master Entity Naming**: Fixed entity naming to prevent `_2` suffix
+  - **Root cause**: Group master entity returned same name as main player when unavailable (during initial registration), causing HA to auto-generate `_2` suffix
+  - **Fix**: Group master entity now always returns distinct name "Device Name Group Master" even when unavailable
+  - **Combined with unique_id change**: Entity unique_id changed from `{uuid}_group_coordinator` to `{uuid}_group_master`
+  - **New installs**: Group master entity will be named `media_player.<device>_group_master` (e.g., `media_player.office_wiim_group_master`) instead of confusing `_2` suffix
+  - **Existing installs**: Entity IDs are not automatically changed (to avoid breaking automations)
+  - Users can manually rename entities in the UI if desired
+  - This entity only appears when the device is a multiroom group master with slaves
+
+## [1.0.42] - 2025-12-09
+
+### Fixed
+
+- **Clear Playlist for UPnP Sources**: Fixed `media_player.clear_playlist` service not working when playing from UPnP sources
+  - Now clears both HTTP playlist and UPnP queue (when device supports UPnP)
+  - Fixes issue where clearing playlist had no effect when playing from "Local UPnP Server" or other DLNA sources
+  - Uses pywiim's `clear_queue()` method in addition to `clear_playlist()` for comprehensive clearing
+  - Safe implementation: only calls `clear_queue()` on devices that support UPnP (via `supports_upnp` check)
+
 ## [1.0.41] - 2025-12-09
 
 ### Changed
@@ -11,6 +51,7 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Pydantic Model Attribute Access**: Fixed incorrect dictionary-style access (`.get()`) on Pydantic models returned by pywiim
+
   - `config_flow.py`: Fixed `DeviceGroupInfo` attribute access in `_discover_slaves()` - was using `.get("role")` instead of `.role`
   - `sensor.py`: Fixed `DeviceInfo` attribute access in firmware sensor - using direct attribute access instead of `getattr()`
   - `media_player.py`: Fixed `Alarm` model attribute access in alarm update handler

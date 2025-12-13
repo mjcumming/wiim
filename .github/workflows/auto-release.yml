@@ -153,17 +153,6 @@ jobs:
             echo "Please verify CI status manually: https://github.com/$REPO/actions"
           fi
 
-      - name: Check if tag already exists
-        id: tag-check
-        run: |
-          if git rev-parse "v${{ needs.check-version.outputs.version }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Tag v${{ needs.check-version.outputs.version }} already exists"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Tag v${{ needs.check-version.outputs.version }} does not exist"
-          fi
-
       - name: Check if release already exists
         id: release-check
         env:

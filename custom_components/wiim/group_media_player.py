@@ -52,7 +52,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Initialize the group coordinator media player."""
         super().__init__(coordinator, config_entry)
         uuid = config_entry.unique_id or coordinator.player.host
-        self._attr_unique_id = f"{uuid}_group_coordinator"
+        self._attr_unique_id = f"{uuid}_group_master"
         self._attr_name = None  # Use dynamic name property
 
     def _update_position_from_coordinator(self) -> None:
@@ -124,11 +124,14 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     @property
     def name(self) -> str:
-        """Return dynamic name based on role."""
+        """Return dynamic name based on role.
+
+        Always returns a distinct name to ensure entity_id doesn't collide with
+        the main player entity. The entity_id is set during first registration and
+        never changes, so we need a unique name even when unavailable.
+        """
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
-        if self.available:
-            return f"{device_name} Group Master"
-        return device_name
+        return f"{device_name} Group Master"
 
     @property
     def available(self) -> bool:

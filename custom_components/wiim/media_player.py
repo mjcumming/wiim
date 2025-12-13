@@ -33,7 +33,6 @@ from pywiim.exceptions import WiiMError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
 from .coordinator import WiiMCoordinator
-from .data import find_coordinator_by_uuid
 from .entity import WiimEntity
 from .group_media_player import WiiMGroupMediaPlayer
 from .media_player_base import WiiMMediaPlayerMixin
@@ -701,9 +700,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         )
 
     async def async_clear_playlist(self) -> None:
-        """Clear the current playlist."""
+        """Clear the current playlist and UPnP queue (if available)."""
         async with wiim_command(self.name, "clear playlist"):
             await self.coordinator.player.clear_playlist()
+            if self._get_player().supports_upnp:
+                await self.coordinator.player.clear_queue()
 
     # ===== GROUPING =====
 
@@ -859,9 +860,27 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 _LOGGER.warning("Entity %s not found when unjoining from group", entity_id)
                 continue
 
-            coordinator = find_coordinator_by_uuid(self.hass, entity_entry.unique_id)
-            if not coordinator or not coordinator.player:
+            # Look up coordinator by config_entry_id (most reliable method)
+            # This avoids issues where entity unique_id (UUID) doesn't match config entry unique_id (IP)
+            if not entity_entry.config_entry_id:
+                _LOGGER.warning("Entity %s has no config_entry_id", entity_id)
+                continue
+
+            config_entry = self.hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+            if not config_entry:
+                _LOGGER.warning("Config entry not found for entity %s", entity_id)
+                continue
+
+            from .data import get_coordinator_from_entry
+
+            try:
+                coordinator = get_coordinator_from_entry(self.hass, config_entry)
+            except RuntimeError:
                 _LOGGER.warning("Coordinator not available for entity %s", entity_id)
+                continue
+
+            if not coordinator.player:
+                _LOGGER.warning("Coordinator player not available for entity %s", entity_id)
                 continue
 
             # pywiim handles leaving groups and updating state automatically
@@ -913,9 +932,27 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 _LOGGER.warning("Entity %s not found when joining group", entity_id)
                 continue
 
-            coordinator = find_coordinator_by_uuid(self.hass, entity_entry.unique_id)
-            if not coordinator or not coordinator.player:
+            # Look up coordinator by config_entry_id (most reliable method)
+            # This avoids issues where entity unique_id (UUID) doesn't match config entry unique_id (IP)
+            if not entity_entry.config_entry_id:
+                _LOGGER.warning("Entity %s has no config_entry_id", entity_id)
+                continue
+
+            config_entry = self.hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+            if not config_entry:
+                _LOGGER.warning("Config entry not found for entity %s", entity_id)
+                continue
+
+            from .data import get_coordinator_from_entry
+
+            try:
+                coordinator = get_coordinator_from_entry(self.hass, config_entry)
+            except RuntimeError:
                 _LOGGER.warning("Coordinator not available for entity %s", entity_id)
+                continue
+
+            if not coordinator.player:
+                _LOGGER.warning("Coordinator player not available for entity %s", entity_id)
                 continue
 
             # pywiim handles joining groups, including slaves leaving their current group
