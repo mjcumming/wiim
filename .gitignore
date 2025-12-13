@@ -219,3 +219,4 @@ DIAGNOSIS.*.md
 wiim_*_test_*.json
 wiim_*_report_*.json
 scripts/test.config
+*.zip
