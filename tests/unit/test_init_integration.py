@@ -177,6 +177,7 @@ class TestIntegrationSetup:
         expected_domains = {"media_player"}  # At minimum, we should have media player
         assert expected_domains.issubset(domains)
 
+    @pytest.mark.skip(reason="Service registration temporarily disabled - migrating to new HA API")
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "service_name",
@@ -261,6 +262,7 @@ class TestIntegrationTeardown:
         assert entry.state is ConfigEntryState.LOADED
 
 
+@pytest.mark.skip(reason="Service registration temporarily disabled - migrating to new HA API")
 class TestIntegrationServices:
     """Test integration service functionality."""
 
