@@ -23,14 +23,6 @@ from custom_components.wiim.const import DOMAIN  # noqa: E402
 from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE  # noqa: E402
 
 # Import realistic player fixtures
-from .fixtures.realistic_player import (  # noqa: E402
-    realistic_group,
-    realistic_player,
-    realistic_player_master,
-    realistic_player_slave,
-    realistic_player_solo,
-    player_with_state,
-)
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -60,6 +52,33 @@ def skip_notifications_fixture():
 def allow_unwatched_threads() -> bool:  # noqa: D401 – simple fixture
     """Tell pytest-homeassistant that background threads are expected."""
     return True
+
+
+@pytest.fixture(autouse=True)
+def fix_storage_mock():
+    """Fix storage mock to work with current HA core version.
+
+    pytest-homeassistant-custom-component's storage mock has a bug where
+    _async_write_data mock doesn't accept the correct number of arguments.
+    This fixture patches it to work correctly.
+
+    The external fixture from pytest-homeassistant-custom-component creates
+    a mock that only accepts 2 args (path, data) but HA core calls it with
+    3 args (self, path, data). We override it with a proper mock.
+    """
+    from unittest.mock import patch
+
+    async def mock_async_write_data(self, path: str, data: dict) -> None:
+        """Mock storage write that accepts correct arguments (self, path, data)."""
+        # Just return None - we don't need to actually write in tests
+        return None
+
+    # Patch the storage method to override pytest-homeassistant's broken mock
+    with patch(
+        "homeassistant.helpers.storage.Store._async_write_data",
+        mock_async_write_data,
+    ):
+        yield
 
 
 # ============================================================================
@@ -383,7 +402,10 @@ def wiim_config_entry():
     entry = MagicMock(spec=ConfigEntry)
     entry.domain = "wiim"
     entry.entry_id = "test_wiim_entry"
+    entry.unique_id = "test-speaker-uuid"
     entry.data = {"host": "192.168.1.100", "name": "Test WiiM"}
+    entry.options = {}
+    entry.title = "Test WiiM"
     return entry
 
 
@@ -480,18 +502,6 @@ def wiim_coordinator(wiim_client):
     coordinator.async_request_refresh = AsyncMock()
     coordinator.record_user_command = MagicMock()
     return coordinator
-
-
-@pytest.fixture
-def wiim_config_entry():
-    """Create a test config entry."""
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.entry_id = "test_wiim_entry"
-    config_entry.unique_id = "test-speaker-uuid"
-    config_entry.data = {"host": "192.168.1.100"}
-    config_entry.options = {}
-    config_entry.title = "Test WiiM"
-    return config_entry
 
 
 @pytest.fixture
