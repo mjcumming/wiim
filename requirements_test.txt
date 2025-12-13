@@ -1,22 +1,20 @@
 -r requirements_dev.txt
 
 # Home Assistant Core compatible test dependencies
-# These versions are aligned with HA Core 2024.12+ requirements
+# pytest-homeassistant-custom-component provides ALL pytest plugins and dependencies:
+# - pytest
+# - pytest-asyncio
+# - pytest-cov
+# - pytest-timeout  
+# - pytest-xdist
+# Do NOT explicitly list these - it causes version conflicts!
 
-# Testing framework
-pytest>=7.4.0
-pytest-cov>=4.1.0
-# pytest-asyncio and pytest-timeout are included in pytest-homeassistant-custom-component
-# Using the version required by HA Core for Python 3.13 compatibility
 pytest-homeassistant-custom-component>=0.12.0
 
 # Test utilities
 aresponses>=2.1.6
 freezegun>=1.2.2
 zeroconf
-
-# Note: async-upnp-client is pulled in by homeassistant dependency
-# Removing strict pin to avoid version conflicts with HA Core
 
 # Code quality
 flake8>=6.0.0

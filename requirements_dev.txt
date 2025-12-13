@@ -8,8 +8,7 @@ pre-commit>=3.0.0
 # The pytest-homeassistant-custom-component package provides HA test fixtures
 # For running against a real HA instance, use the HA Core dev environment
 
-# Testing
-pytest-xdist>=3.0.0
+# Note: pytest-xdist removed - included in pytest-homeassistant-custom-component
 
 # Integration runtime dependencies (matches manifest.json)
 pywiim>=2.1.43
