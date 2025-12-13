@@ -4,7 +4,7 @@
 
 # pytest-homeassistant-custom-component and its core dependencies
 pytest-homeassistant-custom-component==0.13.251
-pytest==8.3.5
+pytest==9.0.2
 coverage==7.6.12
 
 # Fix for Python 3.13 compatibility (pycares/aiodns issue)
