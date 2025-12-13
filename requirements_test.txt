@@ -5,7 +5,7 @@
 # - pytest
 # - pytest-asyncio
 # - pytest-cov
-# - pytest-timeout  
+# - pytest-timeout
 # - pytest-xdist
 # Do NOT explicitly list these - it causes version conflicts!
 

@@ -46,6 +46,7 @@ The constraint file must use the EXACT versions that `pytest-homeassistant-custo
 4. Copy those EXACT versions to `constraints.txt`
 
 **Example for 0.13.251:**
+
 ```text
 pytest-homeassistant-custom-component==0.13.251
 pytest==8.3.5                    # ← MUST match exactly!
@@ -61,7 +62,9 @@ pytest-xdist==3.6.1              # ← Pulled in automatically, don't override
 ## What Went Wrong (Learn from our mistakes)
 
 ### Mistake 1: Listing pytest plugins explicitly
+
 ❌ **WRONG:**
+
 ```text
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
@@ -72,31 +75,38 @@ pytest-homeassistant-custom-component>=0.12.0
 ```
 
 ✅ **CORRECT:**
+
 ```text
 pytest-homeassistant-custom-component>=0.12.0
 # All pytest plugins pulled in automatically
 ```
 
 ### Mistake 2: Wrong pytest version in constraints
+
 ❌ **WRONG:**
+
 ```text
 pytest-homeassistant-custom-component==0.13.251
 pytest==8.4.2  # ← Conflicts! Should be 8.3.5
 ```
 
 ✅ **CORRECT:**
+
 ```text
 pytest-homeassistant-custom-component==0.13.251
 pytest==8.3.5  # ← Matches exactly what it requires
 ```
 
 ### Mistake 3: Including homeassistant in requirements_dev.txt
+
 ❌ **WRONG:**
+
 ```text
 homeassistant>=2024.12.0  # Causes version conflicts
 ```
 
 ✅ **CORRECT:**
+
 ```text
 # NO homeassistant dependency needed
 # pytest-homeassistant-custom-component provides all test fixtures
@@ -149,17 +159,17 @@ pytest tests/unit/ -v
 
 ## Quick Reference
 
-| Package | Version (for 0.13.251) | Notes |
-|---------|----------------------|-------|
-| pytest-homeassistant-custom-component | 0.13.251 | Pin this version |
-| pytest | 8.3.5 | MUST match exactly |
-| pytest-cov | 6.0.0 | MUST match exactly |
-| coverage | 7.6.12 | MUST match exactly |
-| pytest-asyncio | 0.26.0 | Auto-installed |
-| pytest-timeout | 2.3.1 | Auto-installed |
-| pytest-xdist | 3.6.1 | Auto-installed |
-| pycares | 4.4.0 | Python 3.13 fix |
-| aiodns | 3.2.0 | Python 3.13 fix |
+| Package                               | Version (for 0.13.251) | Notes              |
+| ------------------------------------- | ---------------------- | ------------------ |
+| pytest-homeassistant-custom-component | 0.13.251               | Pin this version   |
+| pytest                                | 8.3.5                  | MUST match exactly |
+| pytest-cov                            | 6.0.0                  | MUST match exactly |
+| coverage                              | 7.6.12                 | MUST match exactly |
+| pytest-asyncio                        | 0.26.0                 | Auto-installed     |
+| pytest-timeout                        | 2.3.1                  | Auto-installed     |
+| pytest-xdist                          | 3.6.1                  | Auto-installed     |
+| pycares                               | 4.4.0                  | Python 3.13 fix    |
+| aiodns                                | 3.2.0                  | Python 3.13 fix    |
 
 ---
 
@@ -168,11 +178,13 @@ pytest tests/unit/ -v
 **Let pytest-homeassistant-custom-component manage ALL pytest-related dependencies.**
 
 **DO NOT:**
+
 - ❌ List pytest plugins in requirements_test.txt
 - ❌ Override pytest versions in constraints.txt without checking pytest-homeassistant-custom-component
 - ❌ Include homeassistant in requirements_dev.txt
 
 **DO:**
+
 - ✅ Only specify pytest-homeassistant-custom-component in requirements_test.txt
 - ✅ Match EXACT versions in constraints.txt
 - ✅ Test locally before pushing

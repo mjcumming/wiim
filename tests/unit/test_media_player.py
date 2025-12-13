@@ -39,6 +39,8 @@ def mock_coordinator():
     # Make player methods async
     coordinator.player.set_volume = AsyncMock(return_value=True)
     coordinator.player.set_mute = AsyncMock(return_value=True)
+    coordinator.player.clear_playlist = AsyncMock(return_value=True)
+    coordinator.player.clear_queue = AsyncMock(return_value=True)
     return coordinator
 
 
@@ -1033,10 +1035,13 @@ class TestWiiMMediaPlayerClearPlaylist:
     async def test_clear_playlist(self, media_player, mock_coordinator):
         """Test clearing playlist."""
         mock_coordinator.player.clear_playlist = AsyncMock(return_value=True)
+        mock_coordinator.player.clear_queue = AsyncMock(return_value=True)
+        mock_coordinator.player.supports_upnp = True  # Enable UPnP to test clear_queue path
 
         await media_player.async_clear_playlist()
 
         mock_coordinator.player.clear_playlist.assert_called_once()
+        mock_coordinator.player.clear_queue.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_clear_playlist_handles_error(self, media_player, mock_coordinator):
