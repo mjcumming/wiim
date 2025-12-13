@@ -17,7 +17,7 @@ from homeassistant.components import onboarding
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
-from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
+from homeassistant.components.ssdp import SsdpServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pywiim.discovery import DiscoveredDevice, discover_devices, validate_device
 
