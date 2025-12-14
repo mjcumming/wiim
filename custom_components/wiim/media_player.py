@@ -72,14 +72,7 @@ async def async_setup_entry(
     )
 
     # Register entity services
-    # Try to get platform - in test contexts this may not be available
-    try:
-        platform = entity_platform.async_get_current_platform()
-    except RuntimeError:
-        # Platform context not available (likely in test context)
-        # Services will be registered when platform is properly set up
-        _LOGGER.debug("Platform context not available, skipping service registration")
-        return
+    platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
         "play_url",
         {vol.Required("url"): cv.string},
