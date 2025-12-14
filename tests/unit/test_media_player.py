@@ -778,42 +778,43 @@ class TestWiiMMediaPlayerJoinUnjoin:
 
         # Setup master player with existing group
         master_player = mock_coordinator.player
-        master_player.group = MagicMock()
+        mock_group = MagicMock()
+        mock_slave_player_obj = MagicMock()
+        mock_slave_player_obj.uuid = "slave_uuid"
+        mock_group.all_players = [master_player, mock_slave_player_obj]
+        master_player.group = mock_group
+        master_player.is_solo = False
         media_player.entity_id = "media_player.wiim_master"
 
-        # Mock group_members to return existing slave
-        with patch.object(media_player, "group_members", ["media_player.wiim_master", "media_player.wiim_slave"]):
-            # Mock entity registry
-            mock_registry = MagicMock()
-            mock_entity_entry = MagicMock()
-            mock_entity_entry.config_entry_id = "entry_123"
-            mock_registry.async_get.return_value = mock_entity_entry
+        # Mock entity registry for group_members lookup
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = "media_player.wiim_slave"
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.config_entry_id = "entry_123"
+        mock_registry.async_get.return_value = mock_entity_entry
 
-            # Mock config entry
-            mock_config_entry = MagicMock()
-            mock_config_entry.entry_id = "entry_123"
+        # Mock config entry
+        mock_config_entry = MagicMock()
+        mock_config_entry.entry_id = "entry_123"
 
-            # Mock coordinator for slave
-            mock_slave_coordinator = MagicMock()
-            mock_slave_player = MagicMock()
-            mock_slave_player.leave_group = AsyncMock()
-            mock_slave_coordinator.player = mock_slave_player
+        # Mock coordinator for slave
+        mock_slave_coordinator = MagicMock()
+        mock_slave_player = MagicMock()
+        mock_slave_player.leave_group = AsyncMock()
+        mock_slave_coordinator.player = mock_slave_player
 
-            # Mock hass.data structure
-            media_player.hass.data = {
-                "wiim": {
-                    "entry_123": {"coordinator": mock_slave_coordinator}
-                }
-            }
-            media_player.hass.config_entries = MagicMock()
-            media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
+        # Mock hass.data structure
+        media_player.hass = MagicMock()
+        media_player.hass.data = {"wiim": {"entry_123": {"coordinator": mock_slave_coordinator}}}
+        media_player.hass.config_entries = MagicMock()
+        media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
 
-            with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
-                # Request only master (removes slave)
-                await media_player.async_join_players(["media_player.wiim_master"])
+        with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
+            # Request only master (removes slave)
+            await media_player.async_join_players(["media_player.wiim_master"])
 
-            # Verify leave_group was called
-            mock_slave_player.leave_group.assert_called_once()
+        # Verify leave_group was called
+        mock_slave_player.leave_group.assert_called_once()
 
     def test_group_members_returns_none_when_no_group(self, media_player, mock_coordinator):
         """Test group_members returns None when not in a group."""
@@ -878,11 +879,8 @@ class TestWiiMMediaPlayerJoinUnjoin:
         mock_slave_coordinator.player = mock_slave_player
 
         # Mock hass.data structure
-        media_player.hass.data = {
-            "wiim": {
-                "entry_123": {"coordinator": mock_slave_coordinator}
-            }
-        }
+        media_player.hass = MagicMock()
+        media_player.hass.data = {"wiim": {"entry_123": {"coordinator": mock_slave_coordinator}}}
         media_player.hass.config_entries = MagicMock()
         media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
 
@@ -963,7 +961,7 @@ class TestWiiMMediaPlayerJoinUnjoin:
         media_player.hass.data = {}  # Empty - will cause RuntimeError
 
         with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
-            with patch("custom_components.wiim.media_player.get_coordinator_from_entry", side_effect=RuntimeError("Coordinator not found")):
+            with patch("custom_components.wiim.data.get_coordinator_from_entry", side_effect=RuntimeError("Coordinator not found")):
                 # Should not raise, just log warning and skip
                 await media_player.async_join_players(["media_player.wiim_master", "media_player.wiim_slave"])
 
@@ -993,11 +991,7 @@ class TestWiiMMediaPlayerJoinUnjoin:
         media_player.hass = MagicMock()
         media_player.hass.config_entries = MagicMock()
         media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
-        media_player.hass.data = {
-            "wiim": {
-                "entry_123": {"coordinator": mock_slave_coordinator}
-            }
-        }
+        media_player.hass.data = {"wiim": {"entry_123": {"coordinator": mock_slave_coordinator}}}
 
         with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
             # Should not raise, just log warning and skip
