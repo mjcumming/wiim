@@ -771,6 +771,50 @@ class TestWiiMMediaPlayerJoinUnjoin:
         with pytest.raises(HomeAssistantError, match="Failed to leave group"):
             await media_player.async_unjoin_player()
 
+    @pytest.mark.asyncio
+    async def test_async_join_players_unjoin_uses_new_lookup(self, media_player, mock_coordinator):
+        """Test async_join_players unjoin path uses new coordinator lookup."""
+        from unittest.mock import patch
+
+        # Setup master player with existing group
+        master_player = mock_coordinator.player
+        master_player.group = MagicMock()
+        media_player.entity_id = "media_player.wiim_master"
+
+        # Mock group_members to return existing slave
+        with patch.object(media_player, "group_members", ["media_player.wiim_master", "media_player.wiim_slave"]):
+            # Mock entity registry
+            mock_registry = MagicMock()
+            mock_entity_entry = MagicMock()
+            mock_entity_entry.config_entry_id = "entry_123"
+            mock_registry.async_get.return_value = mock_entity_entry
+
+            # Mock config entry
+            mock_config_entry = MagicMock()
+            mock_config_entry.entry_id = "entry_123"
+
+            # Mock coordinator for slave
+            mock_slave_coordinator = MagicMock()
+            mock_slave_player = MagicMock()
+            mock_slave_player.leave_group = AsyncMock()
+            mock_slave_coordinator.player = mock_slave_player
+
+            # Mock hass.data structure
+            media_player.hass.data = {
+                "wiim": {
+                    "entry_123": {"coordinator": mock_slave_coordinator}
+                }
+            }
+            media_player.hass.config_entries = MagicMock()
+            media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
+
+            with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
+                # Request only master (removes slave)
+                await media_player.async_join_players(["media_player.wiim_master"])
+
+            # Verify leave_group was called
+            mock_slave_player.leave_group.assert_called_once()
+
     def test_group_members_returns_none_when_no_group(self, media_player, mock_coordinator):
         """Test group_members returns None when not in a group."""
         mock_coordinator.player.group = None
@@ -803,6 +847,161 @@ class TestWiiMMediaPlayerJoinUnjoin:
             members = media_player.group_members
             assert members is not None
             assert len(members) == 2
+
+    @pytest.mark.asyncio
+    async def test_async_join_players_success(self, media_player, mock_coordinator):
+        """Test async_join_players successfully joins players using new coordinator lookup."""
+        from unittest.mock import patch
+
+        # Setup master player
+        master_player = mock_coordinator.player
+        master_player.join_group = AsyncMock()
+        master_player.group = None
+        media_player.entity_id = "media_player.wiim_master"
+
+        # Mock entity registry
+        mock_registry = MagicMock()
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.config_entry_id = "entry_123"
+        mock_registry.async_get.return_value = mock_entity_entry
+
+        # Mock config entry
+        mock_config_entry = MagicMock()
+        mock_config_entry.entry_id = "entry_123"
+
+        # Mock coordinator for slave
+        mock_slave_coordinator = MagicMock()
+        mock_slave_player = MagicMock()
+        mock_slave_player.name = "Slave Player"
+        mock_slave_player.group = None
+        mock_slave_player.join_group = AsyncMock()
+        mock_slave_coordinator.player = mock_slave_player
+
+        # Mock hass.data structure
+        media_player.hass.data = {
+            "wiim": {
+                "entry_123": {"coordinator": mock_slave_coordinator}
+            }
+        }
+        media_player.hass.config_entries = MagicMock()
+        media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
+
+        with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
+            await media_player.async_join_players(["media_player.wiim_master", "media_player.wiim_slave"])
+
+        # Verify join was called
+        mock_slave_player.join_group.assert_called_once_with(master_player)
+
+    @pytest.mark.asyncio
+    async def test_async_join_players_missing_config_entry_id(self, media_player, mock_coordinator):
+        """Test async_join_players handles missing config_entry_id gracefully."""
+        from unittest.mock import patch
+
+        master_player = mock_coordinator.player
+        master_player.group = None
+        media_player.entity_id = "media_player.wiim_master"
+
+        # Mock entity registry - entity has no config_entry_id
+        mock_registry = MagicMock()
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.config_entry_id = None  # Missing!
+        mock_registry.async_get.return_value = mock_entity_entry
+
+        media_player.hass = MagicMock()
+
+        with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
+            # Should not raise, just log warning and skip
+            await media_player.async_join_players(["media_player.wiim_master", "media_player.wiim_slave"])
+
+    @pytest.mark.asyncio
+    async def test_async_join_players_missing_config_entry(self, media_player, mock_coordinator):
+        """Test async_join_players handles missing config entry gracefully."""
+        from unittest.mock import patch
+
+        master_player = mock_coordinator.player
+        master_player.group = None
+        media_player.entity_id = "media_player.wiim_master"
+
+        # Mock entity registry
+        mock_registry = MagicMock()
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.config_entry_id = "entry_123"
+        mock_registry.async_get.return_value = mock_entity_entry
+
+        # Mock config entry lookup returns None
+        media_player.hass = MagicMock()
+        media_player.hass.config_entries = MagicMock()
+        media_player.hass.config_entries.async_get_entry.return_value = None
+
+        with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
+            # Should not raise, just log warning and skip
+            await media_player.async_join_players(["media_player.wiim_master", "media_player.wiim_slave"])
+
+    @pytest.mark.asyncio
+    async def test_async_join_players_coordinator_runtime_error(self, media_player, mock_coordinator):
+        """Test async_join_players handles RuntimeError from get_coordinator_from_entry."""
+        from unittest.mock import patch
+        from custom_components.wiim.data import get_coordinator_from_entry
+
+        master_player = mock_coordinator.player
+        master_player.group = None
+        media_player.entity_id = "media_player.wiim_master"
+
+        # Mock entity registry
+        mock_registry = MagicMock()
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.config_entry_id = "entry_123"
+        mock_registry.async_get.return_value = mock_entity_entry
+
+        # Mock config entry
+        mock_config_entry = MagicMock()
+        mock_config_entry.entry_id = "entry_123"
+
+        media_player.hass = MagicMock()
+        media_player.hass.config_entries = MagicMock()
+        media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
+        media_player.hass.data = {}  # Empty - will cause RuntimeError
+
+        with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
+            with patch("custom_components.wiim.media_player.get_coordinator_from_entry", side_effect=RuntimeError("Coordinator not found")):
+                # Should not raise, just log warning and skip
+                await media_player.async_join_players(["media_player.wiim_master", "media_player.wiim_slave"])
+
+    @pytest.mark.asyncio
+    async def test_async_join_players_coordinator_player_none(self, media_player, mock_coordinator):
+        """Test async_join_players handles coordinator with no player gracefully."""
+        from unittest.mock import patch
+
+        master_player = mock_coordinator.player
+        master_player.group = None
+        media_player.entity_id = "media_player.wiim_master"
+
+        # Mock entity registry
+        mock_registry = MagicMock()
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.config_entry_id = "entry_123"
+        mock_registry.async_get.return_value = mock_entity_entry
+
+        # Mock config entry
+        mock_config_entry = MagicMock()
+        mock_config_entry.entry_id = "entry_123"
+
+        # Mock coordinator with no player
+        mock_slave_coordinator = MagicMock()
+        mock_slave_coordinator.player = None  # No player!
+
+        media_player.hass = MagicMock()
+        media_player.hass.config_entries = MagicMock()
+        media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
+        media_player.hass.data = {
+            "wiim": {
+                "entry_123": {"coordinator": mock_slave_coordinator}
+            }
+        }
+
+        with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
+            # Should not raise, just log warning and skip
+            await media_player.async_join_players(["media_player.wiim_master", "media_player.wiim_slave"])
 
 
 class TestWiiMMediaPlayerTimers:

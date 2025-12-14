@@ -410,6 +410,20 @@ class TestActionYAMLSync:
                 )
 
 
+class TestAsyncSetupServices:
+    """Test async_setup_services function."""
+
+    @pytest.mark.asyncio
+    async def test_async_setup_services_noop(self, hass: HomeAssistant):
+        """Test that async_setup_services completes without error (currently disabled)."""
+        # Should complete without raising
+        await async_setup_services(hass)
+        # Function is currently disabled (just pass), so no services should be registered
+        services = hass.services.async_services()
+        # wiim domain may not exist if no services registered
+        assert "wiim" not in services or len(services.get("wiim", {})) == 0
+
+
 class TestMediaPlayerEntityActionHandlers:
     """Test that media player entity has all required action handler methods."""
 
