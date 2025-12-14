@@ -47,7 +47,10 @@ async def wiim_media_player_setup(hass: HomeAssistant, bypass_get_data):
     # Prefer the individual speaker entity over the virtual group entity when present.
     entity_id = next((eid for eid in sorted(entity_ids) if "group" not in eid), sorted(entity_ids)[0])
 
-    return entry, coordinator, entity_id
+    yield entry, coordinator, entity_id
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
 
 
 class TestActionRegistration:
@@ -352,13 +355,13 @@ class TestActionYAMLSync:
         services = hass.services.async_services()
         assert DOMAIN in services
 
-        media_player_services = services["media_player"]
+        wiim_services = services[DOMAIN]
         yaml_action_names = set(services_yaml_content.keys())
 
         # Actions that are allowed without YAML definition (legacy/experimental)
         allowed_without_yaml = set()
 
-        for action_name in media_player_services:
+        for action_name in wiim_services:
             if action_name not in allowed_without_yaml:
                 assert action_name in yaml_action_names, (
                     f"Action '{action_name}' is registered in Python but not defined in services.yaml. "
