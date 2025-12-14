@@ -119,7 +119,7 @@ async def async_setup_entry(
     )
 
     # Register platform entity services using new EntityServiceDescription pattern
-    register_media_player_services(platform)
+    register_media_player_services()
 
 
 class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
@@ -346,46 +346,28 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if not player or not player.source:
             return None
 
-        # Get the current source from pywiim and capitalize it
         current_source = capitalize_source_name(str(player.source))
 
-        # Get the list of available sources to ensure we return a match
+        # Only consider sources that pywiim says are available/selectable.
         available_sources = player.available_sources
         if available_sources:
-            # Create a mapping of capitalized names for matching
-            capitalized_sources = {
-                capitalize_source_name(str(s)): capitalize_source_name(str(s)) for s in available_sources
-            }
-            # Try exact match first
-            if current_source in capitalized_sources:
+            display_sources = [capitalize_source_name(str(s)) for s in available_sources]
+            if current_source in display_sources:
                 return current_source
-            # Try case-insensitive match
+            # Case-insensitive match for UI friendliness
             current_lower = current_source.lower()
-            for cap_source in capitalized_sources:
-                if cap_source.lower() == current_lower:
-                    return cap_source
-
-        # Fallback: check against input_list
-        input_list = self.player.input_list
-        if input_list:
-            capitalized_inputs = {capitalize_source_name(str(s)): capitalize_source_name(str(s)) for s in input_list}
-            if current_source in capitalized_inputs:
-                return current_source
-            # Try case-insensitive match
-            current_lower = current_source.lower()
-            for cap_input in capitalized_inputs:
-                if cap_input.lower() == current_lower:
-                    return cap_input
+            for s in display_sources:
+                if s.lower() == current_lower:
+                    return s
 
         # If current source doesn't match any selectable source, log a warning
         # This might indicate a pywiim issue where source doesn't match available_sources
         _LOGGER.debug(
             "[%s] Current source '%s' from pywiim doesn't match any selectable source in source_list. "
-            "This might indicate a pywiim issue. available_sources=%s, input_list=%s",
+            "This might indicate a pywiim issue. available_sources=%s",
             self.name,
             current_source,
             available_sources,
-            input_list,
         )
         # Return None so dropdown doesn't show incorrect selection
         return None
@@ -399,17 +381,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         player = self._get_player()
         if player.available_sources:
             return [capitalize_source_name(str(s)) for s in player.available_sources]
-
-        # Fallback to input_list if available_sources not available
-        input_list = self.player.input_list
-        if input_list:
-            return [capitalize_source_name(str(s)) for s in input_list]
-
         _LOGGER.warning(
-            "[%s] source_list: No sources available - available_sources=%s, input_list=%s",
-            self.name,
-            player.available_sources,
-            input_list,
+            "[%s] source_list: No sources available - available_sources=%s", self.name, player.available_sources
         )
         return []
 
@@ -417,37 +390,29 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Select input source.
 
         Maps the display name (e.g., "Amazon", "USB") back to the device's
-        expected source name (e.g., "amazon", "usb") using available_sources or input_list.
+        expected source name using pywiim's available_sources as the source of truth.
         """
-        source_lower = source.lower()
-        device_source = None
+        player = self._get_player()
+        available_sources = player.available_sources
+        if not available_sources:
+            raise HomeAssistantError("No sources available")
 
-        # Try available_sources first (smart detection by pywiim)
-        available_sources = self._get_player().available_sources
-        if available_sources:
-            # Create a mapping of lowercase to original
-            available_sources_map = {str(s).lower(): str(s) for s in available_sources}
-            device_source = available_sources_map.get(source_lower)
+        display_to_raw: dict[str, str] = {capitalize_source_name(str(s)): str(s) for s in available_sources}
+        raw = display_to_raw.get(source)
+        if raw is None:
+            source_lower = source.lower()
+            for display, raw_candidate in display_to_raw.items():
+                if display.lower() == source_lower:
+                    raw = raw_candidate
+                    break
 
-        # Fallback to input_list if not found in available_sources
-        if device_source is None:
-            input_list = self.player.input_list
-            if input_list:
-                # Create a mapping of lowercase to original
-                input_list_map = {s.lower(): s for s in input_list}
-                device_source = input_list_map.get(source_lower)
-
-        # Final fallback: use lowercase version of display name
-        if device_source is None:
-            device_source = source_lower
-            _LOGGER.warning(
-                "Source '%s' not found in available_sources or input_list, using lowercase version: '%s'",
-                source,
-                device_source,
-            )
+        if raw is None:
+            # Do NOT guess. If the source isn't in pywiim's available_sources list,
+            # treat it as unsupported (pywiim is the source of truth).
+            raise HomeAssistantError(f"Source '{source}' is not available for this device")
 
         async with wiim_command(self.name, f"select source '{source}'"):
-            await self.coordinator.player.set_source(device_source)
+            await self.coordinator.player.set_source(raw)
             # State updates automatically via callback - no manual refresh needed
 
     # ===== MEDIA =====
@@ -659,11 +624,12 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             player = self._get_player()
 
             # Get preset names from pywiim
+            # Only available if presets_full_data is True (WiiM devices, not LinkPlay)
             preset_names: dict[int, str] = {}
-            if player.presets:
+            if player.supports_presets and player.presets_full_data and player.presets:
                 for preset in player.presets:
                     if isinstance(preset, dict) and "name" in preset:
-                        preset_num = preset.get("preset_number") or preset.get("index")
+                        preset_num = preset.get("number")
                         if preset_num and 1 <= int(preset_num) <= 20:
                             preset_names[int(preset_num)] = preset["name"]
 
@@ -758,13 +724,6 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         self_entity_id = self.entity_id
         if self_entity_id and self_entity_id not in members:
             members.append(self_entity_id)
-
-        # Fallback: If all_players was empty, also include slaves for masters
-        if not group.all_players and player.is_master and hasattr(group, "slaves"):
-            for slave_player in group.slaves:
-                slave_entity_id = self._entity_id_from_player(slave_player, entity_registry)
-                if slave_entity_id and slave_entity_id not in members:
-                    members.append(slave_entity_id)
 
         result = members if members else None
         if player.is_slave:
@@ -995,15 +954,9 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     async def async_set_repeat(self, repeat: RepeatMode) -> None:
         """Set repeat mode - pass through to pywiim."""
-        try:
-            async with wiim_command(self.name, "set repeat"):
-                await self.coordinator.player.set_repeat(repeat.value)
-                # State updates automatically via callback - no manual refresh needed
-        except AttributeError as err:
-            # Fallback if set_repeat not yet available in pywiim Player
-            raise HomeAssistantError(
-                f"Repeat mode setting not yet supported. Please update pywiim library: {err}"
-            ) from err
+        async with wiim_command(self.name, "set repeat"):
+            await self.coordinator.player.set_repeat(repeat.value)
+            # State updates automatically via callback - no manual refresh needed
 
     # ===== SOUND MODE (EQ) =====
 

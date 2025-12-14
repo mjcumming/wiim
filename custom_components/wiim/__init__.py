@@ -89,6 +89,13 @@ def get_enabled_platforms(
     """
     platforms = CORE_PLATFORMS.copy()
 
+    # Firmware update install support (pywiim capability detection):
+    # Per upstream pywiim API, only WiiM devices support firmware installation via API.
+    # Use pywiim's capability flag as the source of truth.
+    caps = capabilities or entry.data.get("capabilities") or {}
+    if caps.get("supports_firmware_install", False):
+        platforms.append(Platform.UPDATE)
+
     # Add optional platforms based on user preferences
     # Note: BUTTON is in CORE_PLATFORMS (for Bluetooth scan), but maintenance buttons are optional
     for config_key, platform in OPTIONAL_PLATFORMS.items():
@@ -276,7 +283,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     entry.data["host"],
                 )
             # Log EQ capability specifically for debugging
-            if capabilities.get("supports_eq") or capabilities.get("eq_supported"):
+            if capabilities.get("supports_eq"):
                 _LOGGER.info(
                     "[EQ] Device %s supports EQ (detected by pywiim capability detection)",
                     entry.data["host"],
@@ -456,7 +463,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             log_fn = _LOGGER.error
 
         # Use appropriate message based on error type
-        if is_wiim_error:
+        # Pylint false-positive: `is_wiim_error` is computed above, not constant.
+        if is_wiim_error:  # pylint: disable=using-constant-test
             err_to_log = underlying_err if underlying_err else err
             if isinstance(err_to_log, WiiMConnectionError):
                 log_fn(

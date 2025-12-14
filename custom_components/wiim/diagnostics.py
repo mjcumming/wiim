@@ -228,16 +228,19 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "sound_mode": player.eq_preset,
         }
 
-        # API capability diagnostics (from coordinator capabilities)
-        api_capabilities = {}
-        if coordinator and hasattr(coordinator, "_capabilities"):
-            caps = coordinator._capabilities
-            api_capabilities = {
-                "metadata_supported": caps.get("metadata", None),
-                "supports_eq": caps.get("supports_eq", None),
-                "supports_audio_output": caps.get("supports_audio_output", None),
-                "device_type": caps.get("device_type", None),
-            }
+        # Capability diagnostics (prefer pywiim Player properties)
+        api_capabilities = {
+            "supports_eq": getattr(player, "supports_eq", None),
+            "supports_presets": getattr(player, "supports_presets", None),
+            "presets_full_data": getattr(player, "presets_full_data", None),
+            "supports_audio_output": getattr(player, "supports_audio_output", None),
+            "supports_metadata": getattr(player, "supports_metadata", None),
+            "supports_alarms": getattr(player, "supports_alarms", None),
+            "supports_sleep_timer": getattr(player, "supports_sleep_timer", None),
+            "supports_led_control": getattr(player, "supports_led_control", None),
+            "supports_enhanced_grouping": getattr(player, "supports_enhanced_grouping", None),
+            "supports_firmware_install": getattr(player, "supports_firmware_install", None),
+        }
 
         # HTTP Polling Statistics
         # Note: pywiim handles polling internally - we only show coordinator-level info
@@ -319,7 +322,9 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             if status_dict:
                 model_data["player_status"] = async_redact_data(status_dict, TO_REDACT)
         if player.device_info:
-            model_data["device_model"] = async_redact_data(player.device_info.model_dump(exclude_none=True), TO_REDACT)
+            model_data["device_model"] = async_redact_data(
+                player.device_info.model_dump(by_alias=True, exclude_none=True), TO_REDACT
+            )
 
         # Source list diagnostics - helps debug input source issues
         source_diagnostics = {}

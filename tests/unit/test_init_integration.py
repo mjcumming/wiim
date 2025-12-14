@@ -341,19 +341,38 @@ class TestIntegrationServices:
         )
 
         # Test with audio output capability
-        capabilities = {"supports_audio_output": True}
+        capabilities = {"supports_audio_output": True, "supports_firmware_install": True}
         platforms = get_enabled_platforms(hass, entry, capabilities)
 
         assert Platform.SELECT in platforms
         assert Platform.MEDIA_PLAYER in platforms
         assert Platform.SENSOR in platforms
+        assert Platform.UPDATE in platforms
 
         # Test without audio output capability
-        capabilities = {"supports_audio_output": False}
+        capabilities = {"supports_audio_output": False, "supports_firmware_install": True}
         platforms = get_enabled_platforms(hass, entry, capabilities)
 
         # SELECT should still be enabled for Bluetooth
         assert Platform.SELECT in platforms
+        assert Platform.UPDATE in platforms
+
+    @pytest.mark.asyncio
+    async def test_get_enabled_platforms_excludes_update_for_non_wiim(self, hass: HomeAssistant) -> None:
+        """Test update platform is excluded for non-WiiM devices."""
+        from homeassistant.const import Platform
+
+        from custom_components.wiim import get_enabled_platforms
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="LinkPlay Device",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+        )
+
+        platforms = get_enabled_platforms(hass, entry, {"supports_firmware_install": False})
+        assert Platform.UPDATE not in platforms
 
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:

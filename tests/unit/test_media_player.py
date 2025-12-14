@@ -241,7 +241,8 @@ class TestWiiMMediaPlayerSource:
     def test_source_returns_current_source(self, media_player, mock_coordinator):
         """Test source property returns current source."""
         mock_coordinator.player.source = "spotify"
-        mock_coordinator.player.available_sources = ["Spotify", "Bluetooth"]
+        # pywiim returns raw source keys in available_sources (e.g. "spotify", "bluetooth")
+        mock_coordinator.player.available_sources = ["spotify", "bluetooth"]
 
         assert media_player.source == "Spotify"  # Capitalized
 
@@ -254,7 +255,7 @@ class TestWiiMMediaPlayerSource:
 
     def test_source_list_returns_available_sources(self, media_player, mock_coordinator):
         """Test source_list returns available sources."""
-        mock_coordinator.player.available_sources = ["Spotify", "Bluetooth", "Optical"]
+        mock_coordinator.player.available_sources = ["spotify", "bluetooth", "optical"]
 
         assert media_player.source_list == ["Spotify", "Bluetooth", "Optical"]
 
@@ -262,18 +263,13 @@ class TestWiiMMediaPlayerSource:
     async def test_select_source(self, media_player, mock_coordinator):
         """Test selecting a source."""
         player = mock_coordinator.player
-        player.available_sources = ["Spotify", "Bluetooth"]
+        player.available_sources = ["spotify", "bluetooth"]
         mock_coordinator.player.set_source = AsyncMock(return_value=True)
-        mock_coordinator.player.input_list = ["spotify", "bluetooth"]
 
         await media_player.async_select_source("Spotify")
 
-        # The code maps "Spotify" -> "spotify" via available_sources or input_list
-        # It should call with the device source name (from available_sources map)
-        mock_coordinator.player.set_source.assert_called_once()
-        # Check it was called with a lowercase version
-        call_args = mock_coordinator.player.set_source.call_args[0][0]
-        assert call_args.lower() == "spotify"
+        # The code maps display "Spotify" -> raw "spotify" via available_sources
+        mock_coordinator.player.set_source.assert_called_once_with("spotify")
         # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
@@ -282,6 +278,8 @@ class TestWiiMMediaPlayerSource:
         from homeassistant.exceptions import HomeAssistantError
         from pywiim.exceptions import WiiMError
 
+        # Ensure the source is considered available so we hit set_source()
+        mock_coordinator.player.available_sources = ["spotify"]
         mock_coordinator.player.set_source = AsyncMock(side_effect=WiiMError("Source error"))
 
         with pytest.raises(HomeAssistantError, match="Failed to select source"):
@@ -533,17 +531,6 @@ class TestWiiMMediaPlayerShuffleRepeat:
         mock_coordinator.player.set_repeat = AsyncMock(side_effect=WiiMError("Repeat error"))
 
         with pytest.raises(HomeAssistantError, match="Failed to set repeat"):
-            await media_player.async_set_repeat(RepeatMode.ALL)
-
-    @pytest.mark.asyncio
-    async def test_set_repeat_handles_attribute_error(self, media_player, mock_coordinator):
-        """Test set_repeat handles AttributeError when method not available."""
-        from homeassistant.components.media_player import RepeatMode
-        from homeassistant.exceptions import HomeAssistantError
-
-        mock_coordinator.player.set_repeat = AsyncMock(side_effect=AttributeError("Method not found"))
-
-        with pytest.raises(HomeAssistantError, match="not yet supported"):
             await media_player.async_set_repeat(RepeatMode.ALL)
 
 
@@ -1176,52 +1163,44 @@ class TestWiiMMediaPlayerSourceEdgeCases:
     """Test source selection edge cases."""
 
     def test_source_uses_input_list_fallback(self, media_player, mock_coordinator):
-        """Test source property falls back to input_list when available_sources doesn't match."""
+        """Test source returns None when not in available_sources (no fallback)."""
         player = mock_coordinator.player
         player.source = "bluetooth"  # Lowercase from device
-        player.available_sources = ["Spotify"]  # Doesn't include bluetooth
-        player.input_list = ["bluetooth", "optical"]
-
-        # Should find it in input_list
-        assert media_player.source == "Bluetooth"
+        player.available_sources = ["spotify"]  # Doesn't include bluetooth
+        assert media_player.source is None
 
     def test_source_returns_none_when_no_match(self, media_player, mock_coordinator):
         """Test source returns None when source doesn't match any available source."""
         player = mock_coordinator.player
         player.source = "unknown_source"
-        player.available_sources = ["Spotify"]
-        player.input_list = ["bluetooth"]
+        player.available_sources = ["spotify"]
 
         assert media_player.source is None
 
     def test_source_list_falls_back_to_input_list(self, media_player, mock_coordinator):
-        """Test source_list falls back to input_list when available_sources is None."""
+        """Test source_list returns empty list when available_sources is unavailable."""
         player = mock_coordinator.player
         player.available_sources = None
-        player.input_list = ["bluetooth", "optical"]
-
-        assert media_player.source_list == ["Bluetooth", "Optical"]
+        assert media_player.source_list == []
 
     def test_source_list_returns_empty_when_no_sources(self, media_player, mock_coordinator):
         """Test source_list returns empty list when no sources available."""
         player = mock_coordinator.player
-        player.available_sources = None
-        player.input_list = None
+        player.available_sources = []
 
         assert media_player.source_list == []
 
     @pytest.mark.asyncio
     async def test_select_source_uses_fallback_to_lowercase(self, media_player, mock_coordinator):
-        """Test select_source uses lowercase fallback when not found."""
+        """Test select_source raises when no sources are available."""
+        from homeassistant.exceptions import HomeAssistantError
+
         player = mock_coordinator.player
         player.available_sources = None
-        player.input_list = ["bluetooth"]
         mock_coordinator.player.set_source = AsyncMock(return_value=True)
 
-        await media_player.async_select_source("UnknownSource")
-
-        # Should use lowercase version as final fallback
-        mock_coordinator.player.set_source.assert_called_once_with("unknownsource")
+        with pytest.raises(HomeAssistantError):
+            await media_player.async_select_source("UnknownSource")
 
 
 class TestWiiMMediaPlayerClearPlaylist:

@@ -33,7 +33,8 @@ def mock_coordinator():
     coordinator.player.audio_output_mode = "Analog"
     coordinator.player.is_bluetooth_output_active = False
     coordinator.player.bluetooth_output_devices = []
-    coordinator.player.select_output = AsyncMock(return_value=True)
+    coordinator.player.audio = MagicMock()
+    coordinator.player.audio.select_output = AsyncMock(return_value=True)
     coordinator.player.name = "Test WiiM"
     return coordinator
 
@@ -140,11 +141,11 @@ class TestWiiMOutputModeSelectSelectOption:
 
         await entity.async_select_option("Optical")
 
-        player.select_output.assert_called_once_with("Optical")
+        player.audio.select_output.assert_called_once_with("Optical")
 
     async def test_select_option_raises_when_player_unavailable(self, mock_coordinator, mock_config_entry):
         """Test select option raises error when player raises error."""
-        mock_coordinator.player.select_output = AsyncMock(side_effect=WiiMError("Audio control unavailable"))
+        mock_coordinator.player.audio.select_output = AsyncMock(side_effect=WiiMError("Audio control unavailable"))
 
         entity = WiiMOutputModeSelect(mock_coordinator, mock_config_entry)
 
@@ -153,7 +154,7 @@ class TestWiiMOutputModeSelectSelectOption:
 
     async def test_select_option_handles_connection_error(self, mock_coordinator, mock_config_entry):
         """Test select option handles connection errors."""
-        mock_coordinator.player.select_output = AsyncMock(side_effect=WiiMConnectionError("Connection lost"))
+        mock_coordinator.player.audio.select_output = AsyncMock(side_effect=WiiMConnectionError("Connection lost"))
         mock_coordinator.player.name = "Test WiiM"
 
         entity = WiiMOutputModeSelect(mock_coordinator, mock_config_entry)
@@ -163,7 +164,7 @@ class TestWiiMOutputModeSelectSelectOption:
 
     async def test_select_option_handles_timeout_error(self, mock_coordinator, mock_config_entry):
         """Test select option handles timeout errors."""
-        mock_coordinator.player.select_output = AsyncMock(side_effect=WiiMTimeoutError("Timeout"))
+        mock_coordinator.player.audio.select_output = AsyncMock(side_effect=WiiMTimeoutError("Timeout"))
         mock_coordinator.player.name = "Test WiiM"
 
         entity = WiiMOutputModeSelect(mock_coordinator, mock_config_entry)
@@ -173,7 +174,9 @@ class TestWiiMOutputModeSelectSelectOption:
 
     async def test_select_option_handles_bluetooth_error(self, mock_coordinator, mock_config_entry):
         """Test select option handles Bluetooth connection errors."""
-        mock_coordinator.player.select_output = AsyncMock(side_effect=WiiMError("Invalid JSON from connectbta2dp"))
+        mock_coordinator.player.audio.select_output = AsyncMock(
+            side_effect=WiiMError("Invalid JSON from connectbta2dp")
+        )
         mock_coordinator.player.name = "Test WiiM"
 
         entity = WiiMOutputModeSelect(mock_coordinator, mock_config_entry)
@@ -187,7 +190,7 @@ class TestWiiMOutputModeSelectSelectOption:
 
     async def test_select_option_handles_other_errors(self, mock_coordinator, mock_config_entry):
         """Test select option handles other errors."""
-        mock_coordinator.player.select_output = AsyncMock(side_effect=WiiMError("Output error"))
+        mock_coordinator.player.audio.select_output = AsyncMock(side_effect=WiiMError("Output error"))
         mock_coordinator.player.name = "Test WiiM"
 
         entity = WiiMOutputModeSelect(mock_coordinator, mock_config_entry)

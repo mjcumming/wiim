@@ -169,7 +169,9 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
         if not player.device_info:
             return {}
 
-        return player.device_info.model_dump(exclude_none=True)
+        # For diagnostics we want the raw-ish API keys (aliases) like "MAC", "Release",
+        # and also any extra fields that were preserved by the model.
+        return player.device_info.model_dump(by_alias=True, exclude_none=True)
 
     # -------------------------- State ----------------------------
 
@@ -198,18 +200,18 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
 
         attrs: dict[str, Any] = {
             # Identifiers
-            "mac": info.get("mac"),
-            "uuid": info.get("uuid"),
-            "project": info.get("project"),
+            "mac": getattr(player, "mac_address", None) or info.get("mac") or info.get("MAC"),
+            "uuid": getattr(player, "uuid", None) or info.get("uuid") or info.get("UUID"),
+            "model": getattr(player, "model", None) or info.get("model") or info.get("project"),
             # Firmware / software
-            "firmware": info.get("firmware"),
-            "release": info.get("release") or info.get("Release"),
+            "firmware": getattr(player, "firmware", None) or info.get("firmware"),
+            "release": info.get("release_date") or info.get("Release"),
             "mcu_ver": info.get("mcu_ver"),
             "dsp_ver": info.get("dsp_ver"),
             "pywiim_version": pywiim_version,
             # Network
             "ssid": info.get("ssid"),
-            "ap_mac": info.get("ap_mac"),
+            "ap_mac": info.get("AP_MAC") or info.get("ap_mac"),
             "ip_address": player.host,
             "wifi_rssi": player.wifi_rssi,
             "internet": _to_bool(info.get("internet")),
@@ -221,6 +223,10 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             "group": player.role,
             "master_uuid": info.get("master_uuid"),
             "preset_key": _to_int(info.get("preset_key")),
+            # Firmware update state (pywiim Player properties)
+            "firmware_update_available": getattr(player, "firmware_update_available", None),
+            "latest_firmware_version": getattr(player, "latest_firmware_version", None),
+            "supports_firmware_install": getattr(player, "supports_firmware_install", None),
         }
 
         # Add adaptive polling diagnostics
@@ -291,12 +297,11 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
                 attrs["release"] = str(device_info.release_date)
 
             # Update availability info (if present)
-            if device_info.version_update:
-                # VersionUpdate can be "0" (no update) or "1" (update available)
-                if str(device_info.version_update) == "1":
-                    attrs["update_available"] = True
-                    if device_info.latest_version:
-                        attrs["latest_version"] = str(device_info.latest_version)
+            attrs["update_available"] = bool(getattr(player, "firmware_update_available", False))
+            latest = getattr(player, "latest_firmware_version", None)
+            if latest:
+                attrs["latest_version"] = str(latest)
+            attrs["supports_firmware_install"] = bool(getattr(player, "supports_firmware_install", False))
 
         # Prune None values
         return {k: v for k, v in attrs.items() if v is not None}

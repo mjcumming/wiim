@@ -1,6 +1,7 @@
 """Global fixtures for WiiM integration tests."""
 
 # Ensure the stubbed Home Assistant package is importable before any test modules
+import asyncio
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,6 +26,22 @@ from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE  # noqa: E402
 # Import realistic player fixtures
 
 pytest_plugins = "pytest_homeassistant_custom_component"
+
+
+@pytest.fixture
+def event_loop() -> asyncio.AbstractEventLoop:
+    """Provide legacy `event_loop` fixture for HA pytest plugin compatibility.
+
+    Newer pytest-asyncio versions no longer provide the `event_loop` fixture by
+    default, but pytest-homeassistant-custom-component still depends on it (via
+    its autouse `enable_event_loop_debug` fixture).
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        yield loop
+    finally:
+        loop.close()
+
 
 @pytest.fixture(scope="session", autouse=True)
 def preload_aiodns_pycares_thread() -> None:
@@ -213,6 +230,7 @@ def bypass_get_data_fixture(hass):
         "supports_audio_output": False,
         "supports_alarms": False,
         "supports_sleep_timer": False,
+        "supports_firmware_install": True,
         "max_alarm_slots": 0,
         "response_timeout": 5.0,
         "retry_count": 3,

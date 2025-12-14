@@ -8,7 +8,7 @@ echo "🚀 Setting up WiiM development environment..."
 # Install Python dependencies
 echo "📦 Installing Python packages..."
 pip install --upgrade pip setuptools wheel
-pip install -r requirements_test.txt
+pip install --constraint=.github/workflows/constraints.txt -r requirements_test.txt
 
 # Install pre-commit hooks if available
 if [ -f ".pre-commit-config.yaml" ]; then

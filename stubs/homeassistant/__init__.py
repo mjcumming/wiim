@@ -180,6 +180,13 @@ sys.modules["homeassistant.const"] = const_mod
 
 update_mod = ModuleType("homeassistant.components.update")
 update_mod.UpdateEntity = type("UpdateEntity", (Entity,), {})
+
+
+class UpdateDeviceClass(str, Enum):  # noqa: D101 – stub
+    FIRMWARE = "firmware"
+
+
+update_mod.UpdateDeviceClass = UpdateDeviceClass  # type: ignore[attr-defined]
 sys.modules["homeassistant.components.update"] = update_mod
 
 # ---------------------------------------------------------------------------

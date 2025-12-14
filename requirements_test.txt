@@ -9,7 +9,7 @@
 # - pytest-xdist
 # Do NOT explicitly list these - it causes version conflicts!
 
-pytest-homeassistant-custom-component>=0.12.0
+pytest-homeassistant-custom-component==0.13.251
 
 # Test utilities
 aresponses>=2.1.6

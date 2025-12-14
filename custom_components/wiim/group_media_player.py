@@ -432,11 +432,6 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         try:
             await self.coordinator.player.set_repeat(repeat.value)
             # State updates automatically via callback - no manual refresh needed
-        except AttributeError as err:
-            # Fallback if set_repeat not yet available in pywiim Player
-            raise HomeAssistantError(
-                f"Repeat mode setting not yet supported. Please update pywiim library: {err}"
-            ) from err
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to set repeat: {err}") from err
 

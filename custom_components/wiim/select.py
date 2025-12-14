@@ -108,11 +108,9 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
         # Check if it's a Bluetooth connection error (device returned invalid JSON)
         try:
             async with wiim_command(device_name, f"select audio output '{option}'"):
-                await player.select_output(option)  # pywiim v2.1.37+
+                # Use pywiim's unified output selection API (hardware modes + BT devices)
+                await player.audio.select_output(option)
                 # State updates automatically via callback - no manual refresh needed
-        except HomeAssistantError:
-            # Re-raise HomeAssistantError as-is (already wrapped by wiim_command)
-            raise
         except WiiMError as err:
             # Check if it's a Bluetooth connection error (device returned invalid JSON)
             error_str = str(err).lower()

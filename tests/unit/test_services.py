@@ -460,6 +460,7 @@ class TestRegisterMediaPlayerServices:
     ):
         """Test that register_media_player_services registers all EntityServiceDescription services."""
         from custom_components.wiim.services import MEDIA_PLAYER_ENTITY_SERVICES
+
         wiim_media_player_setup  # ensure setup ran
 
         # Verify services are registered

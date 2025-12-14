@@ -65,6 +65,26 @@ If pywiim doesn't set `supports_eq` correctly → **FIX PYWIIM**
 
 **ALWAYS reference upstream pywiim documentation guides instead of duplicating content.**
 
+**CRITICAL: Before writing any code that uses pywiim, you MUST review the pywiim API and HA integration documentation.**
+
+### Required Documentation Review
+
+**Before writing or modifying code that uses pywiim:**
+
+1. **MUST review** `/development/HA_INTEGRATION_GUIDE.md` for Home Assistant integration patterns
+2. **MUST review** the upstream [HA Integration Guide](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md) for detailed patterns
+3. **MUST review** the upstream [API Reference](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) for API documentation
+4. **DO NOT** write code based on assumptions about pywiim API behavior
+5. **DO NOT** guess attribute names, method signatures, or data structures - check the docs first
+
+**This applies to:**
+
+- Using any `player.*` attributes or methods
+- Using any `client.*` methods
+- Accessing capabilities or device information
+- Working with presets, EQ, groups, or any pywiim features
+- Any code that interacts with pywiim Player or Client objects
+
 When working with pywiim integration patterns or API usage:
 
 1. **Reference** `/development/HA_INTEGRATION_GUIDE.md` for Home Assistant integration patterns
