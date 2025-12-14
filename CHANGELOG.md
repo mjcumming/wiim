@@ -4,6 +4,10 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+### Fixed
+
+- **SSDP Discovery**: Fixed non-WiiM devices (Sonos, Bose, Denon) appearing in discovery by removing overly broad service-type filters and relying on HTTP validation (following python-linkplay pattern)
+
 ### Changed
 
 - **Service Registration**: Migrated to Home Assistant 2025 EntityServiceDescription pattern
