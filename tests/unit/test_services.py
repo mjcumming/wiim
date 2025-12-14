@@ -59,9 +59,9 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        assert "media_player" in services
+        assert DOMAIN in services
 
-        media_player_services = services["media_player"]
+        wiim_services = services[DOMAIN]
 
         # All actions should be registered via EntityServiceDescription pattern
         expected_actions = {
@@ -75,9 +75,9 @@ class TestActionRegistration:
         }
 
         for action_name in expected_actions:
-            assert action_name in media_player_services, (
+            assert action_name in wiim_services, (
                 f"Action '{action_name}' should be registered but was not found. "
-                f"Registered actions: {list(media_player_services.keys())}"
+                f"Registered actions: {list(wiim_services.keys())}"
             )
 
     @pytest.mark.asyncio
@@ -86,7 +86,7 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        set_timer_service = services["media_player"][SERVICE_SET_SLEEP_TIMER]
+        set_timer_service = services[DOMAIN][SERVICE_SET_SLEEP_TIMER]
 
         assert set_timer_service is not None
 
@@ -96,7 +96,7 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        clear_timer_service = services["media_player"][SERVICE_CLEAR_SLEEP_TIMER]
+        clear_timer_service = services[DOMAIN][SERVICE_CLEAR_SLEEP_TIMER]
 
         assert clear_timer_service is not None
 
@@ -106,7 +106,7 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        update_alarm_service = services["media_player"][SERVICE_UPDATE_ALARM]
+        update_alarm_service = services[DOMAIN][SERVICE_UPDATE_ALARM]
 
         assert update_alarm_service is not None
 
@@ -116,7 +116,7 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        reboot_service = services["media_player"][SERVICE_REBOOT_DEVICE]
+        reboot_service = services[DOMAIN][SERVICE_REBOOT_DEVICE]
 
         assert reboot_service is not None
 
@@ -126,7 +126,7 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        sync_time_service = services["media_player"][SERVICE_SYNC_TIME]
+        sync_time_service = services[DOMAIN][SERVICE_SYNC_TIME]
 
         assert sync_time_service is not None
 
@@ -136,7 +136,7 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        scan_bt_service = services["media_player"][SERVICE_SCAN_BLUETOOTH]
+        scan_bt_service = services[DOMAIN][SERVICE_SCAN_BLUETOOTH]
 
         assert scan_bt_service is not None
 
@@ -146,7 +146,7 @@ class TestActionRegistration:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        balance_service = services["media_player"][SERVICE_SET_CHANNEL_BALANCE]
+        balance_service = services[DOMAIN][SERVICE_SET_CHANNEL_BALANCE]
 
         assert balance_service is not None
 
@@ -161,7 +161,7 @@ class TestActionExecution:
         coordinator.player.set_sleep_timer = AsyncMock()
 
         await hass.services.async_call(
-            "media_player",
+            DOMAIN,
             SERVICE_SET_SLEEP_TIMER,
             {"entity_id": entity_id, "sleep_time": 300},
             blocking=True,
@@ -175,7 +175,7 @@ class TestActionExecution:
         coordinator.player.cancel_sleep_timer = AsyncMock()
 
         await hass.services.async_call(
-            "media_player",
+            DOMAIN,
             SERVICE_CLEAR_SLEEP_TIMER,
             {"entity_id": entity_id},
             blocking=True,
@@ -192,7 +192,7 @@ class TestActionExecution:
         coordinator.player.set_alarm = AsyncMock()
 
         await hass.services.async_call(
-            "media_player",
+            DOMAIN,
             SERVICE_UPDATE_ALARM,
             {
                 "entity_id": entity_id,
@@ -220,7 +220,7 @@ class TestActionValidation:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        assert SERVICE_SET_SLEEP_TIMER in services["media_player"]
+        assert SERVICE_SET_SLEEP_TIMER in services[DOMAIN]
 
     @pytest.mark.asyncio
     async def test_update_alarm_validates_alarm_id(self, hass: HomeAssistant, wiim_media_player_setup):
@@ -228,7 +228,7 @@ class TestActionValidation:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        assert SERVICE_UPDATE_ALARM in services["media_player"]
+        assert SERVICE_UPDATE_ALARM in services[DOMAIN]
 
     @pytest.mark.asyncio
     async def test_scan_bluetooth_validates_duration(self, hass: HomeAssistant, wiim_media_player_setup):
@@ -236,7 +236,7 @@ class TestActionValidation:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        assert SERVICE_SCAN_BLUETOOTH in services["media_player"]
+        assert SERVICE_SCAN_BLUETOOTH in services[DOMAIN]
 
     @pytest.mark.asyncio
     async def test_set_channel_balance_validates_range(self, hass: HomeAssistant, wiim_media_player_setup):
@@ -244,7 +244,7 @@ class TestActionValidation:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        assert SERVICE_SET_CHANNEL_BALANCE in services["media_player"]
+        assert SERVICE_SET_CHANNEL_BALANCE in services[DOMAIN]
 
 
 class TestActionYAMLSync:
@@ -284,9 +284,9 @@ class TestActionYAMLSync:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        assert "media_player" in services
+        assert DOMAIN in services
 
-        media_player_services = services["media_player"]
+        wiim_services = services[DOMAIN]
 
         # Check services.py registered actions
         import inspect
@@ -331,7 +331,7 @@ class TestActionYAMLSync:
                 )
             elif action_name in platform_actions:
                 # Should be registered via EntityServiceDescription pattern
-                assert action_name in media_player_services, (
+                assert action_name in wiim_services, (
                     f"Action '{action_name}' is defined in services.yaml but not registered in Python code. "
                     f"This will cause 'unknown action' errors in Home Assistant automations."
                 )
@@ -350,7 +350,7 @@ class TestActionYAMLSync:
         wiim_media_player_setup  # ensure setup ran
 
         services = hass.services.async_services()
-        assert "media_player" in services
+        assert DOMAIN in services
 
         media_player_services = services["media_player"]
         yaml_action_names = set(services_yaml_content.keys())
@@ -461,15 +461,15 @@ class TestRegisterMediaPlayerServices:
 
         # Verify services are registered
         services = hass.services.async_services()
-        assert "media_player" in services
+        assert DOMAIN in services
 
-        media_player_services = services["media_player"]
+        wiim_services = services[DOMAIN]
 
         # Check all EntityServiceDescription services are registered
         for service_desc in MEDIA_PLAYER_ENTITY_SERVICES:
-            assert service_desc.name in media_player_services, (
+            assert service_desc.name in wiim_services, (
                 f"Service '{service_desc.name}' from EntityServiceDescription not registered. "
-                f"Registered services: {list(media_player_services.keys())}"
+                f"Registered services: {list(wiim_services.keys())}"
             )
 
 
