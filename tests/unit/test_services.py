@@ -225,7 +225,9 @@ class TestActionExecution:
         )
 
     @pytest.mark.asyncio
-    async def test_clear_sleep_timer_calls_entity_method(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
+    async def test_clear_sleep_timer_calls_entity_method(
+        self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator
+    ):
         """Test clear sleep timer action calls entity method."""
         from unittest.mock import AsyncMock, MagicMock
 
@@ -386,7 +388,9 @@ class TestActionYAMLSync:
             return json.load(f)
 
     @pytest.mark.asyncio
-    async def test_all_yaml_actions_registered_in_python(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator, services_yaml_content):
+    async def test_all_yaml_actions_registered_in_python(
+        self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator, services_yaml_content
+    ):
         """Test that all actions defined in services.yaml are registered in Python code.
 
         This test prevents the issue where actions are defined in YAML but not registered,
@@ -460,7 +464,9 @@ class TestActionYAMLSync:
                 raise AssertionError(f"Action '{action_name}' in services.yaml is not recognized")
 
     @pytest.mark.asyncio
-    async def test_all_registered_actions_have_yaml_definition(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator, services_yaml_content):
+    async def test_all_registered_actions_have_yaml_definition(
+        self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator, services_yaml_content
+    ):
         """Test that all registered actions have YAML definitions.
 
         This ensures documentation (services.yaml) matches implementation.
@@ -578,7 +584,9 @@ class TestAsyncSetupServices:
 class TestRegisterMediaPlayerServices:
     """Test register_media_player_services function."""
 
-    def test_register_media_player_services_registers_all_services(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
+    def test_register_media_player_services_registers_all_services(
+        self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator
+    ):
         """Test that register_media_player_services registers all EntityServiceDescription services."""
         from custom_components.wiim import media_player
         from custom_components.wiim.const import DOMAIN
