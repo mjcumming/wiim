@@ -72,7 +72,8 @@ async def async_setup_entry(
     )
 
     # Register entity services
-    platform = entity_platform.async_get_current_platform()
+    # Use async_get_platform instead of async_get_current_platform to work in test contexts
+    platform = entity_platform.async_get_platform(hass, DOMAIN, "media_player")
     platform.async_register_entity_service(
         "play_url",
         {vol.Required("url"): cv.string},
