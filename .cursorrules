@@ -132,7 +132,9 @@ When working with pywiim integration patterns or API usage:
   1. Write the code
   2. Write tests for the new code immediately
   3. Ensure all new lines are covered by tests
-  4. Run `pytest --cov` to verify coverage before committing
+  4. **ALWAYS test locally before pushing** - Run `./scripts/check-before-push.sh` or `pytest --cov` to verify everything works
+  5. **NEVER push with `--no-verify`** unless explicitly debugging CI infrastructure
+  6. **NEVER push to see if it works** - fix issues locally first
 
 ### Codecov Patch Coverage Requirements
 
@@ -298,6 +300,35 @@ Always use pywiim's actual attribute names:
 ✅ `player.eq_presets` - Correct
 ✅ `capabilities.get("supports_eq")` - Correct
 ✅ `player.group.all_players` - Correct
+
+## Release Workflow - CRITICAL
+
+**ALWAYS test locally before pushing to CI.**
+
+The release workflow is designed to identify and solve issues **locally**, not push-and-see.
+
+### Pre-Push Requirements
+
+1. **Run local tests**: `./scripts/check-before-push.sh` (runs same checks as CI)
+   - This script runs: ruff, flake8, mypy, pytest with coverage
+   - Matches `.github/workflows/tests.yaml` exactly
+2. **Fix all issues locally** before pushing
+3. **NEVER push with `--no-verify`** unless explicitly debugging CI infrastructure
+4. **NEVER push to "see if it works"** - test locally first
+
+### Why This Matters
+
+- CI is for **verification**, not **debugging**
+- Pushing broken code wastes CI resources and time
+- Local testing catches 99% of issues before they hit CI
+- The pre-push hook exists to enforce this - respect it!
+
+### If Tests Fail Locally
+
+1. Fix the issue
+2. Re-run `./scripts/check-before-push.sh`
+3. Only push when ALL checks pass locally
+4. CI should be a formality, not a debugging session
 
 ## When to Update This File
 
