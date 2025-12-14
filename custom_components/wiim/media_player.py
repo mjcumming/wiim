@@ -119,7 +119,7 @@ async def async_setup_entry(
     )
 
     # Register platform entity services using new EntityServiceDescription pattern
-    register_media_player_services()
+    register_media_player_services(platform)
 
 
 class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):

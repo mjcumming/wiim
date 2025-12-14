@@ -113,12 +113,16 @@ MEDIA_PLAYER_ENTITY_SERVICES: Final = (
 )
 
 
-def register_media_player_services() -> None:
+def register_media_player_services(platform: entity_platform.EntityPlatform | None = None) -> None:
     """Register media_player entity services using the new EntityServiceDescription pattern.
 
     This should be called from media_player.async_setup_entry() after entities are added.
+
+    Args:
+        platform: The entity platform. If None, will try to get current platform.
     """
-    platform = entity_platform.async_get_current_platform()
+    if platform is None:
+        platform = entity_platform.async_get_current_platform()
     for service in MEDIA_PLAYER_ENTITY_SERVICES:
         service.async_register(platform)
 
