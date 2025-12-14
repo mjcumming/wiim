@@ -1,11 +1,11 @@
 """Unit tests for WiiM Actions - testing all registered actions and sync with YAML/strings.json."""
 
 import json
+import yaml
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import yaml
 from homeassistant.core import HomeAssistant
 
 from custom_components.wiim import media_player
@@ -19,6 +19,7 @@ from custom_components.wiim.services import (
     SERVICE_UPDATE_ALARM,
     async_setup_services,
 )
+
 
 # Skip service registration tests until we migrate to new HA service API
 SKIP_REASON = "Service registration temporarily disabled - migrating to new HA API"
@@ -269,6 +270,7 @@ class TestActionYAMLSync:
 
         # Check services.py registered actions
         import inspect
+        from custom_components.wiim import media_player
 
         # Get media_player.py source to check for entity action registrations
         setup_entry_source = inspect.getsource(media_player.async_setup_entry)
@@ -286,6 +288,15 @@ class TestActionYAMLSync:
         }
 
         # Platform entity actions (registered in services.py via async_setup_services)
+        platform_actions = {
+            SERVICE_SET_SLEEP_TIMER,
+            SERVICE_CLEAR_SLEEP_TIMER,
+            SERVICE_UPDATE_ALARM,
+            SERVICE_REBOOT_DEVICE,
+            SERVICE_SYNC_TIME,
+            SERVICE_SCAN_BLUETOOTH,
+            SERVICE_SET_CHANNEL_BALANCE,
+        }
 
         # Verify all YAML actions are either registered or in media_player.py
         yaml_action_names = set(services_yaml_content.keys())
@@ -377,9 +388,9 @@ class TestActionYAMLSync:
         for action_name, action_def in services_translations.items():
             assert isinstance(action_def, dict), f"Action '{action_name}' translation should be a dictionary"
             # Each action should have at least a name or description
-            assert (
-                "name" in action_def or "description" in action_def
-            ), f"Action '{action_name}' translation should have at least a name or description"
+            assert "name" in action_def or "description" in action_def, (
+                f"Action '{action_name}' translation should have at least a name or description"
+            )
 
     def test_yaml_fields_have_string_translations(self, services_yaml_content, strings_json_content):
         """Test that action fields in services.yaml have translations in strings.json."""

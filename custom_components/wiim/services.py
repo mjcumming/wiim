@@ -29,9 +29,7 @@ ATTR_DURATION = "duration"
 ATTR_BALANCE = "balance"
 
 # Service schemas
-SCHEMA_SET_SLEEP_TIMER = {
-    vol.Required(ATTR_SLEEP_TIME): vol.All(vol.Coerce(int), vol.Range(min=0, max=7200))
-}
+SCHEMA_SET_SLEEP_TIMER = {vol.Required(ATTR_SLEEP_TIME): vol.All(vol.Coerce(int), vol.Range(min=0, max=7200))}
 
 SCHEMA_UPDATE_ALARM = {
     vol.Required(ATTR_ALARM_ID): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
@@ -40,13 +38,9 @@ SCHEMA_UPDATE_ALARM = {
     vol.Optional(ATTR_OPERATION): cv.string,
 }
 
-SCHEMA_SCAN_BLUETOOTH = {
-    vol.Optional(ATTR_DURATION, default=5): vol.All(vol.Coerce(int), vol.Range(min=3, max=10))
-}
+SCHEMA_SCAN_BLUETOOTH = {vol.Optional(ATTR_DURATION, default=5): vol.All(vol.Coerce(int), vol.Range(min=3, max=10))}
 
-SCHEMA_SET_CHANNEL_BALANCE = {
-    vol.Required(ATTR_BALANCE): vol.All(vol.Coerce(float), vol.Range(min=-1.0, max=1.0))
-}
+SCHEMA_SET_CHANNEL_BALANCE = {vol.Required(ATTR_BALANCE): vol.All(vol.Coerce(float), vol.Range(min=-1.0, max=1.0))}
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:

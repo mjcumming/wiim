@@ -403,6 +403,7 @@ class TestWiiMCoordinator:
     @pytest.mark.asyncio
     async def test_refresh_returns_none_handling(self, coordinator, mock_player):
         """Test coordinator handles player.refresh() returning None gracefully."""
+
         # Simulate refresh that doesn't raise but returns None
         async def refresh_none():
             return None
