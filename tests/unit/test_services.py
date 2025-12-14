@@ -584,7 +584,8 @@ class TestAsyncSetupServices:
 class TestRegisterMediaPlayerServices:
     """Test register_media_player_services function."""
 
-    def test_register_media_player_services_registers_all_services(
+    @pytest.mark.asyncio
+    async def test_register_media_player_services_registers_all_services(
         self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator
     ):
         """Test that register_media_player_services registers all EntityServiceDescription services."""
