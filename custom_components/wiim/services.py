@@ -48,7 +48,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     Note: Service registration is temporarily disabled while we migrate
     to the new Home Assistant service API.
-    
+
     Services are still available via the entity methods directly.
     This function exists for API compatibility but does not register services.
     """
