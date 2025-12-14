@@ -27,6 +27,26 @@ from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE  # noqa: E402
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 
+@pytest.fixture(autouse=True)
+def force_aiohttp_threaded_dns_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force aiohttp to use ThreadedResolver to avoid pycares background threads.
+
+    When aiodns/pycares is available, aiohttp defaults to AsyncResolver, which starts
+    a long-lived pycares channel thread. pytest-homeassistant-custom-component's
+    strict cleanup checks fail if that thread is spawned during a test.
+    """
+    try:
+        import aiohttp.resolver as aiohttp_resolver
+    except Exception:  # pragma: no cover
+        # If aiohttp cannot be imported, other tests will already fail.
+        return
+
+    # Disable aiodns usage and force DefaultResolver to ThreadedResolver.
+    monkeypatch.setattr(aiohttp_resolver, "aiodns", None, raising=False)
+    monkeypatch.setattr(aiohttp_resolver, "aiodns_default", False, raising=False)
+    monkeypatch.setattr(aiohttp_resolver, "DefaultResolver", aiohttp_resolver.ThreadedResolver, raising=False)
+
+
 # ============================================================================
 # Autouse Fixtures (applied to all tests automatically)
 # ============================================================================
