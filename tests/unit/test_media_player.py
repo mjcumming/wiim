@@ -961,7 +961,10 @@ class TestWiiMMediaPlayerJoinUnjoin:
         media_player.hass.data = {}  # Empty - will cause RuntimeError
 
         with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
-            with patch("custom_components.wiim.data.get_coordinator_from_entry", side_effect=RuntimeError("Coordinator not found")):
+            with patch(
+                "custom_components.wiim.data.get_coordinator_from_entry",
+                side_effect=RuntimeError("Coordinator not found"),
+            ):
                 # Should not raise, just log warning and skip
                 await media_player.async_join_players(["media_player.wiim_master", "media_player.wiim_slave"])
 

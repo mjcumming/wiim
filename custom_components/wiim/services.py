@@ -1,16 +1,21 @@
 """Support to interface with WiiM players - platform entity actions.
 
-This module provides action schemas for WiiM-specific services.
-The actual service registration happens in the platform setup (media_player.py).
+This module provides entity service descriptions for WiiM-specific services.
+Services are registered via EntityServiceDescription pattern in media_player.py.
 """
 
 from __future__ import annotations
 
-import voluptuous as vol
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from dataclasses import dataclass
+from typing import Final
 
-# Action names
+import voluptuous as vol
+from homeassistant.core import HomeAssistant, SupportsResponse
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
+from homeassistant.helpers.typing import VolDictType, VolSchemaType
+
+# Service names
 SERVICE_SET_SLEEP_TIMER = "set_sleep_timer"
 SERVICE_CLEAR_SLEEP_TIMER = "clear_sleep_timer"
 SERVICE_UPDATE_ALARM = "update_alarm"
@@ -29,29 +34,100 @@ ATTR_DURATION = "duration"
 ATTR_BALANCE = "balance"
 
 # Service schemas
-SCHEMA_SET_SLEEP_TIMER = {vol.Required(ATTR_SLEEP_TIME): vol.All(vol.Coerce(int), vol.Range(min=0, max=7200))}
+SCHEMA_SET_SLEEP_TIMER: Final[VolDictType] = {
+    vol.Required(ATTR_SLEEP_TIME): vol.All(vol.Coerce(int), vol.Range(min=0, max=7200))
+}
 
-SCHEMA_UPDATE_ALARM = {
+SCHEMA_UPDATE_ALARM: Final[VolDictType] = {
     vol.Required(ATTR_ALARM_ID): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
     vol.Optional(ATTR_TIME): cv.string,
     vol.Optional(ATTR_TRIGGER): cv.string,
     vol.Optional(ATTR_OPERATION): cv.string,
 }
 
-SCHEMA_SCAN_BLUETOOTH = {vol.Optional(ATTR_DURATION, default=5): vol.All(vol.Coerce(int), vol.Range(min=3, max=10))}
+SCHEMA_SCAN_BLUETOOTH: Final[VolDictType] = {
+    vol.Optional(ATTR_DURATION, default=5): vol.All(vol.Coerce(int), vol.Range(min=3, max=10))
+}
 
-SCHEMA_SET_CHANNEL_BALANCE = {vol.Required(ATTR_BALANCE): vol.All(vol.Coerce(float), vol.Range(min=-1.0, max=1.0))}
+SCHEMA_SET_CHANNEL_BALANCE: Final[VolDictType] = {
+    vol.Required(ATTR_BALANCE): vol.All(vol.Coerce(float), vol.Range(min=-1.0, max=1.0))
+}
+
+
+@dataclass(frozen=True)
+class EntityServiceDescription:
+    """Describe an entity service for WiiM platform."""
+
+    name: str
+    method_name: str
+    schema: VolDictType | VolSchemaType | None = None
+    supports_response: SupportsResponse = SupportsResponse.NONE
+
+    def async_register(self, platform: entity_platform.EntityPlatform) -> None:
+        """Register the service with the platform."""
+        platform.async_register_entity_service(
+            self.name,
+            self.schema,
+            self.method_name,
+            supports_response=self.supports_response,
+        )
+
+
+# All WiiM platform entity services
+MEDIA_PLAYER_ENTITY_SERVICES: Final = (
+    # Sleep timer services
+    EntityServiceDescription(
+        SERVICE_SET_SLEEP_TIMER,
+        "set_sleep_timer",
+        SCHEMA_SET_SLEEP_TIMER,
+    ),
+    EntityServiceDescription(
+        SERVICE_CLEAR_SLEEP_TIMER,
+        "clear_sleep_timer",
+    ),
+    # Alarm services
+    EntityServiceDescription(
+        SERVICE_UPDATE_ALARM,
+        "set_alarm",
+        SCHEMA_UPDATE_ALARM,
+    ),
+    # Device management services
+    EntityServiceDescription(
+        SERVICE_REBOOT_DEVICE,
+        "async_reboot_device",
+    ),
+    EntityServiceDescription(
+        SERVICE_SYNC_TIME,
+        "async_sync_time",
+    ),
+    EntityServiceDescription(
+        SERVICE_SCAN_BLUETOOTH,
+        "async_scan_bluetooth",
+        SCHEMA_SCAN_BLUETOOTH,
+    ),
+    EntityServiceDescription(
+        SERVICE_SET_CHANNEL_BALANCE,
+        "async_set_channel_balance",
+        SCHEMA_SET_CHANNEL_BALANCE,
+    ),
+)
+
+
+def register_media_player_services() -> None:
+    """Register media_player entity services using the new EntityServiceDescription pattern.
+
+    This should be called from media_player.async_setup_entry() after entities are added.
+    """
+    platform = entity_platform.async_get_current_platform()
+    for service in MEDIA_PLAYER_ENTITY_SERVICES:
+        service.async_register(platform)
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register WiiM platform entity actions.
+    """Legacy function for backward compatibility.
 
-    Note: Service registration is temporarily disabled while we migrate
-    to the new Home Assistant service API.
-
-    Services are still available via the entity methods directly.
-    This function exists for API compatibility but does not register services.
+    Services are now registered via register_media_player_services() in media_player.py.
+    This function is kept for API compatibility but does nothing.
     """
-    # TODO: Migrate to new HA service registration API
-    # Services are still available via the entity methods directly
+    # Services are registered via EntityServiceDescription pattern in media_player.py
     pass

@@ -4,6 +4,15 @@ All notable changes to unified WiiM Audio integration will be documented in this
 
 ## [Unreleased]
 
+### Changed
+
+- **Service Registration**: Migrated to Home Assistant 2025 EntityServiceDescription pattern
+  - **BREAKING CHANGE**: Services are now registered on `media_player` domain instead of `wiim` domain
+  - Services like `set_sleep_timer`, `reboot_device`, etc. are now available as `media_player.set_sleep_timer` instead of `wiim.set_sleep_timer`
+  - This migration re-enables services that were temporarily disabled in v1.0.43
+  - Users with automations using `wiim.*` services need to update to `media_player.*` services
+  - However, since services were disabled in v1.0.43, this change re-enables them with the new API pattern
+
 ## [1.0.43] - 2025-12-13
 
 ### Fixed

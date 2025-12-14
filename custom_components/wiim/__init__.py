@@ -58,7 +58,6 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import WiiMCoordinator
-from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -172,12 +171,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     # Initialize domain data structure
     hass.data.setdefault(DOMAIN, {})
 
-    # Register platform entity actions (only once, even if called multiple times)
-    # All actions now use service.async_register_platform_entity_service()
-    # for proper Home Assistant UI integration with target entity selection
-    if not hass.services.has_service(DOMAIN, "reboot_device"):
-        await async_setup_services(hass)
-        _LOGGER.info("WiiM actions registered")
+    # Services are now registered via EntityServiceDescription pattern in media_player.py
+    # No need to register here - services are registered when entities are added
 
     _LOGGER.info("WiiM integration async_setup completed")
     return True
@@ -191,12 +186,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
-    # Ensure services are registered (fallback if async_setup wasn't called)
-    # This ensures services work even when reloading config entries
-    if not hass.services.has_service(DOMAIN, "set_sleep_timer"):
-        # Register platform entity services (all services are now entity services)
-        await async_setup_services(hass)
-        _LOGGER.info("WiiM services registered in async_setup_entry (fallback)")
+    # Services are registered via EntityServiceDescription pattern in media_player.py
+    # when entities are added to the platform
 
     # Create client and coordinator with firmware capabilities
     session = async_get_clientsession(hass)

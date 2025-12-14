@@ -1,14 +1,12 @@
 """Unit tests for WiiM Actions - testing all registered actions and sync with YAML/strings.json."""
 
 import json
-import yaml
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import yaml
 from homeassistant.core import HomeAssistant
 
-from custom_components.wiim import media_player
 from custom_components.wiim.services import (
     SERVICE_CLEAR_SLEEP_TIMER,
     SERVICE_REBOOT_DEVICE,
@@ -21,25 +19,29 @@ from custom_components.wiim.services import (
 )
 
 
-# Skip service registration tests until we migrate to new HA service API
-SKIP_REASON = "Service registration temporarily disabled - migrating to new HA API"
-
-
-@pytest.mark.skip(reason=SKIP_REASON)
 class TestActionRegistration:
-    """Test action registration."""
+    """Test action registration using new EntityServiceDescription pattern."""
 
     @pytest.mark.asyncio
-    async def test_all_platform_actions_registered(self, hass: HomeAssistant):
-        """Test that all platform entity actions are registered."""
-        await async_setup_services(hass)
+    async def test_all_platform_actions_registered(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
+        """Test that all platform entity actions are registered on media_player domain."""
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        assert "wiim" in services
+        assert "media_player" in services
 
-        wiim_services = services["wiim"]
+        media_player_services = services["media_player"]
 
-        # All actions should be registered via services.py
+        # All actions should be registered via EntityServiceDescription pattern
         expected_actions = {
             SERVICE_SET_SLEEP_TIMER,
             SERVICE_CLEAR_SLEEP_TIMER,
@@ -51,90 +53,163 @@ class TestActionRegistration:
         }
 
         for action_name in expected_actions:
-            assert action_name in wiim_services, (
+            assert action_name in media_player_services, (
                 f"Action '{action_name}' should be registered but was not found. "
-                f"Registered actions: {list(wiim_services.keys())}"
+                f"Registered actions: {list(media_player_services.keys())}"
             )
 
     @pytest.mark.asyncio
-    async def test_set_sleep_timer_action_schema(self, hass: HomeAssistant):
+    async def test_set_sleep_timer_action_schema(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test set sleep timer action schema validation."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        set_timer_service = services["wiim"][SERVICE_SET_SLEEP_TIMER]
+        set_timer_service = services["media_player"][SERVICE_SET_SLEEP_TIMER]
 
         assert set_timer_service is not None
 
     @pytest.mark.asyncio
-    async def test_clear_sleep_timer_action_schema(self, hass: HomeAssistant):
+    async def test_clear_sleep_timer_action_schema(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test clear sleep timer action schema."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        clear_timer_service = services["wiim"][SERVICE_CLEAR_SLEEP_TIMER]
+        clear_timer_service = services["media_player"][SERVICE_CLEAR_SLEEP_TIMER]
 
         assert clear_timer_service is not None
 
     @pytest.mark.asyncio
-    async def test_update_alarm_action_schema(self, hass: HomeAssistant):
+    async def test_update_alarm_action_schema(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test update alarm action schema."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        update_alarm_service = services["wiim"][SERVICE_UPDATE_ALARM]
+        update_alarm_service = services["media_player"][SERVICE_UPDATE_ALARM]
 
         assert update_alarm_service is not None
 
     @pytest.mark.asyncio
-    async def test_reboot_device_action_schema(self, hass: HomeAssistant):
+    async def test_reboot_device_action_schema(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test reboot device action schema."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        reboot_service = services["wiim"][SERVICE_REBOOT_DEVICE]
+        reboot_service = services["media_player"][SERVICE_REBOOT_DEVICE]
 
         assert reboot_service is not None
 
     @pytest.mark.asyncio
-    async def test_sync_time_action_schema(self, hass: HomeAssistant):
+    async def test_sync_time_action_schema(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test sync time action schema."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        sync_time_service = services["wiim"][SERVICE_SYNC_TIME]
+        sync_time_service = services["media_player"][SERVICE_SYNC_TIME]
 
         assert sync_time_service is not None
 
     @pytest.mark.asyncio
-    async def test_scan_bluetooth_action_schema(self, hass: HomeAssistant):
+    async def test_scan_bluetooth_action_schema(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test scan bluetooth action schema."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        scan_bt_service = services["wiim"][SERVICE_SCAN_BLUETOOTH]
+        scan_bt_service = services["media_player"][SERVICE_SCAN_BLUETOOTH]
 
         assert scan_bt_service is not None
 
     @pytest.mark.asyncio
-    async def test_set_channel_balance_action_schema(self, hass: HomeAssistant):
+    async def test_set_channel_balance_action_schema(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test set channel balance action schema."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        balance_service = services["wiim"][SERVICE_SET_CHANNEL_BALANCE]
+        balance_service = services["media_player"][SERVICE_SET_CHANNEL_BALANCE]
 
         assert balance_service is not None
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
 class TestActionExecution:
     """Test action execution (requires media player entity)."""
 
     @pytest.mark.asyncio
-    async def test_set_sleep_timer_calls_entity_method(self, hass: HomeAssistant):
+    async def test_set_sleep_timer_calls_entity_method(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test set sleep timer action calls entity method."""
-        await async_setup_services(hass)
+        from unittest.mock import AsyncMock, MagicMock
+
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         mock_entity = MagicMock()
         mock_entity.entity_id = "media_player.test_wiim"
@@ -143,16 +218,27 @@ class TestActionExecution:
         hass.states.async_set("media_player.test_wiim", "idle")
 
         await hass.services.async_call(
-            "wiim",
+            "media_player",
             SERVICE_SET_SLEEP_TIMER,
             {"entity_id": "media_player.test_wiim", "sleep_time": 300},
             blocking=True,
         )
 
     @pytest.mark.asyncio
-    async def test_clear_sleep_timer_calls_entity_method(self, hass: HomeAssistant):
+    async def test_clear_sleep_timer_calls_entity_method(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test clear sleep timer action calls entity method."""
-        await async_setup_services(hass)
+        from unittest.mock import AsyncMock, MagicMock
+
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         mock_entity = MagicMock()
         mock_entity.entity_id = "media_player.test_wiim"
@@ -161,16 +247,27 @@ class TestActionExecution:
         hass.states.async_set("media_player.test_wiim", "idle")
 
         await hass.services.async_call(
-            "wiim",
+            "media_player",
             SERVICE_CLEAR_SLEEP_TIMER,
             {"entity_id": "media_player.test_wiim"},
             blocking=True,
         )
 
     @pytest.mark.asyncio
-    async def test_update_alarm_calls_entity_method(self, hass: HomeAssistant):
+    async def test_update_alarm_calls_entity_method(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test update alarm action calls entity method."""
-        await async_setup_services(hass)
+        from unittest.mock import AsyncMock, MagicMock
+
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         mock_entity = MagicMock()
         mock_entity.entity_id = "media_player.test_wiim"
@@ -179,7 +276,7 @@ class TestActionExecution:
         hass.states.async_set("media_player.test_wiim", "idle")
 
         await hass.services.async_call(
-            "wiim",
+            "media_player",
             SERVICE_UPDATE_ALARM,
             {
                 "entity_id": "media_player.test_wiim",
@@ -191,44 +288,78 @@ class TestActionExecution:
         )
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
 class TestActionValidation:
     """Test action parameter validation."""
 
     @pytest.mark.asyncio
-    async def test_set_sleep_timer_validates_range(self, hass: HomeAssistant):
+    async def test_set_sleep_timer_validates_range(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test set sleep timer validates sleep_time range (0-7200)."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        assert SERVICE_SET_SLEEP_TIMER in services["wiim"]
+        assert SERVICE_SET_SLEEP_TIMER in services["media_player"]
 
     @pytest.mark.asyncio
-    async def test_update_alarm_validates_alarm_id(self, hass: HomeAssistant):
+    async def test_update_alarm_validates_alarm_id(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test update alarm validates alarm_id range (0-2)."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        assert SERVICE_UPDATE_ALARM in services["wiim"]
+        assert SERVICE_UPDATE_ALARM in services["media_player"]
 
     @pytest.mark.asyncio
-    async def test_scan_bluetooth_validates_duration(self, hass: HomeAssistant):
+    async def test_scan_bluetooth_validates_duration(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test scan bluetooth validates duration range (3-10)."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        assert SERVICE_SCAN_BLUETOOTH in services["wiim"]
+        assert SERVICE_SCAN_BLUETOOTH in services["media_player"]
 
     @pytest.mark.asyncio
-    async def test_set_channel_balance_validates_range(self, hass: HomeAssistant):
+    async def test_set_channel_balance_validates_range(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
         """Test set channel balance validates balance range (-1.0 to 1.0)."""
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        assert SERVICE_SET_CHANNEL_BALANCE in services["wiim"]
+        assert SERVICE_SET_CHANNEL_BALANCE in services["media_player"]
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
 class TestActionYAMLSync:
     """Test that actions are synchronized between Python, YAML, and strings.json."""
 
@@ -255,21 +386,31 @@ class TestActionYAMLSync:
             return json.load(f)
 
     @pytest.mark.asyncio
-    async def test_all_yaml_actions_registered_in_python(self, hass: HomeAssistant, services_yaml_content):
+    async def test_all_yaml_actions_registered_in_python(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator, services_yaml_content):
         """Test that all actions defined in services.yaml are registered in Python code.
 
         This test prevents the issue where actions are defined in YAML but not registered,
         which causes "unknown action" errors in Home Assistant automations.
         """
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        assert "wiim" in services
+        assert "media_player" in services
 
-        wiim_services = services["wiim"]
+        media_player_services = services["media_player"]
 
         # Check services.py registered actions
         import inspect
+
         from custom_components.wiim import media_player
 
         # Get media_player.py source to check for entity action registrations
@@ -287,7 +428,7 @@ class TestActionYAMLSync:
             "get_queue",
         }
 
-        # Platform entity actions (registered in services.py via async_setup_services)
+        # Platform entity actions (registered via EntityServiceDescription pattern in services.py)
         platform_actions = {
             SERVICE_SET_SLEEP_TIMER,
             SERVICE_CLEAR_SLEEP_TIMER,
@@ -308,31 +449,43 @@ class TestActionYAMLSync:
                     f"Action '{action_name}' is defined in services.yaml but registration code not found in "
                     f"media_player.py::async_setup_entry. This will cause 'unknown action' errors."
                 )
-            else:
-                # Should be registered via services.py
-                assert action_name in wiim_services, (
+            elif action_name in platform_actions:
+                # Should be registered via EntityServiceDescription pattern
+                assert action_name in media_player_services, (
                     f"Action '{action_name}' is defined in services.yaml but not registered in Python code. "
                     f"This will cause 'unknown action' errors in Home Assistant automations."
                 )
+            else:
+                # Unknown action - should not happen
+                raise AssertionError(f"Action '{action_name}' in services.yaml is not recognized")
 
     @pytest.mark.asyncio
-    async def test_all_registered_actions_have_yaml_definition(self, hass: HomeAssistant, services_yaml_content):
+    async def test_all_registered_actions_have_yaml_definition(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator, services_yaml_content):
         """Test that all registered actions have YAML definitions.
 
         This ensures documentation (services.yaml) matches implementation.
         """
-        await async_setup_services(hass)
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+
+        # Setup coordinator in hass.data (required for async_setup_entry)
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (this registers services)
+        await media_player.async_setup_entry(hass, wiim_config_entry, lambda entities: None)
 
         services = hass.services.async_services()
-        assert "wiim" in services
+        assert "media_player" in services
 
-        wiim_services = services["wiim"]
+        media_player_services = services["media_player"]
         yaml_action_names = set(services_yaml_content.keys())
 
         # Actions that are allowed without YAML definition (legacy/experimental)
         allowed_without_yaml = set()
 
-        for action_name in wiim_services:
+        for action_name in media_player_services:
             if action_name not in allowed_without_yaml:
                 assert action_name in yaml_action_names, (
                     f"Action '{action_name}' is registered in Python but not defined in services.yaml. "
@@ -415,13 +568,47 @@ class TestAsyncSetupServices:
 
     @pytest.mark.asyncio
     async def test_async_setup_services_noop(self, hass: HomeAssistant):
-        """Test that async_setup_services completes without error (currently disabled)."""
+        """Test that async_setup_services completes without error (legacy compatibility)."""
         # Should complete without raising
         await async_setup_services(hass)
-        # Function is currently disabled (just pass), so no services should be registered
+        # Function is now a no-op - services are registered via platform in media_player.py
+        # This function exists for backward compatibility only
+
+
+class TestRegisterMediaPlayerServices:
+    """Test register_media_player_services function."""
+
+    def test_register_media_player_services_registers_all_services(self, hass: HomeAssistant, wiim_config_entry, wiim_coordinator):
+        """Test that register_media_player_services registers all EntityServiceDescription services."""
+        from custom_components.wiim import media_player
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.services import MEDIA_PLAYER_ENTITY_SERVICES
+
+        # Setup coordinator in hass.data
+        hass.data.setdefault(DOMAIN, {})[wiim_config_entry.entry_id] = {
+            "coordinator": wiim_coordinator,
+        }
+
+        # Setup platform (creates entities and sets up platform context)
+        entities_added = []
+
+        async def add_entities(entities):
+            entities_added.extend(entities)
+
+        await media_player.async_setup_entry(hass, wiim_config_entry, add_entities)
+
+        # Verify services are registered
         services = hass.services.async_services()
-        # wiim domain may not exist if no services registered
-        assert "wiim" not in services or len(services.get("wiim", {})) == 0
+        assert "media_player" in services
+
+        media_player_services = services["media_player"]
+
+        # Check all EntityServiceDescription services are registered
+        for service_desc in MEDIA_PLAYER_ENTITY_SERVICES:
+            assert service_desc.name in media_player_services, (
+                f"Service '{service_desc.name}' from EntityServiceDescription not registered. "
+                f"Registered services: {list(media_player_services.keys())}"
+            )
 
 
 class TestMediaPlayerEntityActionHandlers:

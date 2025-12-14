@@ -205,8 +205,20 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if entry.data.get(CONF_HOST) == host:
                 return self.async_abort(reason="already_configured")
 
+        # HTTP validation: Call device HTTP API to confirm it's actually a WiiM/LinkPlay device
+        # validate_device makes HTTP calls to the device to verify it responds as a LinkPlay/WiiM device
         discovered_device = DiscoveredDevice(ip=host)
-        validated_device = await validate_device(discovered_device)
+        try:
+            validated_device = await validate_device(discovered_device)
+        except Exception as err:
+            # validate_device failed - device is not a WiiM/LinkPlay device or not reachable
+            # Silently abort (following python-linkplay pattern of skipping invalid devices)
+            _LOGGER.debug(
+                "Device validation failed for %s (not a WiiM/LinkPlay device): %s",
+                host,
+                err,
+            )
+            return self.async_abort(reason="not_wiim_device")
 
         device_name = validated_device.name or f"WiiM Device ({host})"
         device_uuid = validated_device.uuid or host

@@ -36,6 +36,7 @@ from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
 from .group_media_player import WiiMGroupMediaPlayer
 from .media_player_base import WiiMMediaPlayerMixin
+from .services import register_media_player_services
 from .utils import capitalize_source_name, wiim_command
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,6 +117,9 @@ async def async_setup_entry(
         func="async_get_queue",
         supports_response=SupportsResponse.ONLY,
     )
+
+    # Register platform entity services using new EntityServiceDescription pattern
+    register_media_player_services()
 
 
 class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):

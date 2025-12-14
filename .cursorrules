@@ -123,6 +123,7 @@ When working with pywiim integration patterns or API usage:
   - Every code change must include tests for the modified functionality
   - Codecov will fail if new/changed code lacks test coverage
   - Patch coverage (new code) is separate from project coverage (overall)
+  - **NEVER skip writing tests to "fix Codecov later"** - tests must be written WITH the code
 - Test pywiim integration, not device hardware
 - Mock pywiim Player and Client objects
 - Test error handling and edge cases
@@ -132,6 +133,46 @@ When working with pywiim integration patterns or API usage:
   2. Write tests for the new code immediately
   3. Ensure all new lines are covered by tests
   4. Run `pytest --cov` to verify coverage before committing
+
+### Codecov Patch Coverage Requirements
+
+**CRITICAL: Codecov enforces 77.40% patch coverage (as of Dec 2025)**
+
+**What is patch coverage?**
+
+- Patch coverage = coverage of NEW or CHANGED lines in a PR/commit
+- This is separate from overall project coverage
+- Codecov compares your changes against the baseline commit
+
+**What happens if patch coverage is too low?**
+
+- CI will fail with: `**28.20% of diff hit (target 77.40%)**`
+- The release process will be blocked
+- You cannot merge until coverage is fixed
+
+**Common causes of low patch coverage:**
+
+1. **Adding new code without tests** - Most common! Every new function/method needs tests
+2. **Skipping tests for "complex" code** - No exceptions! Complex code needs MORE tests
+3. **Error paths not tested** - If you add error handling, test it!
+4. **Conditional logic not fully covered** - Test all branches (if/else, try/except)
+5. **Disabled code still counts** - Even if a function is `pass`, it needs a test
+
+**How to fix low patch coverage:**
+
+1. Identify uncovered lines: `pytest --cov=custom_components/wiim --cov-report=term-missing`
+2. Write tests for ALL uncovered lines
+3. Test both success and error paths
+4. Test edge cases (None, empty lists, invalid inputs)
+5. Re-run coverage until >77.40%
+
+**Example: Join service fix (Dec 2025)**
+
+- Added new coordinator lookup logic → Needed 5+ new tests
+- Added error handling paths → Each error path needed a test
+- Result: Coverage went from 28.20% → 77%+ after adding comprehensive tests
+
+**Golden Rule: If you write code, you MUST write tests. No exceptions.**
 
 ## Code Quality
 
