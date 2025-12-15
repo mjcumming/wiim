@@ -184,6 +184,9 @@ tts/
 www/
 .google.token
 
+# Local dev symlinks (do not commit)
+custom_components/home_topology
+
 # Development
 node_modules/
 npm-debug.log*

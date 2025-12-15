@@ -1,6 +1,6 @@
 """Unit tests for WiiM integration setup and teardown."""
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -373,6 +373,30 @@ class TestIntegrationServices:
 
         platforms = get_enabled_platforms(hass, entry, {"supports_firmware_install": False})
         assert Platform.UPDATE not in platforms
+
+    @pytest.mark.asyncio
+    async def test_get_enabled_platforms_falls_back_to_player_flag(self, hass: HomeAssistant) -> None:
+        """If capabilities are missing supports_firmware_install, fall back to runtime player flag."""
+        from homeassistant.const import Platform
+
+        from custom_components.wiim import get_enabled_platforms
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Master Bedroom",
+            data=MOCK_CONFIG,
+            unique_id=MOCK_DEVICE_DATA["uuid"],
+            entry_id="test-entry-id",
+        )
+        entry.add_to_hass(hass)
+
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.supports_firmware_install = True
+        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coordinator, "entry": entry}
+
+        platforms = get_enabled_platforms(hass, entry, {})
+        assert Platform.UPDATE in platforms
 
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:

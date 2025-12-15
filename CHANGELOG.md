@@ -1,11 +1,25 @@
 # Changelog
 
+## [1.0.45] - 2025-12-15
+
+### Fixed
+
+- **Firmware Update Entity**: Fixed the firmware `update` entity becoming "no longer provided" due to stale cached capability data missing `supports_firmware_install`
+
+  - Treat missing `supports_firmware_install` in cached capabilities as stale and re-detect capabilities
+  - Persist `supports_firmware_install` back into the cached capabilities after first refresh so UPDATE platform stays enabled on restart
+  - Restored stable firmware update `unique_id` suffix (`*_fw_update`) to avoid orphaned/duplicated entities
+  - Added install progress tracking (`INSTALL | PROGRESS`) so Home Assistant shows an in-progress update during the multi-minute install/reboot window
+
+### Changed
+
+- Release version 1.0.45
+
 ## [1.0.44] - 2025-12-14
 
 ### Changed
 
 - Release version 1.0.44
-
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
 

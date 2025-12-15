@@ -93,7 +93,18 @@ def get_enabled_platforms(
     # Per upstream pywiim API, only WiiM devices support firmware installation via API.
     # Use pywiim's capability flag as the source of truth.
     caps = capabilities or entry.data.get("capabilities") or {}
-    if caps.get("supports_firmware_install", False):
+
+    supports_firmware_install = caps.get("supports_firmware_install")
+    if supports_firmware_install is None:
+        # Prefer pywiim's runtime flag if a coordinator/player is available.
+        # This avoids relying on stale/incomplete cached capability dicts.
+        try:
+            coordinator: WiiMCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+            supports_firmware_install = getattr(coordinator.player, "supports_firmware_install", False)
+        except Exception:  # noqa: BLE001
+            supports_firmware_install = False
+
+    if bool(supports_firmware_install):
         platforms.append(Platform.UPDATE)
 
     # Add optional platforms based on user preferences
@@ -225,9 +236,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # OPTIMIZATION: Check for cached capabilities first to avoid slow re-probing
     # on every restart. Capabilities are cached after first successful detection.
     cached_capabilities = entry.data.get("capabilities")
-    capabilities = {}
+    capabilities: dict[str, Any] = {}
 
-    if cached_capabilities:
+    # Capabilities are cached for startup performance, but the cached payload may be
+    # from an older pywiim version that did not include newer keys (e.g.
+    # `supports_firmware_install`). If the cache looks incomplete, re-detect once.
+    if cached_capabilities and "supports_firmware_install" in cached_capabilities:
         # Use cached capabilities - skip slow probing
         capabilities = cached_capabilities
         _LOGGER.debug(
@@ -236,7 +250,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             capabilities.get("device_type", "Unknown"),
         )
     else:
-        # First setup or no cache - need to detect capabilities
+        # First setup, no cache, or stale cache - need to detect capabilities
         try:
             import time
 
@@ -253,7 +267,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 temp_client_kwargs["protocol"] = protocol
             temp_client = WiiMClient(**temp_client_kwargs)
             # Use pywiim's _detect_capabilities() method
-            capabilities = await temp_client._detect_capabilities()
+            detected = await temp_client._detect_capabilities()
+
+            # Merge any existing cached capabilities (if present) with the newly detected ones.
+            # Prefer freshly detected values to avoid stale flags (like firmware install support).
+            if cached_capabilities:
+                capabilities = {**cached_capabilities, **(detected or {})}
+            else:
+                capabilities = detected or {}
 
             elapsed = time.monotonic() - start_time
             _LOGGER.info(
@@ -348,6 +369,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("Starting initial data fetch for %s", entry.data["host"])
         await coordinator.async_config_entry_first_refresh()
         _LOGGER.info("Initial data fetch completed for %s", entry.data["host"])
+
+        # Ensure cached capabilities include pywiim's firmware install support flag.
+        # Our platform enablement uses `supports_firmware_install` to decide whether to
+        # expose the `update` platform; older cached capability payloads may lack it.
+        supports_firmware_install = bool(getattr(coordinator.player, "supports_firmware_install", False))
+        if capabilities.get("supports_firmware_install") != supports_firmware_install:
+            capabilities["supports_firmware_install"] = supports_firmware_install
+            hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    "capabilities": {**(entry.data.get("capabilities") or {}), **capabilities},
+                },
+            )
 
         # After first successful connection, persist the discovered endpoint (optimized pattern)
         # This avoids probing on every startup for faster initialization

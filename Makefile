@@ -3,15 +3,16 @@
 # This Makefile provides commands for testing, linting, and building
 # the WiiM Home Assistant integration.
 
-.PHONY: help test test-integration test-smoke test-multiroom test-all test-phase test-quick pre-release lint format clean install install-dev build check-all check-python check-ha-compat pre-run
+.PHONY: help ci test test-integration test-smoke test-multiroom test-all test-phase test-quick pre-release pre-release-realworld lint format clean install install-dev build check-all check-python check-ha-compat pre-run
 
 # Default target
 help:
 	@echo "WiiM Integration - Available Commands:"
 	@echo ""
 	@echo "Testing:"
+	@echo "  ci             - Run the exact same checks as GitHub CI (recommended before pushing)"
 	@echo "  test           - Run all unit tests"
-	@echo "  test-integration - Run integration tests (pywiim integration)"
+	@echo "  test-integration - Run integration tests (if tests/integration exists)"
 	@echo "  test-smoke     - Run smoke tests (requires HA_URL and HA_TOKEN)"
 	@echo "  test-multiroom - Run comprehensive multiroom tests (requires 3 devices)"
 	@echo "  test-all       - Run all automated tests (unit + integration)"
@@ -19,6 +20,7 @@ help:
 	@echo "  test-verbose   - Run tests with verbose output"
 	@echo "  test-quick     - Run unit tests without coverage (faster)"
 	@echo "  pre-release    - Run pre-release validation checklist"
+	@echo "  pre-release-realworld - Pre-release + real-world tests (requires scripts/test.config or HA_URL/HA_TOKEN)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  pre-run        - Quick checks before running HA (syntax, lint, imports)"
@@ -68,9 +70,17 @@ test:
 	@echo "🧪 Running WiiM Integration Tests..."
 	python tests/run_tests.py
 
+ci:
+	@echo "🔍 Running exact GitHub CI checks..."
+	@bash scripts/check-before-push.sh
+
 test-integration:
 	@echo "🧪 Running Integration Tests..."
-	pytest tests/integration/ -v
+	@if [ -d "tests/integration" ]; then \
+		pytest tests/integration/ -v; \
+	else \
+		echo "⚠️  tests/integration/ not present - skipping"; \
+	fi
 
 test-smoke:
 	@echo "🧪 Running Smoke Tests (requires HA and devices)..."
@@ -94,6 +104,14 @@ test-all: test test-integration
 pre-release:
 	@echo "🔍 Running Pre-Release Validation..."
 	python scripts/pre-release-check.py
+
+pre-release-realworld:
+	@echo "🔍 Running Pre-Release Validation + Real-World Tests..."
+	@if [ -f "scripts/test.config" ]; then \
+		python scripts/pre-release-check.py --config scripts/test.config --realworld; \
+	else \
+		python scripts/pre-release-check.py --realworld; \
+	fi
 
 test-phase:
 	@echo "🧪 Running Phase $(PHASE) Tests..."

@@ -350,6 +350,46 @@ The release workflow is designed to identify and solve issues **locally**, not p
 3. Only push when ALL checks pass locally
 4. CI should be a formality, not a debugging session
 
+## Development Environment
+
+### ⚠️ CRITICAL: Starting Home Assistant
+
+**ALWAYS use this command to start Home Assistant:**
+
+```bash
+hass -c /workspaces/core/config --open-ui
+```
+
+**Why this is critical:**
+
+- The config directory `/workspaces/core/config` contains symlinks to the wiim integration
+- Symlink: `/workspaces/core/config/custom_components/wiim` → `/workspaces/wiim/custom_components/wiim`
+- **DO NOT use `~/.homeassistant`** - that config doesn't have the symlinks
+- **DO NOT use `python3 -m homeassistant`** - use the `hass` command
+- **DO NOT run from `~`** - the environment and symlinks are set up in the workspace
+
+**Optional but recommended:**
+
+```bash
+# Run quick checks first (catches syntax/lint errors)
+cd /workspaces/wiim
+make pre-run
+```
+
+**Other useful commands:**
+
+- Web interface: `http://localhost:8123`
+- Stop HA: `pkill hass`
+- Check if running: `ps aux | grep hass`
+
+**To view terminal output when running in background:**
+
+- Output is written to: `/home/vscode/.cursor/projects/workspaces-core/terminals/[SHELL_ID].txt`
+- View with: `tail -f /home/vscode/.cursor/projects/workspaces-core/terminals/[SHELL_ID].txt`
+- Or run HA directly in a terminal (not background) to see output in real-time
+
+**See `/development/README.md` for complete development setup instructions.**
+
 ## When to Update This File
 
 - When asked to remember something important
