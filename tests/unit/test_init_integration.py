@@ -398,6 +398,74 @@ class TestIntegrationServices:
         platforms = get_enabled_platforms(hass, entry, {})
         assert Platform.UPDATE in platforms
 
+
+class TestCapabilityCacheRefresh:
+    """Tests for capability cache refresh behavior in async_setup_entry."""
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_redetects_when_cached_capabilities_missing_firmware_flag(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If cached capabilities are present but missing supports_firmware_install, re-detect once."""
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Master Bedroom",
+            data={
+                "host": "192.168.1.116",
+                "endpoint": "https://192.168.1.116:443",
+                # Stale cache: missing supports_firmware_install key
+                "capabilities": {"device_type": "WiiM_Pro_with_gc4a", "vendor": "wiim"},
+            },
+            unique_id="FF98F09CD89F9B50AB9CEC68",
+        )
+        entry.add_to_hass(hass)
+
+        # Fake temp client used for _detect_capabilities
+        temp_client = MagicMock()
+        temp_client._detect_capabilities = AsyncMock(
+            return_value={"device_type": "WiiM_Pro_with_gc4a", "vendor": "wiim", "supports_firmware_install": True}
+        )
+
+        # Patch WiiMClient() constructor in module to return our temp client for detection
+        monkeypatch.setattr("custom_components.wiim.WiiMClient", MagicMock(return_value=temp_client))
+
+        # Patch coordinator creation to avoid real network and to control player values
+        class _FakePlayer:
+            def __init__(self):
+                self.host = "192.168.1.116"
+                self.name = "Master Bedroom"
+                self.client = MagicMock(discovered_endpoint=None)
+                self.supports_firmware_install = True
+
+        class _FakeCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                self.hass = hass
+                self.player = _FakePlayer()
+                self.last_update_success = True
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FakeCoordinator)
+
+        # Avoid real device registry writes
+        monkeypatch.setattr("custom_components.wiim._register_ha_device", AsyncMock())
+
+        # Capture which platforms we forward
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        ok = await async_setup_entry(hass, entry)
+        assert ok is True
+
+        # Should have re-detected (since cached caps were missing the flag)
+        temp_client._detect_capabilities.assert_awaited()
+
+        # Should have forwarded UPDATE platform
+        forwarded = hass.config_entries.async_forward_entry_setups.await_args.args[1]
+        assert "update" in [p.value for p in forwarded]
+
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:
         """Test get_enabled_platforms with optional features enabled."""
