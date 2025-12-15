@@ -122,97 +122,24 @@ main() {
     print_step "New version: ${NEW_VERSION}"
 
     echo ""
-    print_step "Step 1: Running linting checks..."
-
-    # Run ruff
-    print_step "  → Running ruff..."
-    if python -m ruff check custom_components/wiim/ --line-length 120; then
-        print_success "  Ruff checks passed"
+    print_step "Step 1: Running EXACT GitHub CI checks (required)..."
+    # This matches .github/workflows/tests.yaml (ruff + flake8 + mypy + pytest w/ coverage)
+    if bash scripts/check-before-push.sh; then
+        print_success "CI-equivalent checks passed"
     else
-        print_warning "  Ruff checks failed, attempting auto-fix..."
-        python -m ruff check custom_components/wiim/ --fix --line-length 120
-        python -m ruff format custom_components/wiim/
-        # Check again after auto-fix
-        if python -m ruff check custom_components/wiim/ --line-length 120; then
-            print_success "  Auto-fixed and formatted"
-        else
-            print_error "  Ruff checks still failed after auto-fix"
-            exit 1
-        fi
-    fi
-
-    # Run flake8
-    print_step "  → Running flake8..."
-    if flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503; then
-        print_success "  Flake8 checks passed"
-    else
-        print_error "  Flake8 checks failed"
-        exit 1
-    fi
-
-    echo ""
-    print_step "Step 2: Running tests with coverage..."
-    # Ensure build directory exists for coverage XML
-    mkdir -p build
-    # Run tests with coverage to catch coverage drops before pushing
-    # Codecov project coverage threshold is ~77% - fail if below 75% to catch regressions early
-    if pytest tests/ --cov=custom_components.wiim --cov-report=term-missing --cov-report=xml:build/coverage.xml --cov-fail-under=75 -q; then
-        print_success "All tests passed"
-
-        # Extract coverage percentage from XML report and check against Codecov threshold
-        if [[ -f "build/coverage.xml" ]]; then
-            COVERAGE_PCT=$(python3 -c "
-import xml.etree.ElementTree as ET
-try:
-    tree = ET.parse('build/coverage.xml')
-    root = tree.getroot()
-    line_rate = float(root.attrib.get('line-rate', 0))
-    coverage_pct = line_rate * 100
-    print(f'{coverage_pct:.2f}')
-except Exception as e:
-    print('0.00')
-" 2>/dev/null || echo "0.00")
-
-            # Check if coverage is significantly below Codecov project threshold (~77%)
-            # Only warn if coverage is below 72% (5% below threshold) to avoid false alarms
-            # Codecov allows small fluctuations, so we don't want to block releases over minor drops
-            COVERAGE_CHECK=$(python3 -c "
-coverage = float('${COVERAGE_PCT}')
-warning_threshold = 72.0  # Warn if below 72% (5% below Codecov threshold)
-if coverage < warning_threshold:
-    print('WARN')
-else:
-    print('OK')
-" 2>/dev/null || echo "OK")
-
-            if [[ "$COVERAGE_CHECK" == "WARN" ]]; then
-                print_warning "Coverage is ${COVERAGE_PCT}% (Codecov project threshold: ~77%)"
-                print_warning "This may fail codecov/project check on GitHub. Consider adding tests."
-                echo ""
-                read -p "Continue with release anyway? (y/N): " -n 1 -r
-                echo
-                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                    print_error "Release cancelled by user"
-                    exit 1
-                fi
-            else
-                print_success "Coverage: ${COVERAGE_PCT}% (acceptable for release)"
-            fi
-        fi
-    else
-        print_error "Tests failed or coverage below threshold"
+        print_error "CI-equivalent checks failed"
         exit 1
     fi
 
     # Update version and changelog if version changed
     if [[ "$NEW_VERSION" != "$CURRENT_VERSION" ]]; then
         echo ""
-        print_step "Step 3: Updating version numbers..."
+        print_step "Step 2: Updating version numbers..."
         update_manifest_version "$NEW_VERSION"
         print_success "Updated manifest.json to version ${NEW_VERSION}"
 
         echo ""
-        print_step "Step 4: Updating CHANGELOG.md..."
+        print_step "Step 3: Updating CHANGELOG.md..."
         update_changelog "$NEW_VERSION"
     else
         print_warning "Skipping version updates (no version change)"
@@ -221,7 +148,7 @@ else:
     # Git operations (only if --push flag is set)
     if [[ "$PUSH_TO_GIT" == "true" ]]; then
         echo ""
-        print_step "Step 5: Git operations..."
+        print_step "Step 4: Git operations..."
 
         # Show git status
         echo ""
