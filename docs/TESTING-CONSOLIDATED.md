@@ -491,6 +491,74 @@ Use `make pre-release` or `python scripts/pre-release-check.py` to validate:
 - Missing coverage areas
 - Real-device test results comparison
 
+## Known Issues and Dependencies
+
+### pytest-asyncio `event_loop` Fixture Deprecation Warning
+
+**Status**: Known issue, monitoring for resolution
+
+**Warning Message**:
+
+```
+Warning: The event_loop fixture provided by pytest-asyncio has been redefined in
+/home/runner/work/wiim/wiim/tests/conftest.py:31
+Replacing the event_loop fixture with a custom implementation is deprecated
+and will lead to errors in the future.
+```
+
+**Root Cause**:
+
+- `pytest-asyncio` v1.0.0+ (released May 2025) removed the `event_loop` fixture
+- `pytest-homeassistant-custom-component==0.13.251` still depends on the legacy `event_loop` fixture via its `enable_event_loop_debug` autouse fixture
+- A custom `event_loop` fixture in `tests/conftest.py` (lines 31-43) bridges this compatibility gap
+
+**Current Workaround**:
+The custom fixture in `conftest.py` provides the legacy `event_loop` fixture that the HA test plugin expects:
+
+```python
+@pytest.fixture
+def event_loop() -> asyncio.AbstractEventLoop:
+    """Provide legacy `event_loop` fixture for HA pytest plugin compatibility."""
+    loop = asyncio.new_event_loop()
+    try:
+        yield loop
+    finally:
+        loop.close()
+```
+
+**Why This Exists**:
+
+- Required for `pytest-homeassistant-custom-component`'s `enable_event_loop_debug` fixture to work
+- Without it, tests would fail with missing fixture errors
+- This is a temporary workaround until the HA plugin updates to support newer pytest-asyncio
+
+**Future Resolution**:
+
+1. **Short term**: Warning is informational only - tests continue to work
+2. **Medium term**: Monitor `pytest-homeassistant-custom-component` releases for pytest-asyncio v1.0+ compatibility
+3. **Long term**: When HA plugin updates, remove custom fixture and rely on pytest-asyncio's built-in behavior
+
+**Options Considered**:
+
+- **Suppress warning**: Could add `filterwarnings` to `pytest.ini`, but doesn't fix underlying issue
+- **Use `event_loop_policy`**: Modern approach, but may not satisfy HA plugin's requirements
+- **Disable `enable_event_loop_debug`**: Would lose useful debugging capabilities
+
+**Action Items**:
+
+- [ ] Monitor `pytest-homeassistant-custom-component` releases
+- [ ] Test compatibility when HA plugin updates
+- [ ] Remove custom fixture once upstream supports newer pytest-asyncio
+- [ ] Consider suppressing warning if it becomes too noisy
+
+**Related Files**:
+
+- `tests/conftest.py` (lines 31-43) - Custom event_loop fixture
+- `pytest.ini` - pytest-asyncio configuration
+- `requirements_test.txt` - pytest-homeassistant-custom-component dependency
+
+**Last Updated**: 2025-12-10
+
 ## File Reference
 
 | File                                      | Purpose                  |

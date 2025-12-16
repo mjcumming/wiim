@@ -214,6 +214,21 @@ Use [Radio Browser](https://www.radio-browser.info) to find stream URLs.
 
 The integration automatically handles this by using pause instead of stop when Bluetooth is the active source. This is a device limitation, not an integration issue.
 
+**Q: How do I completely stop Bluetooth playback?**
+
+If pause/stop commands don't reliably stop Bluetooth playback, you can stop it by switching to another input source:
+
+```yaml
+# Switch to WiFi (or another available source) to disconnect Bluetooth
+service: media_player.select_source
+target:
+  entity_id: media_player.your_device
+data:
+  source: "WiFi"  # or "Line In", "Optical", etc. - any available source
+```
+
+Switching sources will disconnect Bluetooth and stop playback. You can create an automation or script to do this automatically when you want to stop Bluetooth playback.
+
 ### Control Questions
 
 **Q: Why do some buttons not work?**

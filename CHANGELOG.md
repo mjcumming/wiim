@@ -1,5 +1,36 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.0.46] - 2025-12-16
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.56
+
+  **Source list capitalization and selection issues (2.1.56)**:
+
+  - `available_sources` now returns Title Case format (e.g., "Line In", "Bluetooth") to match `source` property, fixing Home Assistant validation failures
+  - Added source name normalization in `set_source()` to handle variations ("Line In", "Line-in", "line_in", "linein" → "line_in")
+  - Fixed USB filtering for WiiM Pro Plus - added `ignore_plm_bits=[2]` to prevent incorrect USB input from appearing
+  - Included WiFi/Ethernet as selectable source (user can switch to network mode)
+  - Fixed capitalization for streaming services: "TuneIn" and "iHeartRadio" now display correctly
+  - All source names now consistently normalized for both display (Title Case) and API calls (lowercase with underscores)
+
+  **Playlist clearing reliability (2.1.56)**:
+
+  - `clear_playlist()` now uses UPnP PlayQueue `DeleteQueue` action when available (more reliable than HTTP API on some devices)
+  - Falls back to HTTP API `setPlayerCmd:clear_playlist` if UPnP PlayQueue service is not available or fails
+  - PlayQueue service is automatically discovered during UPnP initialization (optional, LinkPlay-specific service)
+  - Addresses GitHub issue #154 where HTTP API `clear_playlist` command doesn't work on some devices
+
+  **HCN_BWD03 slave device status timeout (2.1.56)**:
+
+  - Added timeout fallback for HCN_BWD03 slave devices that timeout on `getPlayerStatus` in multiroom mode
+  - Automatically falls back to `getStatusEx` for HCN_BWD03 devices when `getPlayerStatus` times out
+  - Other devices continue to use `getPlayerStatus` and will raise timeout errors normally
+  - Ensures slave devices can refresh status even when master device is controlling playback
+
 ## [1.0.45] - 2025-12-15
 
 ### Fixed
@@ -22,36 +53,6 @@
 - Release version 1.0.44
 
 All notable changes to unified WiiM Audio integration will be documented in this file.
-
-## [Unreleased]
-
-### Fixed
-
-- **Preset Names in Media Browser**: Fixed preset names not displaying in media browser (showing "Preset 1", "Preset 2" instead of actual names)
-
-  - Updated to use pywiim 2.1.54 API: `player.presets` with `number` and `name` keys (was incorrectly using `preset_number`/`index`)
-  - Added checks for `player.supports_presets` and `player.presets_full_data` to ensure names are available (WiiM devices only, not LinkPlay)
-  - Preset names now display correctly when available from device (e.g., "BBC Radio 1", "Radio Paradise")
-  - Falls back to generic "Preset N" names when preset data is not available
-
-- **SSDP Discovery**: Fixed non-WiiM devices (Sonos, Bose, Denon) appearing in discovery by removing overly broad service-type filters and relying on HTTP validation (following python-linkplay pattern)
-
-### Added
-
-- **Firmware Updates**: Added `update` entity to expose firmware update availability (`VersionUpdate`/`NewVer`) and allow reboot-to-apply when an update is ready
-
-### Changed
-
-- **Dependency Update**: Updated `pywiim` library to 2.1.54 (docs-only release, no functional changes)
-- **Thin Wrapper Cleanup**: Removed integration-side fallbacks/workarounds and rely on `pywiim` as the source of truth
-
-  - Source selection now uses `player.available_sources` only (no `input_list` fallback or lowercasing guesses)
-  - Audio output selection uses `player.audio.select_output()`
-  - Removed `set_repeat()` AttributeError fallback (pywiim owns API surface/versioning)
-
-- **Service Registration**: Migrated to Home Assistant 2025 EntityServiceDescription pattern
-  - Services are registered under the integration domain (e.g., `wiim.set_sleep_timer`) and target `media_player` entities via `entity_id`
-  - This migration re-enables services that were temporarily disabled in v1.0.43
 
 ## [1.0.43] - 2025-12-13
 

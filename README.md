@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
 [![Home Assistant](https://img.shields.io/badge/home%20assistant-2024.12.0+-blue.svg)](https://www.home-assistant.io/)
 [![Maintenance](https://img.shields.io/maintenance/yes/2025.svg)](https://github.com/mjcumming/wiim)
-[![Quality Scale](https://img.shields.io/badge/quality%20scale-silver-brightgreen.svg)](https://www.home-assistant.io/docs/quality_scale/)
+[![Quality Scale](https://img.shields.io/badge/quality%20scale-gold-brightgreen.svg)](https://www.home-assistant.io/docs/quality_scale/)
 [![Project Status](https://img.shields.io/badge/project%20status-active-success.svg)](https://github.com/mjcumming/wiim)
 [![CI](https://img.shields.io/github/actions/workflow/status/mjcumming/wiim/tests.yaml?branch=main&label=CI)](https://github.com/mjcumming/wiim/actions/workflows/tests.yaml)
 [![codecov](https://codecov.io/gh/mjcumming/wiim/branch/main/graph/badge.svg)](https://codecov.io/gh/mjcumming/wiim)

@@ -187,7 +187,7 @@ class TestWiiMConfigFlow:
     async def test_discovery_step(self, config_flow, hass):
         """Test discovery step."""
 
-        from homeassistant.components.ssdp import SsdpServiceInfo
+        from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 
         discovery_info = SsdpServiceInfo(
             ssdp_location="http://192.168.1.100:49152/description.xml",
@@ -226,7 +226,7 @@ class TestWiiMConfigFlow:
     @pytest.mark.asyncio
     async def test_discovery_step_handles_duplicate(self, config_flow, hass):
         """Test discovery step handles duplicate entries."""
-        from homeassistant.components.ssdp import SsdpServiceInfo
+        from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 
         discovery_info = SsdpServiceInfo(
             ssdp_location="http://192.168.1.100:49152/description.xml",
@@ -269,7 +269,7 @@ class TestWiiMConfigFlow:
         """Test zeroconf discovery step."""
         from ipaddress import IPv4Address
 
-        from homeassistant.components.zeroconf import ZeroconfServiceInfo
+        from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
         zeroconf_info = ZeroconfServiceInfo(
             ip_address=IPv4Address("192.168.1.100"),
@@ -457,3 +457,164 @@ class TestWiiMConfigFlow:
             call_kwargs = config_flow.async_create_entry.call_args[1]
             assert "ssdp_info" in call_kwargs["data"]
             assert call_kwargs["data"]["ssdp_info"] == {"location": "http://192.168.1.100/description.xml"}
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_step_shows_form(self, config_flow, hass):
+        """Test reconfigure step shows form with current IP."""
+        # Create mock reconfigure entry
+        reconfigure_entry = MagicMock(spec=ConfigEntry)
+        reconfigure_entry.unique_id = "test-uuid"
+        reconfigure_entry.title = "Test WiiM Device"
+        reconfigure_entry.data = {CONF_HOST: "192.168.1.100"}
+
+        # Mock _get_reconfigure_entry
+        config_flow._get_reconfigure_entry = MagicMock(return_value=reconfigure_entry)
+
+        result = await config_flow.async_step_reconfigure(None)
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+        assert "data_schema" in result
+        assert "description_placeholders" in result
+        assert result["description_placeholders"]["name"] == "Test WiiM Device"
+        assert result["description_placeholders"]["current_ip"] == "192.168.1.100"
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_step_success(self, config_flow, hass):
+        """Test successful reconfiguration with new IP."""
+        # Create mock reconfigure entry
+        reconfigure_entry = MagicMock(spec=ConfigEntry)
+        reconfigure_entry.unique_id = "test-uuid"
+        reconfigure_entry.title = "Test WiiM Device"
+        reconfigure_entry.data = {CONF_HOST: "192.168.1.100"}
+
+        # Mock _get_reconfigure_entry
+        config_flow._get_reconfigure_entry = MagicMock(return_value=reconfigure_entry)
+
+        # Mock validate_device to return device with matching UUID
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            from pywiim.models import DeviceInfo
+
+            mock_device = DeviceInfo(
+                ip="192.168.1.200",
+                uuid="test-uuid",
+                name="Test WiiM",
+            )
+            mock_validate.return_value = mock_device
+
+            # Mock async_set_unique_id and async_update_reload_and_abort
+            config_flow.async_set_unique_id = AsyncMock()
+            config_flow.async_update_reload_and_abort = MagicMock(
+                return_value={
+                    "type": FlowResultType.ABORT,
+                    "reason": "reconfigure_successful",
+                }
+            )
+
+            user_input = {CONF_HOST: "192.168.1.200"}
+            await config_flow.async_step_reconfigure(user_input)
+
+            # Should call async_update_reload_and_abort with new IP
+            config_flow.async_update_reload_and_abort.assert_called_once()
+            call_args = config_flow.async_update_reload_and_abort.call_args
+            assert call_args[0][0] == reconfigure_entry
+            assert call_args[1]["data_updates"] == {CONF_HOST: "192.168.1.200"}
+            assert call_args[1]["reason"] == "reconfigure_successful"
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_step_connection_error(self, config_flow, hass):
+        """Test reconfigure step handles connection errors."""
+        # Create mock reconfigure entry
+        reconfigure_entry = MagicMock(spec=ConfigEntry)
+        reconfigure_entry.unique_id = "test-uuid"
+        reconfigure_entry.title = "Test WiiM Device"
+        reconfigure_entry.data = {CONF_HOST: "192.168.1.100"}
+
+        # Mock _get_reconfigure_entry
+        config_flow._get_reconfigure_entry = MagicMock(return_value=reconfigure_entry)
+
+        # Mock validate_device to raise exception
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            mock_validate.side_effect = Exception("Connection failed")
+
+            user_input = {CONF_HOST: "192.168.1.200"}
+            result = await config_flow.async_step_reconfigure(user_input)
+
+            assert result["type"] == FlowResultType.FORM
+            assert result["step_id"] == "reconfigure"
+            assert "errors" in result
+            assert result["errors"]["base"] == "cannot_connect"
+            assert result  # Suppress unused variable warning
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_step_uuid_mismatch(self, config_flow, hass):
+        """Test reconfigure step detects UUID mismatch."""
+        # Create mock reconfigure entry
+        reconfigure_entry = MagicMock(spec=ConfigEntry)
+        reconfigure_entry.unique_id = "test-uuid"
+        reconfigure_entry.title = "Test WiiM Device"
+        reconfigure_entry.data = {CONF_HOST: "192.168.1.100"}
+
+        # Mock _get_reconfigure_entry
+        config_flow._get_reconfigure_entry = MagicMock(return_value=reconfigure_entry)
+
+        # Mock validate_device to return device with different UUID
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            from pywiim.models import DeviceInfo
+
+            mock_device = DeviceInfo(
+                ip="192.168.1.200",
+                uuid="different-uuid",
+                name="Different Device",
+            )
+            mock_validate.return_value = mock_device
+
+            # Mock async_set_unique_id
+            config_flow.async_set_unique_id = AsyncMock()
+
+            user_input = {CONF_HOST: "192.168.1.200"}
+            result = await config_flow.async_step_reconfigure(user_input)
+
+            assert result["type"] == FlowResultType.FORM
+            assert result["step_id"] == "reconfigure"
+            assert "errors" in result
+            assert result["errors"]["base"] == "uuid_mismatch"
+            assert result  # Suppress unused variable warning
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_step_no_unique_id(self, config_flow, hass):
+        """Test reconfigure step handles entry without unique_id."""
+        # Create mock reconfigure entry without unique_id
+        reconfigure_entry = MagicMock(spec=ConfigEntry)
+        reconfigure_entry.unique_id = None
+        reconfigure_entry.title = "Test WiiM Device"
+        reconfigure_entry.data = {CONF_HOST: "192.168.1.100"}
+
+        # Mock _get_reconfigure_entry
+        config_flow._get_reconfigure_entry = MagicMock(return_value=reconfigure_entry)
+
+        # Mock validate_device to return device
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            from pywiim.models import DeviceInfo
+
+            mock_device = DeviceInfo(
+                ip="192.168.1.200",
+                uuid="test-uuid",
+                name="Test WiiM",
+            )
+            mock_validate.return_value = mock_device
+
+            # Mock async_set_unique_id and async_update_reload_and_abort
+            config_flow.async_set_unique_id = AsyncMock()
+            config_flow.async_update_reload_and_abort = MagicMock(
+                return_value={
+                    "type": FlowResultType.ABORT,
+                    "reason": "reconfigure_successful",
+                }
+            )
+
+            user_input = {CONF_HOST: "192.168.1.200"}
+            await config_flow.async_step_reconfigure(user_input)
+
+            # Should succeed even without unique_id (UUID check is skipped)
+            config_flow.async_update_reload_and_abort.assert_called_once()

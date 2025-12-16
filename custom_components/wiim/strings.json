@@ -31,6 +31,13 @@
         "data": {
           "host": "Device IP Address"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure {name}",
+        "description": "Update the IP address for this WiiM device.\n\nCurrent IP: **{current_ip}**\n\nYou can find the new IP address in:\n• Your router's admin panel\n• WiiM Home app → Device Settings → Network Info\n• Network scanner apps",
+        "data": {
+          "host": "Device IP Address"
+        }
       }
     },
     "error": {
@@ -43,7 +50,8 @@
     "abort": {
       "already_configured": "This WiiM device is already configured",
       "cannot_connect": "Cannot connect to device",
-      "no_host": "No device found"
+      "no_host": "No device found",
+      "reconfigure_successful": "Reconfiguration successful"
     }
   },
   "options": {

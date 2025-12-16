@@ -14,11 +14,11 @@ from urllib.parse import urlparse
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components import onboarding
-from homeassistant.components.ssdp import SsdpServiceInfo
-from homeassistant.components.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
+from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pywiim.discovery import DiscoveredDevice, discover_devices, validate_device
 
 from .const import (
@@ -412,6 +412,63 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         except Exception as err:
             _LOGGER.debug("Failed to discover slaves for %s: %s", host, err)
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle reconfiguration initiated by the user."""
+        reconfigure_entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+
+            # Validate device at new IP address
+            discovered_device = DiscoveredDevice(ip=host)
+            try:
+                validated_device = await validate_device(discovered_device)
+            except Exception as err:
+                _LOGGER.debug("Device validation failed for %s: %s", host, err)
+                errors["base"] = "cannot_connect"
+            else:
+                # Verify it's the same device (same UUID)
+                device_uuid = validated_device.uuid or host
+                await self.async_set_unique_id(device_uuid)
+
+                # Check if UUID matches the existing entry
+                if reconfigure_entry.unique_id and device_uuid != reconfigure_entry.unique_id:
+                    errors["base"] = "uuid_mismatch"
+                    _LOGGER.warning(
+                        "UUID mismatch during reconfiguration: expected %s, got %s",
+                        reconfigure_entry.unique_id,
+                        device_uuid,
+                    )
+                else:
+                    # Update entry with new IP and reload
+                    return self.async_update_reload_and_abort(
+                        reconfigure_entry,
+                        data_updates={CONF_HOST: host},
+                        reason="reconfigure_successful",
+                    )
+
+        # Show form with current IP pre-filled
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_HOST,
+                    default=reconfigure_entry.data.get(CONF_HOST),
+                    description="IP address of your WiiM device",
+                ): str
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "name": reconfigure_entry.title,
+                "current_ip": reconfigure_entry.data.get(CONF_HOST, "Unknown"),
+            },
+        )
 
 
 class WiiMOptionsFlow(config_entries.OptionsFlow):
