@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.47] - 2025-12-17
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.57
+
+  **Source selection not working for Line In (2.1.57)**:
+
+  - Fixed GitHub issue #153 where selecting "Line In" via Home Assistant silently did nothing
+  - API normalization now correctly uses hyphens (`line-in`) instead of underscores (`line_in`) for the WiiM `switchmode` command
+  - Fixed all physical input sources: "Line In" → `line-in`, "Line In 2" → `line-in-2`, "Wi-Fi" → `wifi`, etc.
+  - Fixed "CoaxIal" capitalization - now displays as "Coaxial" in source list
+  - All source name variants (spaces, underscores, hyphens) now correctly normalize to the API-expected format
+
 ## [1.0.46] - 2025-12-16
 
 ### Changed

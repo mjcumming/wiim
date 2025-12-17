@@ -296,9 +296,19 @@ class AutomatedTestSuite:
 
             return {"passed": True}
         else:
-            # Source might take longer for streaming services
-            self.print_warning(f"Source may not have changed yet: {new_source} (expected: {target_source})")
-            return {"passed": True, "details": {"note": f"State shows {new_source}, may need more time"}}
+            # For hardware inputs (Line In, Optical, etc.), source should change immediately
+            # Streaming services might take longer, but hardware inputs should work instantly
+            is_hardware_input = any(hw.lower() in target_source.lower() for hw in ["Line In", "Optical", "HDMI", "Coax", "Bluetooth"])
+
+            if is_hardware_input:
+                # Hardware inputs should change immediately - this is a failure
+                self.print_failure(f"Source selection FAILED: Expected '{target_source}' but got '{new_source}'")
+                self.print_warning("Hardware input selection should work immediately - check API format (line-in vs line_in)")
+                return {"passed": False, "details": {"error": f"Source did not change: expected '{target_source}', got '{new_source}'"}}
+            else:
+                # Streaming services might take longer
+                self.print_warning(f"Source may not have changed yet: {new_source} (expected: {target_source})")
+                return {"passed": True, "details": {"note": f"State shows {new_source}, may need more time for streaming service"}}
 
     def test_multiroom_basic(self) -> dict[str, Any]:
         """Test basic multiroom functionality."""

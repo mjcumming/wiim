@@ -6,15 +6,41 @@
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+1. **Start Home Assistant** (if not already running):
+
+   ```bash
+   # Activate venv and start HA
+   source /home/vscode/.local/ha-venv/bin/activate
+   cd /workspaces/core
+   hass -c /workspaces/core/config --open-ui
+
+   # Or run in background:
+   cd /workspaces/core && source /home/vscode/.local/ha-venv/bin/activate && \
+   nohup hass -c /workspaces/core/config > /tmp/ha_startup.log 2>&1 &
+
+   # Wait for HA to be ready (check returns 200 or 401):
+   curl -s -o /dev/null -w "%{http_code}" http://localhost:8123/api/
+   ```
+
+2. **Ensure test config exists**: `scripts/test.config` with `HA_URL` and `HA_TOKEN`
+
+### Running Tests
+
 ```bash
-# Load saved token (once per session)
-source scripts/load-test-env.sh
+# Activate venv (required for test scripts)
+source /home/vscode/.local/ha-venv/bin/activate
 
 # Run smoke tests (fast validation)
+cd /workspaces/wiim
 python scripts/test-smoke.py --config scripts/test.config
 
-# Run full automated suite
+# Run full automated suite (includes source selection)
 python scripts/test-automated.py --config scripts/test.config --mode full
+
+# Run critical tests only (faster, excludes source selection)
+python scripts/test-automated.py --config scripts/test.config --mode critical
 ```
 
 ---
@@ -104,21 +130,34 @@ Contains:
 
 ## 🔧 Running Tests
 
+**IMPORTANT: Always activate the venv before running tests:**
+
+```bash
+source /home/vscode/.local/ha-venv/bin/activate
+cd /workspaces/wiim
+```
+
 ### Smoke Tests (Fast)
 
 ```bash
+source /home/vscode/.local/ha-venv/bin/activate
+cd /workspaces/wiim
 python scripts/test-smoke.py --config scripts/test.config
 ```
 
 ### Full Automated Suite
 
 ```bash
+source /home/vscode/.local/ha-venv/bin/activate
+cd /workspaces/wiim
 python scripts/test-automated.py --config scripts/test.config --mode full
 ```
 
 ### Critical Path Only
 
 ```bash
+source /home/vscode/.local/ha-venv/bin/activate
+cd /workspaces/wiim
 python scripts/test-automated.py --config scripts/test.config --mode critical
 ```
 
@@ -151,7 +190,15 @@ python scripts/test-device-lifecycle.py --config scripts/test.config --device-ip
 ## 📊 Pre-Release Checklist
 
 ```bash
-# Run all validation
+# 1. Start Home Assistant (if not running)
+source /home/vscode/.local/ha-venv/bin/activate
+cd /workspaces/core
+hass -c /workspaces/core/config --open-ui
+# Wait for HA to be ready (check: curl http://localhost:8123/api/)
+
+# 2. Run all validation
+cd /workspaces/wiim
+source /home/vscode/.local/ha-venv/bin/activate
 make pre-release
 
 # Or manually:

@@ -196,6 +196,50 @@ When working with pywiim integration patterns or API usage:
 
 **Golden Rule: If you write code, you MUST write tests. No exceptions.**
 
+### Real-World Testing for pywiim Updates
+
+**CRITICAL: When pywiim library is updated, real-world tests must be run for affected functionality.**
+
+**Why:**
+
+- pywiim has its own unit tests, but real-world integration testing catches issues that unit tests miss
+- API format bugs (like `line_in` vs `line-in`) can silently fail - device accepts command but doesn't work
+- End-to-end testing verifies the full integration path works correctly
+
+**When to run real-world tests:**
+
+1. **ALWAYS** when pywiim version is updated in `manifest.json` or `requirements.txt`
+2. **ALWAYS** when CHANGELOG mentions pywiim bug fixes or new features
+3. **ALWAYS** for functionality that affects user-visible behavior (source selection, playback, volume, etc.)
+4. **ALWAYS** for API format changes or normalization fixes
+
+**What to test:**
+
+- Review pywiim CHANGELOG to identify what changed
+- Run `scripts/test-automated.py` with FULL_TESTS (or at minimum, test affected areas)
+- Source selection is included in FULL_TESTS - **must be tested** when pywiim source handling changes
+- Test the specific functionality mentioned in the pywiim update
+
+**Real-World Test Suite:**
+
+- Located in `scripts/test-automated.py`
+- `CRITICAL_TESTS`: Fast tests run before every release (device discovery, playback, volume, state sync)
+- `FULL_TESTS`: Comprehensive tests including source selection, multiroom, EQ, etc.
+- Source selection is in FULL_TESTS (not critical path) - run when pywiim source handling changes
+
+**Practice:**
+
+- Don't duplicate pywiim's unit tests (they test pywiim library)
+- DO run real-world integration tests when pywiim updates affect functionality
+- Document in CHANGELOG which areas were tested for each pywiim update
+- If a pywiim bug fix addresses a specific issue, test that specific functionality
+
+**Example:**
+
+- pywiim 2.1.57 fixes source selection (`line-in` format) → Run `test-automated.py` with source_selection test
+- pywiim 2.1.56 fixes playlist clearing → Run queue_management test
+- pywiim adds new EQ feature → Run eq_control test
+
 ## Code Quality
 
 - Type hints required
@@ -354,18 +398,31 @@ The release workflow is designed to identify and solve issues **locally**, not p
 
 ### ⚠️ CRITICAL: Starting Home Assistant
 
-**ALWAYS use this command to start Home Assistant:**
+**ALWAYS activate the venv first, then start Home Assistant:**
 
 ```bash
+# 1. Activate the Home Assistant virtual environment
+source /home/vscode/.local/ha-venv/bin/activate
+
+# 2. Start Home Assistant
+cd /workspaces/core
 hass -c /workspaces/core/config --open-ui
+```
+
+**Or as a one-liner (for background execution):**
+
+```bash
+cd /workspaces/core && source /home/vscode/.local/ha-venv/bin/activate && nohup hass -c /workspaces/core/config > /tmp/ha_startup.log 2>&1 &
 ```
 
 **Why this is critical:**
 
+- The venv at `/home/vscode/.local/ha-venv` contains all required dependencies with correct versions
+- Without venv activation, HA may fail with dependency errors (e.g., `aiodns`/`pycares` Python 3.13 compatibility issues)
 - The config directory `/workspaces/core/config` contains symlinks to the wiim integration
 - Symlink: `/workspaces/core/config/custom_components/wiim` → `/workspaces/wiim/custom_components/wiim`
 - **DO NOT use `~/.homeassistant`** - that config doesn't have the symlinks
-- **DO NOT use `python3 -m homeassistant`** - use the `hass` command
+- **DO NOT use `python3 -m homeassistant`** - use the `hass` command with venv activated
 - **DO NOT run from `~`** - the environment and symlinks are set up in the workspace
 
 **Optional but recommended:**
@@ -379,14 +436,68 @@ make pre-run
 **Other useful commands:**
 
 - Web interface: `http://localhost:8123`
-- Stop HA: `pkill hass`
-- Check if running: `ps aux | grep hass`
+- Stop HA: `pkill -f "hass.*config"`
+- Check if running: `ps aux | grep -E "[h]ass.*config"`
+- Check if HA is ready: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8123/api/` (should return 200 or 401)
+- View startup logs: `tail -f /tmp/ha_startup.log`
 
 **To view terminal output when running in background:**
 
 - Output is written to: `/home/vscode/.cursor/projects/workspaces-core/terminals/[SHELL_ID].txt`
 - View with: `tail -f /home/vscode/.cursor/projects/workspaces-core/terminals/[SHELL_ID].txt`
 - Or run HA directly in a terminal (not background) to see output in real-time
+
+### Running Real-World Tests
+
+**When to run real-world tests:**
+
+- When pywiim library is updated (check CHANGELOG for changes)
+- Before releases (especially after pywiim updates)
+- When testing specific functionality that was fixed/added in pywiim
+- After making changes that affect device communication
+
+**How to run real-world tests:**
+
+```bash
+# 1. Ensure Home Assistant is running (see above)
+#    Wait for HA to be ready: curl http://localhost:8123/api/ should return 200 or 401
+
+# 2. Activate venv and run tests
+cd /workspaces/wiim
+source /home/vscode/.local/ha-venv/bin/activate
+
+# 3. Run full test suite (includes source selection)
+python scripts/test-automated.py --config scripts/test.config --mode full
+
+# Or run critical tests only (faster, excludes source selection)
+python scripts/test-automated.py --config scripts/test.config --mode critical
+```
+
+**Test configuration:**
+
+- Test config file: `scripts/test.config` (contains HA URL and access token)
+- This file is in `.gitignore` for security (contains long-lived access token)
+- If missing, create it with:
+  ```bash
+  echo "HA_URL=http://localhost:8123" > scripts/test.config
+  echo "HA_TOKEN=your_long_lived_access_token" >> scripts/test.config
+  ```
+- Get token from: Home Assistant → Profile → Long-Lived Access Tokens
+
+**What the tests verify:**
+
+- `critical` mode: Device discovery, playback controls, volume, state sync (fast, ~2 min)
+- `full` mode: All critical tests + source selection, multiroom, EQ, presets, etc. (~5 min)
+- Source selection test: Verifies hardware inputs (Line In, Optical, etc.) change correctly
+- Tests use real devices via Home Assistant REST API
+
+**Troubleshooting:**
+
+- **HA not responding**: Check if HA is running: `ps aux | grep hass`
+- **Connection refused**: Wait longer for HA to start (can take 30-60 seconds)
+- **401 Unauthorized**: Token in `scripts/test.config` may be expired - create new token
+- **No devices found**: Ensure WiiM devices are configured in Home Assistant
+- **Source selection fails**: This is exactly what we're testing for - check if pywiim update fixed the issue
 
 **See `/development/README.md` for complete development setup instructions.**
 
