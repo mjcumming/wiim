@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.48] - 2025-12-18
+
+### Changed
+
+- **Diagnostics Overhaul**: Completely restructured device diagnostics for better debugging
+
+  - **Added available options** - Now shows all sources, EQ presets, audio outputs, and user presets
+  - **Added audio quality metadata** - Sample rate, bit depth, bit rate now visible
+  - **Added firmware update status** - Shows if update available, latest version
+  - **Added all capability flags** - Now includes all 13 capability flags (was missing 4)
+  - **Removed redundant sections** - Cleaned up duplicate/useless data (command_statistics, http_polling_statistics, duplicate model_data)
+  - **Cleaner structure** - Organized into focused sections: device_info, capabilities, available_options, group_info, playback_state, media_info, audio_quality, firmware_update, connection_info
+
+- **Dependency Update**: Updated `pywiim` library requirement to 2.1.57 (was incorrectly left at 2.1.56 in 1.0.47)
+
 ## [1.0.47] - 2025-12-17
 
 ### Changed
