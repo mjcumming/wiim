@@ -16,7 +16,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
-from .utils import wiim_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -114,8 +113,7 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
         Synchronizes the device's internal clock with network time,
         ensuring accurate timestamps for media metadata and logs.
         """
-        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
-        async with wiim_command(device_name, "sync time"):
-            _LOGGER.info("Synchronizing time for %s", device_name)
+        async with self.wiim_command("sync time"):
+            _LOGGER.info("Synchronizing time for %s", self.name)
             await self.coordinator.player.sync_time()
             # State updates automatically via callback - no manual refresh needed

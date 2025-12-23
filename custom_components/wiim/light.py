@@ -13,7 +13,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
-from .utils import wiim_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -92,7 +91,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
             brightness_pct,
             brightness_255,
         )
-        async with wiim_command(device_name, "turn on LED"):
+        async with self.wiim_command("turn on LED"):
             await self.coordinator.player.set_led(True)
             # Only send brightness command when different from 100 % to
             # avoid unnecessary round-trip on most devices.
@@ -108,8 +107,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:  # type: ignore[override]
         """Turn LED off."""
-        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
-        async with wiim_command(device_name, "turn off LED"):
+        async with self.wiim_command("turn off LED"):
             await self.coordinator.player.set_led(False)
 
         # Update optimistic local state
@@ -127,7 +125,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         _LOGGER.debug("Setting LED brightness for %s: %d%% (raw %d)", device_name, brightness_pct, brightness)
 
-        async with wiim_command(device_name, "set LED brightness"):
+        async with self.wiim_command("set LED brightness"):
             # Ensure LED is on when setting brightness (matches device behaviour)
             await self.coordinator.player.set_led(True)
             await self.coordinator.player.set_led_brightness(brightness_pct)

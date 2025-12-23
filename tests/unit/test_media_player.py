@@ -240,11 +240,11 @@ class TestWiiMMediaPlayerSource:
 
     def test_source_returns_current_source(self, media_player, mock_coordinator):
         """Test source property returns current source."""
-        mock_coordinator.player.source = "spotify"
-        # pywiim returns raw source keys in available_sources (e.g. "spotify", "bluetooth")
-        mock_coordinator.player.available_sources = ["spotify", "bluetooth"]
+        mock_coordinator.player.source = "Spotify"
+        # pywiim returns Title Case sources in available_sources in v2.1.58+
+        mock_coordinator.player.available_sources = ["Spotify", "Bluetooth"]
 
-        assert media_player.source == "Spotify"  # Capitalized
+        assert media_player.source == "Spotify"
 
     def test_source_returns_none_when_no_source(self, media_player, mock_coordinator):
         """Test source returns None when no source set."""
@@ -255,7 +255,7 @@ class TestWiiMMediaPlayerSource:
 
     def test_source_list_returns_available_sources(self, media_player, mock_coordinator):
         """Test source_list returns available sources."""
-        mock_coordinator.player.available_sources = ["spotify", "bluetooth", "optical"]
+        mock_coordinator.player.available_sources = ["Spotify", "Bluetooth", "Optical"]
 
         assert media_player.source_list == ["Spotify", "Bluetooth", "Optical"]
 
@@ -263,14 +263,13 @@ class TestWiiMMediaPlayerSource:
     async def test_select_source(self, media_player, mock_coordinator):
         """Test selecting a source."""
         player = mock_coordinator.player
-        player.available_sources = ["spotify", "bluetooth"]
+        player.available_sources = ["Spotify", "Bluetooth"]
         mock_coordinator.player.set_source = AsyncMock(return_value=True)
 
         await media_player.async_select_source("Spotify")
 
-        # The code maps display "Spotify" -> raw "spotify" via available_sources
-        mock_coordinator.player.set_source.assert_called_once_with("spotify")
-        # State updates automatically via callback - no manual refresh needed
+        # In v2.1.58+, integration passes Title Case directly to pywiim which handles normalization
+        mock_coordinator.player.set_source.assert_called_once_with("Spotify")
 
     @pytest.mark.asyncio
     async def test_select_source_handles_error(self, media_player, mock_coordinator):
@@ -279,7 +278,7 @@ class TestWiiMMediaPlayerSource:
         from pywiim.exceptions import WiiMError
 
         # Ensure the source is considered available so we hit set_source()
-        mock_coordinator.player.available_sources = ["spotify"]
+        mock_coordinator.player.available_sources = ["Spotify"]
         mock_coordinator.player.set_source = AsyncMock(side_effect=WiiMError("Source error"))
 
         with pytest.raises(HomeAssistantError, match="Failed to select source"):
@@ -1105,41 +1104,6 @@ class TestWiiMMediaPlayerExtraState:
 class TestWiiMMediaPlayerHelperFunctions:
     """Test helper functions."""
 
-    def test_is_connection_error_detects_connection_error(self):
-        """Test is_connection_error detects WiiMConnectionError."""
-        from pywiim.exceptions import WiiMConnectionError
-
-        from custom_components.wiim.utils import is_connection_error
-
-        assert is_connection_error(WiiMConnectionError("Connection lost")) is True
-
-    def test_is_connection_error_detects_timeout_error(self):
-        """Test is_connection_error detects WiiMTimeoutError."""
-        from pywiim.exceptions import WiiMTimeoutError
-
-        from custom_components.wiim.utils import is_connection_error
-
-        assert is_connection_error(WiiMTimeoutError("Timeout")) is True
-
-    def test_is_connection_error_detects_timeout_in_chain(self):
-        """Test is_connection_error detects TimeoutError in exception chain."""
-        from custom_components.wiim.utils import is_connection_error
-
-        err = Exception("Wrapper")
-        err.__cause__ = TimeoutError("Timeout")
-        assert is_connection_error(err) is True
-
-    def test_capitalize_source_name(self):
-        """Test capitalize_source_name handles special cases."""
-        from custom_components.wiim.utils import capitalize_source_name
-
-        assert capitalize_source_name("amazon") == "Amazon"
-        assert capitalize_source_name("usb") == "USB"
-        assert capitalize_source_name("bluetooth") == "Bluetooth"
-        assert capitalize_source_name("airplay") == "AirPlay"
-        assert capitalize_source_name("spotify") == "Spotify"
-        assert capitalize_source_name("unknown") == "Unknown"
-
     def test_media_source_filter(self):
         """Test media_source_filter filters audio content."""
         from homeassistant.components.media_player import BrowseMedia, MediaType
@@ -1165,15 +1129,15 @@ class TestWiiMMediaPlayerSourceEdgeCases:
     def test_source_uses_input_list_fallback(self, media_player, mock_coordinator):
         """Test source returns None when not in available_sources (no fallback)."""
         player = mock_coordinator.player
-        player.source = "bluetooth"  # Lowercase from device
-        player.available_sources = ["spotify"]  # Doesn't include bluetooth
+        player.source = "Bluetooth"  # Title Case from device
+        player.available_sources = ["Spotify"]  # Doesn't include Bluetooth
         assert media_player.source is None
 
     def test_source_returns_none_when_no_match(self, media_player, mock_coordinator):
         """Test source returns None when source doesn't match any available source."""
         player = mock_coordinator.player
-        player.source = "unknown_source"
-        player.available_sources = ["spotify"]
+        player.source = "Unknown Source"
+        player.available_sources = ["Spotify"]
 
         assert media_player.source is None
 

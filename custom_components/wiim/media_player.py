@@ -37,7 +37,6 @@ from .entity import WiimEntity
 from .group_media_player import WiiMGroupMediaPlayer
 from .media_player_base import WiiMMediaPlayerMixin
 from .services import register_media_player_services
-from .utils import capitalize_source_name, wiim_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -267,13 +266,13 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level 0..1."""
-        async with wiim_command(self.name, "set volume"):
+        async with self.wiim_command("set volume"):
             await self.coordinator.player.set_volume(volume)
             # State updates automatically via callback - no manual refresh needed
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute/unmute volume."""
-        async with wiim_command(self.name, "set mute"):
+        async with self.wiim_command("set mute"):
             await self.coordinator.player.set_mute(mute)
             # State updates automatically via callback - no manual refresh needed
 
@@ -281,19 +280,19 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     async def async_media_play(self) -> None:
         """Start playback."""
-        async with wiim_command(self.name, "start playback"):
+        async with self.wiim_command("start playback"):
             await self.coordinator.player.play()
             # State updates automatically via callback - no manual refresh needed
 
     async def async_media_pause(self) -> None:
         """Pause playback."""
-        async with wiim_command(self.name, "pause playback"):
+        async with self.wiim_command("pause playback"):
             await self.coordinator.player.pause()
             # State updates automatically via callback - no manual refresh needed
 
     async def async_media_play_pause(self) -> None:
         """Toggle play/pause."""
-        async with wiim_command(self.name, "toggle play/pause"):
+        async with self.wiim_command("toggle play/pause"):
             await self.coordinator.player.media_play_pause()
             # State updates automatically via callback - no manual refresh needed
 
@@ -303,19 +302,19 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         For web radio streams, uses pause instead of stop as stop doesn't work reliably
         due to device firmware behavior.
         """
-        async with wiim_command(self.name, "stop playback"):
+        async with self.wiim_command("stop playback"):
             await self._get_player().stop()
             # State updates automatically via callback - no manual refresh needed
 
     async def async_media_next_track(self) -> None:
         """Skip to next track."""
-        async with wiim_command(self.name, "skip to next track"):
+        async with self.wiim_command("skip to next track"):
             await self.coordinator.player.next_track()
             # State updates automatically via callback - no manual refresh needed
 
     async def async_media_previous_track(self) -> None:
         """Skip to previous track."""
-        async with wiim_command(self.name, "skip to previous track"):
+        async with self.wiim_command("skip to previous track"):
             await self.coordinator.player.previous_track()
             # State updates automatically via callback - no manual refresh needed
 
@@ -328,7 +327,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             self._attr_media_duration,
             bool(self._attr_supported_features & MediaPlayerEntityFeature.SEEK),
         )
-        async with wiim_command(self.name, "seek"):
+        async with self.wiim_command("seek"):
             await self.coordinator.player.seek(int(position))
             # State updates automatically via callback - no manual refresh needed
 
@@ -346,12 +345,12 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if not player or not player.source:
             return None
 
-        current_source = capitalize_source_name(str(player.source))
+        current_source = str(player.source)
 
         # Only consider sources that pywiim says are available/selectable.
         available_sources = player.available_sources
         if available_sources:
-            display_sources = [capitalize_source_name(str(s)) for s in available_sources]
+            display_sources = [str(s) for s in available_sources]
             if current_source in display_sources:
                 return current_source
             # Case-insensitive match for UI friendliness
@@ -380,7 +379,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """
         player = self._get_player()
         if player.available_sources:
-            return [capitalize_source_name(str(s)) for s in player.available_sources]
+            return [str(s) for s in player.available_sources]
         _LOGGER.warning(
             "[%s] source_list: No sources available - available_sources=%s", self.name, player.available_sources
         )
@@ -389,30 +388,22 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     async def async_select_source(self, source: str) -> None:
         """Select input source.
 
-        Maps the display name (e.g., "Amazon", "USB") back to the device's
-        expected source name using pywiim's available_sources as the source of truth.
+        Uses pywiim's set_source which handles normalization of Title Case
+        and variations back to the API format.
         """
         player = self._get_player()
         available_sources = player.available_sources
         if not available_sources:
             raise HomeAssistantError("No sources available")
 
-        display_to_raw: dict[str, str] = {capitalize_source_name(str(s)): str(s) for s in available_sources}
-        raw = display_to_raw.get(source)
-        if raw is None:
-            source_lower = source.lower()
-            for display, raw_candidate in display_to_raw.items():
-                if display.lower() == source_lower:
-                    raw = raw_candidate
-                    break
-
-        if raw is None:
-            # Do NOT guess. If the source isn't in pywiim's available_sources list,
-            # treat it as unsupported (pywiim is the source of truth).
+        # Validate against the available list (case-insensitive)
+        source_lower = source.lower()
+        if not any(str(s).lower() == source_lower for s in available_sources):
             raise HomeAssistantError(f"Source '{source}' is not available for this device")
 
-        async with wiim_command(self.name, f"select source '{source}'"):
-            await self.coordinator.player.set_source(raw)
+        async with self.wiim_command(f"select source '{source}'"):
+            await self.coordinator.player.set_source(source)
+            # State updates automatically via callback - no manual refresh needed
             # State updates automatically via callback - no manual refresh needed
 
     # ===== MEDIA =====
@@ -493,7 +484,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             # Use device's built-in notification endpoint (playPromptUrl)
             # Device automatically handles volume ducking and restoration
             _LOGGER.debug("[%s] Playing notification via device firmware: %s", self.name, media_id)
-            async with wiim_command(self.name, "play notification"):
+            async with self.wiim_command("play notification"):
                 await self.coordinator.player.play_notification(media_id)
                 # State updates automatically via callback - no manual refresh needed
             return
@@ -501,7 +492,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         # Handle preset numbers (presets don't support queue management)
         if media_type == "preset":
             preset_num = int(media_id)
-            async with wiim_command(self.name, "play preset"):
+            async with self.wiim_command("play preset"):
                 await self.coordinator.player.play_preset(preset_num)
                 # State updates automatically via callback - no manual refresh needed
             return
@@ -542,20 +533,20 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if enqueue and enqueue != MediaPlayerEnqueue.REPLACE:
             await self._ensure_upnp_ready()
             if enqueue == MediaPlayerEnqueue.ADD:
-                async with wiim_command(self.name, "add media to queue"):
+                async with self.wiim_command("add media to queue"):
                     await self.coordinator.player.add_to_queue(media_id)
                 return
             if enqueue == MediaPlayerEnqueue.NEXT:
-                async with wiim_command(self.name, "insert media into queue"):
+                async with self.wiim_command("insert media into queue"):
                     await self.coordinator.player.insert_next(media_id)
                 return
             if enqueue == MediaPlayerEnqueue.PLAY:
-                async with wiim_command(self.name, "play media immediately"):
+                async with self.wiim_command("play media immediately"):
                     await self.coordinator.player.play_url(media_id)
                     # State updates automatically via callback - no manual refresh needed
                 return
 
-        async with wiim_command(self.name, "play media"):
+        async with self.wiim_command("play media"):
             await self.coordinator.player.play_url(media_id)
             # State updates automatically via callback - no manual refresh needed
 
@@ -671,7 +662,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     async def async_clear_playlist(self) -> None:
         """Clear the current playlist and UPnP queue (if available)."""
-        async with wiim_command(self.name, "clear playlist"):
+        async with self.wiim_command("clear playlist"):
             await self.coordinator.player.clear_playlist()
             if self._get_player().supports_upnp:
                 await self.coordinator.player.clear_queue()
@@ -881,7 +872,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
             # Player is not in target group - call join_group
             # pywiim will handle leaving current group if needed
-            async with wiim_command(player.name or entity_id, "join group"):
+            async with self.wiim_command("join group"):
                 await player.join_group(master_player)
 
         join_tasks = []
@@ -941,20 +932,20 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Calls pywiim's leave_group() regardless of player role (master/slave/solo).
         PyWiim handles the complexity of what that means for each role.
         """
-        async with wiim_command(self.name, "leave group"):
+        async with self.wiim_command("leave group"):
             await self._get_player().leave_group()
 
     # ===== SHUFFLE & REPEAT =====
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Enable/disable shuffle mode - pass through to pywiim."""
-        async with wiim_command(self.name, "set shuffle"):
+        async with self.wiim_command("set shuffle"):
             await self.coordinator.player.set_shuffle(shuffle)
             # State updates automatically via callback - no manual refresh needed
 
     async def async_set_repeat(self, repeat: RepeatMode) -> None:
         """Set repeat mode - pass through to pywiim."""
-        async with wiim_command(self.name, "set repeat"):
+        async with self.wiim_command("set repeat"):
             await self.coordinator.player.set_repeat(repeat.value)
             # State updates automatically via callback - no manual refresh needed
 
@@ -983,7 +974,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
         # pywiim requires lowercase for set_eq_preset() even in 2.1.42+
         # (normalization only applies to reading eq_preset, not setting)
-        async with wiim_command(self.name, "select sound mode"):
+        async with self.wiim_command("select sound mode"):
             await self.coordinator.player.set_eq_preset(sound_mode.lower())
             # State updates automatically via callback - no manual refresh needed
 
@@ -1017,13 +1008,13 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 # Already a list
                 eq_list = custom_values
             # Set custom EQ values (10-band: 31.5Hz to 16kHz)
-            async with wiim_command(self.name, "set custom EQ"):
+            async with self.wiim_command("set custom EQ"):
                 await self.coordinator.player.set_eq_custom(eq_list)
         else:
             # Set EQ preset
             # pywiim requires lowercase for set_eq_preset() even in 2.1.42+
             # (normalization only applies to reading eq_preset, not setting)
-            async with wiim_command(self.name, "set EQ preset"):
+            async with self.wiim_command("set EQ preset"):
                 await self.coordinator.player.set_eq_preset(preset.lower())
         # State updates automatically via callback - no manual refresh needed
 
@@ -1037,7 +1028,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(
                 "Queue playback not available. The device may not support UPnP or it may not be initialized yet."
             )
-        async with wiim_command(self.name, "play queue"):
+        async with self.wiim_command("play queue"):
             await self.coordinator.player.play_queue(queue_position)
             # State updates automatically via callback - no manual refresh needed
 
@@ -1047,7 +1038,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(
                 "Queue management not available. The device may not support UPnP or it may not be initialized yet."
             )
-        async with wiim_command(self.name, "remove from queue"):
+        async with self.wiim_command("remove from queue"):
             await self.coordinator.player.remove_from_queue(queue_position)
             # State updates automatically via callback - no manual refresh needed
 
@@ -1058,7 +1049,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError(
                 "Queue browsing not available. This feature requires UPnP ContentDirectory support (WiiM Amp/Ultra + USB only)."
             )
-        async with wiim_command(self.name, "get queue"):
+        async with self.wiim_command("get queue"):
             queue = await self.coordinator.player.get_queue()
             # Return queue items in Home Assistant service response format
             return {"queue": queue}
@@ -1067,12 +1058,12 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     async def set_sleep_timer(self, sleep_time: int) -> None:
         """Set the sleep timer on the player."""
-        async with wiim_command(self.name, "set sleep timer"):
+        async with self.wiim_command("set sleep timer"):
             await self.coordinator.player.set_sleep_timer(sleep_time)
 
     async def clear_sleep_timer(self) -> None:
         """Clear the sleep timer on the player."""
-        async with wiim_command(self.name, "clear sleep timer"):
+        async with self.wiim_command("clear sleep timer"):
             await self.coordinator.player.cancel_sleep_timer()
 
     async def set_alarm(
@@ -1166,7 +1157,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         # Set the alarm using the player object
         # For daily alarms, pass empty strings for day and url parameters
         # (device firmware requires them even though they're optional in the API)
-        async with wiim_command(self.name, "set alarm"):
+        async with self.wiim_command("set alarm"):
             if trigger_value == ALARM_TRIGGER_DAILY:
                 await self.coordinator.player.set_alarm(
                     alarm_id=alarm_id,
@@ -1204,10 +1195,9 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     async def async_sync_time(self) -> None:
         """Synchronize device time with Home Assistant (pywiim v2.1.37+)."""
-        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
-        async with wiim_command(device_name, "sync time"):
+        async with self.wiim_command("sync time"):
             await self.coordinator.player.sync_time()
-            _LOGGER.info("Time sync command sent to %s", device_name)
+            _LOGGER.info("Time sync command sent to %s", self.name)
 
     # ===== UNOFFICIAL API ACTIONS =====
 
@@ -1219,11 +1209,10 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Args:
             duration: Scan duration in seconds (3-10 recommended)
         """
-        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         try:
-            async with wiim_command(device_name, "scan for Bluetooth devices"):
+            async with self.wiim_command("scan for Bluetooth devices"):
                 await self.coordinator.player.scan_for_bluetooth_devices(duration=duration)
-                _LOGGER.info("Bluetooth scan started on %s (duration: %ds)", device_name, duration)
+                _LOGGER.info("Bluetooth scan started on %s (duration: %ds)", self.name, duration)
         except AttributeError as exc:
             raise HomeAssistantError(
                 "Bluetooth scanning not available. This may require a newer version of pywiim."
@@ -1237,11 +1226,10 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Args:
             balance: Balance from -1.0 (full left) to 1.0 (full right). 0.0 is center.
         """
-        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         try:
-            async with wiim_command(device_name, "set channel balance"):
+            async with self.wiim_command("set channel balance"):
                 await self.coordinator.player.set_channel_balance(balance)
-                _LOGGER.debug("Channel balance set to %s on %s", balance, device_name)
+                _LOGGER.debug("Channel balance set to %s on %s", balance, self.name)
         except AttributeError as exc:
             raise HomeAssistantError(
                 "Channel balance control not available. This may require a newer version of pywiim."

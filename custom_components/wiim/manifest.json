@@ -9,14 +9,14 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
   "quality_scale": "silver",
-  "requirements": ["pywiim==2.1.57"],
+  "requirements": ["pywiim==2.1.58"],
   "ssdp": [
     {
       "deviceType": "urn:schemas-upnp-org:device:MediaRenderer:1",
       "st": "urn:schemas-upnp-org:device:MediaRenderer:1"
     }
   ],
-  "version": "1.0.48",
+  "version": "1.0.49",
   "zeroconf": [
     {
       "type": "_linkplay._tcp.local."

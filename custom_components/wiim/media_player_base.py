@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState, RepeatMode
 from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMError
-
-from .utils import generate_cover_art_hash
 
 if TYPE_CHECKING:
     from .coordinator import WiiMCoordinator
@@ -226,7 +225,7 @@ class WiiMMediaPlayerMixin:
         state = str(self.state or "idle")
 
         # Use state + metadata to generate hash, ensuring it changes when track/state changes
-        track_hash = generate_cover_art_hash(state, title, artist)
+        track_hash = self._generate_cover_art_hash(state, title, artist)
         # Use different URL scheme for group vs individual players
         url_prefix = (
             "wiim://group-cover-art/"
@@ -249,8 +248,6 @@ class WiiMMediaPlayerMixin:
         # If we have a URL from pywiim, hash it
         # pywiim guarantees media_image_url is always a property (may be None)
         if player.media_image_url:
-            import hashlib
-
             return hashlib.sha256(player.media_image_url.encode("utf-8")).hexdigest()[:16]
 
         # Always create hash from state and metadata (including IDLE state)
@@ -260,7 +257,37 @@ class WiiMMediaPlayerMixin:
         album = self.media_album_name or ""
         state = str(self.state or "idle")
 
-        return generate_cover_art_hash(state, title, artist, album)
+        return self._generate_cover_art_hash(state, title, artist, album)
+
+    def _generate_cover_art_hash(
+        self,
+        state: str | None,
+        title: str | None,
+        artist: str | None,
+        album: str | None = None,
+    ) -> str:
+        """Generate a hash for cover art based on state and metadata.
+
+        Args:
+            state: Current media player state
+            title: Media title
+            artist: Media artist
+            album: Media album (optional)
+
+        Returns:
+            Hex digest hash string (16 characters)
+        """
+        title = title or ""
+        artist = artist or ""
+        album = album or ""
+        state = str(state or "idle")
+
+        if album:
+            track_id = f"{state}|{title}|{artist}|{album}".encode()
+        else:
+            track_id = f"{state}|{title}|{artist}".encode()
+
+        return hashlib.sha256(track_id).hexdigest()[:16]
 
     @property
     def media_image_remotely_accessible(self) -> bool:

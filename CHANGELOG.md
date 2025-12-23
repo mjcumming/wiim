@@ -1,6 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.49] - 2025-12-23
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.58
+
+  - **USB Output support for WiiM Ultra**: Added support for external DAC (mode 6) and "USB Out" selection.
+  - **"Thin Integration" Source Overhaul**: Centralized hardware filtering, unified "Network" source, and UI-ready Title Case formatting for all sources.
+  - **WiFi Direct Multiroom Unjoin**: Fixed unjoin for legacy Linkplay devices by routing through master's `SlaveKickout`.
+  - **UPnP Robustness**: Improved handling of transient metadata changes and mode transitions to prevent device overload.
+  - **Artwork Fallback**: Fixed inconsistent artwork fallback logic in player properties.
 
 ## [1.0.48] - 2025-12-18
 

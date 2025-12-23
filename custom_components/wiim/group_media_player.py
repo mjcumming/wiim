@@ -19,13 +19,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
-from pywiim.exceptions import WiiMError
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
 from .media_player_base import WiiMMediaPlayerMixin
-from .utils import is_connection_error
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -271,7 +270,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             await player.group.set_volume_all(volume)
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
-            if is_connection_error(err):
+            if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
                 # Connection/timeout errors are transient - log at warning level
                 _LOGGER.warning(
                     "Connection issue setting group volume on %s: %s. The device may be temporarily unreachable.",
@@ -301,7 +300,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             await player.group.mute_all(mute)
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
-            if is_connection_error(err):
+            if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
                 # Connection/timeout errors are transient - log at warning level
                 _LOGGER.warning(
                     "Connection issue setting group mute on %s: %s. The device may be temporarily unreachable.",
@@ -525,9 +524,8 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         title = self.media_title or ""
         artist = self.media_artist or ""
         state = str(self.state or "idle")
-        from .utils import generate_cover_art_hash
 
-        track_hash = generate_cover_art_hash(state, title, artist)
+        track_hash = self._generate_cover_art_hash(state, title, artist)
         return f"wiim://group-cover-art/{track_hash}"
 
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:

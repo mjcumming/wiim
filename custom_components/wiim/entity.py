@@ -1,13 +1,18 @@
 """Base entity class for WiiM integration - minimal HA glue only."""
 
-from __future__ import annotations
+import logging
+from contextlib import asynccontextmanager
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class WiimEntity(CoordinatorEntity):
@@ -64,3 +69,26 @@ class WiimEntity(CoordinatorEntity):
     def available(self) -> bool:
         """Return if entity is available."""
         return self.coordinator.last_update_success
+
+    @asynccontextmanager
+    async def wiim_command(self, operation: str):
+        """Context manager for consistent WiiM command error handling.
+
+        Classifies errors into transient (connection/timeout) vs persistent
+        failures for better log hygiene.
+        """
+        try:
+            yield
+        except WiiMError as err:
+            # Classification of errors is now minimal - pywiim is expected to
+            # provide correct exception types.
+            if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
+                _LOGGER.warning(
+                    "[%s] %s failed (connection issue): %s", self.name, operation, err
+                )
+                raise HomeAssistantError(
+                    f"{operation} on {self.name}: device unreachable"
+                ) from err
+
+            _LOGGER.error("[%s] %s failed: %s", self.name, operation, err, exc_info=True)
+            raise HomeAssistantError(f"Failed to {operation}: {err}") from err

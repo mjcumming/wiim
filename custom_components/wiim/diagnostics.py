@@ -12,7 +12,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from .data import get_all_coordinators, get_coordinator_from_entry
-from .utils import capitalize_source_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,7 +174,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             # Sources/Inputs
             "available_sources_raw": list(available_sources) if available_sources else None,
             "available_sources_display": (
-                [capitalize_source_name(str(s)) for s in available_sources] if available_sources else None
+                [str(s) for s in available_sources] if available_sources else None
             ),
             "input_list_from_device": input_list,
             # EQ

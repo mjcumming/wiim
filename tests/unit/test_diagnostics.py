@@ -82,14 +82,14 @@ def mock_player():
     player.audio_quality = "CD Quality"
 
     # Available options
-    player.available_sources = ["spotify", "line-in", "optical"]
-    player.eq_presets = ["flat", "rock", "jazz", "pop"]
-    player.eq_preset = "flat"
-    player.available_outputs = ["speaker", "bluetooth"]
-    player.audio_output = "speaker"
+    player.available_sources = ["Spotify", "Line In", "Optical In"]
+    player.eq_presets = ["Flat", "Rock", "Jazz", "Pop"]
+    player.eq_preset = "Flat"
+    player.available_outputs = ["Speaker", "Bluetooth"]
+    player.audio_output = "Speaker"
     player.presets = None
     player.presets_full_data = None
-    player.input_list = ["line-in", "optical"]
+    player.input_list = ["Line In", "Optical In"]
 
     # Capabilities
     player.supports_eq = True
@@ -358,9 +358,9 @@ class TestDeviceDiagnosticsContent:
         assert "current_eq_preset" in available_options
 
         # Check actual values
-        assert available_options["available_sources_raw"] == ["spotify", "line-in", "optical"]
-        assert available_options["eq_presets"] == ["flat", "rock", "jazz", "pop"]
-        assert available_options["current_eq_preset"] == "flat"
+        assert available_options["available_sources_raw"] == ["Spotify", "Line In", "Optical In"]
+        assert available_options["eq_presets"] == ["Flat", "Rock", "Jazz", "Pop"]
+        assert available_options["current_eq_preset"] == "Flat"
 
     @pytest.mark.asyncio
     async def test_device_diagnostics_capabilities(self, hass, mock_config_entry, mock_device_entry, mock_coordinator):
@@ -500,7 +500,9 @@ class TestDeviceDiagnosticsGroupInfo:
     """Test group info in device diagnostics."""
 
     @pytest.mark.asyncio
-    async def test_device_diagnostics_slave_with_master(self, hass, mock_config_entry, mock_device_entry, mock_coordinator):
+    async def test_device_diagnostics_slave_with_master(
+        self, hass, mock_config_entry, mock_device_entry, mock_coordinator
+    ):
         """Test that slave device shows master name in group info."""
         from custom_components.wiim.const import DOMAIN
 
@@ -597,9 +599,7 @@ class TestDeviceDiagnosticsErrorHandling:
         bad_coordinator = MagicMock()
         bad_coordinator.player = None  # This will cause AttributeError
 
-        hass.data = {
-            DOMAIN: {mock_config_entry.entry_id: {"coordinator": bad_coordinator, "entry": mock_config_entry}}
-        }
+        hass.data = {DOMAIN: {mock_config_entry.entry_id: {"coordinator": bad_coordinator, "entry": mock_config_entry}}}
 
         result = await async_get_device_diagnostics(hass, mock_config_entry, mock_device_entry)
 
