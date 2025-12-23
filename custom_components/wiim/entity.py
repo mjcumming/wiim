@@ -83,12 +83,8 @@ class WiimEntity(CoordinatorEntity):
             # Classification of errors is now minimal - pywiim is expected to
             # provide correct exception types.
             if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
-                _LOGGER.warning(
-                    "[%s] %s failed (connection issue): %s", self.name, operation, err
-                )
-                raise HomeAssistantError(
-                    f"{operation} on {self.name}: device unreachable"
-                ) from err
+                _LOGGER.warning("[%s] %s failed (connection issue): %s", self.name, operation, err)
+                raise HomeAssistantError(f"{operation} on {self.name}: device unreachable") from err
 
             _LOGGER.error("[%s] %s failed: %s", self.name, operation, err, exc_info=True)
             raise HomeAssistantError(f"Failed to {operation}: {err}") from err

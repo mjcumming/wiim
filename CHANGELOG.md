@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.50] - 2025-12-23
+
+### Changed
+
+- **Quality Scale**: Upgraded integration quality scale to **Gold** based on comprehensive test coverage, diagnostics support, and adherence to Home Assistant development patterns.
+- **Version Bump**: Released version 1.0.50.
+
 ## [1.0.49] - 2025-12-23
 
 ### Changed

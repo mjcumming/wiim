@@ -8,7 +8,7 @@
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
-  "quality_scale": "silver",
+  "quality_scale": "gold",
   "requirements": ["pywiim==2.1.58"],
   "ssdp": [
     {
@@ -16,7 +16,7 @@
       "st": "urn:schemas-upnp-org:device:MediaRenderer:1"
     }
   ],
-  "version": "1.0.49",
+  "version": "1.0.50",
   "zeroconf": [
     {
       "type": "_linkplay._tcp.local."

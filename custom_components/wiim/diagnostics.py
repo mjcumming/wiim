@@ -173,9 +173,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         available_options = {
             # Sources/Inputs
             "available_sources_raw": list(available_sources) if available_sources else None,
-            "available_sources_display": (
-                [str(s) for s in available_sources] if available_sources else None
-            ),
+            "available_sources_display": ([str(s) for s in available_sources] if available_sources else None),
             "input_list_from_device": input_list,
             # EQ
             "eq_presets": list(eq_presets) if eq_presets else None,
