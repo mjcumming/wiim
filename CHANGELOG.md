@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.0.51] - 2025-12-28
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.60 (includes 2.1.59 changes)
+
+  **pywiim 2.1.60:**
+
+  - **EQ "Off" Sound Mode Option** (Issue #165): Added ability to disable EQ entirely via sound mode selection.
+    - `sound_mode` now shows `"Off"` when EQ is disabled (bypassed)
+    - `sound_mode_list` includes `"Off"` as the first option
+    - Selecting `"Off"` disables EQ entirely; selecting any preset re-enables EQ
+  - **UUID-Based Slave Matching for WiFi Direct Multiroom** (Issue #164): Added support for older LinkPlay devices (e.g., Xoro HCN_BWD03) that use WiFi Direct multiroom.
+    - Added `slave_uuids` field to `DeviceGroupInfo` for UUID-based slave identification
+    - Group operations now use UUID fallback when IP-based player matching fails
+    - Enables linking slaves that use internal 10.10.10.x IPs (WiFi Direct)
+
+  **pywiim 2.1.59:**
+
+  - **Source Selection Resilience** (Issue #161): Fixed physical source selection failure caused by "In" suffix mismatch.
+    - Smart normalization: `set_source()` uses alphanumeric matching against device's reported `InputList`
+    - Explicit mappings for common variations: "Optical In" → `optical`, "Coaxial In" → `coaxial`, etc.
+    - Reverted "In" suffix for Coaxial, HDMI, Phono, and USB display names for UI stability
+
+- **WiFi Direct Multiroom Fix** (Issue #164): Updated player finder to support UUID-based lookup as fallback for WiFi Direct multiroom groups where slaves may be identified by UUID instead of IP address.
+
 ## [1.0.50] - 2025-12-23
 
 ### Changed

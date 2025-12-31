@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pywiim import Player, PollingStrategy, WiiMClient
 from pywiim.exceptions import WiiMError
 
-from .data import find_coordinator_by_ip
+from .data import find_coordinator_by_ip, find_coordinator_by_uuid
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,25 +62,38 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         client = WiiMClient(**client_kwargs)
 
         # Wrap client in Player (recommended for HA - pywiim manages all state)
-        # Provide player_finder for automatic group linking
+        # Provide player_finder for automatic group linking (supports IP and UUID)
         self.player = Player(
             client,
             on_state_changed=self._on_player_state_changed,
-            player_finder=self._find_player_by_host,
+            player_finder=self._find_player,
         )
 
         # Use pywiim's PollingStrategy to determine when to poll
         self._polling_strategy = PollingStrategy(self._capabilities) if self._capabilities else PollingStrategy({})
 
-    def _find_player_by_host(self, host: str):
-        """Find Player object by host for automatic group linking.
+    def _find_player(self, identifier: str):
+        """Find Player object by IP or UUID for automatic group linking.
 
         This callback allows pywiim to automatically link Player objects when
         groups are detected, enabling group.all_players to be populated.
+
+        WiFi Direct multiroom groups may report slaves by UUID instead of IP,
+        so we try both lookup methods. (pywiim v2.1.60 provides slave_uuids)
         """
-        coordinator = find_coordinator_by_ip(self.hass, host)
+        # First try IP-based lookup (most common case)
+        coordinator = find_coordinator_by_ip(self.hass, identifier)
         if coordinator and coordinator.player:
             return coordinator.player
+
+        # Fallback: try UUID-based lookup (for WiFi Direct multiroom)
+        # Normalize UUID by removing "uuid:" prefix if present
+        normalized_uuid = identifier.replace("uuid:", "") if identifier else None
+        if normalized_uuid:
+            coordinator = find_coordinator_by_uuid(self.hass, normalized_uuid)
+            if coordinator and coordinator.player:
+                return coordinator.player
+
         return None
 
     @callback
