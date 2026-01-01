@@ -3,7 +3,7 @@
 # Only pin what's absolutely necessary to avoid conflicts
 
 # pytest-homeassistant-custom-component and its core dependencies
-pytest-homeassistant-custom-component==0.13.251
+pytest-homeassistant-custom-component==0.13.301
 pytest==8.3.5
 coverage==7.6.12
 
