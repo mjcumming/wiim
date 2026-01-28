@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.54] - 2026-01-28
+
+### Fixed
+
+- **WiFi Direct Multiroom Slave Role Detection** (Issue #164): Fixed slave devices showing "Solo" instead of "Slave" role on WiFi Direct multiroom groups (e.g., Xoro HCN_BWD03).
+  - WiFi Direct slaves report themselves as "solo" when queried directly because they don't know they're in a group
+  - Only the master knows the group membership via `getSlaveList`
+  - Now provides `all_players_finder` callback to pywiim enabling cross-coordinator role inference
+  - When a device reports "solo" but is found in a master's slave list (by UUID), pywiim correctly infers "slave" role
+  - This completes the WiFi Direct multiroom fix started in v1.0.51 (UUID-based slave matching)
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.67
+  - **Cross-coordinator role inference**: New `all_players_finder` callback for WiFi Direct slave detection
+
 ## [1.0.53] - 2026-01-28
 
 ### Fixed

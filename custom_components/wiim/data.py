@@ -21,6 +21,7 @@ __all__ = [
     "find_coordinator_by_uuid",
     "find_coordinator_by_ip",
     "get_all_coordinators",
+    "get_all_players",
 ]
 
 
@@ -64,3 +65,16 @@ def get_all_coordinators(hass: HomeAssistant) -> list[WiiMCoordinator]:
         if entry.entry_id in hass.data.get(DOMAIN, {}):
             coordinators.append(get_coordinator_from_entry(hass, entry))
     return coordinators
+
+
+def get_all_players(hass: HomeAssistant) -> list:
+    """Get all Player objects from all registered coordinators.
+
+    Used by pywiim's all_players_finder callback for cross-coordinator
+    role inference (WiFi Direct multiroom slave detection).
+    """
+    players = []
+    for coordinator in get_all_coordinators(hass):
+        if coordinator.player:
+            players.append(coordinator.player)
+    return players

@@ -11,6 +11,7 @@ from custom_components.wiim.data import (
     find_coordinator_by_ip,
     find_coordinator_by_uuid,
     get_all_coordinators,
+    get_all_players,
     get_coordinator_from_entry,
 )
 
@@ -143,3 +144,73 @@ class TestDataHelperFunctions:
             coordinators = get_all_coordinators(hass)
             # Should return empty list or handle error
             assert isinstance(coordinators, list)
+
+    def test_get_all_players(self, hass: HomeAssistant, mock_config_entry, mock_coordinator):
+        """Test get_all_players returns all Player objects."""
+        # Register coordinator
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+
+        # Mock config entries
+        with patch.object(hass.config_entries, "async_entries", return_value=[mock_config_entry]):
+            players = get_all_players(hass)
+
+            assert len(players) == 1
+            assert players[0] == mock_coordinator.player
+
+    def test_get_all_players_multiple_coordinators(self, hass: HomeAssistant):
+        """Test get_all_players returns players from multiple coordinators."""
+        # Create two mock coordinators with different players
+        mock_coordinator1 = MagicMock()
+        mock_coordinator1.player = MagicMock()
+        mock_coordinator1.player.host = "192.168.1.100"
+
+        mock_coordinator2 = MagicMock()
+        mock_coordinator2.player = MagicMock()
+        mock_coordinator2.player.host = "192.168.1.101"
+
+        mock_entry1 = MagicMock()
+        mock_entry1.entry_id = "entry1"
+        mock_entry1.data = {"host": "192.168.1.100"}
+
+        mock_entry2 = MagicMock()
+        mock_entry2.entry_id = "entry2"
+        mock_entry2.data = {"host": "192.168.1.101"}
+
+        # Register both coordinators
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["entry1"] = {"coordinator": mock_coordinator1}
+        hass.data[DOMAIN]["entry2"] = {"coordinator": mock_coordinator2}
+
+        with patch.object(hass.config_entries, "async_entries", return_value=[mock_entry1, mock_entry2]):
+            players = get_all_players(hass)
+
+            assert len(players) == 2
+            assert mock_coordinator1.player in players
+            assert mock_coordinator2.player in players
+
+    def test_get_all_players_skips_none_player(self, hass: HomeAssistant, mock_config_entry):
+        """Test get_all_players skips coordinators with None player."""
+        mock_coordinator = MagicMock()
+        mock_coordinator.player = None  # Player not yet initialized
+
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+
+        with patch.object(hass.config_entries, "async_entries", return_value=[mock_config_entry]):
+            players = get_all_players(hass)
+
+            assert len(players) == 0
+
+    def test_get_all_players_empty_domain(self, hass: HomeAssistant):
+        """Test get_all_players returns empty list when no coordinators."""
+        hass.data.setdefault(DOMAIN, {})
+
+        with patch.object(hass.config_entries, "async_entries", return_value=[]):
+            players = get_all_players(hass)
+
+            assert players == []

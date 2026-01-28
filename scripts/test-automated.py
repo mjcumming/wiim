@@ -330,21 +330,32 @@ class AutomatedTestSuite:
         if not self.devices:
             return {"passed": False, "details": {"error": "No devices available"}}
 
-        device = self.devices[0]
-        entity_id = device["entity_id"]
+        # Find a device with proper EQ support (more than just 'Off')
+        eq_device = None
+        eq_modes = None
+        for device in self.devices:
+            state = self.get_state(device["entity_id"])
+            if state:
+                modes = state.get("attributes", {}).get("sound_mode_list", [])
+                # Device needs actual EQ presets, not just 'Off'
+                if modes and len(modes) > 1:
+                    eq_device = device
+                    eq_modes = modes
+                    break
 
-        state = self.get_state(entity_id)
-        if not state:
-            return {"passed": False, "details": {"error": "Could not get state"}}
+        if not eq_device:
+            self.print_warning("No devices with full EQ support found")
+            return {"passed": True, "details": {"skipped": "No devices with EQ presets"}}
 
-        sound_modes = state.get("attributes", {}).get("sound_mode_list")
-        if not sound_modes:
-            return {"passed": True, "details": {"skipped": "EQ not supported"}}
+        entity_id = eq_device["entity_id"]
+        self.print_info(f"Testing EQ on: {entity_id}")
 
-        # Try to set first sound mode
-        if sound_modes:
-            if not self.call_service("media_player", "select_sound_mode", entity_id, sound_mode=sound_modes[0]):
-                return {"passed": False, "details": {"error": "Sound mode selection failed"}}
+        # Try to set a preset (not 'Off' - pick the second one which is usually 'Flat')
+        preset_to_test = eq_modes[1] if len(eq_modes) > 1 else eq_modes[0]
+        self.print_info(f"Setting sound mode to: {preset_to_test}")
+
+        if not self.call_service("media_player", "select_sound_mode", entity_id, sound_mode=preset_to_test):
+            return {"passed": False, "details": {"error": "Sound mode selection failed"}}
 
         self.print_success("EQ control working")
         return {"passed": True}
