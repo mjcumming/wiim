@@ -611,15 +611,15 @@ class TestDiagnosticsHelperFunctions:
     """Test diagnostics helper functions."""
 
     def test_get_pywiim_version(self):
-        """Test _get_pywiim_version function."""
+        """Test _get_pywiim_version_sync function."""
         from importlib.metadata import PackageNotFoundError
 
-        from custom_components.wiim.diagnostics import _get_pywiim_version
+        from custom_components.wiim.diagnostics import _get_pywiim_version_sync
 
         with patch("custom_components.wiim.diagnostics.metadata.version", return_value="1.0.0"):
-            version = _get_pywiim_version()
+            version = _get_pywiim_version_sync()
             assert version == "1.0.0"
 
         with patch("custom_components.wiim.diagnostics.metadata.version", side_effect=PackageNotFoundError("pywiim")):
-            version = _get_pywiim_version()
+            version = _get_pywiim_version_sync()
             assert version == "unknown"

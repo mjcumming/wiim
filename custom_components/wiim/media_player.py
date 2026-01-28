@@ -956,25 +956,34 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Return current sound mode (EQ preset) from Player."""
         if not self._is_eq_supported():
             return None
-        eq_preset = self._get_player().eq_preset
-        return str(eq_preset) if eq_preset else None
+        player = self._get_player()
+        eq_preset = player.eq_preset
+        # pywiim 2.1.43+ returns "Off" if EQ is disabled.
+        # Fallback to "Off" if eq_preset is None or empty.
+        return str(eq_preset) if eq_preset else "Off"
 
     @property
     def sound_mode_list(self) -> list[str] | None:
         """Return list of available sound modes (EQ presets) from Player."""
         if not self._is_eq_supported():
             return None
-        eq_presets = self._get_player().eq_presets
-        return [str(preset) for preset in eq_presets] if eq_presets else None
+        player = self._get_player()
+        eq_presets = player.eq_presets
+        if not eq_presets:
+            return ["Off"]
+        # Ensure "Off" is always available even if pywiim doesn't include it
+        presets = [str(preset) for preset in eq_presets]
+        if "Off" not in presets:
+            presets.insert(0, "Off")
+        return presets
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
         """Select sound mode (EQ preset) - pass through to pywiim."""
         if not self._is_eq_supported():
             raise HomeAssistantError("EQ is not supported on this device")
 
-        # pywiim requires lowercase for set_eq_preset() even in 2.1.42+
-        # (normalization only applies to reading eq_preset, not setting)
-        async with self.wiim_command("select sound mode"):
+        async with self.wiim_command(f"select sound mode '{sound_mode}'"):
+            # pywiim handles "off" (case-insensitive) by disabling EQ
             await self.coordinator.player.set_eq_preset(sound_mode.lower())
             # State updates automatically via callback - no manual refresh needed
 
@@ -996,6 +1005,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Handle set_eq service call."""
         if not self._is_eq_supported():
             raise HomeAssistantError("EQ is not supported on this device")
+
+        if preset.lower() == "off":
+            async with self.wiim_command("disable EQ"):
+                await self.coordinator.player.set_eq_preset("off")
+            return
 
         if preset.lower() == "custom":
             if not custom_values:

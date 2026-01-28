@@ -224,7 +224,7 @@ service: media_player.select_source
 target:
   entity_id: media_player.your_device
 data:
-  source: "WiFi"  # or "Line In", "Optical", etc. - any available source
+  source: "WiFi" # or "Line In", "Optical", etc. - any available source
 ```
 
 Switching sources will disconnect Bluetooth and stop playback. You can create an automation or script to do this automatically when you want to stop Bluetooth playback.

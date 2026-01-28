@@ -65,10 +65,11 @@ _LOGGER = logging.getLogger(__name__)
 CORE_PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,  # Always enabled - core functionality
     Platform.SENSOR,  # Always enabled - role sensor is essential for multiroom
-    Platform.NUMBER,  # Always enabled - group volume control for multiroom
+    Platform.NUMBER,  # Always enabled - subwoofer level control (if subwoofer connected)
     Platform.LIGHT,  # Always enabled - front-panel LED control
     Platform.SELECT,  # Always enabled - audio output mode control and Bluetooth device selection
     Platform.BUTTON,  # Always enabled - Bluetooth scan button (maintenance buttons are optional)
+    Platform.SWITCH,  # Always enabled - subwoofer enable/disable (if subwoofer connected)
 ]
 
 # Essential optional platforms based on user configuration

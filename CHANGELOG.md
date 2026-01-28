@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.0.52] - 2026-01-28
+
+### Added
+
+- **Subwoofer Control Entities** (WiiM Ultra with firmware 5.2+ only):
+  - **Subwoofer Switch**: Enable/disable subwoofer output
+  - **Subwoofer Level Number**: Adjust subwoofer level (-15 to +15 dB)
+  - Entities only appear when a subwoofer is physically connected
+  - Subwoofer status now included in device diagnostics
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.63
+
+  **pywiim 2.1.63:**
+  - **Subwoofer Control API**: Full support for WiiM Ultra subwoofer configuration
+    - `supports_subwoofer` property to check device capability
+    - `subwoofer_status` property for cached status (plugged, enabled, level, crossover, phase, delay)
+    - `get_subwoofer_status()` async method for fresh status
+    - `set_subwoofer_enabled()`, `set_subwoofer_level()`, `set_subwoofer_crossover()`, `set_subwoofer_phase()`, `set_subwoofer_delay()` control methods
+
+  **pywiim 2.1.62:**
+  - **Audio Pro Reboot Support**: Fixed reboot command for Audio Pro devices (uses MCU reboot endpoint)
+
+  **pywiim 2.1.61:**
+  - **RCA Input Fix**: Fixed "RCA In" source selection for devices with RCA inputs
+
+
 ## [1.0.51] - 2025-12-28
 
 ### Changed

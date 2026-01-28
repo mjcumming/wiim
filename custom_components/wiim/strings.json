@@ -79,6 +79,22 @@
       "integration_version": "Integration version"
     }
   },
+  "entity": {
+    "switch": {
+      "subwoofer": {
+        "name": "Subwoofer",
+        "state": {
+          "on": "Enabled",
+          "off": "Disabled"
+        }
+      }
+    },
+    "number": {
+      "subwoofer_level": {
+        "name": "Subwoofer Level"
+      }
+    }
+  },
   "services": {
     "play_url": {
       "name": "Play URL",

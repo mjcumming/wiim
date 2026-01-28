@@ -16,12 +16,17 @@ from .data import get_all_coordinators, get_coordinator_from_entry
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_pywiim_version() -> str:
-    """Get pywiim package version."""
+def _get_pywiim_version_sync() -> str:
+    """Get pywiim package version (synchronous, must be called in executor)."""
     try:
         return metadata.version("pywiim")
     except metadata.PackageNotFoundError:
         return "unknown"
+
+
+async def _get_pywiim_version(hass: HomeAssistant) -> str:
+    """Get pywiim package version asynchronously."""
+    return await hass.async_add_executor_job(_get_pywiim_version_sync)
 
 
 # Sensitive data to redact from diagnostics
@@ -73,7 +78,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
 
         player = coordinator.player
         return {
-            "pywiim_version": _get_pywiim_version(),
+            "pywiim_version": await _get_pywiim_version(hass),
             "integration_overview": {
                 "total_devices": len(all_players),
                 "available_devices": sum(1 for p in all_players if p.available),
@@ -241,6 +246,31 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         }
 
         # =================================================================
+        # SUBWOOFER STATUS (WiiM Ultra with firmware 5.2+ only)
+        # =================================================================
+        subwoofer_info: dict[str, Any] | None = None
+        try:
+            if player.supports_subwoofer:
+                # Use cached status from player (sync property)
+                status = player.subwoofer_status
+                subwoofer_info = {
+                    "supported": True,
+                    "connected": status.get("plugged", False) if status else False,
+                }
+                if status:
+                    subwoofer_info["enabled"] = status.get("status", False)
+                    subwoofer_info["level_db"] = status.get("level")
+                    subwoofer_info["crossover_hz"] = status.get("cross")
+                    subwoofer_info["phase_degrees"] = status.get("phase")
+                    subwoofer_info["sub_delay_ms"] = status.get("sub_delay")
+                    subwoofer_info["main_filter_enabled"] = status.get("main_filter")
+                    subwoofer_info["sub_filter_enabled"] = status.get("sub_filter")
+            else:
+                subwoofer_info = {"supported": False}
+        except Exception:
+            subwoofer_info = {"supported": False, "error": "Failed to check subwoofer support"}
+
+        # =================================================================
         # FIRMWARE UPDATE STATUS
         # =================================================================
         firmware_update = {
@@ -294,7 +324,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
                 raw_device_info = "Failed to serialize device_info"
 
         return {
-            "pywiim_version": _get_pywiim_version(),
+            "pywiim_version": await _get_pywiim_version(hass),
             "device_info": device_info,
             "capabilities": capabilities,
             "available_options": available_options,
@@ -302,6 +332,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "playback_state": playback_state,
             "media_info": media_info,
             "audio_quality": audio_quality,
+            "subwoofer_info": subwoofer_info,
             "firmware_update": firmware_update,
             "connection_info": connection_info,
             "coordinator_info": coordinator_info,

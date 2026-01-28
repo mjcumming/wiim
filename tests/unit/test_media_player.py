@@ -546,6 +546,29 @@ class TestWiiMMediaPlayerSoundMode:
         mock_coordinator.player.supports_eq = False
         assert media_player._is_eq_supported() is False
 
+    def test_sound_mode_returns_off_when_eq_disabled(self, media_player, mock_coordinator):
+        """Test sound_mode returns 'Off' when EQ is disabled."""
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_preset = "Off"
+        assert media_player.sound_mode == "Off"
+
+    def test_sound_mode_list_includes_off(self, media_player, mock_coordinator):
+        """Test sound_mode_list always includes 'Off'."""
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_presets = ["Flat", "Rock"]
+        assert "Off" in media_player.sound_mode_list
+        assert media_player.sound_mode_list[0] == "Off"
+
+    @pytest.mark.asyncio
+    async def test_select_sound_mode_off(self, media_player, mock_coordinator):
+        """Test selecting 'Off' sound mode."""
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.set_eq_preset = AsyncMock(return_value=True)
+
+        await media_player.async_select_sound_mode("Off")
+
+        mock_coordinator.player.set_eq_preset.assert_called_once_with("off")
+
     def test_sound_mode_returns_current_preset(self, media_player, mock_coordinator):
         """Test sound_mode returns current EQ preset."""
         mock_coordinator.player.supports_eq = True
@@ -559,23 +582,24 @@ class TestWiiMMediaPlayerSoundMode:
         assert media_player.sound_mode is None
 
     def test_sound_mode_list_returns_presets(self, media_player, mock_coordinator):
-        """Test sound_mode_list returns available EQ presets."""
+        """Test sound_mode_list returns available EQ presets plus 'Off'."""
         mock_coordinator.player.supports_eq = True
         # pywiim 2.1.43+ normalizes EQ presets to Title Case
         mock_coordinator.player.eq_presets = ["Bass", "Treble", "Flat"]
 
-        assert media_player.sound_mode_list == ["Bass", "Treble", "Flat"]
+        assert media_player.sound_mode_list == ["Off", "Bass", "Treble", "Flat"]
 
     def test_sound_mode_list_returns_none_when_not_supported(self, media_player, mock_coordinator):
         """Test sound_mode_list returns None when EQ is not supported."""
         mock_coordinator.player.supports_eq = False
         assert media_player.sound_mode_list is None
 
-    def test_sound_mode_list_returns_none_when_no_presets(self, media_player, mock_coordinator):
-        """Test sound_mode_list returns None when no presets available."""
+    def test_sound_mode_list_returns_off_when_no_presets(self, media_player, mock_coordinator):
+        """Test sound_mode_list returns ['Off'] when no presets available (pywiim 2.1.60+)."""
         mock_coordinator.player.supports_eq = True
         mock_coordinator.player.eq_presets = None
-        assert media_player.sound_mode_list is None
+        # With pywiim 2.1.60+, "Off" is always available to disable EQ
+        assert media_player.sound_mode_list == ["Off"]
 
     @pytest.mark.asyncio
     async def test_select_sound_mode(self, media_player, mock_coordinator):
@@ -1088,6 +1112,8 @@ class TestWiiMMediaPlayerExtraState:
         mock_coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
         mock_coordinator.player.role = "master"
         mock_coordinator.player.is_master = True
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_preset = "Off"
 
         attrs = media_player.extra_state_attributes
 
@@ -1099,6 +1125,7 @@ class TestWiiMMediaPlayerExtraState:
         assert attrs["is_group_coordinator"] is True
         assert attrs["music_assistant_compatible"] is True
         assert attrs["integration_purpose"] == "individual_speaker_control"
+        assert attrs["sound_mode"] == "Off"
 
 
 class TestWiiMMediaPlayerHelperFunctions:
@@ -1737,10 +1764,11 @@ class TestWiiMMediaPlayerEdgeCases:
         assert sources is not None  # Should not raise, may be empty list
 
     def test_eq_preset_handles_none(self, media_player, mock_coordinator):
-        """Test sound_mode handles None EQ preset."""
+        """Test sound_mode returns 'Off' when EQ preset is None (pywiim 2.1.60+)."""
         mock_coordinator.player.supports_eq = True
         mock_coordinator.player.eq_preset = None
-        assert media_player.sound_mode is None
+        # With pywiim 2.1.60+, None preset means EQ is disabled, shown as "Off"
+        assert media_player.sound_mode == "Off"
 
     def test_group_members_handles_none_group(self, media_player, mock_coordinator):
         """Test group_members handles None group."""
