@@ -102,7 +102,7 @@
       "fields": {
         "url": {
           "name": "URL",
-          "description": "URL of the media to play (e.g., http://stream.example.com/radio.mp3)."
+          "description": "URL of the media to play (radio streams, audio files, etc.)."
         }
       }
     },

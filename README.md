@@ -73,14 +73,14 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ### 🎛️ Audio Enhancement
 
-| Feature             | Description                                                                   |
-| ------------------- | ----------------------------------------------------------------------------- |
-| **EQ Control**      | 10-band equalizer with 24 presets (Flat, Rock, Jazz, Classical, Pop, etc.)    |
-| **Custom EQ**       | Fine-tune each of 10 frequency bands (-12dB to +12dB)                         |
-| **Subwoofer**       | Enable/disable and adjust level (-15 to +15 dB) for connected subwoofers      |
-| **Audio Output**    | Control hardware output modes (Line Out, Optical, Coax, Bluetooth, Headphone, USB) |
-| **Audio Quality**   | Real-time sensors for sample rate, bit depth, and bit rate                    |
-| **Format Support**  | Lossless (FLAC, WAV, ALAC up to 24-bit/192kHz) and compressed formats         |
+| Feature            | Description                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| **EQ Control**     | 10-band equalizer with 24 presets (Flat, Rock, Jazz, Classical, Pop, etc.)         |
+| **Custom EQ**      | Fine-tune each of 10 frequency bands (-12dB to +12dB)                              |
+| **Subwoofer**      | Enable/disable and adjust level (-15 to +15 dB) for connected subwoofers           |
+| **Audio Output**   | Control hardware output modes (Line Out, Optical, Coax, Bluetooth, Headphone, USB) |
+| **Audio Quality**  | Real-time sensors for sample rate, bit depth, and bit rate                         |
+| **Format Support** | Lossless (FLAC, WAV, ALAC up to 24-bit/192kHz) and compressed formats              |
 
 ### 🏠 Multiroom & Grouping
 
