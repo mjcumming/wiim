@@ -9,7 +9,7 @@
 [![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
 [![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
 [![Home Assistant](https://img.shields.io/badge/home%20assistant-2024.12.0+-blue.svg)](https://www.home-assistant.io/)
-[![Maintenance](https://img.shields.io/maintenance/yes/2025.svg)](https://github.com/mjcumming/wiim)
+[![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/mjcumming/wiim)
 [![Quality Scale](https://img.shields.io/badge/quality%20scale-gold-brightgreen.svg)](https://www.home-assistant.io/docs/quality_scale/)
 [![Project Status](https://img.shields.io/badge/project%20status-active-success.svg)](https://github.com/mjcumming/wiim)
 [![CI](https://img.shields.io/github/actions/workflow/status/mjcumming/wiim/tests.yaml?branch=main&label=CI)](https://github.com/mjcumming/wiim/actions/workflows/tests.yaml)
@@ -29,7 +29,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 - **🚀 Auto-Discovery** - Finds speakers automatically via UPnP/SSDP/Zeroconf
 - **📱 Universal Compatibility** - Works with all Home Assistant dashboards, voice assistants, and media sources
 - **⚡ Hybrid State Updates** - UPnP events for real-time updates + HTTP polling for reliability
-- **🎛️ Advanced Audio** - 10-band EQ, audio quality sensors, output mode control, and format support
+- **🎛️ Advanced Audio** - 10-band EQ, subwoofer control, audio quality sensors, output mode control, and format support
 - **⏰ Timer & Alarms** - Sleep timer and alarm management for WiiM devices
 - **📊 Rich Diagnostics** - Comprehensive statistics, health monitoring, and troubleshooting tools
 - **🔄 Scene Support** - Full scene restoration including EQ presets and playback state
@@ -73,13 +73,14 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ### 🎛️ Audio Enhancement
 
-| Feature            | Description                                                                   |
-| ------------------ | ----------------------------------------------------------------------------- |
-| **EQ Control**     | 10-band equalizer with 24 presets (Flat, Rock, Jazz, Classical, Pop, etc.)    |
-| **Custom EQ**      | Fine-tune each of 10 frequency bands (-12dB to +12dB)                         |
-| **Audio Output**   | Control hardware output modes (Line Out, Optical, Coax, Bluetooth, Headphone) |
-| **Audio Quality**  | Real-time sensors for sample rate, bit depth, and bit rate                    |
-| **Format Support** | Lossless (FLAC, WAV, ALAC up to 24-bit/192kHz) and compressed formats         |
+| Feature             | Description                                                                   |
+| ------------------- | ----------------------------------------------------------------------------- |
+| **EQ Control**      | 10-band equalizer with 24 presets (Flat, Rock, Jazz, Classical, Pop, etc.)    |
+| **Custom EQ**       | Fine-tune each of 10 frequency bands (-12dB to +12dB)                         |
+| **Subwoofer**       | Enable/disable and adjust level (-15 to +15 dB) for connected subwoofers      |
+| **Audio Output**    | Control hardware output modes (Line Out, Optical, Coax, Bluetooth, Headphone, USB) |
+| **Audio Quality**   | Real-time sensors for sample rate, bit depth, and bit rate                    |
+| **Format Support**  | Lossless (FLAC, WAV, ALAC up to 24-bit/192kHz) and compressed formats         |
 
 ### 🏠 Multiroom & Grouping
 
@@ -187,6 +188,28 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
   target: select.living_room_audio_output_mode
   data:
     option: "Line Out"
+
+# Switch to USB DAC (WiiM Ultra)
+- service: select.select_option
+  target: select.living_room_audio_output_mode
+  data:
+    option: "USB Out"
+```
+
+### Subwoofer Control (WiiM Ultra)
+
+```yaml
+# Enable subwoofer
+- service: switch.turn_on
+  target:
+    entity_id: switch.living_room_subwoofer
+
+# Set subwoofer level
+- service: number.set_value
+  target:
+    entity_id: number.living_room_subwoofer_level
+  data:
+    value: 3
 ```
 
 ### Automation Examples
@@ -395,6 +418,11 @@ The integration creates multiple entity types for comprehensive control:
 - **Mute** - Toggle mute state
 - **Shuffle** - Toggle shuffle mode
 - **Repeat** - Toggle repeat mode
+- **Subwoofer** - Enable/disable subwoofer output (WiiM Ultra with firmware 5.2+)
+
+### Number Entities
+
+- **Subwoofer Level** - Adjust subwoofer level (-15 to +15 dB, WiiM Ultra with firmware 5.2+)
 
 ### Lights (Device Dependent)
 
