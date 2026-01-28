@@ -771,7 +771,14 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         raise NotImplementedError("Use async_join_players instead")
 
     async def async_join_players(self, group_members: list[str]) -> None:
-        """Join/unjoin players to match the requested group configuration.
+        """Join `group_members` as a player group with the current player.
+
+        This method is ADDITIVE - it adds the specified players to this player's group.
+        It does NOT remove existing group members. To remove players from a group,
+        use the `unjoin_player` service on those players.
+
+        This matches the Home Assistant standard behavior for media_player.join,
+        as implemented by Sonos and other integrations.
 
         Delegates to pywiim to handle all group management - pywiim manages
         state changes, role updates, and group membership automatically.
@@ -788,69 +795,9 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if master_player is None:
             raise HomeAssistantError("Master player is not ready")
 
-        # Normalize: ensure self is included in group_members (self is always the master)
         current_entity_id = self.entity_id
-        if current_entity_id not in group_members:
-            group_members = [current_entity_id] + group_members
 
-        # Get current group members from master's perspective
-        current_group = set(self.group_members or [])
-        requested_group = set(group_members)
-
-        # Determine which players to add and which to remove
-        # Note: to_add might include players that are already in the group due to timing
-        # We'll verify each player's actual state before calling join_group
-        to_add = requested_group - current_group
-        to_remove = current_group - requested_group
-
-        # Remove players that are no longer in the group (deselected in UI)
-        # pywiim handles all state management via callbacks
-        unjoin_tasks = []
-        for entity_id in to_remove:
-            if entity_id == current_entity_id:
-                # Don't unjoin self (master)
-                continue
-
-            entity_entry = entity_registry.async_get(entity_id)
-            if not entity_entry:
-                _LOGGER.warning("Entity %s not found when unjoining from group", entity_id)
-                continue
-
-            # Look up coordinator by config_entry_id (most reliable method)
-            # This avoids issues where entity unique_id (UUID) doesn't match config entry unique_id (IP)
-            if not entity_entry.config_entry_id:
-                _LOGGER.warning("Entity %s has no config_entry_id", entity_id)
-                continue
-
-            config_entry = self.hass.config_entries.async_get_entry(entity_entry.config_entry_id)
-            if not config_entry:
-                _LOGGER.warning("Config entry not found for entity %s", entity_id)
-                continue
-
-            try:
-                coordinator = get_coordinator_from_entry(self.hass, config_entry)
-            except RuntimeError:
-                _LOGGER.warning("Coordinator not available for entity %s", entity_id)
-                continue
-
-            if not coordinator.player:
-                _LOGGER.warning("Coordinator player not available for entity %s", entity_id)
-                continue
-
-            # pywiim handles leaving groups and updating state automatically
-            unjoin_tasks.append(coordinator.player.leave_group())
-
-        # Execute all unjoin operations in parallel
-        if unjoin_tasks:
-            unjoin_results = await asyncio.gather(*unjoin_tasks, return_exceptions=True)
-            for result in unjoin_results:
-                if isinstance(result, Exception):
-                    _LOGGER.error("Failed to remove player from group: %s", result)
-
-        # Add players that are newly selected
-        # We check each player's actual state before calling join_group to avoid unnecessary API calls
-        # and errors. pywiim should ideally handle "already in group" gracefully, but we check first
-        # to be more efficient and avoid the error entirely.
+        # Helper to join a single player to the group
         async def _join_single_player(entity_id: str, coordinator: WiiMCoordinator) -> None:
             """Join a single player to the group.
 
@@ -875,8 +822,10 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             async with self.wiim_command("join group"):
                 await player.join_group(master_player)
 
+        # Add all specified players to the group (additive behavior)
+        # We check each player's actual state before calling join_group to avoid unnecessary API calls
         join_tasks = []
-        for entity_id in to_add:
+        for entity_id in group_members:
             if entity_id == current_entity_id:
                 # Skip self (already the master)
                 continue

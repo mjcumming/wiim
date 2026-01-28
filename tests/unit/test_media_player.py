@@ -782,49 +782,62 @@ class TestWiiMMediaPlayerJoinUnjoin:
             await media_player.async_unjoin_player()
 
     @pytest.mark.asyncio
-    async def test_async_join_players_unjoin_uses_new_lookup(self, media_player, mock_coordinator):
-        """Test async_join_players unjoin path uses new coordinator lookup."""
+    async def test_async_join_players_is_additive(self, media_player, mock_coordinator):
+        """Test async_join_players is additive - it only adds players, never removes.
+
+        This matches the Home Assistant standard behavior for media_player.join,
+        as implemented by Sonos and other integrations.
+        """
         from unittest.mock import patch
 
-        # Setup master player with existing group
+        # Setup master player with existing group (master + existing_slave)
         master_player = mock_coordinator.player
+        master_player.join_group = AsyncMock()
         mock_group = MagicMock()
-        mock_slave_player_obj = MagicMock()
-        mock_slave_player_obj.uuid = "slave_uuid"
-        mock_group.all_players = [master_player, mock_slave_player_obj]
+        mock_existing_slave = MagicMock()
+        mock_existing_slave.uuid = "existing_slave_uuid"
+        mock_existing_slave.leave_group = AsyncMock()  # Should NOT be called
+        mock_group.all_players = [master_player, mock_existing_slave]
+        mock_group.master = master_player
         master_player.group = mock_group
         master_player.is_solo = False
         media_player.entity_id = "media_player.wiim_master"
 
-        # Mock entity registry for group_members lookup
+        # Mock entity registry
         mock_registry = MagicMock()
-        mock_registry.async_get_entity_id.return_value = "media_player.wiim_slave"
-        mock_entity_entry = MagicMock()
-        mock_entity_entry.config_entry_id = "entry_123"
-        mock_registry.async_get.return_value = mock_entity_entry
+        mock_registry.async_get_entity_id.return_value = "media_player.wiim_existing_slave"
 
-        # Mock config entry
+        # New player to add
+        mock_new_slave_entry = MagicMock()
+        mock_new_slave_entry.config_entry_id = "entry_new"
+        mock_registry.async_get.return_value = mock_new_slave_entry
+
+        # Mock config entry for new slave
         mock_config_entry = MagicMock()
-        mock_config_entry.entry_id = "entry_123"
+        mock_config_entry.entry_id = "entry_new"
 
-        # Mock coordinator for slave
-        mock_slave_coordinator = MagicMock()
-        mock_slave_player = MagicMock()
-        mock_slave_player.leave_group = AsyncMock()
-        mock_slave_coordinator.player = mock_slave_player
+        # Mock coordinator for new slave
+        mock_new_coordinator = MagicMock()
+        mock_new_player = MagicMock()
+        mock_new_player.join_group = AsyncMock()
+        mock_new_player.group = None  # Not in any group yet
+        mock_new_coordinator.player = mock_new_player
 
         # Mock hass.data structure
         media_player.hass = MagicMock()
-        media_player.hass.data = {"wiim": {"entry_123": {"coordinator": mock_slave_coordinator}}}
+        media_player.hass.data = {"wiim": {"entry_new": {"coordinator": mock_new_coordinator}}}
         media_player.hass.config_entries = MagicMock()
         media_player.hass.config_entries.async_get_entry.return_value = mock_config_entry
 
         with patch("custom_components.wiim.media_player.er.async_get", return_value=mock_registry):
-            # Request only master (removes slave)
-            await media_player.async_join_players(["media_player.wiim_master"])
+            # Add only the new player (NOT requesting existing_slave)
+            await media_player.async_join_players(["media_player.wiim_new_slave"])
 
-        # Verify leave_group was called
-        mock_slave_player.leave_group.assert_called_once()
+        # Verify new player was joined
+        mock_new_player.join_group.assert_called_once_with(master_player)
+
+        # CRITICAL: Verify existing slave was NOT removed (additive behavior)
+        mock_existing_slave.leave_group.assert_not_called()
 
     def test_group_members_returns_none_when_no_group(self, media_player, mock_coordinator):
         """Test group_members returns None when not in a group."""

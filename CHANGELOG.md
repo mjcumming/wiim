@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.53] - 2026-01-28
+
+### Fixed
+
+- **Multiroom Grouping Behavior** (Issue #176): Fixed `media_player.join` to use standard Home Assistant additive semantics.
+  - Previously, calling join with a partial list would **remove** existing group members not in the list
+  - Now, join only **adds** speakers to the group (matching Sonos and other integrations)
+  - To remove speakers from a group, use `media_player.unjoin` on those speakers
+  - This fixes compatibility with Lovelace cards that expect standard HA grouping behavior
+
 ## [1.0.52] - 2026-01-28
 
 ### Added
@@ -15,6 +25,7 @@
 - **Dependency Update**: Updated `pywiim` library to 2.1.63
 
   **pywiim 2.1.63:**
+
   - **Subwoofer Control API**: Full support for WiiM Ultra subwoofer configuration
     - `supports_subwoofer` property to check device capability
     - `subwoofer_status` property for cached status (plugged, enabled, level, crossover, phase, delay)
@@ -22,11 +33,12 @@
     - `set_subwoofer_enabled()`, `set_subwoofer_level()`, `set_subwoofer_crossover()`, `set_subwoofer_phase()`, `set_subwoofer_delay()` control methods
 
   **pywiim 2.1.62:**
+
   - **Audio Pro Reboot Support**: Fixed reboot command for Audio Pro devices (uses MCU reboot endpoint)
 
   **pywiim 2.1.61:**
-  - **RCA Input Fix**: Fixed "RCA In" source selection for devices with RCA inputs
 
+  - **RCA Input Fix**: Fixed "RCA In" source selection for devices with RCA inputs
 
 ## [1.0.51] - 2025-12-28
 
