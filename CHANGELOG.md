@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.55] - 2026-01-28
+
+### Fixed
+
+- **USB Out Audio Output Mode** (Issue #160): Fixed USB Out not appearing in audio output options for WiiM Ultra devices.
+  - USB Out allows routing audio to an external USB DAC
+  - pywiim 2.1.68 fixes detection of USB Out capability on Ultra devices
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.68
+
 ## [1.0.54] - 2026-01-28
 
 ### Fixed
