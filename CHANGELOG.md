@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.56] - 2026-01-29
+
+### Fixed
+
+- **WiFi Direct Multiroom Group Members** (Issue #178): Fixed group members not showing correctly for WiFi Direct multiroom groups (e.g., Xoro XVS 100).
+  - WiFi Direct slaves move to the master's internal network (10.10.10.x IPs) and are no longer reachable at their original LAN IPs
+  - pywiim 2.1.69 now uses UUID-based matching when IP lookup fails
+  - `group_members` attribute now correctly shows all slaves in WiFi Direct groups
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.69
+
 ## [1.0.55] - 2026-01-28
 
 ### Fixed
