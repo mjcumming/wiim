@@ -12,8 +12,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pywiim import Player, PollingStrategy, WiiMClient
 from pywiim.exceptions import WiiMError
 
-from .data import find_coordinator_by_ip, find_coordinator_by_uuid, get_all_players
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -62,50 +60,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         client = WiiMClient(**client_kwargs)
 
         # Wrap client in Player (recommended for HA - pywiim manages all state)
-        # Provide player_finder for automatic group linking (supports IP and UUID)
-        # Provide all_players_finder for cross-coordinator role inference (WiFi Direct slave detection)
+        # pywiim 2.1.70+ handles player linking internally via its player registry
         self.player = Player(
             client,
             on_state_changed=self._on_player_state_changed,
-            player_finder=self._find_player,
-            all_players_finder=self._get_all_players,
         )
 
         # Use pywiim's PollingStrategy to determine when to poll
         self._polling_strategy = PollingStrategy(self._capabilities) if self._capabilities else PollingStrategy({})
-
-    def _find_player(self, identifier: str):
-        """Find Player object by IP or UUID for automatic group linking.
-
-        This callback allows pywiim to automatically link Player objects when
-        groups are detected, enabling group.all_players to be populated.
-
-        WiFi Direct multiroom groups may report slaves by UUID instead of IP,
-        so we try both lookup methods. (pywiim v2.1.60 provides slave_uuids)
-        """
-        # First try IP-based lookup (most common case)
-        coordinator = find_coordinator_by_ip(self.hass, identifier)
-        if coordinator and coordinator.player:
-            return coordinator.player
-
-        # Fallback: try UUID-based lookup (for WiFi Direct multiroom)
-        # Normalize UUID by removing "uuid:" prefix if present
-        normalized_uuid = identifier.replace("uuid:", "") if identifier else None
-        if normalized_uuid:
-            coordinator = find_coordinator_by_uuid(self.hass, normalized_uuid)
-            if coordinator and coordinator.player:
-                return coordinator.player
-
-        return None
-
-    def _get_all_players(self) -> list:
-        """Return all Player objects for cross-coordinator role inference.
-
-        This callback enables pywiim to check if any known master lists this
-        device as a slave. Required for WiFi Direct multiroom where slaves
-        report "solo" when queried directly (they don't know they're in a group).
-        """
-        return get_all_players(self.hass)
 
     @callback
     def _on_player_state_changed(self) -> None:

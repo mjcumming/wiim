@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.57] - 2026-01-31
+
+### Changed
+
+- Release version 1.0.57
+
+
 ## [1.0.56] - 2026-01-29
 
 ### Fixed
@@ -66,7 +73,6 @@
 - **Dependency Update**: Updated `pywiim` library to 2.1.63
 
   **pywiim 2.1.63:**
-
   - **Subwoofer Control API**: Full support for WiiM Ultra subwoofer configuration
     - `supports_subwoofer` property to check device capability
     - `subwoofer_status` property for cached status (plugged, enabled, level, crossover, phase, delay)
@@ -74,11 +80,9 @@
     - `set_subwoofer_enabled()`, `set_subwoofer_level()`, `set_subwoofer_crossover()`, `set_subwoofer_phase()`, `set_subwoofer_delay()` control methods
 
   **pywiim 2.1.62:**
-
   - **Audio Pro Reboot Support**: Fixed reboot command for Audio Pro devices (uses MCU reboot endpoint)
 
   **pywiim 2.1.61:**
-
   - **RCA Input Fix**: Fixed "RCA In" source selection for devices with RCA inputs
 
 ## [1.0.51] - 2025-12-28
@@ -88,7 +92,6 @@
 - **Dependency Update**: Updated `pywiim` library to 2.1.60 (includes 2.1.59 changes)
 
   **pywiim 2.1.60:**
-
   - **EQ "Off" Sound Mode Option** (Issue #165): Added ability to disable EQ entirely via sound mode selection.
     - `sound_mode` now shows `"Off"` when EQ is disabled (bypassed)
     - `sound_mode_list` includes `"Off"` as the first option
@@ -99,7 +102,6 @@
     - Enables linking slaves that use internal 10.10.10.x IPs (WiFi Direct)
 
   **pywiim 2.1.59:**
-
   - **Source Selection Resilience** (Issue #161): Fixed physical source selection failure caused by "In" suffix mismatch.
     - Smart normalization: `set_source()` uses alphanumeric matching against device's reported `InputList`
     - Explicit mappings for common variations: "Optical In" → `optical`, "Coaxial In" → `coaxial`, etc.
@@ -119,7 +121,6 @@
 ### Changed
 
 - **Dependency Update**: Updated `pywiim` library to 2.1.58
-
   - **USB Output support for WiiM Ultra**: Added support for external DAC (mode 6) and "USB Out" selection.
   - **"Thin Integration" Source Overhaul**: Centralized hardware filtering, unified "Network" source, and UI-ready Title Case formatting for all sources.
   - **WiFi Direct Multiroom Unjoin**: Fixed unjoin for legacy Linkplay devices by routing through master's `SlaveKickout`.
@@ -131,7 +132,6 @@
 ### Changed
 
 - **Diagnostics Overhaul**: Completely restructured device diagnostics for better debugging
-
   - **Added available options** - Now shows all sources, EQ presets, audio outputs, and user presets
   - **Added audio quality metadata** - Sample rate, bit depth, bit rate now visible
   - **Added firmware update status** - Shows if update available, latest version
@@ -148,7 +148,6 @@
 - **Dependency Update**: Updated `pywiim` library to 2.1.57
 
   **Source selection not working for Line In (2.1.57)**:
-
   - Fixed GitHub issue #153 where selecting "Line In" via Home Assistant silently did nothing
   - API normalization now correctly uses hyphens (`line-in`) instead of underscores (`line_in`) for the WiiM `switchmode` command
   - Fixed all physical input sources: "Line In" → `line-in`, "Line In 2" → `line-in-2`, "Wi-Fi" → `wifi`, etc.
@@ -162,7 +161,6 @@
 - **Dependency Update**: Updated `pywiim` library to 2.1.56
 
   **Source list capitalization and selection issues (2.1.56)**:
-
   - `available_sources` now returns Title Case format (e.g., "Line In", "Bluetooth") to match `source` property, fixing Home Assistant validation failures
   - Added source name normalization in `set_source()` to handle variations ("Line In", "Line-in", "line_in", "linein" → "line_in")
   - Fixed USB filtering for WiiM Pro Plus - added `ignore_plm_bits=[2]` to prevent incorrect USB input from appearing
@@ -171,14 +169,12 @@
   - All source names now consistently normalized for both display (Title Case) and API calls (lowercase with underscores)
 
   **Playlist clearing reliability (2.1.56)**:
-
   - `clear_playlist()` now uses UPnP PlayQueue `DeleteQueue` action when available (more reliable than HTTP API on some devices)
   - Falls back to HTTP API `setPlayerCmd:clear_playlist` if UPnP PlayQueue service is not available or fails
   - PlayQueue service is automatically discovered during UPnP initialization (optional, LinkPlay-specific service)
   - Addresses GitHub issue #154 where HTTP API `clear_playlist` command doesn't work on some devices
 
   **HCN_BWD03 slave device status timeout (2.1.56)**:
-
   - Added timeout fallback for HCN_BWD03 slave devices that timeout on `getPlayerStatus` in multiroom mode
   - Automatically falls back to `getStatusEx` for HCN_BWD03 devices when `getPlayerStatus` times out
   - Other devices continue to use `getPlayerStatus` and will raise timeout errors normally
@@ -189,7 +185,6 @@
 ### Fixed
 
 - **Firmware Update Entity**: Fixed the firmware `update` entity becoming "no longer provided" due to stale cached capability data missing `supports_firmware_install`
-
   - Treat missing `supports_firmware_install` in cached capabilities as stale and re-detect capabilities
   - Persist `supports_firmware_install` back into the cached capabilities after first refresh so UPDATE platform stays enabled on restart
   - Restored stable firmware update `unique_id` suffix (`*_fw_update`) to avoid orphaned/duplicated entities
@@ -212,7 +207,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Group Join Service**: Fixed `media_player.join` service failing with "Coordinator not available" warnings (GitHub Issue #149)
-
   - Root cause: Entity unique_id changed to UUID in v1.0.40, but coordinator lookup still used unique_id which didn't match config entry unique_id (IP address)
   - Fix: Use entity's `config_entry_id` for coordinator lookup instead of `unique_id` - this is more reliable and handles UUID/IP mismatches
   - The `media_player.join` service now works correctly when adding slaves to a multiroom group
@@ -227,7 +221,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 - **Dependency Update**: Updated `pywiim` library to 2.1.52
 
   **Slave Device Status Endpoint (2.1.52)**:
-
   - Fixed slave devices to use capability-configured status endpoint (`get_player_status()`) instead of hardcoded `get_status()`
   - Ensures slaves use same capability-driven endpoint selection as masters
   - Improves consistency and device compatibility
@@ -262,7 +255,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Pydantic Model Attribute Access**: Fixed incorrect dictionary-style access (`.get()`) on Pydantic models returned by pywiim
-
   - `config_flow.py`: Fixed `DeviceGroupInfo` attribute access in `_discover_slaves()` - was using `.get("role")` instead of `.role`
   - `sensor.py`: Fixed `DeviceInfo` attribute access in firmware sensor - using direct attribute access instead of `getattr()`
   - `media_player.py`: Fixed `Alarm` model attribute access in alarm update handler
@@ -288,7 +280,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 - **Dependency Update**: Updated `pywiim` library to 2.1.48
 
   **Capability Detection Fixes (2.1.47)**:
-
   - Capability detection no longer changes device settings during initialization
   - Audio output mode and EQ preset are no longer modified during HA restart or integration reload
   - Uses read-only probing: if a setting can be read, we assume it can be set
@@ -300,12 +291,10 @@ All notable changes to unified WiiM Audio integration will be documented in this
 - **Dependency Update**: Updated `pywiim` library to 2.1.46
 
   **Group Media Properties (2.1.45)**:
-
   - Group object exposes master's media state: `media_title`, `media_artist`, `media_album`, `media_position`, `media_duration`
   - Immediate role detection - `is_solo`, `is_master`, `is_slave` update instantly on join/unjoin (no API poll required)
 
   **Idempotent Group Operations (2.1.44)**:
-
   - `join_group()` handles "already in group" gracefully (returns success if already in target group)
   - Automatically leaves current group before joining new one (no more race condition errors)
 
@@ -325,32 +314,26 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Changed
 
 - **Dependency Update**: Updated minimum `pywiim` library version to 2.1.43
-
   - Major improvements from pywiim 2.1.37 → 2.1.43:
 
   **UI Stability (2.1.43)**:
-
   - EQ preset state preserved during refresh (no more flickering back to old values)
   - Shuffle/repeat state preserved during refresh (optimistic updates held for 60 seconds)
 
   **Display Improvements (2.1.42)**:
-
   - EQ presets normalized to Title Case ("Flat", "Acoustic" instead of "flat", "acoustic")
   - Source names normalized to Title Case ("AirPlay", "Spotify", "Line In", "Bluetooth")
 
   **Playback Improvements (2.1.39)**:
-
   - Track change debouncing - no more false "stopped" states between tracks
   - Stream metadata enrichment - raw URLs now show proper artist/title from Icecast/M3U streams
   - Group metadata propagation - slaves always receive latest metadata from master
 
   **Device Support (2.1.38)**:
-
   - Device profiles system for better Audio Pro, Arylic, and LinkPlay device support
   - Profile-driven state management (UPnP vs HTTP source selection per device type)
 
   **Cleaner State Properties (2.1.37)**:
-
   - New `is_playing`, `is_paused`, `is_idle`, `is_buffering` properties
   - Normalized `state` property for consistent state mapping
 
@@ -368,14 +351,12 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Next/Previous Track Buttons Missing** (GitHub Issue #142)
-
   - Fixed next/previous track buttons not appearing for Spotify and other streaming services
   - Now uses pywiim's `supports_next_track` property which correctly detects source capabilities
   - Streaming services like Spotify now show track controls even with `queue_count=0`
   - This fix applies to both individual player and group coordinator entities
 
 - **Seek Feature Detection**: Updated seek support detection to use pywiim's source-aware `supports_seek` property
-
   - Previously used duration-based check which could miss some cases
   - Now correctly identifies sources that support seeking (e.g., not live radio or physical inputs)
 
@@ -387,7 +368,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Changed
 
 - **Dependency Update**: Updated minimum `pywiim` library version to 2.1.36
-
   - New source capability detection: `supports_next_track`, `supports_previous_track`, `supports_seek`
   - These properties are source-aware and correctly handle streaming services
 
@@ -445,7 +425,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Translation Error**: Fixed translation error in onboarding message for Zeroconf discovery
-
   - Removed unused `{audio_pro_note}` placeholder from `discovery_confirm` step translations
   - Resolves GitHub issue #130
 
@@ -465,7 +444,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Group Coordinator Next/Previous Track**: Fixed inconsistency in next/previous track controls between master player and group coordinator
-
   - Group coordinator now checks `next_track_supported` before showing next/previous track controls
   - Ensures both master player and group coordinator show/hide controls consistently based on source support
   - Both entities now stay synchronized when controlling group playback
@@ -473,7 +451,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Changed
 
 - **Dependency Update**: Updated minimum `pywiim` library version to 2.1.26
-
   - Adds support for Audio Pro Gen1 device grouping operations (Wi-Fi Direct mode)
   - pywiim now automatically detects firmware version and selects appropriate grouping mode
   - Gen1 devices (A26, C10, C5a) with firmware < v4.2.8020 now supported via legacy `ConnectMasterAp` command
@@ -488,7 +465,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Preset Names**: Fixed preset name listing in media browser to display actual preset names from device
-
   - Presets now show their configured names (e.g., "BBC Radio 1") instead of generic "Preset 1", "Preset 2", etc.
   - Falls back to generic names if preset names are not available from pywiim
   - Supports both `presets` attribute and `get_preset()` method from pywiim
@@ -538,7 +514,6 @@ All notable changes to unified WiiM Audio integration will be documented in this
 ### Fixed
 
 - **Shuffle and Repeat Controls**: Fixed shuffle and repeat mode functionality across streaming services
-
   - **Spotify**: Shuffle and repeat modes now work correctly
   - **Amazon Music**: Shuffle and repeat modes now work correctly
   - **AirPlay**: Shuffle and repeat modes are not available from the WiiM device (expected behavior - AirPlay protocol limitation)
@@ -739,7 +714,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Changed
 
 - **Bluetooth Device Update**: Refactored to synchronous operation for better reliability
-
   - "BT Update Paired Devices" now blocks until device list is refreshed
   - Improved error handling and state updates
   - More predictable behavior when updating paired device list
@@ -871,7 +845,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Changed
 
 - **Join/Unjoin Flow**: Simplified group join and unjoin operations for better stability
-
   - Virtual group master now enables/disables immediately (optimistic update)
   - Slaves wait for device to confirm role before updating (prevents conflicts with polling)
   - Removed retry logic and manual state manipulation - let device state flow naturally
@@ -895,14 +868,12 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Changed
 
 - **UPnP Subscription Handling**: Refactored to follow DLNA DMR pattern from Home Assistant core
-
   - Replaced pessimistic `_subscriptions_failed` flag with optimistic `check_available` flag
   - Trusts `auto_resubscribe=True` to recover from temporary failures
   - HTTP polling and UPnP now work cooperatively rather than one being authoritative
   - Enhanced diagnostic logging and improved diagnostics to show `check_available` and `upnp_working` status
 
 - **UPnP Health Tracking**: Added health monitoring based on event arrival
-
   - New `is_upnp_working()` method tracks recent events (within 5 minutes)
   - Adaptive polling: 5 seconds when UPnP working, 1 second when playing without UPnP, 5 seconds when idle
 
@@ -920,7 +891,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Fixed
 
 - **Audio Pro Metadata Display**: Fixed metadata not showing when playing music via WiiM app on Audio Pro speakers
-
   - Prevents empty metadata events from clearing existing metadata during track transitions
   - Metadata is now preserved when device is playing/transitioning, only cleared when truly stopped/idle
   - Fixes issue where metadata would disappear during track changes when playing from WiiM app
@@ -932,7 +902,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Fixed
 
 - **UPnP Resubscription Failure Handling**: Fixed playback state remaining idle and metadata not updating when UPnP subscriptions fail
-
   - Detects UPnP resubscription failures (empty state_variables) and marks subscriptions as failed
   - HTTP polling now becomes authoritative when UPnP subscriptions fail, ensuring state updates correctly
   - Prevents stale UPnP state from overwriting correct HTTP polling state
@@ -946,7 +915,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Fixed
 
 - **DLNA Source Detection**: Fixed missing source attribute during DLNA playback
-
   - Improved mode-to-source mapping logic to handle cases where API returns mode but not source field
   - Source is now correctly derived from mode value when source field is missing, None, or invalid
   - Resolves issue #104 where DLNA playback (mode="2") was not showing correct source
@@ -1023,24 +991,20 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Added
 
 - **Phono Input Support**: Added Phono input source support for WiiM Ultra devices
-
   - Phono input now appears in source selection dropdown
   - Proper source mapping for phono/phono_in API values
 
 - **Headphone Out Support**: Added Headphone Out audio output mode (mode 0) for WiiM Ultra
-
   - Headphone Out option available in audio output mode select entity
   - Mode value verification pending (see Issue #86)
 
 - **Input List Tracking**: Enhanced device info tracking with input_list field
-
   - Devices now track available input sources from API
   - Enables future dynamic source list generation based on device capabilities
 
 ### Changed
 
 - **Code Cleanup**: Reduced excessive debug logging throughout codebase
-
   - Removed verbose debug logs from volume control, playback commands, and media controller
   - Cleaned up formatting and improved code readability
   - Reduced log noise while maintaining essential error logging
@@ -1096,7 +1060,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Fixed
 
 - **Media Browser**: Fixed issue where media library showed no items when selecting WiiM speaker
-
   - Improved media source detection to properly show Media Library entry even when children are initially empty
   - Lookup now checks `can_expand` property to determine if media sources are browsable
 
@@ -1108,7 +1071,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Changed
 
 - **State Detection**: Simplified playback state detection logic
-
   - Removed metadata-based assumptions about playing state
   - Now uses only documented API states: "play", "pause", "stop", "load", "idle"
   - Handles common variations: "playing", "paused", "stopped"
@@ -1138,7 +1100,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Added
 
 - **UPnP Event System**: Real-time device state updates via UPnP DLNA DMR eventing
-
   - Automatic subscription to AVTransport and RenderingControl UPnP services
   - Instant state updates when device state changes (play/pause/volume/mute)
   - Follows Home Assistant patterns (Samsung TV, DLNA DMR) using `async_upnp_client`
@@ -1147,7 +1108,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
   - Works with WiiM Pro, Mini, Amp, and compatible LinkPlay devices
 
 - **UPnP Health Monitoring**: New diagnostic sensor for UPnP event health
-
   - Shows UPnP push health status (healthy/degraded/unavailable)
   - Tracks event counts and last notification timestamps
   - Helps diagnose UPnP connectivity issues
@@ -1162,7 +1122,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Changed
 
 - **Polling Strategy**: Optimized polling intervals with UPnP event system
-
   - Basic device status: 30 seconds (down from 15) when UPnP is healthy
   - Device info: 120 seconds (unchanged)
   - Multiroom status: 30 seconds (unchanged)
@@ -1180,14 +1139,12 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Technical
 
 - **UPnP Architecture**: Modular implementation following HA core patterns
-
   - `upnp_client.py` - UPnP client wrapper for `async_upnp_client`
   - `upnp_eventer.py` - Event subscription manager with health tracking
   - `state.py` - State management with UPnP event integration
   - Clean separation of concerns with proper error handling
 
 - **Event Processing**: Efficient LastChange XML parsing
-
   - Parses AVTransport and RenderingControl XML notifications
   - Extracts play state, volume, mute, track info from events
   - Dispatcher-based state updates to media player entities
@@ -1202,7 +1159,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Documentation
 
 - **UPnP Testing Guide**: Added comprehensive UPnP testing documentation
-
   - Step-by-step verification process
   - Diagnostic script usage examples
   - Troubleshooting common UPnP issues
@@ -1258,7 +1214,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Testing
 
 - **Setup Retry Testing**: Added test to verify logging escalation works correctly
-
   - Ensures logging levels adjust properly for multiple consecutive retry attempts
   - Prevents regression of log spam issue in the future
 
@@ -1321,7 +1276,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Added
 
 - **Unofficial API Endpoints Support**: Added support for reverse-engineered WiiM HTTP API endpoints
-
   - Bluetooth device scanning and discovery
   - Audio settings (SPDIF sample rate, channel balance)
   - Squeezelite/Lyrion Music Server (LMS) integration
@@ -1364,7 +1318,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Fixed
 
 - **Audio Pro Device Discovery**: Enhanced discovery and validation for Audio Pro devices
-
   - Added graceful fallback for Audio Pro devices that fail auto-discovery validation
   - Improved protocol prioritization (HTTPS first for MkII/W-Series devices)
   - Enhanced error messages and user guidance for Audio Pro device setup
@@ -1480,14 +1433,12 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Fixed
 
 - **Source Field Display**: Fixed blank "Source" field in Home Assistant media player UI
-
   - **Apple Music Support**: Added proper mapping for Apple Music streaming service
   - **Source Mapping**: Streaming services (AirPlay, Spotify, Apple Music, etc.) now show their actual service names in the UI instead of generic "Ethernet"
   - **UI Consistency**: Source dropdown now shows only physical input sources (Bluetooth, Line In, Optical, etc.) - network streaming services are handled automatically
   - **Media Content Source**: Implemented `media_content_source` property for streaming service identification
 
 - **Audio Output Mode Stability**: Fixed audio output mode constantly changing from "Line Out" to blank
-
   - **Polling Optimization**: Improved 15-second polling interval for audio output status
   - **Data Flow**: Fixed audio output data propagation from API to status model
   - **Error Handling**: Added robust error handling for test environments and production
@@ -1596,7 +1547,6 @@ This is the first stable release of the WiiM Audio integration for Home Assistan
 ### Fixed
 
 - **Test Suite**: Fixed failing test `test_media_properties_unavailable` in group media player
-
   - Updated test expectation for `media_position_updated_at` to expect timestamp instead of `None` when unavailable
   - Maintains Media Assistant compatibility by always returning valid timestamps
   - Test now correctly validates the intended behavior rather than expecting incorrect behavior
