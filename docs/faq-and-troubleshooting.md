@@ -396,12 +396,14 @@ View logs: Settings → System → Logs
 
 ### Error Messages
 
-| Error                                     | Meaning                     | Solution                         |
-| ----------------------------------------- | --------------------------- | -------------------------------- |
-| `Connection timeout`                      | Can't reach device          | Check network, verify IP         |
-| `Invalid response`                        | Firmware issue              | Update speaker firmware          |
-| `Unknown command`                         | Not supported               | Check device model capabilities  |
-| `Slave speaker cannot play independently` | TTS to slave without master | Target master or use force_local |
+| Error                                           | Meaning                                                     | Solution                                                                                                                                                                       |
+| ----------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Connection timeout`                            | Can't reach device                                          | Check network, verify IP                                                                                                                                                       |
+| `Invalid response`                              | Firmware issue                                              | Update speaker firmware                                                                                                                                                        |
+| `Unknown command`                               | Not supported                                               | Check device model capabilities                                                                                                                                                |
+| `Slave speaker cannot play independently`       | TTS to slave without master                                 | Target master or use force_local                                                                                                                                               |
+| TTS URL works in browser but no audio on device | Device gets 401 on TTS proxy                                | Configure HA HTTP (internal URL, trusted_networks, or allowlist) so device can fetch TTS without auth; see [HTTP docs](https://www.home-assistant.io/docs/configuration/http/) |
+| No TTS when using Spotify Connect               | Device/firmware may not interrupt Spotify for announcements | Device limitation; use WiFi source or check WiiM firmware updates                                                                                                              |
 
 ### Performance Issues
 

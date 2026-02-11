@@ -124,26 +124,20 @@ class TestWiiMGroupMediaPlayerBasic:
 
     def test_initialization(self, mock_group_master_setup):
         """Test group media player initialization."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.unique_id == "test-uuid_group_master"
         assert entity.coordinator == mock_group_master_setup.coordinator
         assert entity._config_entry == mock_group_master_setup.config_entry
 
     def test_name_property(self, mock_group_master_setup):
         """Test dynamic name property."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         # When available and master
         assert entity.name == "Test WiiM Group Master"
 
         # When not available (coordinator unavailable means group entity is unavailable)
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.name == "Test WiiM Group Master"
 
     def test_available_when_master_with_slaves(self, mock_group_master_setup, mock_master_player):
@@ -152,9 +146,7 @@ class TestWiiMGroupMediaPlayerBasic:
         mock_master_player.is_master = True
         mock_master_player.group.all_players = [mock_master_player, MagicMock()]  # 2 players = has slaves
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.available is True
 
     def test_not_available_when_solo(self, mock_group_master_setup, mock_master_player):
@@ -163,9 +155,7 @@ class TestWiiMGroupMediaPlayerBasic:
         mock_master_player.is_solo = True
         mock_master_player.group.all_players = [mock_master_player]  # Only 1 player = solo
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.available is False
 
     def test_not_available_when_slave(self, mock_group_master_setup, mock_master_player):
@@ -174,9 +164,7 @@ class TestWiiMGroupMediaPlayerBasic:
         mock_master_player.is_slave = True
         mock_master_player.group = None
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.available is False
 
 
@@ -189,43 +177,33 @@ class TestWiiMGroupMediaPlayerVolume:
         mock_master_player.volume_level = 0.5
         mock_master_player.group.volume_level = 0.6  # MAX
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.volume_level == 0.6
 
     def test_volume_level_returns_none_when_unavailable(self, mock_group_master_setup):
         """Test volume level returns None when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.volume_level is None
 
     def test_volume_step_reads_from_config(self, mock_group_master_setup):
         """Test volume step reads from config entry options."""
         mock_group_master_setup.config_entry.options = {CONF_VOLUME_STEP: 0.10}  # Stored as decimal (10% = 0.10)
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.volume_step == 0.10  # 10% = 0.10
 
     def test_volume_step_defaults_when_not_configured(self, mock_group_master_setup):
         """Test volume step defaults when not configured."""
         mock_config_entry.options = {}
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.volume_step == DEFAULT_VOLUME_STEP
 
     async def test_set_volume_level(self, mock_group_master_setup, mock_master_player):
         """Test setting group volume level."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         # Mock group.set_volume_all method
         mock_master_player.group.set_volume_all = AsyncMock(return_value=True)
@@ -240,9 +218,7 @@ class TestWiiMGroupMediaPlayerVolume:
         """Test set volume level handles errors."""
         mock_master_player.group.set_volume_all = AsyncMock(side_effect=WiiMError("Volume error"))
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         with pytest.raises(HomeAssistantError, match="Failed to set group volume"):
             await entity.async_set_volume_level(0.75)
@@ -255,25 +231,19 @@ class TestWiiMGroupMediaPlayerMute:
         """Test is_volume_muted returns True when ALL devices are muted."""
         mock_master_player.group.is_muted = True  # ALL muted
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.is_volume_muted is True
 
     def test_is_volume_muted_returns_false_when_any_unmuted(self, mock_group_master_setup, mock_master_player):
         """Test is_volume_muted returns False when any device is unmuted."""
         mock_master_player.group.is_muted = False  # Not all muted
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.is_volume_muted is False
 
     async def test_mute_volume(self, mock_group_master_setup, mock_master_player):
         """Test muting group volume."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         # Mock group.mute_all method
         mock_master_player.group.mute_all = AsyncMock(return_value=True)
@@ -285,9 +255,7 @@ class TestWiiMGroupMediaPlayerMute:
 
     async def test_unmute_volume(self, mock_group_master_setup, mock_master_player):
         """Test unmuting group volume."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         # Mock group.mute_all method
         mock_master_player.group.mute_all = AsyncMock(return_value=True)
@@ -303,9 +271,7 @@ class TestWiiMGroupMediaPlayerPlayback:
 
     async def test_media_play(self, mock_group_master_setup, mock_master_player):
         """Test play command."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         await entity.async_media_play()
 
@@ -314,9 +280,7 @@ class TestWiiMGroupMediaPlayerPlayback:
 
     async def test_media_pause(self, mock_group_master_setup, mock_master_player):
         """Test pause command."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         await entity.async_media_pause()
 
@@ -325,9 +289,7 @@ class TestWiiMGroupMediaPlayerPlayback:
 
     async def test_media_stop(self, mock_group_master_setup, mock_master_player):
         """Test stop command."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         await entity.async_media_stop()
 
@@ -336,9 +298,7 @@ class TestWiiMGroupMediaPlayerPlayback:
 
     async def test_media_next_track(self, mock_group_master_setup, mock_master_player):
         """Test next track command."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         await entity.async_media_next_track()
 
@@ -347,9 +307,7 @@ class TestWiiMGroupMediaPlayerPlayback:
 
     async def test_media_previous_track(self, mock_group_master_setup, mock_master_player):
         """Test previous track command."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         await entity.async_media_previous_track()
 
@@ -359,12 +317,8 @@ class TestWiiMGroupMediaPlayerPlayback:
     async def test_playback_handles_connection_error(self, mock_group_master_setup, mock_master_player):
         """Test playback commands handle connection errors gracefully."""
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
-        mock_group_master_setup.coordinator.player.play = AsyncMock(
-            side_effect=WiiMConnectionError("Connection lost")
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        mock_group_master_setup.coordinator.player.play = AsyncMock(side_effect=WiiMConnectionError("Connection lost"))
 
         # Playback methods raise generic HomeAssistantError (not "temporarily unreachable" like volume/mute)
         with pytest.raises(HomeAssistantError, match="Failed to play"):
@@ -373,9 +327,7 @@ class TestWiiMGroupMediaPlayerPlayback:
     async def test_playback_handles_timeout_error(self, mock_group_master_setup, mock_master_player):
         """Test playback commands handle timeout errors gracefully."""
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         mock_group_master_setup.coordinator.player.play = AsyncMock(side_effect=WiiMTimeoutError("Timeout"))
 
         # Playback methods raise generic HomeAssistantError (not "temporarily unreachable" like volume/mute)
@@ -386,12 +338,49 @@ class TestWiiMGroupMediaPlayerPlayback:
         """Test playback commands handle other errors."""
         mock_master_player.play.side_effect = WiiMError("Playback error")
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         with pytest.raises(HomeAssistantError, match="Failed to"):
             await entity.async_media_play()
+
+    async def test_next_track_handles_wii_error(self, mock_group_master_setup, mock_master_player):
+        """Test next track raises HomeAssistantError when WiiMError occurs."""
+        mock_master_player.next_track = AsyncMock(side_effect=WiiMError("Skip error"))
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        with pytest.raises(HomeAssistantError, match="Failed to skip track"):
+            await entity.async_media_next_track()
+
+    async def test_previous_track_handles_wii_error(self, mock_group_master_setup, mock_master_player):
+        """Test previous track raises HomeAssistantError when WiiMError occurs."""
+        mock_master_player.previous_track = AsyncMock(side_effect=WiiMError("Back error"))
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        with pytest.raises(HomeAssistantError, match="Failed to go to previous track"):
+            await entity.async_media_previous_track()
+
+    async def test_turn_off_handles_wii_error(self, mock_group_master_setup, mock_master_player):
+        """Test turn_off raises HomeAssistantError when WiiMError occurs."""
+        mock_master_player.stop = AsyncMock(side_effect=WiiMError("Stop error"))
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        with pytest.raises(HomeAssistantError, match="Failed to turn off"):
+            await entity.async_turn_off()
+
+    async def test_turn_off_clears_media_state(self, mock_group_master_setup, mock_master_player):
+        """Test turn_off clears displayed media state so entity shows as off."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        entity._attr_state = MediaPlayerState.PLAYING
+        entity._attr_media_position = 60
+        entity._attr_media_duration = 180
+
+        with patch.object(entity, "async_write_ha_state"):
+            await entity.async_turn_off()
+
+        assert entity._media_cleared_by_turn_off is True
+        assert entity._attr_state == MediaPlayerState.OFF
+        assert entity._attr_media_position is None
+        assert entity._attr_media_duration is None
 
 
 class TestWiiMGroupMediaPlayerState:
@@ -403,9 +392,7 @@ class TestWiiMGroupMediaPlayerState:
         mock_master_player.is_paused = False
         mock_master_player.is_buffering = False
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.state == MediaPlayerState.PLAYING
 
     def test_state_paused(self, mock_group_master_setup, mock_master_player):
@@ -414,9 +401,7 @@ class TestWiiMGroupMediaPlayerState:
         mock_master_player.is_paused = True
         mock_master_player.is_buffering = False
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.state == MediaPlayerState.PAUSED
 
     def test_state_idle(self, mock_group_master_setup, mock_master_player):
@@ -425,49 +410,72 @@ class TestWiiMGroupMediaPlayerState:
         mock_master_player.is_paused = False
         mock_master_player.is_buffering = False
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.state == MediaPlayerState.IDLE
 
     def test_state_none_when_unavailable(self, mock_group_master_setup):
         """Test state is None when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.state is None
+
+    def test_state_off_when_media_cleared_by_turn_off(self, mock_group_master_setup, mock_master_player):
+        """Test state is OFF when _media_cleared_by_turn_off is True."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        entity._media_cleared_by_turn_off = True
+
+        assert entity.state == MediaPlayerState.OFF
 
 
 class TestWiiMGroupMediaPlayerMediaInfo:
     """Test group media player media information."""
 
+    def test_volume_level_none_when_player_missing(self, mock_group_master_setup):
+        """Test volume_level returns None when player or group is None."""
+        mock_group_master_setup.coordinator.player = None
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        assert entity.volume_level is None
+
+    def test_volume_level_none_when_group_missing(self, mock_group_master_setup, mock_master_player):
+        """Test volume_level returns None when group is None."""
+        mock_master_player.group = None
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        assert entity.volume_level is None
+
+    def test_media_cleared_by_turn_off_cleared_on_playback_resume(self, mock_group_master_setup, mock_master_player):
+        """Test _media_cleared_by_turn_off is cleared when playback resumes (PLAYING/PAUSED)."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        entity._media_cleared_by_turn_off = True
+        mock_master_player.group.play_state = "play"
+        mock_master_player.group.media_position = 30
+        mock_master_player.group.media_duration = 180
+
+        entity._update_position_from_coordinator()
+
+        assert entity._media_cleared_by_turn_off is False
+
     def test_media_title(self, mock_group_master_setup, mock_master_player):
         """Test media title from group (pywiim 2.1.45+)."""
         mock_master_player.group.media_title = "Test Song"
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.media_title == "Test Song"
 
     def test_media_artist(self, mock_group_master_setup, mock_master_player):
         """Test media artist from group (pywiim 2.1.45+)."""
         mock_master_player.group.media_artist = "Test Artist"
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.media_artist == "Test Artist"
 
     def test_media_album_name(self, mock_group_master_setup, mock_master_player):
         """Test media album name from group (pywiim 2.1.45+)."""
         mock_master_player.group.media_album = "Test Album"
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.media_album_name == "Test Album"
 
     def test_media_image_url(self, mock_group_master_setup, mock_master_player):
@@ -475,9 +483,7 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         # Group object may not have media_image_url, so fallback to player's URL
         mock_master_player.media_image_url = "http://example.com/cover.jpg"
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         # Should use player's image URL as fallback (group doesn't have media_image_url property)
         assert entity.media_image_url == "http://example.com/cover.jpg"
 
@@ -486,9 +492,7 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         mock_master_player.group.media_duration = 180
         mock_master_player.group.play_state = "play"  # Need playing state for duration
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         # Trigger update to set duration
         entity._update_position_from_coordinator()
         assert entity.media_duration == 180
@@ -498,9 +502,7 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         mock_master_player.group.media_position = 60
         mock_master_player.group.play_state = "play"  # Need playing state for position
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         # Trigger update to set position
         entity._update_position_from_coordinator()
         assert entity.media_position == 60
@@ -512,50 +514,38 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
     def test_shuffle_supported_returns_true(self, mock_group_master_setup, mock_master_player):
         """Test shuffle_supported returns True when supported."""
         mock_master_player.shuffle_supported = True
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity._shuffle_supported() is True
 
     def test_shuffle_supported_returns_false_when_not_supported(self, mock_group_master_setup, mock_master_player):
         """Test shuffle_supported returns False when not supported."""
         mock_master_player.shuffle_supported = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity._shuffle_supported() is False
 
     def test_shuffle_returns_true(self, mock_group_master_setup, mock_master_player):
         """Test shuffle property returns True when enabled."""
         mock_master_player.shuffle = True
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.shuffle is True
 
     def test_shuffle_returns_false(self, mock_group_master_setup, mock_master_player):
         """Test shuffle property returns False when disabled."""
         mock_master_player.shuffle = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.shuffle is False
 
     def test_shuffle_returns_none_when_player_missing(self, mock_group_master_setup):
         """Test shuffle property returns None when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.shuffle is None
 
     @pytest.mark.asyncio
     async def test_set_shuffle_enables(self, mock_group_master_setup, mock_master_player):
         """Test setting shuffle to True."""
         mock_master_player.set_shuffle = AsyncMock(return_value=True)
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         await entity.async_set_shuffle(True)
 
@@ -566,9 +556,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
     async def test_set_shuffle_handles_error(self, mock_group_master_setup, mock_master_player):
         """Test set_shuffle handles errors."""
         mock_master_player.set_shuffle = AsyncMock(side_effect=WiiMError("Shuffle error"))
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         with pytest.raises(HomeAssistantError, match="Failed to set shuffle"):
             await entity.async_set_shuffle(True)
@@ -576,9 +564,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
     def test_repeat_supported_returns_true(self, mock_group_master_setup, mock_master_player):
         """Test repeat_supported returns True when supported."""
         mock_master_player.repeat_supported = True
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity._repeat_supported() is True
 
     def test_repeat_returns_off(self, mock_group_master_setup, mock_master_player):
@@ -586,9 +572,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
         from homeassistant.components.media_player import RepeatMode
 
         mock_master_player.repeat = "off"
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.repeat == RepeatMode.OFF
 
     def test_repeat_returns_one(self, mock_group_master_setup, mock_master_player):
@@ -596,9 +580,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
         from homeassistant.components.media_player import RepeatMode
 
         mock_master_player.repeat = "1"
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.repeat == RepeatMode.ONE
 
     def test_repeat_returns_all(self, mock_group_master_setup, mock_master_player):
@@ -606,9 +588,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
         from homeassistant.components.media_player import RepeatMode
 
         mock_master_player.repeat = "all"
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.repeat == RepeatMode.ALL
 
     @pytest.mark.asyncio
@@ -617,9 +597,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
         from homeassistant.components.media_player import RepeatMode
 
         mock_master_player.set_repeat = AsyncMock(return_value=True)
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         await entity.async_set_repeat(RepeatMode.ALL)
 
@@ -632,9 +610,7 @@ class TestWiiMGroupMediaPlayerShuffleRepeat:
         from homeassistant.components.media_player import RepeatMode
 
         mock_master_player.set_repeat = AsyncMock(side_effect=WiiMError("Repeat error"))
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         with pytest.raises(HomeAssistantError, match="Failed to set repeat"):
             await entity.async_set_repeat(RepeatMode.ALL)
@@ -645,27 +621,87 @@ class TestWiiMGroupMediaPlayerPlayMedia:
 
     @pytest.mark.asyncio
     async def test_play_media_delegates_to_master(self, mock_group_master_setup, mock_master_player):
-        """Test play_media delegates to master player."""
+        """Test play_media delegates to master player when master entity not in registry."""
         mock_master_player.play_url = AsyncMock(return_value=True)
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
-
-        await entity.async_play_media("music", "http://example.com/song.mp3")
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        # No master entity_id in registry -> fallback to play_url on coordinator
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = None
+        with patch(
+            "custom_components.wiim.group_media_player.er.async_get",
+            return_value=mock_registry,
+        ):
+            await entity.async_play_media("music", "http://example.com/song.mp3")
 
         mock_master_player.play_url.assert_called_once_with("http://example.com/song.mp3")
-        # No manual refresh - pywiim manages state updates via callbacks
+
+    @pytest.mark.asyncio
+    async def test_play_media_fallback_handles_wii_error(self, mock_group_master_setup, mock_master_player):
+        """Test play_media fallback raises HomeAssistantError when play_url fails."""
+        mock_master_player.play_url = AsyncMock(side_effect=WiiMError("Play error"))
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = None
+        with patch(
+            "custom_components.wiim.group_media_player.er.async_get",
+            return_value=mock_registry,
+        ):
+            with pytest.raises(HomeAssistantError, match="Failed to play media"):
+                await entity.async_play_media("music", "http://example.com/song.mp3")
+
+    @pytest.mark.asyncio
+    async def test_play_media_delegates_to_master_entity_when_found(self, mock_group_master_setup, mock_master_player):
+        """Test play_media calls media_player.play_media on master entity so resolution runs there."""
+        from homeassistant.components.media_player import (
+            ATTR_MEDIA_ANNOUNCE,
+            ATTR_MEDIA_CONTENT_ID,
+            ATTR_MEDIA_CONTENT_TYPE,
+        )
+
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        entity.hass = MagicMock()
+        entity.hass.services.async_call = AsyncMock()
+        mock_master_player.uuid = "test-uuid"
+        mock_master_player.mac = None
+        mock_master_player.host = "192.168.1.100"
+        master_entity_id = "media_player.living_room"
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.side_effect = lambda platform, domain, uid: (
+            master_entity_id if uid == "test-uuid" else None
+        )
+        with patch(
+            "custom_components.wiim.group_media_player.er.async_get",
+            return_value=mock_registry,
+        ):
+            await entity.async_play_media(
+                "music",
+                "media-source://tts?message=hello",
+                **{ATTR_MEDIA_ANNOUNCE: True},
+            )
+
+        entity.hass.services.async_call.assert_called_once()
+        # async_call(domain, service, service_data, ...) -> service_data is 3rd positional
+        call_args = entity.hass.services.async_call.call_args[0]
+        service_data = call_args[2]
+        assert service_data["entity_id"] == master_entity_id
+        assert service_data[ATTR_MEDIA_CONTENT_ID] == "media-source://tts?message=hello"
+        assert service_data[ATTR_MEDIA_CONTENT_TYPE] == "music"
+        assert service_data[ATTR_MEDIA_ANNOUNCE] is True
+        mock_master_player.play_url.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_play_media_handles_error(self, mock_group_master_setup, mock_master_player):
-        """Test play_media handles errors."""
+        """Test play_media handles errors when using fallback play_url."""
         mock_master_player.play_url = AsyncMock(side_effect=WiiMError("Play error"))
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
-
-        with pytest.raises(HomeAssistantError, match="Failed to play media"):
-            await entity.async_play_media("music", "http://example.com/song.mp3")
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = None
+        with patch(
+            "custom_components.wiim.group_media_player.er.async_get",
+            return_value=mock_registry,
+        ):
+            with pytest.raises(HomeAssistantError, match="Failed to play media"):
+                await entity.async_play_media("music", "http://example.com/song.mp3")
 
 
 class TestWiiMGroupMediaPlayerMediaContent:
@@ -675,9 +711,7 @@ class TestWiiMGroupMediaPlayerMediaContent:
         """Test media_content_type returns MUSIC."""
         from homeassistant.components.media_player import MediaType
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.media_content_type == MediaType.MUSIC
 
     def test_media_content_id_returns_url_when_playing(self, mock_group_master_setup, mock_master_player):
@@ -685,9 +719,7 @@ class TestWiiMGroupMediaPlayerMediaContent:
         from homeassistant.components.media_player import MediaPlayerState
 
         mock_master_player.media_content_id = "http://example.com/song.mp3"
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         entity._attr_state = MediaPlayerState.PLAYING
 
         assert entity.media_content_id == "http://example.com/song.mp3"
@@ -697,9 +729,7 @@ class TestWiiMGroupMediaPlayerMediaContent:
         from homeassistant.components.media_player import MediaPlayerState
 
         mock_master_player.media_content_id = "http://example.com/song.mp3"
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         entity._attr_state = MediaPlayerState.IDLE
 
         # Should return None when idle even if pywiim has a URL
@@ -712,9 +742,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
     def test_media_image_url_returns_none_when_unavailable(self, mock_group_master_setup):
         """Test media_image_url returns None when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         assert entity.media_image_url is None
 
@@ -723,9 +751,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
         mock_master_player.media_image_url = None
         mock_master_player.media_title = "Test Song"
         mock_master_player.media_artist = "Test Artist"
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         url = entity.media_image_url
         assert url is not None
@@ -733,9 +759,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
 
     def test_media_image_remotely_accessible(self, mock_group_master_setup):
         """Test media_image_remotely_accessible returns False."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.media_image_remotely_accessible is False
 
     @pytest.mark.asyncio
@@ -743,9 +767,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
         """Test async_get_media_image returns cover art."""
         mock_master_player.fetch_cover_art = AsyncMock(return_value=(b"image_data", "image/jpeg"))
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         result = await entity.async_get_media_image()
 
         assert result == (b"image_data", "image/jpeg")
@@ -755,9 +777,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
     async def test_get_media_image_returns_none_when_unavailable(self, mock_group_master_setup):
         """Test async_get_media_image returns None when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         result = await entity.async_get_media_image()
         assert result == (None, None)
@@ -766,9 +786,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
     async def test_get_media_image_handles_missing_fetch_method(self, mock_group_master_setup, mock_master_player):
         """Test async_get_media_image handles missing fetch_cover_art method."""
         # Don't set fetch_cover_art attribute
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         result = await entity.async_get_media_image()
         assert result == (None, None)
@@ -778,9 +796,7 @@ class TestWiiMGroupMediaPlayerImageHandling:
         """Test async_get_media_image handles exceptions gracefully."""
         mock_master_player.fetch_cover_art = AsyncMock(side_effect=Exception("Error"))
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         result = await entity.async_get_media_image()
 
         assert result == (None, None)
@@ -791,9 +807,7 @@ class TestWiiMGroupMediaPlayerExtraState:
 
     def test_extra_state_attributes_when_available(self, mock_group_master_setup, mock_master_player):
         """Test extra_state_attributes when available."""
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         attrs = entity.extra_state_attributes
 
@@ -803,9 +817,7 @@ class TestWiiMGroupMediaPlayerExtraState:
     def test_extra_state_attributes_when_unavailable(self, mock_group_master_setup):
         """Test extra_state_attributes when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         attrs = entity.extra_state_attributes
 
@@ -819,9 +831,7 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
     def test_supported_features_when_unavailable(self, mock_group_master_setup):
         """Test supported_features returns basic features when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         features = entity.supported_features
 
@@ -834,9 +844,7 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
     def test_supported_features_with_supports_next_track(self, mock_group_master_setup, mock_master_player):
         """Test supported_features includes NEXT_TRACK and PREVIOUS_TRACK when supported."""
         mock_master_player.supports_next_track = True
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         features = entity.supported_features
 
@@ -846,9 +854,7 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
     def test_supported_features_without_supports_next_track(self, mock_group_master_setup, mock_master_player):
         """Test supported_features excludes NEXT_TRACK and PREVIOUS_TRACK when not supported."""
         mock_master_player.supports_next_track = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         features = entity.supported_features
 
@@ -858,29 +864,21 @@ class TestWiiMGroupMediaPlayerSupportedFeatures:
     def test_next_track_supported_returns_true(self, mock_group_master_setup, mock_master_player):
         """Test _next_track_supported returns True when supported."""
         mock_master_player.supports_next_track = True
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         assert entity._next_track_supported() is True
 
-    def test_next_track_supported_returns_false_when_not_supported(
-        self, mock_group_master_setup, mock_master_player
-    ):
+    def test_next_track_supported_returns_false_when_not_supported(self, mock_group_master_setup, mock_master_player):
         """Test _next_track_supported returns False when not supported."""
         mock_master_player.supports_next_track = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         assert entity._next_track_supported() is False
 
     def test_next_track_supported_returns_false_when_unavailable(self, mock_group_master_setup):
         """Test _next_track_supported returns False when entity is unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         assert entity._next_track_supported() is False
 
@@ -898,9 +896,7 @@ class TestWiiMGroupMediaPlayerStateEdgeCases:
         mock_master_player.is_playing = True
         mock_master_player.is_paused = False
         mock_master_player.is_buffering = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         entity._attr_state = None
 
         assert entity.state == MediaPlayerState.PLAYING
@@ -912,9 +908,7 @@ class TestWiiMGroupMediaPlayerStateEdgeCases:
         mock_master_player.is_playing = False
         mock_master_player.is_paused = False
         mock_master_player.is_buffering = True
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         entity._attr_state = None
 
         assert entity.state == MediaPlayerState.BUFFERING
@@ -923,9 +917,7 @@ class TestWiiMGroupMediaPlayerStateEdgeCases:
         """Test state uses _attr_state when set."""
         from homeassistant.components.media_player import MediaPlayerState
 
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         entity._attr_state = MediaPlayerState.PAUSED
 
         assert entity.state == MediaPlayerState.PAUSED
@@ -933,9 +925,7 @@ class TestWiiMGroupMediaPlayerStateEdgeCases:
     def test_state_returns_none_when_unavailable(self, mock_group_master_setup):
         """Test state returns None when unavailable."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         entity._attr_state = None
 
         assert entity.state is None
@@ -947,9 +937,7 @@ class TestWiiMGroupMediaPlayerUpdatePosition:
     def test_update_position_handles_missing_player(self, mock_group_master_setup):
         """Test _update_position_from_coordinator handles missing player (unavailable)."""
         mock_group_master_setup.coordinator.last_update_success = False
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         entity._update_position_from_coordinator()
 
@@ -966,9 +954,7 @@ class TestWiiMGroupMediaPlayerHandleUpdate:
         mock_master_player.play_state = "play"
         mock_master_player.media_position = 60
         mock_master_player.media_duration = 180
-        entity = WiiMGroupMediaPlayer(
-            mock_group_master_setup.coordinator, mock_group_master_setup.config_entry
-        )
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
         with patch.object(entity, "async_write_ha_state"):
             entity._handle_coordinator_update()

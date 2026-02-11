@@ -18,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
+from .version import get_pywiim_version
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -194,9 +195,7 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
         player = self.coordinator.player
 
         # Get pywiim library version for diagnostics
-        import pywiim
-
-        pywiim_version = pywiim.__version__
+        pywiim_version = get_pywiim_version()
 
         attrs: dict[str, Any] = {
             # Identifiers

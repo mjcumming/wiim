@@ -10,6 +10,8 @@ import logging
 from typing import Any
 
 from homeassistant.components.media_player import (
+    ATTR_MEDIA_CONTENT_ID,
+    ATTR_MEDIA_CONTENT_TYPE,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
@@ -18,10 +20,11 @@ from homeassistant.components.media_player.const import MediaType, RepeatMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
-from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
+from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
 from .media_player_base import WiiMMediaPlayerMixin
@@ -53,6 +56,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         uuid = config_entry.unique_id or coordinator.player.host
         self._attr_unique_id = f"{uuid}_group_master"
         self._attr_name = None  # Use dynamic name property
+        self._media_cleared_by_turn_off = False  # Issue #180: turn_off clears media state until next play
 
     def _update_position_from_coordinator(self) -> None:
         """Update media position attributes from coordinator data (LinkPlay pattern).
@@ -94,6 +98,12 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         else:
             current_state = MediaPlayerState.IDLE
         self._attr_state = current_state
+
+        # Clear "turn_off" overlay when playback resumes (issue #180)
+        if current_state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED) and getattr(
+            self, "_media_cleared_by_turn_off", False
+        ):
+            self._media_cleared_by_turn_off = False
 
         # Get values from group object (pywiim 2.1.45+ provides group media properties)
         new_position = group.media_position
@@ -186,6 +196,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
+            | MediaPlayerEntityFeature.TURN_OFF
             | MediaPlayerEntityFeature.PLAY_MEDIA
             | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
         )
@@ -209,6 +220,8 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Return the current state."""
         if not self.available:
             return None
+        if self._media_cleared_by_turn_off:
+            return MediaPlayerState.OFF
         if self._attr_state is not None:
             return self._attr_state
 
@@ -359,6 +372,25 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to stop: {err}") from err
 
+    async def async_turn_off(self) -> None:
+        """Turn off the group media player (issue #180).
+
+        Stops playback on master (slaves follow) and clears displayed media state
+        so the entity shows as off with no track info (like Google Cast).
+        """
+        if not self.available:
+            return
+        try:
+            await self.coordinator.player.stop()
+        except WiiMError as err:
+            raise HomeAssistantError(f"Failed to turn off: {err}") from err
+        self._media_cleared_by_turn_off = True
+        self._attr_state = MediaPlayerState.OFF
+        self._attr_media_position = None
+        self._attr_media_position_updated_at = None
+        self._attr_media_duration = None
+        self.async_write_ha_state()
+
     async def async_media_next_track(self) -> None:
         """Skip to next track on master (slaves follow automatically).
 
@@ -389,20 +421,54 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to go to previous track: {err}") from err
 
-    async def async_play_media(self, _media_type: str, media_id: str, **_kwargs: Any) -> None:
+    async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         """Play media on master (slaves follow automatically).
 
-        Commands sent to coordinator.player (the physical master) are automatically
-        synchronized to all slaves by the LinkPlay firmware.
+        Delegates to the master entity so that media_source resolution and
+        announce logic run there. The device cannot fetch media_source:// URLs;
+        the master entity resolves them to a playable URL before calling the
+        library.
         """
         if not self.available:
             return
 
+        master_entity_id = self._master_entity_id()
+        if master_entity_id:
+            await self.hass.services.async_call(
+                "media_player",
+                "play_media",
+                {
+                    "entity_id": master_entity_id,
+                    ATTR_MEDIA_CONTENT_ID: media_id,
+                    ATTR_MEDIA_CONTENT_TYPE: media_type,
+                    **kwargs,
+                },
+                context=self._context,
+            )
+            return
+
+        # Fallback if master entity not in registry (e.g. during reload)
         try:
             await self.coordinator.player.play_url(media_id)
-            # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play media: {err}") from err
+
+    def _master_entity_id(self) -> str | None:
+        """Return entity_id of the master (single-device) media player."""
+        entity_registry = er.async_get(self.hass)
+        player = self.coordinator.player
+        if not player:
+            return None
+        # Same lookup as WiiMMediaPlayer._entity_id_from_player
+        uid = getattr(player, "uuid", None) or getattr(player, "mac", None)
+        if uid:
+            eid = entity_registry.async_get_entity_id("media_player", DOMAIN, uid)
+            if eid:
+                return eid
+        host = getattr(player, "host", None)
+        if host:
+            return entity_registry.async_get_entity_id("media_player", DOMAIN, host)
+        return None
 
     # ===== SHUFFLE & REPEAT =====
 
@@ -471,7 +537,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_title(self) -> str | None:
         """Return media title from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available:
+        if not self.available or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -482,7 +548,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_artist(self) -> str | None:
         """Return media artist from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available:
+        if not self.available or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -493,7 +559,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_album_name(self) -> str | None:
         """Return media album from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available:
+        if not self.available or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -504,7 +570,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_image_url(self) -> str | None:
         """Image url of current playing media from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available:
+        if not self.available or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:

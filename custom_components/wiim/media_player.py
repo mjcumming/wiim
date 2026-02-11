@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import suppress
 from typing import Any
 
@@ -12,6 +13,7 @@ from homeassistant.components import media_source
 from homeassistant.components.media_player import (
     ATTR_MEDIA_ANNOUNCE,
     ATTR_MEDIA_ENQUEUE,
+    ATTR_MEDIA_EXTRA,
     BrowseError,
     BrowseMedia,
     MediaClass,
@@ -29,7 +31,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pywiim.exceptions import WiiMError
+from homeassistant.helpers.network import NoURLAvailableError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
 from .coordinator import WiiMCoordinator
@@ -132,6 +134,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         player_uuid = getattr(coordinator.player, "uuid", None) or getattr(coordinator.player, "mac", None)
         self._attr_unique_id = player_uuid or config_entry.unique_id or coordinator.player.host
         self._attr_name = None  # Use device name
+        self._media_cleared_by_turn_off = False  # Issue #180: turn_off clears media state until next play
 
     @property
     def name(self) -> str:
@@ -160,6 +163,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.PAUSE
             | MediaPlayerEntityFeature.STOP
+            | MediaPlayerEntityFeature.TURN_OFF
         )
 
         # Features only available to non-slaves (master or solo players)
@@ -236,6 +240,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState | None:
         """Return the current state."""
+        if self._media_cleared_by_turn_off:
+            return MediaPlayerState.OFF
         if self._attr_state is not None:
             return self._attr_state
 
@@ -305,6 +311,22 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         async with self.wiim_command("stop playback"):
             await self._get_player().stop()
             # State updates automatically via callback - no manual refresh needed
+
+    async def async_turn_off(self) -> None:
+        """Turn off the media player (issue #180).
+
+        Stops playback and clears displayed media state so the entity shows as off
+        with no track info (like Google Cast). Use case: Universal Media Player
+        (Wiim + AVR) — when switching AVR to TV, Wiim entity should not show last song.
+        """
+        async with self.wiim_command("turn off"):
+            await self._get_player().stop()
+        self._media_cleared_by_turn_off = True
+        self._attr_state = MediaPlayerState.OFF
+        self._attr_media_position = None
+        self._attr_media_position_updated_at = None
+        self._attr_media_duration = None
+        self.async_write_ha_state()
 
     async def async_media_next_track(self) -> None:
         """Skip to next track."""
@@ -433,16 +455,22 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_title(self) -> str | None:
         """Return media title."""
+        if self._media_cleared_by_turn_off:
+            return None
         return self._get_metadata_player().media_title
 
     @property
     def media_artist(self) -> str | None:
         """Return media artist."""
+        if self._media_cleared_by_turn_off:
+            return None
         return self._get_metadata_player().media_artist
 
     @property
     def media_album_name(self) -> str | None:
         """Return media album."""
+        if self._media_cleared_by_turn_off:
+            return None
         return self._get_metadata_player().media_album
 
     @callback
@@ -460,33 +488,68 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if not media_id:
             raise HomeAssistantError("media_id cannot be empty")
 
-        # Check for announce parameter - uses device's built-in playPromptUrl endpoint
-        # The device firmware automatically:
-        # - Lowers current playback volume
-        # - Plays the notification audio
-        # - Restores volume after completion
-        # No state management needed - device handles it all
+        # Resolve media_source IDs once at the start (Sonos-style) so both announce and
+        # normal play receive a single, absolute, playable URL. Never pass media_source://
+        # or raw media_content_id to the device.
+        if media_id.startswith("media-source://"):
+            original_media_id = media_id
+            _LOGGER.debug("[%s] Resolving media source: %s", self.name, original_media_id)
+            try:
+                sourced_media = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
+                _LOGGER.debug(
+                    "[%s] Resolved media source - url: %s, mime_type: %s",
+                    self.name,
+                    sourced_media.url,
+                    sourced_media.mime_type,
+                )
+                media_id = sourced_media.url
+                if not media_id:
+                    _LOGGER.error(
+                        "[%s] Media source resolved to empty URL. Original media_id: %s, mime_type: %s",
+                        self.name,
+                        original_media_id,
+                        sourced_media.mime_type,
+                    )
+                    raise HomeAssistantError(
+                        f"Media source resolved to empty URL for: {original_media_id}. "
+                        "This may indicate the media source is not playable or not properly configured."
+                    )
+                try:
+                    media_id = async_process_play_media_url(self.hass, media_id)
+                except NoURLAvailableError as err:
+                    _LOGGER.warning(
+                        "[%s] Cannot build playable URL for TTS/announcement: %s",
+                        self.name,
+                        err,
+                    )
+                    raise HomeAssistantError(
+                        "Home Assistant could not build a URL the WiiM can use for this media. "
+                        "Set Internal URL in Settings → System → Network to this instance's LAN address (e.g. http://192.168.1.x:8123)."
+                    ) from err
+            except HomeAssistantError:
+                raise
+            except Exception as err:
+                _LOGGER.error(
+                    "[%s] Failed to resolve media source %s: %s",
+                    self.name,
+                    original_media_id,
+                    err,
+                    exc_info=True,
+                )
+                raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
+
+        # Announce path:
+        # WiiM firmware does not reliably support playPromptUrl on all models.
+        # Use normal URL playback for announcements so behavior is consistent.
         announce = kwargs.get(ATTR_MEDIA_ANNOUNCE, False)
         if announce:
-            # Handle media_source resolution for announcements
-            if media_source.is_media_source_id(media_id):
-                original_media_id = media_id
-                try:
-                    sourced_media = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
-                    media_id = sourced_media.url
-                    if not media_id:
-                        raise HomeAssistantError(f"Media source resolved to empty URL: {original_media_id}")
-                    media_id = async_process_play_media_url(self.hass, media_id)
-                except Exception as err:
-                    _LOGGER.error("Failed to resolve media source for announcement: %s", err, exc_info=True)
-                    raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
-
-            # Use device's built-in notification endpoint (playPromptUrl)
-            # Device automatically handles volume ducking and restoration
-            _LOGGER.debug("[%s] Playing notification via device firmware: %s", self.name, media_id)
+            kwargs.get(ATTR_MEDIA_EXTRA, {})  # e.g. volume; use when library supports it
+            # Add cache-busting query param to avoid WiiM returning cached audio
+            bust = f"?_={int(time.time() * 1000)}" if "?" not in media_id else f"&_={int(time.time() * 1000)}"
+            play_url = media_id + bust
+            _LOGGER.debug("[%s] Playing announcement via URL playback: %s", self.name, play_url)
             async with self.wiim_command("play notification"):
-                await self.coordinator.player.play_notification(media_id)
-                # State updates automatically via callback - no manual refresh needed
+                await self.coordinator.player.play_url(play_url)
             return
 
         # Handle preset numbers (presets don't support queue management)
@@ -494,40 +557,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             preset_num = int(media_id)
             async with self.wiim_command("play preset"):
                 await self.coordinator.player.play_preset(preset_num)
-                # State updates automatically via callback - no manual refresh needed
             return
-
-        # Handle media_source
-        if media_source.is_media_source_id(media_id):
-            original_media_id = media_id
-            _LOGGER.debug("Resolving media source: %s", original_media_id)
-            try:
-                sourced_media = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
-                _LOGGER.debug(
-                    "Resolved media source - url: %s, mime_type: %s", sourced_media.url, sourced_media.mime_type
-                )
-                media_id = sourced_media.url
-                # Validate that we have a valid URL before processing
-                if not media_id:
-                    _LOGGER.error(
-                        "Media source resolved to empty URL. Original media_id: %s, mime_type: %s",
-                        original_media_id,
-                        sourced_media.mime_type,
-                    )
-                    raise HomeAssistantError(
-                        f"Media source resolved to empty URL for: {original_media_id}. "
-                        f"This may indicate the media source is not playable or not properly configured."
-                    )
-                # Process URL to handle relative paths
-                media_id = async_process_play_media_url(self.hass, media_id)
-            except Exception as err:
-                _LOGGER.error(
-                    "Failed to resolve media source %s: %s",
-                    original_media_id,
-                    err,
-                    exc_info=True,
-                )
-                raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
 
         enqueue: MediaPlayerEnqueue | None = kwargs.get(ATTR_MEDIA_ENQUEUE)
         if enqueue and enqueue != MediaPlayerEnqueue.REPLACE:
@@ -1143,13 +1173,19 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     # ===== DEVICE MANAGEMENT =====
 
     async def async_reboot_device(self) -> None:
-        """Reboot the WiiM device."""
+        """Reboot the WiiM device.
+
+        For restart only, no-response (connection closed, timeout, or "Didn't receive
+        expected OK") is treated as success — the command was sent and the device may
+        have already rebooted. Never surface an error to the user for restart.
+        """
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         try:
             await self.coordinator.player.reboot()
             _LOGGER.info("Reboot command sent to %s", device_name)
-        except WiiMError as err:
-            # Reboot may cause connection issues - this is expected
+        except Exception as err:
+            # Restart: command sent; device may reboot before responding.
+            # Treat no response / connection closed / timeout as success (issue #179).
             _LOGGER.info(
                 "Reboot command sent to %s (device may not respond): %s",
                 device_name,

@@ -49,7 +49,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from pywiim import WiiMClient
-from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMRequestError, WiiMTimeoutError
 
 # Import config_flow to make it available as a module attribute for tests
 from . import config_flow  # noqa: F401
@@ -58,8 +58,28 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import WiiMCoordinator
+from .version import (
+    MIN_REQUIRED_PYWIIM_VERSION,
+    async_ensure_pywiim_version,
+    get_pywiim_version_label,
+    is_pywiim_version_compatible,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _is_expected_unreachable_error(err: Exception) -> bool:
+    """Return True when error indicates expected offline/unreachable device."""
+    err_text = str(err).lower()
+    return "device unreachable" in err_text or "connection failed on all attempted protocols" in err_text
+
+
+def _compact_connectivity_error(err: Exception) -> str:
+    """Return compact connectivity error string to reduce log noise."""
+    if _is_expected_unreachable_error(err):
+        return "device unreachable"
+    return str(err)
+
 
 # Core platforms that are always enabled
 CORE_PLATFORMS: list[Platform] = [
@@ -148,12 +168,8 @@ async def _register_ha_device(hass: HomeAssistant, coordinator: WiiMCoordinator,
     identifiers = {(DOMAIN, uuid)}
 
     # Get pywiim library version
-    try:
-        import pywiim
-
-        pywiim_version = f"pywiim {getattr(pywiim, '__version__', 'unknown')}"
-    except (ImportError, AttributeError):
-        pywiim_version = "pywiim unknown"
+    await async_ensure_pywiim_version(hass)
+    pywiim_version = get_pywiim_version_label()
 
     # Get device info from player
     player = coordinator.player
@@ -207,6 +223,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Services are registered via EntityServiceDescription pattern in media_player.py
     # when entities are added to the platform
+
+    installed_pywiim_version = await async_ensure_pywiim_version(hass)
+    if not is_pywiim_version_compatible(installed_pywiim_version):
+        _LOGGER.error(
+            "pywiim %s is too old for this integration (requires >= %s). "
+            "Home Assistant must update dependencies before setup can continue.",
+            installed_pywiim_version,
+            MIN_REQUIRED_PYWIIM_VERSION,
+        )
+        raise ConfigEntryNotReady(
+            f"pywiim {MIN_REQUIRED_PYWIIM_VERSION}+ required; found {installed_pywiim_version}. "
+            "Please restart Home Assistant to refresh integration dependencies."
+        )
 
     # Create client and coordinator with firmware capabilities
     session = async_get_clientsession(hass)
@@ -462,7 +491,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "Timeout fetching initial data from %s (attempt %d), will retry: %s",
                 entry.data["host"],
                 retry_count,
-                err,
+                _compact_connectivity_error(err),
             )
             raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
         if isinstance(err, WiiMConnectionError):
@@ -470,27 +499,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "Connection error fetching initial data from %s (attempt %d), will retry: %s",
                 entry.data["host"],
                 retry_count,
-                err,
+                _compact_connectivity_error(err),
             )
             raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
-        _LOGGER.error("API error fetching initial data from %s: %s", entry.data["host"], err)
+        _LOGGER.error(
+            "API error fetching initial data from %s: %s",
+            entry.data["host"],
+            _compact_connectivity_error(err),
+        )
         raise ConfigEntryNotReady(f"API error with WiiM device at {entry.data['host']}") from err
     except Exception as err:
-        # Cleanup on unexpected error and re-raise
+        # Cleanup on error and re-raise (ConfigEntryNotReady from coordinator, or unexpected)
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
-        # Check if this is a wrapped WiiM exception (e.g., UpdateFailed from coordinator)
-        underlying_err = err.__cause__ if hasattr(err, "__cause__") and err.__cause__ else None
-        is_wiim_error = isinstance(err, (WiiMTimeoutError, WiiMConnectionError, WiiMError)) or isinstance(
-            underlying_err, (WiiMTimeoutError, WiiMConnectionError, WiiMError)
-        )
+        # Walk __cause__ chain to find WiiM exception (coordinator wraps: ConfigEntryNotReady -> UpdateFailed -> WiiMRequestError)
+        def _find_wiim_cause(exc: BaseException | None) -> BaseException | None:
+            while exc:
+                if isinstance(exc, (WiiMTimeoutError, WiiMConnectionError, WiiMRequestError, WiiMError)):
+                    return exc
+                exc = getattr(exc, "__cause__", None)
+            return None
 
-        # Smart logging escalation for unexpected errors too
+        wiim_cause = _find_wiim_cause(err)
+        is_connectivity_error = isinstance(wiim_cause, (WiiMConnectionError, WiiMTimeoutError, WiiMRequestError))
+
+        # Smart logging escalation to reduce noise for persistent failures
         retry_count = getattr(entry, "_setup_retry_count", 0)
         retry_count += 1
         entry._setup_retry_count = retry_count
-
-        # Escalate logging based on retry count
         if retry_count <= 2:
             log_fn = _LOGGER.warning
         elif retry_count <= 4:
@@ -498,27 +534,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             log_fn = _LOGGER.error
 
-        # Use appropriate message based on error type
-        # Pylint false-positive: `is_wiim_error` is computed above, not constant.
-        if is_wiim_error:  # pylint: disable=using-constant-test
-            err_to_log = underlying_err if underlying_err else err
-            if isinstance(err_to_log, WiiMConnectionError):
+        # For connectivity errors: log cleanly without traceback (expected failure mode)
+        if is_connectivity_error:
+            err_msg = _compact_connectivity_error(wiim_cause if wiim_cause else err)
+            if isinstance(wiim_cause, WiiMConnectionError):
                 log_fn(
                     "Connection error fetching initial data from %s (attempt %d), will retry: %s",
                     entry.data["host"],
                     retry_count,
-                    err,
+                    err_msg,
                 )
                 raise ConfigEntryNotReady(f"Connection error with WiiM device at {entry.data['host']}") from err
-            elif isinstance(err_to_log, WiiMTimeoutError):
+            if isinstance(wiim_cause, WiiMTimeoutError):
                 log_fn(
                     "Timeout fetching initial data from %s (attempt %d), will retry: %s",
                     entry.data["host"],
                     retry_count,
-                    err,
+                    err_msg,
                 )
                 raise ConfigEntryNotReady(f"Timeout connecting to WiiM device at {entry.data['host']}") from err
+            # WiiMRequestError (wraps connection errors)
+            log_fn(
+                "Device unreachable at %s (attempt %d), will retry: %s",
+                entry.data["host"],
+                retry_count,
+                err_msg,
+            )
+            raise ConfigEntryNotReady(f"Device unreachable at {entry.data['host']}") from err
 
+        # Truly unexpected errors: log with traceback for debugging
         log_fn(
             "Unexpected error fetching initial data from %s (attempt %d): %s",
             entry.data["host"],

@@ -8,7 +8,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 **The Essentials (What Most Users Need)**
 
-- 🎵 Play, pause, and control your music
+- 🎵 Play, pause, stop, turn off, and control your music
 - 🔊 Adjust volume and mute speakers
 - 🏠 Group speakers together for multiroom audio
 - 📻 Browse and play your favorite presets
@@ -27,7 +27,6 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 ### Via HACS (Recommended)
 
 1. **Install**
-
    - Open HACS → Integrations
    - Search for "WiiM Audio" → Download → Restart Home Assistant
 

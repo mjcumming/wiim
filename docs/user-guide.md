@@ -12,7 +12,7 @@ Everything you need for everyday use - playing music, controlling volume, and gr
 
 ### 🎵 Basic Playback
 
-**Play, Pause, and Stop**
+**Play, Pause, Stop, and Turn Off**
 
 ```yaml
 service: media_player.media_play
@@ -26,7 +26,13 @@ target:
 service: media_player.media_stop
 target:
   entity_id: media_player.living_room
+
+service: media_player.turn_off
+target:
+  entity_id: media_player.living_room
 ```
+
+**Turn off** stops playback and clears the displayed media state (title, artist, etc.) so the entity shows as "off" with no track info—useful when using a Universal Media Player (e.g. WiiM + AVR) and switching the AVR to another source.
 
 **Next and Previous Track**
 

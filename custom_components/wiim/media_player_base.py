@@ -85,6 +85,12 @@ class WiiMMediaPlayerMixin:
         current_state = self._derive_state_from_player(player)
         self._attr_state = current_state
 
+        # Clear "turn_off" overlay when playback resumes (issue #180: turn_off clears media state)
+        if current_state in (MediaPlayerState.PLAYING, MediaPlayerState.PAUSED) and getattr(
+            self, "_media_cleared_by_turn_off", False
+        ):
+            self._media_cleared_by_turn_off = False
+
         # Get values from pywiim
         new_position = player.media_position
         # If duration is 0, return None (unknown) to avoid 00:00 display

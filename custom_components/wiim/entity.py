@@ -11,6 +11,7 @@ from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
+from .version import get_pywiim_version_label
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,12 +41,7 @@ class WiimEntity(CoordinatorEntity):
             mac_address = player.device_info.mac
 
         # Get pywiim library version
-        try:
-            import pywiim
-
-            pywiim_version = f"pywiim {getattr(pywiim, '__version__', 'unknown')}"
-        except (ImportError, AttributeError):
-            pywiim_version = "pywiim unknown"
+        pywiim_version = get_pywiim_version_label()
 
         # Build connections set with MAC address if available
         connections: set[tuple[str, str]] = set()

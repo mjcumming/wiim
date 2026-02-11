@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -61,18 +62,23 @@ class AutomatedTestSuite:
         "play_preset",
         "play_url",
         "announcements",
+        "tts_announce",
         "queue_management",
         "sync_time",
         "bluetooth_output",
     ]
 
-    def __init__(self, ha_url: str, token: str):
+    # TTS-only mode: discovery + TTS announce (for quick TTS validation)
+    TTS_TESTS = ["device_discovery", "tts_announce"]
+
+    def __init__(self, ha_url: str, token: str, entity_id: str | None = None):
         self.ha_url = ha_url.rstrip("/")
         self.token = token
         self.headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         self.devices = []
         self.results = {}
         self.tracker = TestTracker()
+        self.entity_override = entity_id  # e.g. media_player.master_bedroom for TTS target
 
     def print_header(self, text: str):
         width = 80
@@ -298,17 +304,27 @@ class AutomatedTestSuite:
         else:
             # For hardware inputs (Line In, Optical, etc.), source should change immediately
             # Streaming services might take longer, but hardware inputs should work instantly
-            is_hardware_input = any(hw.lower() in target_source.lower() for hw in ["Line In", "Optical", "HDMI", "Coax", "Bluetooth"])
+            is_hardware_input = any(
+                hw.lower() in target_source.lower() for hw in ["Line In", "Optical", "HDMI", "Coax", "Bluetooth"]
+            )
 
             if is_hardware_input:
                 # Hardware inputs should change immediately - this is a failure
                 self.print_failure(f"Source selection FAILED: Expected '{target_source}' but got '{new_source}'")
-                self.print_warning("Hardware input selection should work immediately - check API format (line-in vs line_in)")
-                return {"passed": False, "details": {"error": f"Source did not change: expected '{target_source}', got '{new_source}'"}}
+                self.print_warning(
+                    "Hardware input selection should work immediately - check API format (line-in vs line_in)"
+                )
+                return {
+                    "passed": False,
+                    "details": {"error": f"Source did not change: expected '{target_source}', got '{new_source}'"},
+                }
             else:
                 # Streaming services might take longer
                 self.print_warning(f"Source may not have changed yet: {new_source} (expected: {target_source})")
-                return {"passed": True, "details": {"note": f"State shows {new_source}, may need more time for streaming service"}}
+                return {
+                    "passed": True,
+                    "details": {"note": f"State shows {new_source}, may need more time for streaming service"},
+                }
 
     def test_multiroom_basic(self) -> dict[str, Any]:
         """Test basic multiroom functionality."""
@@ -550,7 +566,7 @@ class AutomatedTestSuite:
             return {"passed": False, "details": {"error": str(e)}}
 
     def test_announcements(self) -> dict[str, Any]:
-        """Test announcement/notification playback."""
+        """Test announcement/notification playback (direct URL via wiim.play_notification)."""
         self.print_header("Test: Announcements")
 
         if not self.devices:
@@ -576,6 +592,58 @@ class AutomatedTestSuite:
             else:
                 return {"passed": False, "details": {"error": f"Service returned {response.status_code}"}}
         except Exception as e:
+            return {"passed": False, "details": {"error": str(e)}}
+
+    def test_tts_announce(self) -> dict[str, Any]:
+        """Test TTS announcement via media_player.play_media with media_source + announce.
+
+        Exercises the integration's media_source resolution path: HA resolves
+        media-source://tts to a playable URL, then the device plays it as a notification.
+        """
+        self.print_header("Test: TTS Announce (media_source + announce)")
+
+        entity_id = self.entity_override
+        if not entity_id and not self.devices:
+            return {"passed": False, "details": {"error": "No devices available"}}
+        if not entity_id:
+            entity_id = self.devices[0]["entity_id"]
+
+        # TTS media source - HA will resolve this to a playable URL (e.g. tts_proxy)
+        # Use a longer phrase so it's easy to hear
+        message = "This is a test from Home Assistant. Can you hear me?"
+        media_content_id = "media-source://tts/tts.google_translate_en_com?" + urllib.parse.urlencode(
+            {"message": message}
+        )
+
+        self.print_info(f"Calling media_player.play_media with TTS media source and announce=true...")
+        self.print_info(f"  entity_id={entity_id}")
+        self.print_info(f"  media_content_id={media_content_id[:60]}...")
+        try:
+            url = f"{self.ha_url}/api/services/media_player/play_media"
+            payload = {
+                "entity_id": entity_id,
+                "media_content_id": media_content_id,
+                "media_content_type": "music",
+                "announce": True,
+            }
+            response = requests.post(url, headers=self.headers, json=payload, timeout=15)
+
+            if response.status_code == 200:
+                self.print_success("TTS play_media (announce) accepted")
+                time.sleep(4)  # Allow TTS to generate and play
+                return {"passed": True}
+            else:
+                body = (response.text or "")[:200]
+                self.print_failure(f"play_media returned {response.status_code}: {body}")
+                return {
+                    "passed": False,
+                    "details": {
+                        "error": f"Service returned {response.status_code}",
+                        "body": body,
+                    },
+                }
+        except Exception as e:
+            self.print_failure(str(e))
             return {"passed": False, "details": {"error": str(e)}}
 
     def test_queue_management(self) -> dict[str, Any]:
@@ -726,6 +794,7 @@ class AutomatedTestSuite:
             "play_preset": self.test_play_preset,
             "play_url": self.test_play_url,
             "announcements": self.test_announcements,
+            "tts_announce": self.test_tts_announce,
             "queue_management": self.test_queue_management,
             "sync_time": self.test_sync_time,
             "bluetooth_output": self.test_bluetooth_output,
@@ -755,12 +824,27 @@ class AutomatedTestSuite:
 
         print(f"\n{Colors.BOLD}Results: {passed}/{total} tests passed{Colors.RESET}")
 
+    def run_tts_only(self) -> dict[str, Any]:
+        """Run only device discovery and TTS announce (for quick TTS validation)."""
+        self.print_header("WiiM Integration - TTS Tests Only")
+        test_map = {
+            "device_discovery": self.test_device_discovery,
+            "tts_announce": self.test_tts_announce,
+        }
+        results = {}
+        for test_name in self.TTS_TESTS:
+            if test_name in test_map:
+                results[test_name] = test_map[test_name]()
+        return results
+
     def run(self, mode: str = "critical", version: str | None = None) -> bool:
         """Run tests and save results."""
         self.print_header("WiiM Integration - Automated Test Suite")
 
         if mode == "critical":
             results = self.run_critical_path()
+        elif mode == "tts":
+            results = self.run_tts_only()
         else:
             results = self.run_full_suite()
 
@@ -782,7 +866,16 @@ def main():
     parser.add_argument("--ha-url", default="http://localhost:8123", help="Home Assistant URL")
     parser.add_argument("--token", help="Home Assistant long-lived access token")
     parser.add_argument("--config", help="Path to test.config file")
-    parser.add_argument("--mode", choices=["critical", "full"], default="critical", help="Test mode")
+    parser.add_argument(
+        "--mode",
+        choices=["critical", "full", "tts"],
+        default="critical",
+        help="Test mode: critical (fast), full (all), tts (discovery + TTS announce only)",
+    )
+    parser.add_argument(
+        "--entity",
+        help="Target entity_id for TTS test (e.g. media_player.master_bedroom). Default: first discovered device.",
+    )
     parser.add_argument("--version", help="Version string for result tracking")
 
     args = parser.parse_args()
@@ -814,7 +907,7 @@ def main():
         print("Error: No token provided. Use --token or set HA_TOKEN environment variable.")
         sys.exit(1)
 
-    suite = AutomatedTestSuite(ha_url, token)
+    suite = AutomatedTestSuite(ha_url, token, entity_id=args.entity)
     success = suite.run(args.mode, args.version)
 
     sys.exit(0 if success else 1)

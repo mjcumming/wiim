@@ -15,6 +15,19 @@ from pywiim.exceptions import WiiMError
 _LOGGER = logging.getLogger(__name__)
 
 
+def _is_expected_unreachable_error(err: Exception) -> bool:
+    """Return True when error indicates expected offline/unreachable device."""
+    err_text = str(err).lower()
+    return "device unreachable" in err_text or "connection failed on all attempted protocols" in err_text
+
+
+def _compact_wiim_error(err: Exception) -> str:
+    """Return compact error text to avoid log spam."""
+    if _is_expected_unreachable_error(err):
+        return "device unreachable"
+    return str(err)
+
+
 class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """WiiM coordinator - minimal glue between pywiim and Home Assistant."""
 
@@ -119,8 +132,8 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return result
 
         except WiiMError as err:
-            _LOGGER.warning("Update failed for %s: %s", self.player.host, err)
+            _LOGGER.warning("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
             # Return cached Player object even on error
             if self.data:
                 return self.data
-            raise UpdateFailed(f"Failed to communicate with {self.player.host}: {err}") from err
+            raise UpdateFailed(f"Failed to communicate with {self.player.host}: {_compact_wiim_error(err)}") from err

@@ -192,6 +192,25 @@ class TestWiiMMediaPlayerPlayback:
         # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
+    async def test_turn_off_calls_stop_and_clears_media_state(self, media_player, mock_coordinator):
+        """Test turn_off (issue #180): stop playback and clear displayed media state."""
+        from homeassistant.components.media_player import MediaPlayerState
+
+        player = mock_coordinator.player
+        player.stop = AsyncMock(return_value=True)
+        media_player.async_write_ha_state = AsyncMock()
+
+        await media_player.async_turn_off()
+
+        player.stop.assert_called_once()
+        assert media_player._media_cleared_by_turn_off is True
+        assert media_player._attr_state == MediaPlayerState.OFF
+        assert media_player._attr_media_position is None
+        assert media_player._attr_media_position_updated_at is None
+        assert media_player._attr_media_duration is None
+        media_player.async_write_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_media_next_track(self, media_player, mock_coordinator):
         """Test next track command."""
         mock_coordinator.player.next_track = AsyncMock(return_value=True)
@@ -383,6 +402,35 @@ class TestWiiMMediaPlayerErrorHandling:
 
         with pytest.raises(HomeAssistantError, match="Failed to"):
             await media_player.async_mute_volume(True)
+
+
+class TestWiiMMediaPlayerRebootDevice:
+    """Test reboot device (issue #179: no-response treated as success)."""
+
+    @pytest.mark.asyncio
+    async def test_async_reboot_device_success(self, media_player, mock_coordinator):
+        """Test reboot device when pywiim returns normally."""
+        mock_coordinator.player.reboot = AsyncMock()
+        await media_player.async_reboot_device()
+        mock_coordinator.player.reboot.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_reboot_device_no_response_treated_as_success(self, media_player, mock_coordinator):
+        """Test reboot device when device does not respond (connection closed / no OK) — no user error (issue #179)."""
+        from pywiim.exceptions import WiiMError
+
+        mock_coordinator.player.reboot = AsyncMock(side_effect=WiiMError("Didn't receive expected OK"))
+        await media_player.async_reboot_device()
+        mock_coordinator.player.reboot.assert_called_once()
+        # No exception raised — restart is considered successful
+
+    @pytest.mark.asyncio
+    async def test_async_reboot_device_connection_error_treated_as_success(self, media_player, mock_coordinator):
+        """Test reboot device when connection drops (e.g. device reboots) — no user error (issue #179)."""
+        mock_coordinator.player.reboot = AsyncMock(side_effect=ConnectionError("Connection closed"))
+        await media_player.async_reboot_device()
+        mock_coordinator.player.reboot.assert_called_once()
+        # No exception raised — restart is considered successful
 
 
 class TestWiiMMediaPlayerShuffleRepeat:
@@ -665,13 +713,16 @@ class TestWiiMMediaPlayerPlayMedia:
         """Test playing an announcement."""
         from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE
 
-        mock_coordinator.player.play_notification = AsyncMock(return_value=True)
+        mock_coordinator.player.play_url = AsyncMock(return_value=True)
         media_player.hass = MagicMock()
         media_player.entity_id = "media_player.test"
 
         await media_player.async_play_media("music", "http://example.com/announce.mp3", **{ATTR_MEDIA_ANNOUNCE: True})
 
-        mock_coordinator.player.play_notification.assert_called_once_with("http://example.com/announce.mp3")
+        mock_coordinator.player.play_url.assert_called_once()
+        called_url = mock_coordinator.player.play_url.call_args.args[0]
+        assert called_url.startswith("http://example.com/announce.mp3")
+        assert "?_=" in called_url
         # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
@@ -1351,7 +1402,7 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
         from homeassistant.components import media_source
         from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE
 
-        mock_coordinator.player.play_notification = AsyncMock(return_value=True)
+        mock_coordinator.player.play_url = AsyncMock(return_value=True)
         media_player.hass = MagicMock()
         media_player.entity_id = "media_player.test"
 
@@ -1366,7 +1417,43 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
                 ):
                     await media_player.async_play_media("music", "media-source://test", **{ATTR_MEDIA_ANNOUNCE: True})
 
-        mock_coordinator.player.play_notification.assert_called_once_with("http://example.com/announce.mp3")
+        mock_coordinator.player.play_url.assert_called_once()
+        called_url = mock_coordinator.player.play_url.call_args.args[0]
+        assert called_url.startswith("http://example.com/announce.mp3")
+        assert "?_=" in called_url
+
+    @pytest.mark.asyncio
+    async def test_play_media_announce_no_url_available_raises_helpful_error(self, media_player, mock_coordinator):
+        """Test play_media announce when HA cannot build URL (e.g. Internal URL not set)."""
+        from homeassistant.components import media_source
+        from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE
+        from homeassistant.exceptions import HomeAssistantError
+        from homeassistant.helpers.network import NoURLAvailableError
+
+        mock_coordinator.player.play_url = AsyncMock(return_value=True)
+        media_player.hass = MagicMock()
+        media_player.entity_id = "media_player.test"
+
+        mock_sourced_media = MagicMock()
+        mock_sourced_media.url = "/api/tts_proxy/abc123"
+        mock_sourced_media.mime_type = "audio/mpeg"
+
+        with patch.object(media_source, "is_media_source_id", return_value=True):
+            with patch.object(media_source, "async_resolve_media", return_value=mock_sourced_media):
+                with patch(
+                    "custom_components.wiim.media_player.async_process_play_media_url",
+                    side_effect=NoURLAvailableError("no url"),
+                ):
+                    with pytest.raises(
+                        HomeAssistantError,
+                        match="Internal URL.*Settings.*System.*Network",
+                    ):
+                        await media_player.async_play_media(
+                            "music",
+                            "media-source://tts/google_translate?message=Hi",
+                            **{ATTR_MEDIA_ANNOUNCE: True},
+                        )
+        mock_coordinator.player.play_url.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_play_media_handles_add_to_queue_error(self, media_player, mock_coordinator):
@@ -1485,6 +1572,27 @@ class TestWiiMMediaPlayerStateDerivation:
 
         assert media_player.state == MediaPlayerState.PAUSED
 
+    def test_state_returns_off_when_media_cleared_by_turn_off(self, media_player):
+        """Test state returns OFF when _media_cleared_by_turn_off (issue #180)."""
+        from homeassistant.components.media_player import MediaPlayerState
+
+        media_player._media_cleared_by_turn_off = True
+        assert media_player.state == MediaPlayerState.OFF
+
+    def test_media_title_artist_album_return_none_when_media_cleared_by_turn_off(self, media_player, mock_coordinator):
+        """Test media_title/artist/album return None when _media_cleared_by_turn_off (issue #180)."""
+        mock_coordinator.player.media_title = "Last Song"
+        mock_coordinator.player.media_artist = "Last Artist"
+        mock_coordinator.player.media_album = "Last Album"
+        assert media_player.media_title == "Last Song"
+        assert media_player.media_artist == "Last Artist"
+        assert media_player.media_album_name == "Last Album"
+
+        media_player._media_cleared_by_turn_off = True
+        assert media_player.media_title is None
+        assert media_player.media_artist is None
+        assert media_player.media_album_name is None
+
 
 class TestWiiMMediaPlayerUpdatePosition:
     """Test _update_position_from_coordinator edge cases."""
@@ -1506,6 +1614,25 @@ class TestWiiMMediaPlayerUpdatePosition:
 
         assert media_player._attr_media_position == 120
         assert media_player._attr_media_duration == 240
+        assert media_player._attr_state == MediaPlayerState.PLAYING
+
+    def test_update_position_clears_turn_off_flag_when_playing(self, media_player, mock_coordinator):
+        """Test _update_position_from_coordinator clears _media_cleared_by_turn_off when PLAYING (issue #180)."""
+        from homeassistant.components.media_player import MediaPlayerState
+
+        media_player._media_cleared_by_turn_off = True
+        media_player._attr_state = MediaPlayerState.OFF
+
+        player = mock_coordinator.player
+        player.is_playing = True
+        player.is_paused = False
+        player.is_buffering = False
+        player.media_position = 30
+        player.media_duration = 180
+
+        media_player._update_position_from_coordinator()
+
+        assert media_player._media_cleared_by_turn_off is False
         assert media_player._attr_state == MediaPlayerState.PLAYING
 
 

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -401,6 +402,27 @@ class TestIntegrationServices:
 
 class TestCapabilityCacheRefresh:
     """Tests for capability cache refresh behavior in async_setup_entry."""
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_requires_minimum_pywiim_version(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Setup should fail fast if installed pywiim is below minimum supported version."""
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Master Bedroom",
+            data={"host": "192.168.1.116"},
+            unique_id="FF98F09CD89F9B50AB9CEC68",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr("custom_components.wiim.async_ensure_pywiim_version", AsyncMock(return_value="2.1.58"))
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: False)
+
+        with pytest.raises(ConfigEntryNotReady, match="pywiim 2.1.78\\+ required; found 2.1.58"):
+            await async_setup_entry(hass, entry)
 
     @pytest.mark.asyncio
     async def test_async_setup_entry_redetects_when_cached_capabilities_missing_firmware_flag(
