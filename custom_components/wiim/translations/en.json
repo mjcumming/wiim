@@ -34,7 +34,8 @@
     "abort": {
       "already_configured": "This WiiM device is already configured",
       "cannot_connect": "Cannot connect to device",
-      "no_host": "No device found"
+      "no_host": "No device found",
+      "reconfigure_successful": "Reconfiguration successful"
     }
   },
   "options": {

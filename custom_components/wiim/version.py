@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from packaging.version import InvalidVersion, Version
 
 _CACHED_PYWIIM_VERSION: str | None = None
-MIN_REQUIRED_PYWIIM_VERSION = "2.1.78"
+REQUIRED_PYWIIM_VERSION = "2.1.80"
 
 
 def _fallback_pywiim_version() -> str:
@@ -50,9 +50,9 @@ def get_pywiim_version_label() -> str:
     return f"pywiim {get_pywiim_version()}"
 
 
-def is_pywiim_version_compatible(installed_version: str, minimum_version: str = MIN_REQUIRED_PYWIIM_VERSION) -> bool:
-    """Return True when installed pywiim satisfies minimum version."""
+def is_pywiim_version_compatible(installed_version: str, required_version: str = REQUIRED_PYWIIM_VERSION) -> bool:
+    """Return True when installed pywiim matches required version exactly."""
     try:
-        return Version(installed_version) >= Version(minimum_version)
+        return Version(installed_version) == Version(required_version)
     except InvalidVersion:
         return False

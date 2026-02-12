@@ -579,6 +579,49 @@ class TestWiiMConfigFlow:
             assert result["step_id"] == "reconfigure"
             assert "errors" in result
             assert result["errors"]["base"] == "uuid_mismatch"
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_step_migrates_legacy_ip_unique_id(self, config_flow, hass):
+        """Test reconfigure migrates legacy IP-based unique_id to canonical UUID."""
+        # Create mock reconfigure entry with legacy unique_id == old host
+        reconfigure_entry = MagicMock(spec=ConfigEntry)
+        reconfigure_entry.entry_id = "legacy_entry"
+        reconfigure_entry.unique_id = "192.168.6.221"
+        reconfigure_entry.title = "Cabin"
+        reconfigure_entry.data = {CONF_HOST: "192.168.6.221"}
+
+        # Mock _get_reconfigure_entry and current entries list
+        config_flow._get_reconfigure_entry = MagicMock(return_value=reconfigure_entry)
+        config_flow._async_current_entries = MagicMock(return_value=[reconfigure_entry])
+
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            from pywiim.models import DeviceInfo
+
+            mock_device = DeviceInfo(
+                ip="192.168.6.250",
+                uuid="FF98F09CC21FF6EC8C9A3F58",
+                name="Cabin",
+            )
+            mock_validate.return_value = mock_device
+
+            config_flow.async_set_unique_id = AsyncMock()
+            config_flow.async_update_reload_and_abort = MagicMock(
+                return_value={
+                    "type": FlowResultType.ABORT,
+                    "reason": "reconfigure_successful",
+                }
+            )
+            hass.config_entries.async_update_entry = MagicMock()
+
+            user_input = {CONF_HOST: "192.168.6.250"}
+            result = await config_flow.async_step_reconfigure(user_input)
+
+            assert result["type"] == FlowResultType.ABORT
+            assert result["reason"] == "reconfigure_successful"
+            hass.config_entries.async_update_entry.assert_called_once_with(
+                reconfigure_entry,
+                unique_id="FF98F09CC21FF6EC8C9A3F58",
+            )
             assert result  # Suppress unused variable warning
 
     @pytest.mark.asyncio

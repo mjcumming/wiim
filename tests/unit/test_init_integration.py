@@ -9,6 +9,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pywiim.discovery import DiscoveredDevice
 from pywiim.exceptions import WiiMConnectionError
 
 from custom_components.wiim.const import DOMAIN
@@ -404,10 +405,10 @@ class TestCapabilityCacheRefresh:
     """Tests for capability cache refresh behavior in async_setup_entry."""
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry_requires_minimum_pywiim_version(
+    async def test_async_setup_entry_requires_exact_pywiim_version(
         self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Setup should fail fast if installed pywiim is below minimum supported version."""
+        """Setup should fail fast if installed pywiim doesn't match the pinned version."""
         from custom_components.wiim import async_setup_entry
 
         entry = MockConfigEntry(
@@ -421,7 +422,7 @@ class TestCapabilityCacheRefresh:
         monkeypatch.setattr("custom_components.wiim.async_ensure_pywiim_version", AsyncMock(return_value="2.1.58"))
         monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: False)
 
-        with pytest.raises(ConfigEntryNotReady, match="pywiim 2.1.78\\+ required; found 2.1.58"):
+        with pytest.raises(ConfigEntryNotReady, match="pywiim 2.1.80 required; found 2.1.58"):
             await async_setup_entry(hass, entry)
 
     @pytest.mark.asyncio
@@ -522,6 +523,113 @@ class TestCapabilityCacheRefresh:
         # Note: SWITCH was removed as it was empty (no switch entities implemented)
         assert Platform.NUMBER in platforms
         assert Platform.LIGHT in platforms
+
+    @pytest.mark.asyncio
+    async def test_try_rebind_host_from_uuid_updates_entry_host(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """UUID-matched rediscovery should update host and clear stale endpoint."""
+        from custom_components.wiim import _try_rebind_host_from_uuid
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Master Bedroom",
+            data={
+                "host": "192.168.1.50",
+                "endpoint": "http://192.168.1.50:80",
+            },
+            unique_id="FF98F09CD89F9B50AB9CEC68",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.discover_devices",
+            AsyncMock(
+                return_value=[
+                    DiscoveredDevice(
+                        ip="192.168.1.116",
+                        uuid="FF98F09CD89F9B50AB9CEC68",
+                        validated=True,
+                    )
+                ]
+            ),
+        )
+
+        new_host = await _try_rebind_host_from_uuid(hass, entry)
+        assert new_host == "192.168.1.116"
+        assert entry.data["host"] == "192.168.1.116"
+        assert "endpoint" not in entry.data
+
+    @pytest.mark.asyncio
+    async def test_try_rebind_host_from_uuid_returns_none_when_not_found(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rediscovery should be a no-op when UUID match is not found."""
+        from custom_components.wiim import _try_rebind_host_from_uuid
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Master Bedroom",
+            data={"host": "192.168.1.50"},
+            unique_id="FF98F09CD89F9B50AB9CEC68",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.discover_devices",
+            AsyncMock(
+                return_value=[
+                    DiscoveredDevice(
+                        ip="192.168.1.77",
+                        uuid="SOME-OTHER-UUID",
+                        validated=True,
+                    )
+                ]
+            ),
+        )
+
+        new_host = await _try_rebind_host_from_uuid(hass, entry)
+        assert new_host is None
+        assert entry.data["host"] == "192.168.1.50"
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_rebinds_on_connectivity_error(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Setup retries should trigger host rebind attempt on connectivity failures."""
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Master Bedroom",
+            data={
+                "host": "192.168.1.50",
+                "capabilities": {"supports_firmware_install": False},
+            },
+            unique_id="FF98F09CD89F9B50AB9CEC68",
+        )
+        entry.add_to_hass(hass)
+
+        class _FailingCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                self.hass = hass
+                self.player = MagicMock()
+                self.player.name = "Master Bedroom"
+                self.player.client = MagicMock(discovered_endpoint=None)
+
+            async def async_config_entry_first_refresh(self):
+                raise WiiMConnectionError("device unreachable")
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FailingCoordinator)
+        monkeypatch.setattr("custom_components.wiim.async_ensure_pywiim_version", AsyncMock(return_value="2.1.80"))
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+        monkeypatch.setattr(
+            "custom_components.wiim._try_rebind_host_from_uuid",
+            AsyncMock(return_value="192.168.1.116"),
+        )
+
+        with pytest.raises(ConfigEntryNotReady, match="Device rediscovered at 192.168.1.116"):
+            await async_setup_entry(hass, entry)
 
 
 @pytest.mark.skip(reason="HA 2025 test infrastructure issues - teardown problems")

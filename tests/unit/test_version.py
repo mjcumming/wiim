@@ -44,13 +44,17 @@ class TestVersionHelpers:
         hass.async_add_executor_job.assert_awaited_once()
 
     def test_is_pywiim_version_compatible_true_for_newer(self) -> None:
-        """Compatibility check accepts installed version above minimum."""
-        assert is_pywiim_version_compatible("2.1.99", "2.1.77") is True
+        """Compatibility check accepts exact required version."""
+        assert is_pywiim_version_compatible("2.1.80", "2.1.80") is True
 
     def test_is_pywiim_version_compatible_false_for_older(self) -> None:
-        """Compatibility check rejects installed version below minimum."""
-        assert is_pywiim_version_compatible("2.1.58", "2.1.77") is False
+        """Compatibility check rejects non-matching versions."""
+        assert is_pywiim_version_compatible("2.1.79", "2.1.80") is False
+
+    def test_is_pywiim_version_compatible_false_for_newer(self) -> None:
+        """Compatibility check rejects newer but non-pinned versions."""
+        assert is_pywiim_version_compatible("2.1.81", "2.1.80") is False
 
     def test_is_pywiim_version_compatible_false_for_invalid(self) -> None:
         """Compatibility check rejects invalid version strings."""
-        assert is_pywiim_version_compatible("unknown", "2.1.77") is False
+        assert is_pywiim_version_compatible("unknown", "2.1.80") is False

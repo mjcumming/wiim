@@ -34,7 +34,8 @@
     "abort": {
       "already_configured": "Denne WiiM-enheten er allerede konfigurert",
       "cannot_connect": "Kan ikke koble til enheten",
-      "no_host": "Ingen enhet funnet"
+      "no_host": "Ingen enhet funnet",
+      "reconfigure_successful": "Rekonfigurering vellykket"
     }
   },
   "options": {

@@ -8,6 +8,7 @@ Simple discovery and setup flow following Home Assistant best practices.
 from __future__ import annotations
 
 import logging
+from ipaddress import ip_address
 from typing import Any
 from urllib.parse import urlparse
 
@@ -30,6 +31,17 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _is_ip_literal(value: str | None) -> bool:
+    """Return True when value is an IPv4/IPv6 literal."""
+    if not value:
+        return False
+    try:
+        ip_address(value)
+        return True
+    except ValueError:
+        return False
 
 
 class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -435,13 +447,40 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 # Check if UUID matches the existing entry
                 if reconfigure_entry.unique_id and device_uuid != reconfigure_entry.unique_id:
-                    errors["base"] = "uuid_mismatch"
-                    _LOGGER.warning(
-                        "UUID mismatch during reconfiguration: expected %s, got %s",
-                        reconfigure_entry.unique_id,
-                        device_uuid,
-                    )
-                else:
+                    # Legacy entries may use host IP as unique_id. Allow one-time migration
+                    # to canonical device UUID when validated.
+                    if _is_ip_literal(reconfigure_entry.unique_id):
+                        existing_entry = next(
+                            (
+                                entry
+                                for entry in self._async_current_entries()
+                                if entry.entry_id != reconfigure_entry.entry_id and entry.unique_id == device_uuid
+                            ),
+                            None,
+                        )
+                        if existing_entry:
+                            errors["base"] = "already_configured"
+                            _LOGGER.warning(
+                                "Cannot migrate legacy IP unique_id for %s to %s; UUID already configured",
+                                reconfigure_entry.unique_id,
+                                device_uuid,
+                            )
+                        else:
+                            _LOGGER.info(
+                                "Migrating legacy IP-based unique_id from %s to %s",
+                                reconfigure_entry.unique_id,
+                                device_uuid,
+                            )
+                            self.hass.config_entries.async_update_entry(reconfigure_entry, unique_id=device_uuid)
+                    else:
+                        errors["base"] = "uuid_mismatch"
+                        _LOGGER.warning(
+                            "UUID mismatch during reconfiguration: expected %s, got %s",
+                            reconfigure_entry.unique_id,
+                            device_uuid,
+                        )
+
+                if not errors:
                     # Update entry with new IP and reload
                     return self.async_update_reload_and_abort(
                         reconfigure_entry,

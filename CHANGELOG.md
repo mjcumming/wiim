@@ -1,18 +1,61 @@
 # Changelog
 
+## [1.0.61] - 2026-02-12
+
+### Changed
+
+- Release version 1.0.61
+
+### Fixed
+
+- **Reconfigure UUID Handling**: Fixed reconfigure flow for legacy entries that used IP address as `unique_id`. Reconfigure now migrates those entries to canonical device UUID after validation, then updates host/IP successfully.
+- **Reconfigure Success Message**: Added missing `reconfigure_successful` translation keys so Home Assistant shows a proper localized success message instead of raw key text.
+
+## [1.0.60] - 2026-02-12
+
+### Changed
+
+- Release version 1.0.60
+- **Dependency Update**: Updated `pywiim` library to 2.1.80
+
+### Fixed
+
+- Pulled in upstream `pywiim` fixes from 2.1.80 addressing:
+  - package `__version__` mismatch (module reported `2.1.58` while distribution metadata was newer)
+  - `timeSync` non-JSON response handling that could surface as a sync-time error in Home Assistant service calls
+- **Host Rebind on DHCP IP Change**: When setup fails due to connectivity and the configured host is stale, the integration now attempts UUID-based rediscovery and automatically updates `CONF_HOST` (clearing stale cached endpoint) before retrying setup.
+- **Reconfigure Legacy UUID Migration**: Reconfigure now accepts entries that historically used IP address as `unique_id`, migrates them to canonical device UUID after validation, and then updates host.
+
+### Testing
+
+- Ran real-world validation with `python scripts/test-automated.py --config scripts/test.config --mode full`.
+- Result: 13/16 tests passed.
+  - `sync_time` now passes end-to-end (no `Invalid JSON response ... timeSync` errors observed).
+  - Remaining failures are unchanged service-capability/source-availability issues on `media_player.dock` (`media_pause`, `volume_set`, and no selectable sources).
+
+## [1.0.59] - 2026-02-12
+
+### Changed
+
+- Release version 1.0.59
+- **Dependency Update**: Updated `pywiim` library to 2.1.79
+
+### Testing
+
+- Ran real-world device validation with `python scripts/test-automated.py --config scripts/test.config --mode full` against Home Assistant + physical WiiM devices.
+- Result: 13/16 tests passed.
+  - Failures were environment/service-capability specific on `media_player.dock` (`media_pause`, `volume_set`, and source selection not supported/no sources available at test time), not dependency install failures.
+
 ## [1.0.58] - 2026-02-11
 
 ### Changed
 
 - Release version 1.0.58
 
-
-## [Unreleased]
-
 ### Fixed
 
 - **Issue #160 Hardening**: Integration setup now validates runtime `pywiim` version and blocks startup when an older library is loaded.
-  - Requires `pywiim >= 2.1.78` at runtime (prevents stale environments from silently missing USB Out behavior fixes).
+  - Requires exact runtime version `pywiim 2.1.79` (prevents stale environments from silently missing USB Out behavior fixes).
   - Added explicit setup error guidance to restart Home Assistant so dependency updates are applied.
 
 ### Changed

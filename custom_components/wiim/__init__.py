@@ -49,6 +49,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from pywiim import WiiMClient
+from pywiim.discovery import discover_devices
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMRequestError, WiiMTimeoutError
 
 # Import config_flow to make it available as a module attribute for tests
@@ -59,7 +60,7 @@ from .const import (
 )
 from .coordinator import WiiMCoordinator
 from .version import (
-    MIN_REQUIRED_PYWIIM_VERSION,
+    REQUIRED_PYWIIM_VERSION,
     async_ensure_pywiim_version,
     get_pywiim_version_label,
     is_pywiim_version_compatible,
@@ -79,6 +80,49 @@ def _compact_connectivity_error(err: Exception) -> str:
     if _is_expected_unreachable_error(err):
         return "device unreachable"
     return str(err)
+
+
+async def _try_rebind_host_from_uuid(hass: HomeAssistant, entry: ConfigEntry) -> str | None:
+    """Try to rediscover and rebind host by config entry UUID.
+
+    Returns the new host when a different host is found and the entry is updated,
+    otherwise returns None.
+    """
+    device_uuid = entry.unique_id
+    current_host = entry.data.get("host")
+    if not device_uuid:
+        return None
+
+    try:
+        # Keep timeout short to avoid long setup delays on every retry.
+        discovered = await discover_devices(validate=True, ssdp_timeout=3)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug(
+            "Host rebind discovery failed for %s (uuid=%s): %s",
+            current_host,
+            device_uuid,
+            err,
+        )
+        return None
+
+    match = next((device for device in discovered if device.uuid == device_uuid and device.ip), None)
+    if not match:
+        return None
+    if match.ip == current_host:
+        return None
+
+    updated_data = {**entry.data, "host": match.ip}
+    # Endpoint is host-specific; force a fresh probe on next setup.
+    updated_data.pop("endpoint", None)
+    hass.config_entries.async_update_entry(entry, data=updated_data)
+    _LOGGER.warning(
+        "Detected host change for %s (uuid=%s): %s -> %s",
+        entry.title or "WiiM device",
+        device_uuid,
+        current_host,
+        match.ip,
+    )
+    return match.ip
 
 
 # Core platforms that are always enabled
@@ -227,13 +271,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     installed_pywiim_version = await async_ensure_pywiim_version(hass)
     if not is_pywiim_version_compatible(installed_pywiim_version):
         _LOGGER.error(
-            "pywiim %s is too old for this integration (requires >= %s). "
+            "pywiim %s does not match this integration's required version (%s). "
             "Home Assistant must update dependencies before setup can continue.",
             installed_pywiim_version,
-            MIN_REQUIRED_PYWIIM_VERSION,
+            REQUIRED_PYWIIM_VERSION,
         )
         raise ConfigEntryNotReady(
-            f"pywiim {MIN_REQUIRED_PYWIIM_VERSION}+ required; found {installed_pywiim_version}. "
+            f"pywiim {REQUIRED_PYWIIM_VERSION} required; found {installed_pywiim_version}. "
             "Please restart Home Assistant to refresh integration dependencies."
         )
 
@@ -486,6 +530,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             log_fn = _LOGGER.error  # Many attempts - device likely offline
 
+        rebind_host = await _try_rebind_host_from_uuid(hass, entry)
+        if rebind_host:
+            raise ConfigEntryNotReady(
+                f"Device rediscovered at {rebind_host}; updated host and retrying setup."
+            ) from err
+
         if isinstance(err, WiiMTimeoutError):
             log_fn(
                 "Timeout fetching initial data from %s (attempt %d), will retry: %s",
@@ -537,6 +587,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # For connectivity errors: log cleanly without traceback (expected failure mode)
         if is_connectivity_error:
             err_msg = _compact_connectivity_error(wiim_cause if wiim_cause else err)
+            rebind_host = await _try_rebind_host_from_uuid(hass, entry)
+            if rebind_host:
+                raise ConfigEntryNotReady(
+                    f"Device rediscovered at {rebind_host}; updated host and retrying setup."
+                ) from err
             if isinstance(wiim_cause, WiiMConnectionError):
                 log_fn(
                     "Connection error fetching initial data from %s (attempt %d), will retry: %s",

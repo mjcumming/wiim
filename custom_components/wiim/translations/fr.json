@@ -34,7 +34,8 @@
     "abort": {
       "already_configured": "Cet appareil WiiM est déjà configuré",
       "cannot_connect": "Impossible de se connecter à l'appareil",
-      "no_host": "Aucun appareil trouvé"
+      "no_host": "Aucun appareil trouvé",
+      "reconfigure_successful": "Reconfiguration réussie"
     }
   },
   "options": {
