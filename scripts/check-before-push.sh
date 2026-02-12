@@ -36,6 +36,11 @@ echo ""
 # This catches the "codecov/patch" failure before pushing
 echo "5️⃣  Patch coverage check (Codecov simulation)..."
 
+# Keep local gate aligned with Codecov patch target.
+# Override via env var when Codecov target changes:
+#   CODECOV_PATCH_TARGET=81.0 ./scripts/check-before-push.sh
+PATCH_TARGET="${CODECOV_PATCH_TARGET:-80.26}"
+
 # Get the compare branch (origin/main or HEAD~1 if main)
 COMPARE_BRANCH="origin/main"
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -48,15 +53,15 @@ fi
 CHANGED_FILES=$(git diff --name-only "$COMPARE_BRANCH" -- 'custom_components/wiim/*.py' 2>/dev/null || echo "")
 
 if [ -n "$CHANGED_FILES" ]; then
-    # Run diff-cover with the Codecov threshold (77.52%)
-    if diff-cover build/coverage.xml --compare-branch="$COMPARE_BRANCH" --fail-under=77 --quiet 2>/dev/null; then
+    # Run diff-cover with the configured Codecov-aligned threshold.
+    if diff-cover build/coverage.xml --compare-branch="$COMPARE_BRANCH" --fail-under="$PATCH_TARGET" --quiet 2>/dev/null; then
         PATCH_COVERAGE=$(diff-cover build/coverage.xml --compare-branch="$COMPARE_BRANCH" 2>/dev/null | grep -oP '[\d.]+(?=%)' | head -1 || echo "100")
-        echo "   ✅ Patch coverage: ${PATCH_COVERAGE}% (target: 77%)"
+        echo "   ✅ Patch coverage: ${PATCH_COVERAGE}% (target: ${PATCH_TARGET}%)"
     else
         echo ""
         echo "   ❌ PATCH COVERAGE FAILED!"
         echo ""
-        echo "   Codecov requires 77% coverage on new/changed lines."
+        echo "   Codecov requires ${PATCH_TARGET}% coverage on new/changed lines."
         echo "   Your changes don't have enough test coverage."
         echo ""
         echo "   Run this to see uncovered lines:"
