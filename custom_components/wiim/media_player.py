@@ -539,17 +539,41 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 raise HomeAssistantError(f"Failed to resolve media source: {err}") from err
 
         # Announce path:
-        # WiiM firmware does not reliably support playPromptUrl on all models.
-        # Use normal URL playback for announcements so behavior is consistent.
+        # pywiim's play_notification() handles source-aware routing:
+        #   - Native sources (WiFi, USB, TuneIn, etc.): uses firmware playPromptUrl
+        #     which ducks current audio, plays notification, and auto-resumes.
+        #   - Unsupported sources (Spotify, AirPlay, BT, physical inputs): falls back
+        #     to play_url so the user at least hears the TTS (original media interrupted).
+        #
+        # URL requirements (already handled by media_source resolution above):
+        #   - Must be HTTP (not HTTPS) — device has limited SSL root certificates
+        #   - Must use IP address (not hostname) — device may not resolve .local names
+        #   - Must be MP3 format — WAV is unreliable on Linkplay firmware
+        #   - Must be reachable from the device's network (not localhost)
         announce = kwargs.get(ATTR_MEDIA_ANNOUNCE, False)
         if announce:
             kwargs.get(ATTR_MEDIA_EXTRA, {})  # e.g. volume; use when library supports it
             # Add cache-busting query param to avoid WiiM returning cached audio
             bust = f"?_={int(time.time() * 1000)}" if "?" not in media_id else f"&_={int(time.time() * 1000)}"
             play_url = media_id + bust
-            _LOGGER.debug("[%s] Playing announcement via URL playback: %s", self.name, play_url)
+            _LOGGER.debug("[%s] Playing announcement: %s", self.name, play_url)
             async with self.wiim_command("play notification"):
-                await self.coordinator.player.play_url(play_url)
+                result = await self.coordinator.player.play_notification(play_url)
+            if result.likely_interrupted:
+                _LOGGER.info(
+                    "[%s] Announcement played via %s (source was '%s'). Original media was likely interrupted%s.",
+                    self.name,
+                    result.method_used,
+                    result.source_before or "idle",
+                    f" ({result.reason})" if result.reason else "",
+                )
+            else:
+                _LOGGER.debug(
+                    "[%s] Announcement played via %s (source was '%s').",
+                    self.name,
+                    result.method_used,
+                    result.source_before or "idle",
+                )
             return
 
         # Handle preset numbers (presets don't support queue management)

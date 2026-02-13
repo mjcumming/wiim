@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.62] - 2026-02-13
+
+### Changed
+
+- **Dependency Update**: Updated `pywiim` library to 2.1.81
+- **Announcement Routing**: TTS announcements now use pywiim's source-aware `play_notification()` which automatically selects the best playback method based on the current audio source
+
+### Fixed
+
+- **TTS Announcements on Spotify/AirPlay/Bluetooth/Physical Inputs**: Announcements (e.g. TTS via `media_player.play_media` with `announce: true`) previously used firmware `playPromptUrl` which silently fails for Spotify Connect, AirPlay, Bluetooth, and physical inputs (Line-In, Optical). pywiim 2.1.81 now detects unsupported sources and falls back to direct URL playback so the user always hears the announcement. Original media will be interrupted for these sources (firmware limitation).
+- **TTS Announcements on Network/USB Sources**: For native sources (WiFi streams, USB, TuneIn, etc.), announcements continue to use firmware `playPromptUrl` which ducks current audio, plays the notification, and auto-resumes — no interruption.
+
 ## [1.0.61] - 2026-02-12
 
 ### Changed

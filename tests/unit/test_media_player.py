@@ -710,20 +710,43 @@ class TestWiiMMediaPlayerPlayMedia:
 
     @pytest.mark.asyncio
     async def test_play_media_announce(self, media_player, mock_coordinator):
-        """Test playing an announcement."""
+        """Test announce calls pywiim play_notification and handles result."""
+        from pywiim.player.media import NotificationPlaybackResult
         from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE
 
-        mock_coordinator.player.play_url = AsyncMock(return_value=True)
+        mock_result = NotificationPlaybackResult(method_used="prompt", source_before="wifi", likely_interrupted=False)
+        mock_coordinator.player.play_notification = AsyncMock(return_value=mock_result)
         media_player.hass = MagicMock()
         media_player.entity_id = "media_player.test"
 
         await media_player.async_play_media("music", "http://example.com/announce.mp3", **{ATTR_MEDIA_ANNOUNCE: True})
 
-        mock_coordinator.player.play_url.assert_called_once()
-        called_url = mock_coordinator.player.play_url.call_args.args[0]
+        mock_coordinator.player.play_notification.assert_called_once()
+        called_url = mock_coordinator.player.play_notification.call_args.args[0]
         assert called_url.startswith("http://example.com/announce.mp3")
         assert "?_=" in called_url
-        # State updates automatically via callback - no manual refresh needed
+
+    @pytest.mark.asyncio
+    async def test_play_media_announce_fallback_logs_interruption(self, media_player, mock_coordinator):
+        """Test announce logs info when pywiim falls back to play_url (media interrupted)."""
+        from pywiim.player.media import NotificationPlaybackResult
+        from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE
+
+        mock_result = NotificationPlaybackResult(
+            method_used="play_url",
+            source_before="spotify",
+            likely_interrupted=True,
+            reason="unsupported_source",
+        )
+        mock_coordinator.player.play_notification = AsyncMock(return_value=mock_result)
+        media_player.hass = MagicMock()
+        media_player.entity_id = "media_player.test"
+
+        await media_player.async_play_media("music", "http://example.com/announce.mp3", **{ATTR_MEDIA_ANNOUNCE: True})
+
+        mock_coordinator.player.play_notification.assert_called_once()
+        called_url = mock_coordinator.player.play_notification.call_args.args[0]
+        assert called_url.startswith("http://example.com/announce.mp3")
 
     @pytest.mark.asyncio
     async def test_play_media_handles_empty_media_id(self, media_player):
@@ -1398,11 +1421,13 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
 
     @pytest.mark.asyncio
     async def test_play_media_announce_with_media_source(self, media_player, mock_coordinator):
-        """Test play_media announcement with media source ID."""
+        """Test play_media announcement with media source ID calls play_notification."""
+        from pywiim.player.media import NotificationPlaybackResult
         from homeassistant.components import media_source
         from homeassistant.components.media_player import ATTR_MEDIA_ANNOUNCE
 
-        mock_coordinator.player.play_url = AsyncMock(return_value=True)
+        mock_result = NotificationPlaybackResult(method_used="prompt", source_before="wifi", likely_interrupted=False)
+        mock_coordinator.player.play_notification = AsyncMock(return_value=mock_result)
         media_player.hass = MagicMock()
         media_player.entity_id = "media_player.test"
 
@@ -1417,8 +1442,8 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
                 ):
                     await media_player.async_play_media("music", "media-source://test", **{ATTR_MEDIA_ANNOUNCE: True})
 
-        mock_coordinator.player.play_url.assert_called_once()
-        called_url = mock_coordinator.player.play_url.call_args.args[0]
+        mock_coordinator.player.play_notification.assert_called_once()
+        called_url = mock_coordinator.player.play_notification.call_args.args[0]
         assert called_url.startswith("http://example.com/announce.mp3")
         assert "?_=" in called_url
 
@@ -1430,7 +1455,7 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
         from homeassistant.exceptions import HomeAssistantError
         from homeassistant.helpers.network import NoURLAvailableError
 
-        mock_coordinator.player.play_url = AsyncMock(return_value=True)
+        mock_coordinator.player.play_notification = AsyncMock(return_value=True)
         media_player.hass = MagicMock()
         media_player.entity_id = "media_player.test"
 
@@ -1453,7 +1478,7 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
                             "media-source://tts/google_translate?message=Hi",
                             **{ATTR_MEDIA_ANNOUNCE: True},
                         )
-        mock_coordinator.player.play_url.assert_not_called()
+        mock_coordinator.player.play_notification.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_play_media_handles_add_to_queue_error(self, media_player, mock_coordinator):

@@ -422,7 +422,7 @@ class TestCapabilityCacheRefresh:
         monkeypatch.setattr("custom_components.wiim.async_ensure_pywiim_version", AsyncMock(return_value="2.1.58"))
         monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: False)
 
-        with pytest.raises(ConfigEntryNotReady, match="pywiim 2.1.80 required; found 2.1.58"):
+        with pytest.raises(ConfigEntryNotReady, match="pywiim 2.1.81 required; found 2.1.58"):
             await async_setup_entry(hass, entry)
 
     @pytest.mark.asyncio
@@ -621,7 +621,7 @@ class TestCapabilityCacheRefresh:
                 raise WiiMConnectionError("device unreachable")
 
         monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FailingCoordinator)
-        monkeypatch.setattr("custom_components.wiim.async_ensure_pywiim_version", AsyncMock(return_value="2.1.80"))
+        monkeypatch.setattr("custom_components.wiim.async_ensure_pywiim_version", AsyncMock(return_value="2.1.81"))
         monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
         monkeypatch.setattr(
             "custom_components.wiim._try_rebind_host_from_uuid",

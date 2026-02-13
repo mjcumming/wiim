@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from packaging.version import InvalidVersion, Version
 
 _CACHED_PYWIIM_VERSION: str | None = None
-REQUIRED_PYWIIM_VERSION = "2.1.80"
+REQUIRED_PYWIIM_VERSION = "2.1.81"
 
 
 def _fallback_pywiim_version() -> str:
