@@ -9,4 +9,4 @@ coverage==7.6.12
 
 # Fix for Python 3.13 compatibility (pycares/aiodns issue)
 pycares==4.4.0
-aiodns==3.4.0
+aiodns==4.0.0
