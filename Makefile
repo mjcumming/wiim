@@ -3,7 +3,7 @@
 # This Makefile provides commands for testing, linting, and building
 # the WiiM Home Assistant integration.
 
-.PHONY: help ci test test-integration test-smoke test-multiroom test-all test-phase test-quick pre-release pre-release-realworld lint format clean install install-dev build check-all check-python check-ha-compat pre-run
+.PHONY: help ci test test-integration test-smoke test-multiroom test-all test-phase test-quick pre-release pre-release-realworld lint format clean install install-dev build check-all check-python check-ha-compat pre-run sync-pywiim
 
 # Default target
 help:
@@ -60,6 +60,11 @@ check-ha-compat: check-python
 install-dev: check-ha-compat
 	pip install --constraint=.github/workflows/constraints.txt -r requirements_test.txt
 	@echo "✅ Development environment ready for Home Assistant integration development"
+
+# Keep pywiim pins in sync (manifest + requirements_dev)
+sync-pywiim:
+	@python3 scripts/sync-pywiim-version.py --write
+	@echo "✅ pywiim version pins synced"
 
 # Quick test run without coverage (faster for development)
 test-quick: check-python

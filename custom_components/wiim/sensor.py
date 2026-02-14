@@ -359,7 +359,8 @@ class WiiMInputSensor(WiimEntity, SensorEntity):
     @property  # type: ignore[override]
     def native_value(self):
         """Return the current input source (can be selectable or non-selectable)."""
-        return self.coordinator.player.source
+        player = self.coordinator.player
+        return getattr(player, "source_name", None) or player.source
 
 
 # ------------------- Bluetooth Output Sensor -------------------

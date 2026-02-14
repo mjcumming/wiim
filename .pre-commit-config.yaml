@@ -62,6 +62,15 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Dependency pins: keep pywiim versions in lockstep
+      - id: pywiim-version-pin
+        name: pywiim version pin sync check
+        entry: python3 scripts/sync-pywiim-version.py
+        language: system
+        args: ["--write"] # auto-fix drift before commit
+        pass_filenames: false
+        always_run: true
+
 # Global settings
 default_stages: [pre-commit]
 fail_fast: true # Stop on first failure - faster feedback

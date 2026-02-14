@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.63] - 2026-02-14
+
+### Changed
+
+- Release version 1.0.63
+- **Dependency Update**: Updated `pywiim` library to 2.1.83
+- **Source Display Compatibility**: Updated source handling for pywiim 2.1.82+ where `player.source` is now a stable id and `player.source_name` is the UI-ready display name (Home Assistant continues to show Title Case source names)
+
+### Fixed
+
+- **USB Out / Audio Output Selection**: Pulled in pywiim 2.1.83 fixes correcting USB Out hardware mode (WiiM Ultra) and removing invalid HDMI Out option on Ultra
+
 ## [1.0.62] - 2026-02-13
 
 ### Changed

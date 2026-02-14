@@ -367,7 +367,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if not player or not player.source:
             return None
 
-        current_source = str(player.source)
+        # pywiim 2.1.82+: `player.source` is a stable id, `player.source_name` is UI-ready.
+        current_source = str(getattr(player, "source_name", None) or player.source)
 
         # Only consider sources that pywiim says are available/selectable.
         available_sources = player.available_sources
@@ -385,9 +386,10 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         # This might indicate a pywiim issue where source doesn't match available_sources
         _LOGGER.debug(
             "[%s] Current source '%s' from pywiim doesn't match any selectable source in source_list. "
-            "This might indicate a pywiim issue. available_sources=%s",
+            "This might indicate a pywiim issue. source_id=%s available_sources=%s",
             self.name,
             current_source,
+            getattr(player, "source", None),
             available_sources,
         )
         # Return None so dropdown doesn't show incorrect selection

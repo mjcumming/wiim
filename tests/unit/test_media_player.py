@@ -259,7 +259,8 @@ class TestWiiMMediaPlayerSource:
 
     def test_source_returns_current_source(self, media_player, mock_coordinator):
         """Test source property returns current source."""
-        mock_coordinator.player.source = "Spotify"
+        mock_coordinator.player.source = "spotify"
+        mock_coordinator.player.source_name = "Spotify"
         # pywiim returns Title Case sources in available_sources in v2.1.58+
         mock_coordinator.player.available_sources = ["Spotify", "Bluetooth"]
 
@@ -268,6 +269,7 @@ class TestWiiMMediaPlayerSource:
     def test_source_returns_none_when_no_source(self, media_player, mock_coordinator):
         """Test source returns None when no source set."""
         mock_coordinator.player.source = None
+        mock_coordinator.player.source_name = None
         mock_coordinator.player.available_sources = []
 
         assert media_player.source is None
@@ -1243,14 +1245,16 @@ class TestWiiMMediaPlayerSourceEdgeCases:
     def test_source_uses_input_list_fallback(self, media_player, mock_coordinator):
         """Test source returns None when not in available_sources (no fallback)."""
         player = mock_coordinator.player
-        player.source = "Bluetooth"  # Title Case from device
+        player.source = "bluetooth"
+        player.source_name = "Bluetooth"  # UI-ready display
         player.available_sources = ["Spotify"]  # Doesn't include Bluetooth
         assert media_player.source is None
 
     def test_source_returns_none_when_no_match(self, media_player, mock_coordinator):
         """Test source returns None when source doesn't match any available source."""
         player = mock_coordinator.player
-        player.source = "Unknown Source"
+        player.source = "unknown_source"
+        player.source_name = "Unknown Source"
         player.available_sources = ["Spotify"]
 
         assert media_player.source is None

@@ -325,7 +325,7 @@ class WiiMMediaPlayerMixin:
         _LOGGER.debug(
             "Cover art URL from player.media_image_url: %s (source: %s, state: %s)",
             player.media_image_url,
-            player.source,
+            getattr(player, "source_name", None) or player.source,
             self.state,
         )
 
