@@ -8,5 +8,5 @@ pytest==8.3.5
 coverage==7.6.12
 
 # Fix for Python 3.13 compatibility (pycares/aiodns issue)
-pycares==4.4.0
+pycares==5.0.1
 aiodns==3.4.0
