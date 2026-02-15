@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.64] - 2026-02-15
+
+### Changed
+
+- Release version 1.0.64
+- **Dependency Update**: Updated `pywiim` library to 2.1.84
+
 ## [1.0.63] - 2026-02-14
 
 ### Changed
