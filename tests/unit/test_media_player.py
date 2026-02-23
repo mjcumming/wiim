@@ -305,6 +305,17 @@ class TestWiiMMediaPlayerSource:
         with pytest.raises(HomeAssistantError, match="Failed to select source"):
             await media_player.async_select_source("Spotify")
 
+    @pytest.mark.asyncio
+    async def test_select_source_unavailable_is_noop(self, media_player, mock_coordinator):
+        """Test unavailable source is ignored instead of failing."""
+        player = mock_coordinator.player
+        player.available_sources = ["Bluetooth"]
+        player.set_source = AsyncMock(return_value=True)
+
+        await media_player.async_select_source("Spotify")
+
+        player.set_source.assert_not_called()
+
 
 class TestWiiMMediaPlayerMediaInfo:
     """Test media information properties."""

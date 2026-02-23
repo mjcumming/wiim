@@ -423,7 +423,17 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         # Validate against the available list (case-insensitive)
         source_lower = source.lower()
         if not any(str(s).lower() == source_lower for s in available_sources):
-            raise HomeAssistantError(f"Source '{source}' is not available for this device")
+            # Some sources (for example Spotify Connect) can be current playback
+            # context but are not directly selectable via switchmode. Scene
+            # restoration may still try to re-apply them; treat as a no-op
+            # instead of hard-failing the entire scene restore.
+            _LOGGER.warning(
+                "[%s] Skipping source selection for non-selectable source '%s'. Available sources: %s",
+                self.name,
+                source,
+                available_sources,
+            )
+            return
 
         async with self.wiim_command(f"select source '{source}'"):
             await self.coordinator.player.set_source(source)
