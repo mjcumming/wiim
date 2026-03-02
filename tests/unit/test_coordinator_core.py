@@ -455,3 +455,76 @@ class TestWiiMCoordinator:
         data = await coordinator._async_update_data()
         # Should handle replacement gracefully
         assert data is not None
+
+    @pytest.mark.asyncio
+    async def test_player_finder_by_host(self, coordinator, mock_player):
+        """Test player finder locates another coordinator's player by host IP."""
+        other = MagicMock()
+        other.player = MagicMock(spec=Player)
+        other.player.host = "192.168.1.101"
+        other.player.uuid = "OTHER-UUID-001"
+
+        # get_all_coordinators is a local import inside _player_finder from .data
+        with patch("custom_components.wiim.data.get_all_coordinators", return_value=[coordinator, other]):
+            result = coordinator._player_finder("192.168.1.101")
+
+        assert result is other.player
+
+    @pytest.mark.asyncio
+    async def test_player_finder_by_uuid(self, coordinator, mock_player):
+        """Test player finder locates another coordinator's player by UUID."""
+        other = MagicMock()
+        other.player = MagicMock(spec=Player)
+        other.player.host = "192.168.1.101"
+        other.player.uuid = "OTHER-UUID-ABC"
+
+        with patch("custom_components.wiim.data.get_all_coordinators", return_value=[coordinator, other]):
+            result = coordinator._player_finder("OTHER-UUID-ABC")
+
+        assert result is other.player
+
+    @pytest.mark.asyncio
+    async def test_player_finder_skips_self(self, coordinator, mock_player):
+        """Never return self as the player even when self.player.host matches the search term."""
+        mock_player.host = "192.168.1.100"
+
+        with patch("custom_components.wiim.data.get_all_coordinators", return_value=[coordinator]):
+            result = coordinator._player_finder("192.168.1.100")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_all_players_finder_includes_self(self, coordinator, mock_player):
+        """Returns the calling coordinator's own player (unlike _player_finder, self is not excluded)."""
+        with patch("custom_components.wiim.data.get_all_coordinators", return_value=[coordinator]):
+            result = coordinator._all_players_finder()
+
+        assert result == [mock_player]
+
+    @pytest.mark.asyncio
+    async def test_all_players_finder_returns_all_players(self, coordinator, mock_player):
+        """Returns players from every coordinator."""
+        other1 = MagicMock()
+        other1.player = MagicMock(spec=Player)
+        other2 = MagicMock()
+        other2.player = MagicMock(spec=Player)
+
+        with patch(
+            "custom_components.wiim.data.get_all_coordinators",
+            return_value=[coordinator, other1, other2],
+        ):
+            result = coordinator._all_players_finder()
+
+        assert len(result) == 3
+        assert mock_player in result
+        assert other1.player in result
+        assert other2.player in result
+
+    @pytest.mark.asyncio
+    async def test_all_players_finder_empty(self, coordinator):
+        """Returns an empty list when no coordinators are registered."""
+        with patch("custom_components.wiim.data.get_all_coordinators", return_value=[]):
+            result = coordinator._all_players_finder()
+
+        assert result == []
+
