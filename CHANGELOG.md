@@ -10,6 +10,7 @@
 ### Fixed
 
 - **Scene restore source fallback for non-selectable sources** (Issue #189): Restoring a scene captured while playing service-managed sources (for example Spotify Connect) no longer fails with `Source 'Spotify' is not available for this device`. The integration now treats non-selectable source restore requests as a no-op and continues scene restoration. Service-managed streaming sessions are not directly restartable via source selection and may require manual/app-level resume.
+- **Tests**: Service/action tests now pass by ensuring the `http` component is set up before the WiiM config entry and by aligning the storage mock with the current Home Assistant `Store._async_write_data(self, data)` signature.
 
 ## [1.0.64] - 2026-02-15
 

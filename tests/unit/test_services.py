@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 import yaml
 from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
 
@@ -29,7 +30,9 @@ async def wiim_media_player_setup(hass: HomeAssistant, bypass_get_data):
 
     Service registration for entity services requires Home Assistant to call the platform
     via the normal config-entry setup path (which sets the entity_platform context).
+    The integration declares a dependency on the http component; ensure it is loaded first.
     """
+    await async_setup_component(hass, "http", {})
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="WiiM Mini",

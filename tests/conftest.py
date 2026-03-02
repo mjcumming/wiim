@@ -27,6 +27,10 @@ from .const import MOCK_DEVICE_DATA, MOCK_STATUS_RESPONSE  # noqa: E402
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
+# Session-scoped loop so the main thread always has a current loop when
+# pytest-homeassistant-custom-component's enable_event_loop_debug runs (Python 3.13+).
+_session_loop: asyncio.AbstractEventLoop | None = None
+
 
 @pytest.fixture
 def event_loop() -> asyncio.AbstractEventLoop:
@@ -34,12 +38,15 @@ def event_loop() -> asyncio.AbstractEventLoop:
 
     Newer pytest-asyncio versions no longer provide the `event_loop` fixture by
     default, but pytest-homeassistant-custom-component still depends on it (via
-    its autouse `enable_event_loop_debug` fixture).
+    its autouse `enable_event_loop_debug` fixture). Set the loop on the main thread
+    so get_event_loop() returns it; restore the session loop in finally.
     """
     loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
         yield loop
     finally:
+        asyncio.set_event_loop(_session_loop)
         loop.close()
 
 
@@ -74,6 +81,26 @@ def preload_aiodns_pycares_thread() -> None:
         loop.close()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_main_thread_event_loop(preload_aiodns_pycares_thread: None) -> asyncio.AbstractEventLoop:
+    """Set a main-thread event loop after other session fixtures so HA plugin works.
+
+    In Python 3.13+, asyncio.get_event_loop() in the main thread raises if no loop is set.
+    The pytest-homeassistant-custom-component plugin's autouse enable_event_loop_debug
+    fixture calls get_event_loop() at function scope. The plugin uses HassEventLoopPolicy;
+    we must set the loop on that policy explicitly so it is visible. This runs after
+    preload_aiodns_pycares_thread (which clears the loop).
+    """
+    global _session_loop
+    _session_loop = asyncio.new_event_loop()
+    policy = asyncio.get_event_loop_policy()
+    policy.set_event_loop(_session_loop)
+    yield _session_loop
+    policy.set_event_loop(None)
+    _session_loop.close()
+    _session_loop = None
+
+
 # ============================================================================
 # Autouse Fixtures (applied to all tests automatically)
 # ============================================================================
@@ -105,22 +132,18 @@ def allow_unwatched_threads() -> bool:  # noqa: D401 – simple fixture
 def fix_storage_mock():
     """Fix storage mock to work with current HA core version.
 
-    pytest-homeassistant-custom-component's storage mock has a bug where
-    _async_write_data mock doesn't accept the correct number of arguments.
-    This fixture patches it to work correctly.
-
-    The external fixture from pytest-homeassistant-custom-component creates
-    a mock that only accepts 2 args (path, data) but HA core calls it with
-    3 args (self, path, data). We override it with a proper mock.
+    pytest-homeassistant-custom-component's storage mock may not accept the
+    arguments that the installed HA core uses. HA core changed _async_write_data
+    to (self, data) in newer versions (no path argument). This fixture patches
+    it so storage writes no-op in tests.
     """
     from unittest.mock import patch
 
-    async def mock_async_write_data(self, path: str, data: dict) -> None:
-        """Mock storage write that accepts correct arguments (self, path, data)."""
-        # Just return None - we don't need to actually write in tests
+    async def mock_async_write_data(self, data: dict) -> None:
+        """Mock storage write (self, data) for HA versions that use this signature."""
         return None
 
-    # Patch the storage method to override pytest-homeassistant's broken mock
+    # Patch the storage method to override pytest-homeassistant's mock
     with patch(
         "homeassistant.helpers.storage.Store._async_write_data",
         mock_async_write_data,
