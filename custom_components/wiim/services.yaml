@@ -13,6 +13,12 @@ play_preset:
         number:
           min: 1
           max: 20
+    index:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 10000
 
 play_url:
   target:

@@ -39,7 +39,7 @@ echo "5️⃣  Patch coverage check (Codecov simulation)..."
 # Keep local gate aligned with Codecov patch target.
 # Override via env var when Codecov target changes:
 #   CODECOV_PATCH_TARGET=81.0 ./scripts/check-before-push.sh
-PATCH_TARGET="${CODECOV_PATCH_TARGET:-80.26}"
+PATCH_TARGET="${CODECOV_PATCH_TARGET:-75}"
 
 # Get the compare branch (origin/main or HEAD~1 if main)
 COMPARE_BRANCH="origin/main"

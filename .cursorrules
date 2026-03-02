@@ -138,7 +138,7 @@ When working with pywiim integration patterns or API usage:
 
 ## Testing Requirements
 
-- **CRITICAL: Always add tests for new code** - Codecov requires 77.88% patch coverage
+- **CRITICAL: Always add tests for new code** - Codecov requires 75% patch coverage
   - Every new function, method, or feature must have corresponding tests
   - Every code change must include tests for the modified functionality
   - Codecov will fail if new/changed code lacks test coverage

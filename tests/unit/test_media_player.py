@@ -1695,15 +1695,25 @@ class TestWiiMMediaPlayerServiceHandlers:
 
     @pytest.mark.asyncio
     async def test_async_play_preset(self, media_player, mock_coordinator):
-        """Test async_play_preset service handler."""
+        """Test async_play_preset service handler (no index - uses async_play_media path)."""
         mock_coordinator.player.play_preset = AsyncMock(return_value=True)
         media_player.hass = MagicMock()
         media_player.async_play_media = AsyncMock()
 
         await media_player.async_play_preset(5)
 
-        # Should call async_play_media with preset type
+        # Should call async_play_media with preset type when index is omitted
         media_player.async_play_media.assert_called_once_with("preset", "5")
+
+    @pytest.mark.asyncio
+    async def test_async_play_preset_with_index(self, media_player, mock_coordinator):
+        """Test async_play_preset service handler with optional index (pywiim 2.1.90+)."""
+        mock_coordinator.player.play_preset = AsyncMock(return_value=True)
+        media_player.hass = MagicMock()
+
+        await media_player.async_play_preset(5, index=2)
+
+        mock_coordinator.player.play_preset.assert_called_once_with(5, index=2)
 
     @pytest.mark.asyncio
     async def test_async_play_playlist(self, media_player, mock_coordinator):

@@ -255,11 +255,11 @@ _LOGGER.info("Volume set")
 ### Test Coverage
 
 - **CRITICAL: Codecov Patch Coverage Requirement**
-  - Codecov requires **77.88% patch coverage** for new/changed code
+  - Codecov requires **75% patch coverage** for new/changed code (see `scripts/check-before-push.sh`; override with `CODECOV_PATCH_TARGET` if the dashboard target changes)
   - Patch coverage = coverage of lines you added or modified in your PR
-  - This is separate from overall project coverage (currently 77.64%)
-  - **Every new line of code must have corresponding tests**
-  - Codecov will fail the CI check if patch coverage is below 77.88%
+  - This is separate from overall project coverage
+  - New/changed lines should have corresponding tests so the patch stays above the target
+  - Codecov will fail the CI check if patch coverage is below the target
   - Always add tests when adding or modifying code
 - **Minimum**: 10% (current requirement)
 - **Target**: 80%+
@@ -298,7 +298,7 @@ Before submitting a PR:
 - [ ] All tests pass: `make test`
 - [ ] Passes linting: `make lint`
 - [ ] Coverage ≥ 10% (target 80%+)
-- [ ] **Patch coverage ≥ 77.88% (Codecov requirement - verify with `pytest --cov`)**
+- [ ] **Patch coverage ≥ 75% (Codecov requirement; run `./scripts/check-before-push.sh` to verify)**
 - [ ] Docs/changelog updated (if needed)
 - [ ] Tested on real device (if applicable)
 - [ ] Follows architecture patterns

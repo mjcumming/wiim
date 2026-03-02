@@ -1,11 +1,15 @@
 """Unit tests for WiiM Switch Entity - testing subwoofer control."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
 
-from custom_components.wiim.switch import WiiMSubwooferSwitch, async_setup_entry
+from custom_components.wiim.switch import (
+    WiiMSubwooferSwitch,
+    WiiMTriggerOutSwitch,
+    async_setup_entry,
+)
 
 
 @pytest.fixture
@@ -30,6 +34,7 @@ def mock_coordinator():
     coordinator.player = MagicMock()
     coordinator.player.name = "Test WiiM"
     coordinator.player.host = "192.168.1.100"
+    coordinator.player.supports_trigger_out = False  # 12V trigger (pywiim 2.1.89+) - disable for subwoofer-only tests
     coordinator.player.supports_subwoofer = True
     coordinator.player.subwoofer_status = {"plugged": True, "status": True, "level": 0}
     coordinator.player.get_subwoofer_status = AsyncMock(return_value={"plugged": True, "status": True, "level": 0})
@@ -63,13 +68,16 @@ class TestSubwooferSwitchSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
-        assert len(entities) == 1
-        assert isinstance(entities[0], WiiMSubwooferSwitch)
+        # With supports_trigger_out=False we get only subwoofer; with True we'd get trigger + subwoofer
+        assert len(entities) >= 1
+        subwoofer_entities = [e for e in entities if isinstance(e, WiiMSubwooferSwitch)]
+        assert len(subwoofer_entities) == 1
 
     @pytest.mark.asyncio
     async def test_setup_skips_entity_when_no_subwoofer(self, mock_hass, mock_config_entry, mock_coordinator):
         """Test setup skips entity when no subwoofer connected."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_trigger_out = False
         mock_coordinator.player.supports_subwoofer = True
         mock_coordinator.player.subwoofer_status = {"plugged": False, "status": False}
 
@@ -80,12 +88,14 @@ class TestSubwooferSwitchSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
-        assert len(entities) == 0
+        subwoofer_entities = [e for e in entities if isinstance(e, WiiMSubwooferSwitch)]
+        assert len(subwoofer_entities) == 0
 
     @pytest.mark.asyncio
     async def test_setup_skips_entity_when_not_supported(self, mock_hass, mock_config_entry, mock_coordinator):
         """Test setup skips entity when device doesn't support subwoofer."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_trigger_out = False
         mock_coordinator.player.supports_subwoofer = False
 
         entities = []
@@ -95,7 +105,8 @@ class TestSubwooferSwitchSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
-        assert len(entities) == 0
+        subwoofer_entities = [e for e in entities if isinstance(e, WiiMSubwooferSwitch)]
+        assert len(subwoofer_entities) == 0
 
 
 class TestSubwooferSwitchBasic:
@@ -196,4 +207,171 @@ class TestSubwooferSwitchControl:
         await entity._update_state()
 
         # Should not crash and should not change state on error
+        assert entity._is_on is True
+
+
+# =============================================================================
+# 12V trigger switch (WiiM Ultra / Pro / Pro Plus - pywiim 2.1.89+)
+# =============================================================================
+
+
+class TestTriggerOutSwitchSetup:
+    """Test 12V trigger switch setup."""
+
+    @pytest.mark.asyncio
+    async def test_setup_creates_entity_when_trigger_supported(self, mock_hass, mock_config_entry, mock_coordinator):
+        """Test setup creates 12V trigger entity when device supports it."""
+        mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_trigger_out = True
+        mock_coordinator.player.supports_subwoofer = False
+        mock_coordinator.player.subwoofer_status = {}
+        mock_coordinator.player.client = MagicMock()
+        mock_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": False})
+        mock_coordinator.player.client.set_trigger_out = AsyncMock()
+
+        entities = []
+
+        def mock_add_entities(new_entities):
+            entities.extend(new_entities)
+
+        await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
+
+        trigger_entities = [e for e in entities if isinstance(e, WiiMTriggerOutSwitch)]
+        assert len(trigger_entities) == 1
+
+    @pytest.mark.asyncio
+    async def test_setup_skips_trigger_when_not_supported(self, mock_hass, mock_config_entry, mock_coordinator):
+        """Test setup skips 12V trigger when device does not support it."""
+        mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_trigger_out = False
+        mock_coordinator.player.supports_subwoofer = False
+
+        entities = []
+
+        def mock_add_entities(new_entities):
+            entities.extend(new_entities)
+
+        await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
+
+        trigger_entities = [e for e in entities if isinstance(e, WiiMTriggerOutSwitch)]
+        assert len(trigger_entities) == 0
+
+    @pytest.mark.asyncio
+    async def test_setup_handles_trigger_check_exception(self, mock_hass, mock_config_entry, mock_coordinator):
+        """Test setup skips 12V trigger when checking support raises."""
+        mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_subwoofer = False
+
+        def getattr_raise(obj, name, default=None):
+            if name == "supports_trigger_out":
+                raise RuntimeError("probe error")
+            return default
+
+        entities = []
+        def mock_add_entities(new_entities):
+            entities.extend(new_entities)
+
+        with patch("custom_components.wiim.switch.getattr", side_effect=getattr_raise):
+            await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
+
+        trigger_entities = [e for e in entities if isinstance(e, WiiMTriggerOutSwitch)]
+        assert len(trigger_entities) == 0
+
+
+class TestTriggerOutSwitchBasic:
+    """Test basic 12V trigger switch functionality."""
+
+    @pytest.fixture
+    def trigger_coordinator(self, mock_coordinator):
+        """Coordinator with 12V trigger support."""
+        mock_coordinator.player.supports_trigger_out = True
+        mock_coordinator.player.client = MagicMock()
+        mock_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": True})
+        mock_coordinator.player.client.set_trigger_out = AsyncMock()
+        return mock_coordinator
+
+    def test_initialization(self, trigger_coordinator, mock_config_entry):
+        """Test 12V trigger switch initialization."""
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_trigger_out"
+        assert entity.name == "12V trigger"
+        assert entity.icon == "mdi:flash"
+
+    def test_is_on_and_available(self, trigger_coordinator, mock_config_entry):
+        """Test is_on and available."""
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+        entity._is_on = True
+        assert entity.is_on is True
+        assert entity.available is True
+        entity._is_on = None
+        assert entity.available is False
+
+
+class TestTriggerOutSwitchControl:
+    """Test 12V trigger switch turn on/off."""
+
+    @pytest.fixture
+    def trigger_coordinator(self, mock_coordinator):
+        """Coordinator with 12V trigger support."""
+        mock_coordinator.player.supports_trigger_out = True
+        mock_coordinator.player.client = MagicMock()
+        mock_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": False})
+        mock_coordinator.player.client.set_trigger_out = AsyncMock()
+        return mock_coordinator
+
+    @pytest.mark.asyncio
+    async def test_turn_on(self, trigger_coordinator, mock_config_entry):
+        """Test turn on calls set_trigger_out(True)."""
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+
+        await entity.async_turn_on()
+
+        trigger_coordinator.player.client.set_trigger_out.assert_called_once_with(True)
+        assert entity._is_on is True
+        entity.async_write_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_turn_off(self, trigger_coordinator, mock_config_entry):
+        """Test turn off calls set_trigger_out(False)."""
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+
+        await entity.async_turn_off()
+
+        trigger_coordinator.player.client.set_trigger_out.assert_called_once_with(False)
+        assert entity._is_on is False
+        entity.async_write_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_state_from_status(self, trigger_coordinator, mock_config_entry):
+        """Test _update_state fetches status from get_trigger_out_status."""
+        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": True})
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+
+        await entity._update_state()
+
+        trigger_coordinator.player.client.get_trigger_out_status.assert_called_once()
+        assert entity._is_on is True
+
+    @pytest.mark.asyncio
+    async def test_update_state_handles_error(self, trigger_coordinator, mock_config_entry):
+        """Test _update_state handles errors gracefully."""
+        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(side_effect=Exception("Connection error"))
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+        entity._is_on = False
+
+        await entity._update_state()
+
+        assert entity._is_on is False
+
+    @pytest.mark.asyncio
+    async def test_update_state_uses_trigger_out_on_when_status_not_dict(self, trigger_coordinator, mock_config_entry):
+        """Test _update_state uses player.trigger_out_on when status is not a dict."""
+        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value=None)
+        trigger_coordinator.player.trigger_out_on = True
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+
+        await entity._update_state()
+
         assert entity._is_on is True

@@ -81,7 +81,10 @@ async def async_setup_entry(
     )
     platform.async_register_entity_service(
         "play_preset",
-        {vol.Required("preset"): vol.All(vol.Coerce(int), vol.Range(min=1, max=20))},
+        {
+            vol.Required("preset"): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+            vol.Optional("index"): vol.All(vol.Coerce(int), vol.Range(min=1, max=10000)),
+        },
         "async_play_preset",
     )
     platform.async_register_entity_service(
@@ -1008,9 +1011,13 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Handle play_url service call."""
         await self.async_play_media(MediaType.MUSIC, url)
 
-    async def async_play_preset(self, preset: int) -> None:
+    async def async_play_preset(self, preset: int, index: int | None = None) -> None:
         """Handle play_preset service call."""
-        await self.async_play_media("preset", str(preset))
+        if index is not None:
+            async with self.wiim_command("play preset"):
+                await self.coordinator.player.play_preset(preset, index=index)
+        else:
+            await self.async_play_media("preset", str(preset))
 
     async def async_play_playlist(self, playlist_url: str) -> None:
         """Handle play_playlist service call."""

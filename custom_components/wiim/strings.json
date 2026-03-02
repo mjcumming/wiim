@@ -108,11 +108,15 @@
     },
     "play_preset": {
       "name": "Play Preset",
-      "description": "Play a hardware preset configured in the WiiM app. Due to WiiM firmware behavior, presets may automatically resume after a few seconds when switching to external sources.",
+      "description": "Play a hardware preset configured in the WiiM app. Optionally start at a specific track index in the preset's playlist. Due to WiiM firmware behavior, presets may automatically resume after a few seconds when switching to external sources.",
       "fields": {
         "preset": {
           "name": "Preset Number",
           "description": "Preset number to play (1-20, device dependent)."
+        },
+        "index": {
+          "name": "Track Index",
+          "description": "Optional 1-based track index to start from in the preset's playlist (e.g. 1 = from beginning). Omit to resume from last position."
         }
       }
     },

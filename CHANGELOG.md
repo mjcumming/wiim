@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.66] - 2026-03-02
+
+### Added
+
+- **12V trigger switch** (pywiim 2.1.89+): New switch entity "12V trigger" for WiiM Ultra / Pro / Pro Plus to turn the 12V trigger output on or off (e.g. to power amplifiers). Requires pywiim 2.1.90.
+- **Optional track index for Play Preset** (Issue [#191](https://github.com/mjcumming/wiim/issues/191)): Service `wiim.play_preset` now accepts an optional `index` parameter (1-based) to start playback at a specific track in the preset's playlist. Omit `index` to resume from the last position (unchanged behavior).
+
+### Changed
+
+- Release version 1.0.66
+- **Dependency Update**: Updated `pywiim` library to 2.1.90 (includes play_preset index and 12V trigger API from pywiim 2.1.89/2.1.90).
+
 ## [1.0.65] - 2026-02-23
 
 ### Changed
