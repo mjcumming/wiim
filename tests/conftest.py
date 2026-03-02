@@ -133,14 +133,18 @@ def fix_storage_mock():
     """Fix storage mock to work with current HA core version.
 
     pytest-homeassistant-custom-component's storage mock may not accept the
-    arguments that the installed HA core uses. HA core changed _async_write_data
-    to (self, data) in newer versions (no path argument). This fixture patches
-    it so storage writes no-op in tests.
+    arguments that the installed HA core uses. HA core has used two signatures:
+    - Older: _async_write_data(self, path, data) and _async_handle_write_data
+      calls await self._async_write_data(self.path, data)
+    - Newer: _async_write_data(self, data) and _async_handle_write_data
+      calls await self._async_write_data(data)
+    This fixture patches with a no-op that accepts both (self, *args) so CI and
+    local runs work regardless of HA version.
     """
     from unittest.mock import patch
 
-    async def mock_async_write_data(self, data: dict) -> None:
-        """Mock storage write (self, data) for HA versions that use this signature."""
+    async def mock_async_write_data(self, *args: object, **kwargs: object) -> None:
+        """Mock storage write - accept (self, data) or (self, path, data)."""
         return None
 
     # Patch the storage method to override pytest-homeassistant's mock
