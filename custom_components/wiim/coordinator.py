@@ -102,11 +102,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for coordinator in get_all_coordinators(self.hass):
             if coordinator is self:
                 continue
-            p = coordinator.player
-            if getattr(p, "host", None) == host_or_uuid:
-                return p
-            if getattr(p, "uuid", None) == host_or_uuid:
-                return p
+            try:
+                p = coordinator.player
+                if getattr(p, "host", None) == host_or_uuid:
+                    return p
+                if getattr(p, "uuid", None) == host_or_uuid:
+                    return p
+            except Exception as err:
+                _LOGGER.warning("Error in player_finder for %s: %s", host_or_uuid, _compact_wiim_error(err))
         return None
 
     def _all_players_finder(self) -> list[Player]:
@@ -117,7 +120,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         from .data import get_all_coordinators
 
-        return [c.player for c in get_all_coordinators(self.hass)]
+        players = []
+        for c in get_all_coordinators(self.hass):
+            try:
+                players.append(c.player)
+            except Exception as err:
+                _LOGGER.warning("Error in all_players_finder: %s", _compact_wiim_error(err))
+        return players
 
     @callback
     def _on_player_state_changed(self) -> None:

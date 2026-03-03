@@ -1,6 +1,6 @@
 """Core coordinator tests for WiiM - testing pywiim integration."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -494,6 +494,17 @@ class TestWiiMCoordinator:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_player_finder_handles_coordinator_error(self, coordinator):
+        """Exceptions raised accessing coordinator.player are caught; method returns None."""
+        bad = MagicMock()
+        type(bad).player = PropertyMock(side_effect=RuntimeError("coordinator not ready"))
+
+        with patch("custom_components.wiim.data.get_all_coordinators", return_value=[coordinator, bad]):
+            result = coordinator._player_finder("192.168.1.101")
+
+        assert result is None
+
+    @pytest.mark.asyncio
     async def test_all_players_finder_includes_self(self, coordinator, mock_player):
         """Returns the calling coordinator's own player (unlike _player_finder, self is not excluded)."""
         with patch("custom_components.wiim.data.get_all_coordinators", return_value=[coordinator]):
@@ -527,4 +538,15 @@ class TestWiiMCoordinator:
             result = coordinator._all_players_finder()
 
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_all_players_finder_skips_bad_coordinator(self, coordinator, mock_player):
+        """A coordinator whose .player raises is skipped; others are still returned."""
+        bad = MagicMock()
+        type(bad).player = PropertyMock(side_effect=Exception("coordinator not ready"))
+
+        with patch("custom_components.wiim.data.get_all_coordinators", return_value=[coordinator, bad]):
+            result = coordinator._all_players_finder()
+
+        assert result == [mock_player]
 
