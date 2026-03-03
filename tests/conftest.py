@@ -32,24 +32,6 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 _session_loop: asyncio.AbstractEventLoop | None = None
 
 
-@pytest.fixture
-def event_loop() -> asyncio.AbstractEventLoop:
-    """Provide legacy `event_loop` fixture for HA pytest plugin compatibility.
-
-    Newer pytest-asyncio versions no longer provide the `event_loop` fixture by
-    default, but pytest-homeassistant-custom-component still depends on it (via
-    its autouse `enable_event_loop_debug` fixture). Set the loop on the main thread
-    so get_event_loop() returns it; restore the session loop in finally.
-    """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        yield loop
-    finally:
-        asyncio.set_event_loop(_session_loop)
-        loop.close()
-
-
 @pytest.fixture(scope="session", autouse=True)
 def preload_aiodns_pycares_thread() -> None:
     """Preload aiohttp's AsyncResolver so pycares thread exists before tests.

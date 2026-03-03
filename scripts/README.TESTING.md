@@ -67,7 +67,7 @@ Contains:
 | --------------------------------- | ------------------------------- | -------- |
 | `test-smoke.py`                   | Quick validation (4 tests)      | ~2 min   |
 | `test-automated.py`               | Full automated suite (9 tests)  | ~5 min   |
-| `test-multiroom-comprehensive.py` | Multiroom edge cases (10 tests) | ~10 min  |
+| `test-multiroom-comprehensive.py` | Multiroom edge cases (12 tests) | ~10 min  |
 
 ### Specialized Tests
 
@@ -98,10 +98,17 @@ Contains:
 
 - 2-device join/unjoin
 - 3-device join/unjoin
+- External/app-style group join via direct device HTTP API command
+- Subnet-aware external join sweep (validates both subnet groups without cross-subnet grouping)
 - Virtual group entity
 - Metadata propagation
 - Group controls
 - Edge cases (unjoin master, join already joined, etc.)
+
+`test-multiroom-comprehensive.py` options:
+- `--mode full` (default): full comprehensive flow + external sync checks
+- `--mode external`: external/app-style sync checks only (fast regression check)
+- `WIIM_TARGET_IPS=ip1,ip2,...`: optionally limit discovery to a subset of devices
 
 ### ✅ Covered by Specialized Tests
 

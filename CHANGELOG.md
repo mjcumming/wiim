@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.70] - 2026-03-03
+
+### Changed
+
+- Release version 1.0.70
+- **Real-world multiroom test tooling**: `test-multiroom-comprehensive.py` now supports dynamic device discovery, `--mode external`, subnet-aware external join sweeps, and direct device API probing across common HTTP/HTTPS ports.
+- **Pre-release messaging**: `scripts/pre-release-check.py --realworld-full` help text now explicitly documents external/API group-sync validation.
+- **Testing docs**: Updated `scripts/README.TESTING.md` to reflect expanded multiroom coverage and new test modes.
+
+### Fixed
+
+- **Pytest async fixture compatibility**: Removed legacy `event_loop` fixture override from `tests/conftest.py` to rely on current pytest/HA plugin behavior.
+
 ## [1.0.69] - 2026-03-03
 
 ### Changed

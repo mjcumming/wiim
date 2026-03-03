@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import requests
+import argparse
 from typing import Any
 
 
@@ -27,7 +28,11 @@ class MultiroomTestSuite:
         self.ha_url = ha_url.rstrip("/")
         self.token = token
         self.headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        self.devices = {}
+        self.devices: dict[str, dict[str, Any]] = {}
+        target_ips_raw = os.getenv("WIIM_TARGET_IPS", "").strip()
+        self.target_ips: set[str] | None = (
+            {ip.strip() for ip in target_ips_raw.split(",") if ip.strip()} if target_ips_raw else None
+        )
 
     def print_header(self, text: str):
         print(f"\n{Colors.CYAN}{'=' * 80}{Colors.RESET}")
@@ -75,13 +80,11 @@ class MultiroomTestSuite:
             return False, str(e)
 
     def discover_devices(self):
-        """Find the three target devices"""
+        """Discover WiiM media_player entities from Home Assistant."""
         self.print_header("Device Discovery")
 
         response = requests.get(f"{self.ha_url}/api/states", headers=self.headers)
         all_states = response.json()
-
-        target_ips = ["192.168.1.116", "192.168.1.115", "192.168.1.68"]
 
         for state in all_states:
             if (
@@ -89,23 +92,40 @@ class MultiroomTestSuite:
                 and state.get("attributes", {}).get("integration_purpose") == "individual_speaker_control"
             ):
                 ip = state.get("attributes", {}).get("ip_address")
-                if ip in target_ips:
-                    self.devices[ip] = {
-                        "entity_id": state["entity_id"],
-                        "name": state.get("attributes", {}).get("friendly_name", state["entity_id"]),
-                        "ip": ip,
-                        "state": state,
-                    }
-                    print(
-                        f"{Colors.MAGENTA}{ip}:{Colors.RESET} {self.devices[ip]['name']} ({self.devices[ip]['entity_id']})"
-                    )
+                if not ip:
+                    continue
+                if self.target_ips is not None and ip not in self.target_ips:
+                    continue
+                self.devices[ip] = {
+                    "entity_id": state["entity_id"],
+                    "name": state.get("attributes", {}).get("friendly_name", state["entity_id"]),
+                    "ip": ip,
+                    "state": state,
+                }
 
-        if len(self.devices) != 3:
-            self.print_failure(f"Expected 3 devices, found {len(self.devices)}")
+        if len(self.devices) < 2:
+            self.print_failure(f"Need at least 2 devices, found {len(self.devices)}")
             return False
 
-        self.print_success(f"Found all 3 target devices")
+        for ip in sorted(self.devices.keys()):
+            dev = self.devices[ip]
+            print(f"{Colors.MAGENTA}{ip}:{Colors.RESET} {dev['name']} ({dev['entity_id']})")
+
+        if self.target_ips is not None:
+            missing = sorted(self.target_ips - set(self.devices.keys()))
+            if missing:
+                self.print_warning(f"Configured target IPs not found in HA: {', '.join(missing)}")
+
+        self.print_success(f"Discovered {len(self.devices)} devices")
         return True
+
+    def _select_reference_ips(self) -> list[str]:
+        """Select three reference devices for legacy join/unjoin flow."""
+        preferred = ["192.168.1.115", "192.168.1.68", "192.168.1.116"]
+        available = [ip for ip in preferred if ip in self.devices]
+        if len(available) >= 3:
+            return available[:3]
+        return sorted(self.devices.keys())[:3]
 
     def get_group_info(self, entity_id: str) -> dict[str, Any]:
         """Get current group information for a device"""
@@ -115,6 +135,7 @@ class MultiroomTestSuite:
         attrs = state.get("attributes", {})
         return {
             "role": attrs.get("group_role", "unknown"),
+            "group_state": attrs.get("group_state", "unknown"),
             "group_members": attrs.get("group_members") or [],
             "is_master": attrs.get("group_role") == "master",
             "is_slave": attrs.get("group_role") == "slave",
@@ -129,6 +150,131 @@ class MultiroomTestSuite:
                 return True
             time.sleep(0.5)
         return False
+
+    def _call_device_httpapi(self, device_ip: str, command: str, timeout: int = 8) -> tuple[bool, str]:
+        """Call a raw LinkPlay/WiiM httpapi command directly on a device.
+
+        Devices vary by protocol/port (http:80, https:443/4443/8443). We probe
+        common endpoint combinations and return on first success.
+        """
+        attempts: list[str] = []
+        candidates = [
+            ("http", 80),
+            ("https", 443),
+            ("https", 4443),
+            ("https", 8443),
+            ("http", 49152),
+        ]
+        command_param = {"command": command}
+
+        for scheme, port in candidates:
+            url = f"{scheme}://{device_ip}:{port}/httpapi.asp"
+            try:
+                response = requests.get(
+                    url,
+                    params=command_param,
+                    timeout=timeout,
+                    verify=False,
+                )
+                response.raise_for_status()
+
+                body = response.text.strip()
+                if "OK" in body.upper() or (body.startswith("{") and body.endswith("}")):
+                    return True, f"{scheme}:{port} {body}"
+                attempts.append(f"{scheme}:{port} unexpected_response={body[:120]}")
+            except Exception as e:
+                attempts.append(f"{scheme}:{port} {e}")
+
+        return False, "; ".join(attempts)
+
+    def test_external_join_via_device_api(self, master_ip: str, slave_ips: list[str]) -> bool:
+        """Join by direct device API calls and verify HA reflects the change."""
+        master = self.devices[master_ip]
+        slaves = [self.devices[ip] for ip in slave_ips]
+
+        print(
+            f"\n{Colors.BOLD}Test: External/API Join -> HA Sync ({master['name']} + {', '.join(s['name'] for s in slaves)}){Colors.RESET}"
+        )
+        print("  Path: direct device httpapi command (curl-style), not HA media_player.join")
+
+        # Ensure we're starting from solo to keep expectations deterministic.
+        self.ensure_all_solo()
+        time.sleep(2)
+
+        # Equivalent curl:
+        # curl "http://<slave_ip>/httpapi.asp?command=ConnectMasterAp:JoinGroupMaster:eth<master_ip>:wifi0.0.0.0"
+        for slave in slaves:
+            command = f"ConnectMasterAp:JoinGroupMaster:eth{master_ip}:wifi0.0.0.0"
+            ok, detail = self._call_device_httpapi(slave["ip"], command)
+            if not ok:
+                self.print_failure(
+                    f"External join command failed for {slave['name']} ({slave['ip']}): {detail}"
+                )
+                return False
+            self.print_info(f"Sent external join to {slave['name']} ({slave['ip']})")
+
+        # Give devices a moment to form group before polling HA.
+        time.sleep(3)
+
+        deadline = time.time() + 25
+        while time.time() < deadline:
+            master_info = self.get_group_info(master["entity_id"])
+            slave_infos = [self.get_group_info(slave["entity_id"]) for slave in slaves]
+
+            master_has_all = all(slave["entity_id"] in (master_info.get("group_members") or []) for slave in slaves)
+            master_ok = master_info.get("is_master") and master_info.get("group_state") == "coordinator" and master_has_all
+
+            slaves_ok = all(
+                info.get("is_slave") and info.get("group_state") == "member"
+                for info in slave_infos
+            )
+
+            if master_ok and slaves_ok:
+                self.print_success("HA detected external group change (role/state/members are correct)")
+                return True
+
+            time.sleep(1)
+
+        # Timed out - print final observed state for debugging.
+        master_info = self.get_group_info(master["entity_id"])
+        self.print_failure(
+            "HA did not fully reflect external group change within timeout. "
+            f"Master role/state/members: {master_info.get('role')}/{master_info.get('group_state')}/{master_info.get('group_members')}"
+        )
+        for slave in slaves:
+            info = self.get_group_info(slave["entity_id"])
+            self.print_warning(
+                f"  Slave {slave['name']} role/state/members: "
+                f"{info.get('role')}/{info.get('group_state')}/{info.get('group_members')}"
+            )
+        return False
+
+    def test_external_join_subnet_sweep(self) -> bool:
+        """Run external join->HA sync checks across all discovered subnet groups."""
+        self.print_header("External/API Join Sweep Across Discovered Devices")
+        subnet_groups: dict[str, list[str]] = {}
+        for ip in sorted(self.devices.keys()):
+            subnet = ".".join(ip.split(".")[:3])
+            subnet_groups.setdefault(subnet, []).append(ip)
+
+        cases: list[tuple[str, list[str], str]] = []
+        for subnet, ips in sorted(subnet_groups.items()):
+            if len(ips) >= 2:
+                cases.append((ips[0], ips[1:], subnet))
+
+        if not cases:
+            self.print_warning("No subnet has >=2 devices; skipping external sweep")
+            return True
+
+        all_passed = True
+        for master_ip, slave_ips, subnet in cases:
+            self.print_header(f"External/API Join Sweep ({subnet}.x)")
+            passed = self.test_external_join_via_device_api(master_ip, slave_ips)
+            all_passed = all_passed and passed
+            self.ensure_all_solo()
+            time.sleep(2)
+
+        return all_passed
 
     def test_join(self, master_ip: str, slave_ips: list[str], expected_success: bool = True) -> bool:
         """Test joining devices"""
@@ -268,6 +414,15 @@ class MultiroomTestSuite:
         if not self.discover_devices():
             return
 
+        ref_ips = self._select_reference_ips()
+        if len(ref_ips) < 3:
+            self.print_failure("Need at least 3 devices for full comprehensive run")
+            return
+        ref_master, ref_slave1, ref_slave2 = ref_ips[0], ref_ips[1], ref_ips[2]
+        self.print_info(
+            f"Reference trio for baseline flow: {ref_master} (master), {ref_slave1}, {ref_slave2}"
+        )
+
         self.ensure_all_solo()
         time.sleep(2)
 
@@ -275,48 +430,48 @@ class MultiroomTestSuite:
 
         # Test 1: Simple 2-device join
         self.print_header("Test 1: Simple 2-Device Join")
-        results.append(("2-device join", self.test_join("192.168.1.115", ["192.168.1.68"])))
+        results.append(("2-device join", self.test_join(ref_master, [ref_slave1])))
         time.sleep(2)
 
         # Test 2: Unjoin slave
         self.print_header("Test 2: Unjoin Slave")
-        results.append(("Unjoin slave", self.test_unjoin("192.168.1.68")))
+        results.append(("Unjoin slave", self.test_unjoin(ref_slave1)))
         time.sleep(2)
 
         # Test 3: Join 3 devices
         self.print_header("Test 3: Join 3 Devices")
-        results.append(("3-device join", self.test_join("192.168.1.115", ["192.168.1.68", "192.168.1.116"])))
+        results.append(("3-device join", self.test_join(ref_master, [ref_slave1, ref_slave2])))
         time.sleep(2)
 
         # Test 4: Unjoin middle device (should break group)
         self.print_header("Test 4: Unjoin Middle Device")
-        results.append(("Unjoin middle", self.test_unjoin("192.168.1.68")))
+        results.append(("Unjoin middle", self.test_unjoin(ref_slave1)))
         time.sleep(2)
 
         # Test 5: Rejoin to form 2-device group
         self.print_header("Test 5: Rejoin 2 Devices")
-        results.append(("Rejoin 2 devices", self.test_join("192.168.1.115", ["192.168.1.116"])))
+        results.append(("Rejoin 2 devices", self.test_join(ref_master, [ref_slave2])))
         time.sleep(2)
 
         # Test 6: Unjoin master (slave should become solo)
         self.print_header("Test 6: Unjoin Master")
-        results.append(("Unjoin master", self.test_unjoin("192.168.1.115")))
+        results.append(("Unjoin master", self.test_unjoin(ref_master)))
         time.sleep(2)
 
         # Test 7: Join already joined device (should work - replaces group)
         self.print_header("Test 7: Join Already Joined Device")
         # First create a group
-        self.test_join("192.168.1.115", ["192.168.1.68"])
+        self.test_join(ref_master, [ref_slave1])
         time.sleep(2)
         # Now join the master to a different slave (should work)
-        results.append(("Join already joined", self.test_join("192.168.1.115", ["192.168.1.116"])))
+        results.append(("Join already joined", self.test_join(ref_master, [ref_slave2])))
         time.sleep(2)
 
         # Test 8: Unjoin solo device (should fail or be no-op)
         self.print_header("Test 8: Unjoin Solo Device")
         self.ensure_all_solo()
         time.sleep(2)
-        results.append(("Unjoin solo", self.test_unjoin("192.168.1.68", expected_success=True)))  # May succeed as no-op
+        results.append(("Unjoin solo", self.test_unjoin(ref_slave1, expected_success=True)))  # May succeed as no-op
         time.sleep(2)
 
         # Test 9: Join device to itself (edge case - should be no-op or fail gracefully)
@@ -324,7 +479,7 @@ class MultiroomTestSuite:
         self.ensure_all_solo()
         time.sleep(2)
         # This should either work as a no-op or fail gracefully - either is acceptable
-        result = self.test_join("192.168.1.115", ["192.168.1.115"], expected_success=True)
+        result = self.test_join(ref_master, [ref_master], expected_success=True)
         # Accept either success (no-op) or graceful failure
         results.append(("Join to self", True))  # Always pass - just testing it doesn't crash
         time.sleep(2)
@@ -334,10 +489,25 @@ class MultiroomTestSuite:
         self.ensure_all_solo()
         time.sleep(2)
         # Step 1: Join A+B
-        self.test_join("192.168.1.115", ["192.168.1.68"])
+        self.test_join(ref_master, [ref_slave1])
         time.sleep(2)
         # Step 2: Join C to A (should add C to existing group)
-        results.append(("Complex join", self.test_join("192.168.1.115", ["192.168.1.116"])))
+        results.append(("Complex join", self.test_join(ref_master, [ref_slave2])))
+        time.sleep(2)
+
+        # Test 11: External app/API style join (direct device command), then verify HA catches up
+        self.print_header("Test 11: External/API Join -> HA Sync")
+        results.append(
+            (
+                "External/API join sync",
+                self.test_external_join_via_device_api(ref_master, [ref_slave1]),
+            )
+        )
+        time.sleep(2)
+
+        # Test 12: External/API sweep across all discovered device subnets
+        self.print_header("Test 12: External/API Subnet Sweep")
+        results.append(("External/API subnet sweep", self.test_external_join_subnet_sweep()))
         time.sleep(2)
 
         # Final cleanup
@@ -359,6 +529,15 @@ class MultiroomTestSuite:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Comprehensive WiiM multiroom real-device tests")
+    parser.add_argument(
+        "--mode",
+        choices=["full", "external"],
+        default="full",
+        help="Test mode: full suite or external API sync checks only",
+    )
+    args = parser.parse_args()
+
     ha_url = os.getenv("HA_URL", "http://localhost:8123")
     token = os.getenv("HA_TOKEN")
 
@@ -367,6 +546,14 @@ def main():
         sys.exit(1)
 
     suite = MultiroomTestSuite(ha_url, token)
+    if args.mode == "external":
+        if not suite.discover_devices():
+            sys.exit(1)
+        suite.ensure_all_solo()
+        ok = suite.test_external_join_subnet_sweep()
+        suite.ensure_all_solo()
+        sys.exit(0 if ok else 1)
+
     suite.run_all_tests()
 
 

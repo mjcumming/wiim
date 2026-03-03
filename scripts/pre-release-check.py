@@ -420,7 +420,10 @@ def main():
     parser.add_argument(
         "--realworld-full",
         action="store_true",
-        help="Run full real-world tests (smoke + automated full + multiroom). Requires --ha-url/--token for multiroom.",
+        help=(
+            "Run full real-world tests (smoke + automated full + multiroom comprehensive, "
+            "including external/API group-sync checks). Requires --ha-url/--token for multiroom."
+        ),
     )
     parser.add_argument(
         "--require-realworld",
