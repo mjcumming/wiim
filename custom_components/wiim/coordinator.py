@@ -74,13 +74,59 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Wrap client in Player (recommended for HA - pywiim manages all state)
         # pywiim 2.1.70+ handles player linking internally via its player registry
+
+        # We need to include player_finder and all_players_finder to enable cross-coordinator group linking.
+        # In pywiim's player/groupsops.py the "Case 2" for device is master but we don't have a group object
+        # short-circuits if there isn't a player_finder callback.
+        # all_players_finder is also included as a final fallback in case the UUID lookup doesn't work for
+        # some reason.
+
         self.player = Player(
             client,
             on_state_changed=self._on_player_state_changed,
+            player_finder=self._player_finder,
+            all_players_finder=self._all_players_finder,
         )
 
         # Use pywiim's PollingStrategy to determine when to poll
         self._polling_strategy = PollingStrategy(self._capabilities) if self._capabilities else PollingStrategy({})
+
+    def _player_finder(self, host_or_uuid: str) -> Player | None:
+        """Find a Player object across all coordinators by host IP or UUID.
+
+        Called by pywiim when it needs to resolve a slave's IP/UUID (from
+        getSlaveList) to an actual Player object for group linking.
+        """
+        from .data import get_all_coordinators
+
+        for coordinator in get_all_coordinators(self.hass):
+            if coordinator is self:
+                continue
+            try:
+                p = coordinator.player
+                if getattr(p, "host", None) == host_or_uuid:
+                    return p
+                if getattr(p, "uuid", None) == host_or_uuid:
+                    return p
+            except Exception as err:
+                _LOGGER.warning("Error in player_finder for %s: %s", host_or_uuid, _compact_wiim_error(err))
+        return None
+
+    def _all_players_finder(self) -> list[Player]:
+        """Return all Player objects from every registered coordinator.
+
+        Called by pywiim to infer slave role if e.g. a device is still reporting
+        that it's solo even though it appears in another device's getSlaveList.
+        """
+        from .data import get_all_coordinators
+
+        players = []
+        for c in get_all_coordinators(self.hass):
+            try:
+                players.append(c.player)
+            except Exception as err:
+                _LOGGER.warning("Error in all_players_finder: %s", _compact_wiim_error(err))
+        return players
 
     @callback
     def _on_player_state_changed(self) -> None:
