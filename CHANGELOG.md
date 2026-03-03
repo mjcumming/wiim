@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.69] - 2026-03-03
+
+### Changed
+
+- Release version 1.0.69
+
+### Fixed
+
+- **Media browser robustness**: Fixed failures when Home Assistant media source browse responses are missing optional attributes (for example `domain`) and when preset metadata contains non-numeric preset numbers. Unexpected browse exceptions are now surfaced as `BrowseError` instead of leaking raw exceptions.
+
 ## [1.0.68] - 2026-03-03
 
 ### Changed

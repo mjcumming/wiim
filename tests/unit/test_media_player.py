@@ -1,5 +1,6 @@
 """Unit tests for WiiM Media Player - testing volume and core functionality."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1248,6 +1249,68 @@ class TestWiiMMediaPlayerHelperFunctions:
         dlna_item = MagicMock(spec=BrowseMedia)
         dlna_item.media_content_type = MediaType.CHANNEL
         assert media_source_filter(dlna_item) is True
+
+
+class TestWiiMMediaPlayerBrowse:
+    """Test media browsing behavior."""
+
+    @pytest.mark.asyncio
+    async def test_async_browse_media_handles_missing_domain_attr(self, media_player):
+        """Test root browse handling when media source result has no domain attribute."""
+        from homeassistant.components.media_player import BrowseMedia, MediaClass
+
+        media_player.hass = MagicMock()
+        external_child = BrowseMedia(
+            title="Media Source",
+            media_class=MediaClass.DIRECTORY,
+            media_content_id="media-source://",
+            media_content_type="music",
+            can_play=False,
+            can_expand=True,
+        )
+        browse_result = SimpleNamespace(children=[external_child])  # no "domain" attr
+
+        with patch(
+            "custom_components.wiim.media_player.media_source.async_browse_media",
+            new=AsyncMock(return_value=browse_result),
+        ):
+            result = await media_player.async_browse_media()
+
+        assert result.children is not None
+        assert any(child.title == "Presets" for child in result.children)
+        assert any(child.title == "Media Source" for child in result.children)
+
+    @pytest.mark.asyncio
+    async def test_async_browse_media_wraps_unexpected_errors(self, media_player):
+        """Test async_browse_media wraps unexpected exceptions as BrowseError."""
+        from homeassistant.components.media_player import BrowseError
+
+        media_player.hass = MagicMock()
+
+        with patch(
+            "custom_components.wiim.media_player.media_source.async_browse_media",
+            new=AsyncMock(side_effect=RuntimeError("browse explosion")),
+        ):
+            with pytest.raises(BrowseError, match="browse explosion"):
+                await media_player.async_browse_media()
+
+    @pytest.mark.asyncio
+    async def test_async_browse_media_presets_skips_invalid_numbers(self, media_player, mock_coordinator):
+        """Test preset browsing ignores invalid preset numbers."""
+        mock_coordinator.player.supports_presets = True
+        mock_coordinator.player.presets_full_data = True
+        mock_coordinator.player.presets = [
+            {"name": "Bad Number", "number": "abc"},
+            {"name": "Good Number", "number": "2"},
+            {"name": "Missing Number", "number": None},
+        ]
+
+        result = await media_player.async_browse_media("presets", "")
+
+        assert result.children is not None
+        assert len(result.children) == 20
+        assert result.children[0].title == "Preset 1"
+        assert result.children[1].title == "Good Number"
 
 
 class TestWiiMMediaPlayerSourceEdgeCases:

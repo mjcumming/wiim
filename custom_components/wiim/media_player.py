@@ -625,6 +625,22 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         media_content_id: str | None = None,
     ) -> BrowseMedia:
         """Implement media browsing."""
+        try:
+            return await self._async_browse_media_impl(
+                media_content_type, media_content_id
+            )
+        except BrowseError:
+            raise
+        except Exception as err:
+            _LOGGER.exception("[%s] Media browsing failed", self.player.name or "WiiM")
+            raise BrowseError(str(err)) from err
+
+    async def _async_browse_media_impl(
+        self,
+        media_content_type: MediaType | str | None,
+        media_content_id: str | None,
+    ) -> BrowseMedia:
+        """Implementation of media browsing (called by async_browse_media)."""
         # Handle media source browsing
         if media_content_id and media_source.is_media_source_id(media_content_id):
             return await media_source.async_browse_media(
@@ -655,9 +671,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                         content_filter=media_source_filter,
                     )
                     # If domain is None, it's an overview of available sources
-                    if browse.domain is None and browse.children:
+                    if getattr(browse, "domain", None) is None and getattr(
+                        browse, "children", None
+                    ):
                         children.extend(browse.children)
-                    else:
+                    elif browse is not None:
                         children.append(browse)
 
                 # If there's only one child, return it directly (skip root level)
@@ -690,8 +708,12 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 for preset in player.presets:
                     if isinstance(preset, dict) and "name" in preset:
                         preset_num = preset.get("number")
-                        if preset_num and 1 <= int(preset_num) <= 20:
-                            preset_names[int(preset_num)] = preset["name"]
+                        try:
+                            num = int(preset_num) if preset_num is not None else None
+                            if num is not None and 1 <= num <= 20:
+                                preset_names[num] = preset["name"]
+                        except (TypeError, ValueError):
+                            continue
 
             # Show presets 1-20 (device dependent, but max is 20 per service definition)
             for preset_num in range(1, 21):
