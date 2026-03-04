@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.71] - 2026-03-04
+
+### Changed
+
+- Release version 1.0.71
+- **Dependency Update**: Updated `pywiim` library to 2.1.93
+
+### pywiim 2.1.91–2.1.93 (library updates)
+
+- **2.1.93**: Base API now returns consistent `ApiResponse(parsed, raw)` from requests; `Player.get_subwoofer_status()` returns `SubwooferStatus` (attribute access) instead of raw dict.
+- **2.1.92**: `play_notification(url, force_interrupt=True)` — optional `force_interrupt` uses `play_url` so TTS is guaranteed audible when prompt path is unreliable; `linkplay_radio` in source capabilities with notification fallback; TTS troubleshooting and integration work list in library docs; notification docs no longer overclaim duck/resume for `playPromptUrl`.
+- **2.1.91**: New `get_debug_info()` on client (DiagnosticsAPI) for device debug info (e.g. system_ready, slave_status, play_status) for diagnostics and troubleshooting; optional endpoint, unsupported devices reported as warnings.
+
 ## [1.0.70] - 2026-03-03
 
 ### Changed
