@@ -16,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
+from .utils import status_field, status_truthy
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ async def async_setup_entry(
         if player.supports_subwoofer:
             # Check if subwoofer is actually connected via status
             status = player.subwoofer_status
-            if status and status.get("plugged"):
+            if status_truthy(status_field(status, "plugged")):
                 entities.append(WiiMSubwooferLevelNumber(coordinator, config_entry))
                 _LOGGER.debug("Creating subwoofer level number entity - subwoofer connected")
             else:
@@ -84,9 +85,14 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
             # Use async method for fresh data
             status = await self.coordinator.player.get_subwoofer_status()
             if status:
-                self._value = float(status.get("level", 0))
+                level = status_field(status, "level")
+                if level is not None:
+                    self._value = float(level)
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
+        finally:
+            if self.hass is not None:
+                self.async_write_ha_state()
 
     @property
     def native_value(self) -> float | None:
@@ -109,6 +115,6 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
-        # Schedule state update (async operation)
+        # _update_state() writes HA state when the async fetch completes.
+        # Avoid immediate super() write with stale local cache.
         self.hass.async_create_task(self._update_state())
-        super()._handle_coordinator_update()
