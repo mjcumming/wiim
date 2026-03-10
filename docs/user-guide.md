@@ -569,7 +569,8 @@ Complete reference for all entities, configuration options, and technical detail
 
 **Lights** (device dependent)
 
-- `light.{device_name}_status_led` - Control front panel LED
+- `light.{device_name}_led` - Front panel LED (on/off only)
+- `light.{device_name}_display` - WiiM Ultra LCD screen (on/off and brightness; Ultra only)
 
 **Binary Sensors** (optional - enable network monitoring)
 

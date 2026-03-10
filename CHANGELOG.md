@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.72] - 2026-03-10
+
+### Added
+
+- **Display entity (WiiM Ultra)** – New light entity `light.{device}_display` for WiiM Ultra LCD screen (on/off and brightness). Only created when the device supports display config (pywiim 2.1.95+).
+
+### Changed
+
+- Release version 1.0.72
+- **Dependency Update**: Updated `pywiim` library to 2.1.95
+- **LED entity (legacy)** – Front-panel LED is now **on/off only**; brightness control removed to match actual device behavior. Entity ID unchanged (`light.{device}_led`).
+
+### Fixed
+
+- **Coordinator / “does not report a color mode” (Issue [#200](https://github.com/mjcumming/wiim/issues/200))** – LED light entity now reports `color_mode` so Home Assistant no longer raises and coordinator updates complete without errors.
+
 ## [1.0.71] - 2026-03-04
 
 ### Changed

@@ -425,7 +425,8 @@ The integration creates multiple entity types for comprehensive control:
 
 ### Lights (Device Dependent)
 
-- **Status LED** - Control device LED indicators
+- **LED** - Front panel status LED (on/off only)
+- **Display** - WiiM Ultra LCD screen (on/off and brightness; Ultra only)
 
 ## Diagnostics & Troubleshooting
 
