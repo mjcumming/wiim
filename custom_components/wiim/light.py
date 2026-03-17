@@ -71,6 +71,11 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         """Return LED power state (assumed)."""
         return self._is_on
 
+    @property
+    def color_mode(self) -> ColorMode:  # type: ignore[override]
+        """Return the LED color mode explicitly for HA light validation."""
+        return ColorMode.ONOFF
+
     async def async_turn_on(self, **kwargs: Any) -> None:  # type: ignore[override]
         """Turn LED on. Brightness is ignored (legacy LED is on/off only)."""
         _ = kwargs.get(ATTR_BRIGHTNESS)  # ignored
@@ -122,6 +127,11 @@ class WiiMDisplayLight(WiimEntity, LightEntity):
     def brightness(self) -> int | None:  # type: ignore[override]
         """Return display brightness (0-255, assumed)."""
         return self._brightness
+
+    @property
+    def color_mode(self) -> ColorMode:  # type: ignore[override]
+        """Return the display color mode explicitly for HA light validation."""
+        return ColorMode.BRIGHTNESS
 
     async def async_turn_on(self, **kwargs: Any) -> None:  # type: ignore[override]
         """Turn display on and optionally set brightness."""

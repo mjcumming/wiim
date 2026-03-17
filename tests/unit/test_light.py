@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode
+from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_COLOR_MODE, ColorMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -109,6 +109,14 @@ class TestWiiMLEDLightBasic:
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity.is_on is None
 
+    def test_state_attributes_include_color_mode_when_on(self, mock_coordinator_setup):
+        """Test HA state attributes render LED color mode without errors."""
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
+        entity._is_on = True
+
+        assert entity.state_attributes[ATTR_COLOR_MODE] == ColorMode.ONOFF
+
 
 class TestWiiMLEDLightTurnOnOff:
     """Test LED turn on/off (no brightness)."""
@@ -211,6 +219,15 @@ class TestWiiMDisplayLightBasic:
         entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
         assert entity.is_on is None
         assert entity.brightness is None
+
+    def test_state_attributes_include_color_mode_when_on(self, mock_coordinator_with_display):
+        """Test HA state attributes render display color mode without errors."""
+        mock_coordinator, mock_config_entry = mock_coordinator_with_display
+        entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
+        entity._is_on = True
+        entity._brightness = 255
+
+        assert entity.state_attributes[ATTR_COLOR_MODE] == ColorMode.BRIGHTNESS
 
 
 class TestWiiMDisplayLightTurnOnOff:

@@ -154,11 +154,26 @@ class TestWiiMMediaPlayerPlayback:
     async def test_media_play(self, media_player, mock_coordinator):
         """Test play command."""
         mock_coordinator.player.play = AsyncMock(return_value=True)
+        mock_coordinator.player.resume = AsyncMock(return_value=True)
+        mock_coordinator.player.is_paused = False
 
         await media_player.async_media_play()
 
         mock_coordinator.player.play.assert_called_once()
+        mock_coordinator.player.resume.assert_not_called()
         # State updates automatically via callback - no manual refresh needed
+
+    @pytest.mark.asyncio
+    async def test_media_play_resumes_when_paused(self, media_player, mock_coordinator):
+        """Test play command uses resume when the player is paused."""
+        mock_coordinator.player.play = AsyncMock(return_value=True)
+        mock_coordinator.player.resume = AsyncMock(return_value=True)
+        mock_coordinator.player.is_paused = True
+
+        await media_player.async_media_play()
+
+        mock_coordinator.player.resume.assert_called_once()
+        mock_coordinator.player.play.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_media_pause(self, media_player, mock_coordinator):
@@ -629,7 +644,7 @@ class TestWiiMMediaPlayerSoundMode:
 
         await media_player.async_select_sound_mode("Off")
 
-        mock_coordinator.player.set_eq_preset.assert_called_once_with("off")
+        mock_coordinator.player.set_eq_preset.assert_called_once_with("Off")
 
     def test_sound_mode_returns_current_preset(self, media_player, mock_coordinator):
         """Test sound_mode returns current EQ preset."""
@@ -671,8 +686,18 @@ class TestWiiMMediaPlayerSoundMode:
 
         await media_player.async_select_sound_mode("Bass")
 
-        mock_coordinator.player.set_eq_preset.assert_called_once_with("bass")
+        mock_coordinator.player.set_eq_preset.assert_called_once_with("Bass")
         # State updates automatically via callback - no manual refresh needed
+
+    @pytest.mark.asyncio
+    async def test_select_sound_mode_preserves_dynamic_label(self, media_player, mock_coordinator):
+        """Test selecting a dynamic/device-reported preset preserves the label."""
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.set_eq_preset = AsyncMock(return_value=True)
+
+        await media_player.async_select_sound_mode("Vocal Booster")
+
+        mock_coordinator.player.set_eq_preset.assert_called_once_with("Vocal Booster")
 
     @pytest.mark.asyncio
     async def test_select_sound_mode_handles_not_supported(self, media_player, mock_coordinator):

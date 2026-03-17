@@ -83,8 +83,11 @@ class WiiMTriggerOutSwitch(WiimEntity, SwitchEntity):
         """Fetch current 12V trigger state from device."""
         try:
             status = await self.coordinator.player.client.get_trigger_out_status()
-            if isinstance(status, dict):
-                self._is_on = status.get("status", status.get("on", False))
+            if isinstance(status, bool):
+                self._is_on = status
+            elif isinstance(status, dict):
+                raw_status = status.get("status", status.get("on", False))
+                self._is_on = bool(raw_status)
             else:
                 self._is_on = getattr(
                     self.coordinator.player, "trigger_out_on", None
@@ -147,10 +150,14 @@ class WiiMSubwooferSwitch(WiimEntity, SwitchEntity):
     async def _update_state(self) -> None:
         """Fetch current subwoofer state from device."""
         try:
-            # Use async method for fresh data
             status = await self.coordinator.player.get_subwoofer_status()
-            if status:
-                self._is_on = status.get("status", False)
+            if isinstance(status, dict):
+                raw_status = status.get("status", False)
+                self._is_on = bool(raw_status)
+            elif status is not None:
+                enabled = getattr(status, "enabled", None)
+                if enabled is not None:
+                    self._is_on = bool(enabled)
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
 

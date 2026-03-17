@@ -1,5 +1,6 @@
 """Unit tests for WiiM Switch Entity - testing subwoofer control."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -198,6 +199,16 @@ class TestSubwooferSwitchControl:
         assert entity._is_on is True
 
     @pytest.mark.asyncio
+    async def test_update_state_fetches_model_status(self, mock_coordinator, mock_config_entry):
+        """Test _update_state accepts current pywiim model return type."""
+        mock_coordinator.player.get_subwoofer_status = AsyncMock(return_value=SimpleNamespace(enabled=True, plugged=True))
+        entity = WiiMSubwooferSwitch(mock_coordinator, mock_config_entry)
+
+        await entity._update_state()
+
+        assert entity._is_on is True
+
+    @pytest.mark.asyncio
     async def test_update_state_handles_error(self, mock_coordinator, mock_config_entry):
         """Test _update_state handles errors gracefully."""
         mock_coordinator.player.get_subwoofer_status = AsyncMock(side_effect=Exception("Connection error"))
@@ -352,6 +363,16 @@ class TestTriggerOutSwitchControl:
         await entity._update_state()
 
         trigger_coordinator.player.client.get_trigger_out_status.assert_called_once()
+        assert entity._is_on is True
+
+    @pytest.mark.asyncio
+    async def test_update_state_from_bool_status(self, trigger_coordinator, mock_config_entry):
+        """Test _update_state accepts current pywiim bool return type."""
+        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value=True)
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+
+        await entity._update_state()
+
         assert entity._is_on is True
 
     @pytest.mark.asyncio

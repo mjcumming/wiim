@@ -337,7 +337,11 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             return
 
         try:
-            await self.coordinator.player.play()
+            player = self.coordinator.player
+            if getattr(player, "is_paused", None) is True:
+                await player.resume()
+            else:
+                await player.play()
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             raise HomeAssistantError(f"Failed to play: {err}") from err

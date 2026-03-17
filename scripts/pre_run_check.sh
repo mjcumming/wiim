@@ -29,7 +29,7 @@ sys.path.insert(0, '.')
 try:
     from custom_components.wiim import DOMAIN
     from custom_components.wiim.coordinator import WiiMCoordinator
-    from custom_components.wiim.data import Speaker
+    from custom_components.wiim.data import get_coordinator_from_entry, get_all_coordinators
     print('✅ Core imports successful')
 except Exception as e:
     print(f'❌ Import error: {e}')

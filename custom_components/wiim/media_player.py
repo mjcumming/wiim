@@ -290,7 +290,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     async def async_media_play(self) -> None:
         """Start playback."""
         async with self.wiim_command("start playback"):
-            await self.coordinator.player.play()
+            player = self.coordinator.player
+            if getattr(player, "is_paused", None) is True:
+                await player.resume()
+            else:
+                await player.play()
             # State updates automatically via callback - no manual refresh needed
 
     async def async_media_pause(self) -> None:
@@ -1023,8 +1027,9 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             raise HomeAssistantError("EQ is not supported on this device")
 
         async with self.wiim_command(f"select sound mode '{sound_mode}'"):
-            # pywiim handles "off" (case-insensitive) by disabling EQ
-            await self.coordinator.player.set_eq_preset(sound_mode.lower())
+            # Pass the exact device-reported label through to pywiim so dynamic
+            # and custom presets can be resolved against the player's preset list.
+            await self.coordinator.player.set_eq_preset(sound_mode)
             # State updates automatically via callback - no manual refresh needed
 
     # ===== SERVICE HANDLERS =====
@@ -1070,10 +1075,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
                 await self.coordinator.player.set_eq_custom(eq_list)
         else:
             # Set EQ preset
-            # pywiim requires lowercase for set_eq_preset() even in 2.1.42+
-            # (normalization only applies to reading eq_preset, not setting)
             async with self.wiim_command("set EQ preset"):
-                await self.coordinator.player.set_eq_preset(preset.lower())
+                await self.coordinator.player.set_eq_preset(preset)
         # State updates automatically via callback - no manual refresh needed
 
     async def async_play_notification(self, url: str) -> None:

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.73] - 2026-03-17
+
+### Changed
+
+- Release version 1.0.73
+
+
 ## [1.0.72] - 2026-03-10
 
 ### Added

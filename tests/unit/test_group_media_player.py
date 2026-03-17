@@ -272,11 +272,26 @@ class TestWiiMGroupMediaPlayerPlayback:
     async def test_media_play(self, mock_group_master_setup, mock_master_player):
         """Test play command."""
         entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        mock_master_player.resume = AsyncMock(return_value=True)
+        mock_master_player.is_paused = False
 
         await entity.async_media_play()
 
         mock_master_player.play.assert_called_once()
+        mock_master_player.resume.assert_not_called()
         # No manual refresh - pywiim manages state updates via callbacks
+
+    async def test_media_play_resumes_when_paused(self, mock_group_master_setup, mock_master_player):
+        """Test play command resumes paused playback."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        mock_master_player.play = AsyncMock(return_value=True)
+        mock_master_player.resume = AsyncMock(return_value=True)
+        mock_master_player.is_paused = True
+
+        await entity.async_media_play()
+
+        mock_master_player.resume.assert_called_once()
+        mock_master_player.play.assert_not_called()
 
     async def test_media_pause(self, mock_group_master_setup, mock_master_player):
         """Test pause command."""
