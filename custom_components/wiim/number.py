@@ -6,6 +6,8 @@ Provides configurable numeric settings for device configuration.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
@@ -18,6 +20,32 @@ from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _status_field(status: Any, field: str, default: Any = None) -> Any:
+    """Read status field from either dict-like or object-like payload."""
+    if status is None:
+        return default
+    if isinstance(status, Mapping):
+        return status.get(field, default)
+    return getattr(status, field, default)
+
+
+def _status_truthy(value: Any) -> bool:
+    """Interpret common status payloads while preserving fallback truthiness."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "on", "yes", "enabled"}:
+            return True
+        if normalized in {"0", "false", "off", "no", "disabled"}:
+            return False
+    return bool(value)
 
 
 async def async_setup_entry(
@@ -36,7 +64,7 @@ async def async_setup_entry(
         if player.supports_subwoofer:
             # Check if subwoofer is actually connected via status
             status = player.subwoofer_status
-            if status and status.get("plugged"):
+            if _status_truthy(_status_field(status, "plugged")):
                 entities.append(WiiMSubwooferLevelNumber(coordinator, config_entry))
                 _LOGGER.debug("Creating subwoofer level number entity - subwoofer connected")
             else:
@@ -84,9 +112,14 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
             # Use async method for fresh data
             status = await self.coordinator.player.get_subwoofer_status()
             if status:
-                self._value = float(status.get("level", 0))
+                level = _status_field(status, "level")
+                if level is not None:
+                    self._value = float(level)
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
+        finally:
+            if self.hass is not None:
+                self.async_write_ha_state()
 
     @property
     def native_value(self) -> float | None:
@@ -109,6 +142,5 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
-        # Schedule state update (async operation)
+        # _update_state writes entity state once the async read completes.
         self.hass.async_create_task(self._update_state())
-        super()._handle_coordinator_update()
