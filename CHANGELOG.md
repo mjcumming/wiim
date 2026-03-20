@@ -9,6 +9,7 @@
 ### Fixed
 
 - **12V trigger & Subwoofer switches unavailable** (Issue [#205](https://github.com/mjcumming/wiim/issues/205)) – pywiim returns `SubwooferStatus` (dataclass) from `get_subwoofer_status()`; the integration now reads both legacy dict and `SubwooferStatus` via `subwoofer_helpers`. Subwoofer level number and diagnostics use the same helpers. 12V trigger uses `Player.get_trigger_out_status()` / `set_trigger_out()` so state stays in sync with the player cache.
+- Thanks to [@jannylund](https://github.com/jannylund) for [PR #210](https://github.com/mjcumming/wiim/pull/210), which independently diagnosed the `SubwooferStatus` vs dict mismatch for subwoofer level.
 
 
 ## [1.0.73] - 2026-03-17
