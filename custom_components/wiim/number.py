@@ -16,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
+from .subwoofer_helpers import subwoofer_level_from_status, subwoofer_plugged
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ async def async_setup_entry(
         if player.supports_subwoofer:
             # Check if subwoofer is actually connected via status
             status = player.subwoofer_status
-            if status and status.get("plugged"):
+            if status and subwoofer_plugged(status):
                 entities.append(WiiMSubwooferLevelNumber(coordinator, config_entry))
                 _LOGGER.debug("Creating subwoofer level number entity - subwoofer connected")
             else:
@@ -83,8 +84,9 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
         try:
             # Use async method for fresh data
             status = await self.coordinator.player.get_subwoofer_status()
-            if status:
-                self._value = float(status.get("level", 0))
+            level = subwoofer_level_from_status(status)
+            if level is not None:
+                self._value = level
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
 

@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from .data import get_all_coordinators, get_coordinator_from_entry
+from .subwoofer_helpers import subwoofer_status_for_diagnostics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -253,20 +254,20 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         subwoofer_info: dict[str, Any] | None = None
         try:
             if player.supports_subwoofer:
-                # Use cached status from player (sync property)
+                # Use cached status from player (sync property); dict or SubwooferStatus
                 status = player.subwoofer_status
+                fields = subwoofer_status_for_diagnostics(status)
                 subwoofer_info = {
                     "supported": True,
-                    "connected": status.get("plugged", False) if status else False,
+                    "connected": fields.get("connected", False),
+                    "enabled": fields.get("enabled"),
+                    "level_db": fields.get("level_db"),
+                    "crossover_hz": fields.get("crossover_hz"),
+                    "phase_degrees": fields.get("phase_degrees"),
+                    "sub_delay_ms": fields.get("sub_delay_ms"),
+                    "main_filter_enabled": fields.get("main_filter_enabled"),
+                    "sub_filter_enabled": fields.get("sub_filter_enabled"),
                 }
-                if status:
-                    subwoofer_info["enabled"] = status.get("status", False)
-                    subwoofer_info["level_db"] = status.get("level")
-                    subwoofer_info["crossover_hz"] = status.get("cross")
-                    subwoofer_info["phase_degrees"] = status.get("phase")
-                    subwoofer_info["sub_delay_ms"] = status.get("sub_delay")
-                    subwoofer_info["main_filter_enabled"] = status.get("main_filter")
-                    subwoofer_info["sub_filter_enabled"] = status.get("sub_filter")
             else:
                 subwoofer_info = {"supported": False}
         except Exception:

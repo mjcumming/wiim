@@ -16,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
+from .subwoofer_helpers import subwoofer_enabled_from_status, subwoofer_plugged
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ async def async_setup_entry(
         if player.supports_subwoofer:
             # Check if subwoofer is actually connected via status
             status = player.subwoofer_status
-            if status and status.get("plugged"):
+            if status and subwoofer_plugged(status):
                 entities.append(WiiMSubwooferSwitch(coordinator, config_entry))
                 _LOGGER.debug("Creating subwoofer switch entity - subwoofer connected")
             else:
@@ -82,16 +83,12 @@ class WiiMTriggerOutSwitch(WiimEntity, SwitchEntity):
     async def _update_state(self) -> None:
         """Fetch current 12V trigger state from device."""
         try:
-            status = await self.coordinator.player.client.get_trigger_out_status()
-            if isinstance(status, bool):
+            # Use Player API so trigger_out_on cache stays in sync.
+            status = await self.coordinator.player.get_trigger_out_status()
+            if status is not None:
                 self._is_on = status
-            elif isinstance(status, dict):
-                raw_status = status.get("status", status.get("on", False))
-                self._is_on = bool(raw_status)
             else:
-                self._is_on = getattr(
-                    self.coordinator.player, "trigger_out_on", None
-                )
+                self._is_on = getattr(self.coordinator.player, "trigger_out_on", None)
         except Exception as err:
             _LOGGER.debug("Failed to get 12V trigger status: %s", err)
 
@@ -108,14 +105,14 @@ class WiiMTriggerOutSwitch(WiimEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn 12V trigger output on."""
         async with self.wiim_command("12V trigger on"):
-            await self.coordinator.player.client.set_trigger_out(True)
+            await self.coordinator.player.set_trigger_out(True)
         self._is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn 12V trigger output off."""
         async with self.wiim_command("12V trigger off"):
-            await self.coordinator.player.client.set_trigger_out(False)
+            await self.coordinator.player.set_trigger_out(False)
         self._is_on = False
         self.async_write_ha_state()
 
@@ -151,13 +148,9 @@ class WiiMSubwooferSwitch(WiimEntity, SwitchEntity):
         """Fetch current subwoofer state from device."""
         try:
             status = await self.coordinator.player.get_subwoofer_status()
-            if isinstance(status, dict):
-                raw_status = status.get("status", False)
-                self._is_on = bool(raw_status)
-            elif status is not None:
-                enabled = getattr(status, "enabled", None)
-                if enabled is not None:
-                    self._is_on = bool(enabled)
+            enabled = subwoofer_enabled_from_status(status)
+            if enabled is not None:
+                self._is_on = bool(enabled)
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
 

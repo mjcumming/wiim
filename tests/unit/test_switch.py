@@ -236,9 +236,8 @@ class TestTriggerOutSwitchSetup:
         mock_coordinator.player.supports_trigger_out = True
         mock_coordinator.player.supports_subwoofer = False
         mock_coordinator.player.subwoofer_status = {}
-        mock_coordinator.player.client = MagicMock()
-        mock_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": False})
-        mock_coordinator.player.client.set_trigger_out = AsyncMock()
+        mock_coordinator.player.get_trigger_out_status = AsyncMock(return_value=False)
+        mock_coordinator.player.set_trigger_out = AsyncMock()
 
         entities = []
 
@@ -296,9 +295,8 @@ class TestTriggerOutSwitchBasic:
     def trigger_coordinator(self, mock_coordinator):
         """Coordinator with 12V trigger support."""
         mock_coordinator.player.supports_trigger_out = True
-        mock_coordinator.player.client = MagicMock()
-        mock_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": True})
-        mock_coordinator.player.client.set_trigger_out = AsyncMock()
+        mock_coordinator.player.get_trigger_out_status = AsyncMock(return_value=True)
+        mock_coordinator.player.set_trigger_out = AsyncMock()
         return mock_coordinator
 
     def test_initialization(self, trigger_coordinator, mock_config_entry):
@@ -325,9 +323,8 @@ class TestTriggerOutSwitchControl:
     def trigger_coordinator(self, mock_coordinator):
         """Coordinator with 12V trigger support."""
         mock_coordinator.player.supports_trigger_out = True
-        mock_coordinator.player.client = MagicMock()
-        mock_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": False})
-        mock_coordinator.player.client.set_trigger_out = AsyncMock()
+        mock_coordinator.player.get_trigger_out_status = AsyncMock(return_value=False)
+        mock_coordinator.player.set_trigger_out = AsyncMock()
         return mock_coordinator
 
     @pytest.mark.asyncio
@@ -338,7 +335,7 @@ class TestTriggerOutSwitchControl:
 
         await entity.async_turn_on()
 
-        trigger_coordinator.player.client.set_trigger_out.assert_called_once_with(True)
+        trigger_coordinator.player.set_trigger_out.assert_called_once_with(True)
         assert entity._is_on is True
         entity.async_write_ha_state.assert_called_once()
 
@@ -350,25 +347,25 @@ class TestTriggerOutSwitchControl:
 
         await entity.async_turn_off()
 
-        trigger_coordinator.player.client.set_trigger_out.assert_called_once_with(False)
+        trigger_coordinator.player.set_trigger_out.assert_called_once_with(False)
         assert entity._is_on is False
         entity.async_write_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_update_state_from_status(self, trigger_coordinator, mock_config_entry):
         """Test _update_state fetches status from get_trigger_out_status."""
-        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value={"status": True})
+        trigger_coordinator.player.get_trigger_out_status = AsyncMock(return_value=True)
         entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
 
         await entity._update_state()
 
-        trigger_coordinator.player.client.get_trigger_out_status.assert_called_once()
+        trigger_coordinator.player.get_trigger_out_status.assert_called_once()
         assert entity._is_on is True
 
     @pytest.mark.asyncio
     async def test_update_state_from_bool_status(self, trigger_coordinator, mock_config_entry):
         """Test _update_state accepts current pywiim bool return type."""
-        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value=True)
+        trigger_coordinator.player.get_trigger_out_status = AsyncMock(return_value=True)
         entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
 
         await entity._update_state()
@@ -378,7 +375,7 @@ class TestTriggerOutSwitchControl:
     @pytest.mark.asyncio
     async def test_update_state_handles_error(self, trigger_coordinator, mock_config_entry):
         """Test _update_state handles errors gracefully."""
-        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(side_effect=Exception("Connection error"))
+        trigger_coordinator.player.get_trigger_out_status = AsyncMock(side_effect=Exception("Connection error"))
         entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
         entity._is_on = False
 
@@ -389,7 +386,7 @@ class TestTriggerOutSwitchControl:
     @pytest.mark.asyncio
     async def test_update_state_uses_trigger_out_on_when_status_not_dict(self, trigger_coordinator, mock_config_entry):
         """Test _update_state uses player.trigger_out_on when status is not a dict."""
-        trigger_coordinator.player.client.get_trigger_out_status = AsyncMock(return_value=None)
+        trigger_coordinator.player.get_trigger_out_status = AsyncMock(return_value=None)
         trigger_coordinator.player.trigger_out_on = True
         entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
 

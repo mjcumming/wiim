@@ -195,6 +195,29 @@ class TestSubwooferLevelControl:
         assert entity._value == 7.0
 
     @pytest.mark.asyncio
+    async def test_update_state_subwoofer_status_dataclass(self, mock_coordinator, mock_config_entry):
+        """Test _update_state with pywiim SubwooferStatus (not dict)."""
+        from pywiim.api.subwoofer import SubwooferStatus
+
+        mock_coordinator.player.get_subwoofer_status = AsyncMock(
+            return_value=SubwooferStatus(
+                enabled=True,
+                plugged=True,
+                crossover=80,
+                phase=0,
+                level=-2,
+                main_filter_enabled=True,
+                sub_filter_enabled=True,
+                sub_delay=0,
+            )
+        )
+        entity = WiiMSubwooferLevelNumber(mock_coordinator, mock_config_entry)
+
+        await entity._update_state()
+
+        assert entity._value == -2.0
+
+    @pytest.mark.asyncio
     async def test_update_state_handles_error(self, mock_coordinator, mock_config_entry):
         """Test _update_state handles errors gracefully."""
         mock_coordinator.player.get_subwoofer_status = AsyncMock(side_effect=Exception("Connection error"))
