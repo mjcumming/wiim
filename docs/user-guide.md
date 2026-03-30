@@ -223,6 +223,12 @@ data:
 - Muting the group mutes all speakers
 - Unmuting the group unmutes all speakers
 
+**Announcements / TTS in a group**
+
+- **`tts.speak` / `media_player.play_media` with `announce: true`:** Use the **master** `media_player` for that group or the **`media_player.*_group_coordinator`** entity. You will hear the announcement on **all grouped speakers** (the master drives group playback, including notification URLs).
+- **Slave `media_player` entities** do **not** support `play_media` / announce in Home Assistant. On device firmware, playing a notification **directly on a slave** would **remove it from the group**; the integration avoids that by not exposing those actions on slaves.
+- Details: [TTS Guide](TTS_GUIDE.md#group-behavior-master-slave-coordinator).
+
 ### 📱 Dashboard Cards
 
 **Basic Media Control**
@@ -570,7 +576,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Lights** (device dependent)
 
 - `light.{device_name}_led` - Front panel LED (on/off only)
-- `light.{device_name}_display` - WiiM Ultra LCD screen (on/off and brightness; Ultra only)
+- `light.{device_name}_display` - WiiM Ultra LCD screen (on/off and brightness; Ultra only). Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale (pywiim `set_display_enabled` / `setLightOperationBrightConfig`). Turning the display on sends an explicit level so the screen does not stay at minimum brightness (requires **pywiim 2.1.98+**). For adaptive brightness, use the WiiM app; the integration uses manual levels when you set brightness here.
 
 **Binary Sensors** (optional - enable network monitoring)
 

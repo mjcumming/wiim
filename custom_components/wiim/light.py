@@ -93,7 +93,13 @@ class WiiMLEDLight(WiimEntity, LightEntity):
 
 
 class WiiMDisplayLight(WiimEntity, LightEntity):
-    """Light entity for WiiM Ultra LCD display (on/off + brightness)."""
+    """Light entity for WiiM Ultra LCD display (on/off + brightness).
+
+    Brightness uses the device's 1–100 scale (pywiim ``DISPLAY_BRIGHTNESS_*``);
+    Home Assistant's 0–255 value is mapped into that range. Turning on always
+    passes an explicit level via ``set_display_enabled(..., default_bright=…)``
+    (pywiim 2.1.98+) so the screen is not left at minimum brightness.
+    """
 
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
     _attr_color_mode = ColorMode.BRIGHTNESS
@@ -134,19 +140,16 @@ class WiiMDisplayLight(WiimEntity, LightEntity):
         return ColorMode.BRIGHTNESS
 
     async def async_turn_on(self, **kwargs: Any) -> None:  # type: ignore[override]
-        """Turn display on and optionally set brightness."""
+        """Turn display on and set brightness (device scale 1–100 via pywiim)."""
         brightness_255: int = int(kwargs.get(ATTR_BRIGHTNESS, 255))
-        brightness_pct: int = max(0, min(100, round(brightness_255 * 100 / 255)))
+        # Map HA 0–255 → device 1–100 (1 = minimum on device; see pywiim API docs).
+        brightness_pct: int = max(1, min(100, round(brightness_255 * 100 / 255)))
 
         async with self.wiim_command("turn on display"):
-            await self.coordinator.player.set_display_enabled(True)
-        if brightness_pct != 100:
-            async with self.wiim_command("set display brightness"):
-                await self.coordinator.player.set_display_config(
-                    auto_sense_enable=0,
-                    default_bright=brightness_pct,
-                    disable=0,
-                )
+            await self.coordinator.player.set_display_enabled(
+                True,
+                default_bright=brightness_pct,
+            )
 
         self._is_on = True
         self._brightness = brightness_255

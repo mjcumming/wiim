@@ -1,6 +1,6 @@
 # WiiM TTS (Text-to-Speech) Guide
 
-The WiiM integration now supports TTS announcements with role-aware group coordination, allowing you to send text-to-speech messages to your WiiM speakers.
+The WiiM integration supports TTS announcements via `media_player.play_media` with `announce: true` and via `tts.speak`. For **multiroom groups**, target the **master** or **group coordinator** entity so every grouped speaker hears the announcement; **slave** entities cannot run these services (see [Group behavior](#group-behavior-master-slave-coordinator) below).
 
 ## Developer Tools / Actions (correct payload)
 
@@ -55,107 +55,47 @@ data:
     tts_volume: 75 # 75% volume
 ```
 
-## Group Behavior
+## Group behavior (master, slave, coordinator)
 
-### Automatic Group Coordination
+### What happens on the device
 
-- **Solo Speakers**: TTS plays directly on the speaker
-- **Master Speakers**: TTS plays on the master and all slaves in the group
-- **Slave Speakers**: TTS is automatically delegated to the master for group-wide announcement
+- **Solo** speaker: `media_player.play_media` / `tts.speak` with `announce: true` plays the notification on that unit only.
+- **Master** in a multiroom group: the same announcement is played through the **group audio path**. Slaves follow the master, so **they will play the announcement too** (it is still a URL fetched and rendered as part of grouped playback—you do not need to target each slave).
+- **Slave** speaker: on LinkPlay / WiiM firmware, starting a **notification-style URL on the slave itself** causes the device to **leave the group**. To avoid breaking groups by accident, Home Assistant **does not** expose `media_player.play_media` (or `announce`) on **slave** `media_player` entities—those actions are only available on **solo**, **master**, and **group coordinator** entities.
 
-### Example: Group TTS
+### What to target
 
-```yaml
-# Send to master - plays on entire group
-service: media_player.play_media
-target:
-  entity_id: media_player.living_room  # Master speaker
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts?message=Dinner is ready"
-  announce: true
+| Your goal                         | Target entity                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| Announce to the **whole group**   | The **master** `media_player` for that group, or `media_player.*_group_coordinator` |
+| Announce to one **ungrouped** box | That speaker’s `media_player` while it is **solo**                          |
+| Slave `media_player`              | **Do not use** for `play_media` / `tts.speak` / announce — use master or coordinator instead |
 
-# Send to slave - automatically delegates to master
-service: media_player.play_media
-target:
-  entity_id: media_player.kitchen  # Slave speaker
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts?message=Dinner is ready"
-  announce: true
-```
-
-## Advanced Options
-
-### Force Local TTS
-
-Force TTS to play on a specific speaker, even if it's a slave:
+### Example: group-wide TTS (recommended)
 
 ```yaml
-service: media_player.play_media
-target:
-  entity_id: media_player.kitchen
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts?message=Kitchen only message"
-  announce: true
-  extra:
-    tts_behavior: "force_local"
-```
-
-### Force Group TTS
-
-Ensure TTS plays group-wide (delegates to master if slave):
-
-```yaml
-service: media_player.play_media
-target:
-  entity_id: media_player.kitchen
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts/google_translate?message=Group announcement"
-  announce: true
-  extra:
-    tts_behavior: "force_group"
-```
-
-### Auto Behavior (Default)
-
-Let the system decide based on speaker role:
-
-```yaml
-service: media_player.play_media
-target:
-  entity_id: media_player.kitchen
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts?message=Smart announcement"
-  announce: true
-  extra:
-    tts_behavior: "auto" # Default behavior
-```
-
-## Group Coordinator TTS
-
-Use the group coordinator entity for group-wide announcements:
-
-```yaml
+# Option A — group coordinator (when the group exists)
 service: media_player.play_media
 target:
   entity_id: media_player.living_room_group_coordinator
 data:
   media_content_type: music
-  media_content_id: "media-source://tts?message=Group announcement"
+  media_content_id: "media-source://tts?message=Dinner is ready"
+  announce: true
+
+# Option B — master speaker entity (same effective outcome for announcements)
+service: media_player.play_media
+target:
+  entity_id: media_player.living_room  # Master, not a slave
+data:
+  media_content_type: music
+  media_content_id: "media-source://tts?message=Dinner is ready"
   announce: true
 ```
 
-## TTS Behavior Options
+### `wiim.play_notification`
 
-| Behavior         | Solo Speaker  | Master Speaker | Slave Speaker       |
-| ---------------- | ------------- | -------------- | ------------------- |
-| `auto` (default) | Plays locally | Plays on group | Delegates to master |
-| `force_local`    | Plays locally | Plays locally  | Plays locally       |
-| `force_group`    | Plays locally | Plays on group | Delegates to master |
+Use a **direct HTTP URL** the device can fetch. For a **grouped** home, target the **master** or **group coordinator** so the announcement follows the same rule as above. Avoid pushing notification URLs at a **slave** player if you want the group to stay intact.
 
 ## Volume Control
 
@@ -189,26 +129,13 @@ TTS announcements automatically:
 5. **Wait for completion**
 6. **Restore original state**
 
-## Error Handling
+## Error handling
 
-### Slave Without Master
+### Slave `media_player` and `tts.speak`
 
-If a slave speaker has no coordinator:
+Slave entities **do not** advertise support for `media_player.play_media`, so **`tts.speak`** and **Actions → play_media** with `announce: true` are not valid targets for a slave. That is intentional: on firmware, playing a notification **directly on a slave** would **remove it from the group**. Use the **master** or **`*_group_coordinator`** entity instead; the group will still hear the announcement when you target the master path.
 
-```yaml
-# This will raise an error
-service: media_player.play_media
-target:
-  entity_id: media_player.orphaned_slave
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts/google_translate?message=This will fail"
-  announce: true
-```
-
-Error: `Slave speaker 'orphaned_slave' cannot play TTS independently`
-
-### Network Issues
+### Network issues
 
 TTS will fail gracefully with network issues and restore original state.
 
@@ -326,6 +253,7 @@ Click **Perform action**. Then open **Developer tools → Logs** (or Settings �
 | `Failed to resolve media source` / TTS error                            | TTS engine or media source problem                | Check **Settings → Voice assistants → Text-to-speech**: the engine in the URL (e.g. `tts.google_translate_en_com`) must exist. Test TTS from Media or another player.                                            |
 | `Media source resolved to empty URL`                                    | TTS returned no URL                               | Same as above: fix TTS engine / config.                                                                                                                                                                          |
 | `Cannot build playable URL` / `NoURLAvailableError`                     | HA has no Internal URL                            | **Settings → System → Network**: set **Internal URL** to your HA LAN address (e.g. `http://192.168.1.x:8123`).                                                                                                   |
+| Action / `tts.speak` “not supported” for entity                         | Target is a **group slave**                       | Use the **master** `media_player` or **`media_player.*_group_coordinator`**. Slaves intentionally cannot run `play_media` / announce (would unjoin the group on device).                                        |
 | `Playing notification via device firmware: http://...` but **no sound** | WiiM cannot reach the URL or gets 401             | Internal URL must be the IP the WiiM can reach. Open that `http://...` URL in a browser on the same network; if it asks for login, the WiiM will get 401 (see “No audio even when the URL looks correct” below). |
 
 ### 3. Check the entity and payload

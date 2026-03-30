@@ -236,6 +236,7 @@ Switching sources will disconnect Bluetooth and stop playback. You can create an
 Not all speakers support all features:
 
 - **EQ**: Pro/Pro Plus/Ultra only
+- **Ultra LCD (`light.*_display`)**: Requires **pywiim 2.1.98+** and a current integration release so turning the display on sets brightness explicitly (1–100 on the device). If the screen stays barely readable after “on”, upgrade dependencies; adaptive brightness is controlled in the WiiM app, not Home Assistant.
 - **Presets**: Check available slots in WiiM app
 - **Sources**: Varies by model
 - **Alarms/Sleep Timer**: WiiM devices only
@@ -401,7 +402,8 @@ View logs: Settings → System → Logs
 | `Connection timeout`                            | Can't reach device                                          | Check network, verify IP                                                                                                                                                       |
 | `Invalid response`                              | Firmware issue                                              | Update speaker firmware                                                                                                                                                        |
 | `Unknown command`                               | Not supported                                               | Check device model capabilities                                                                                                                                                |
-| `Slave speaker cannot play independently`       | TTS to slave without master                                 | Target master or use force_local                                                                                                                                               |
+| `Slave speaker cannot play independently`       | Legacy / misleading                                         | Prefer: target **master** or **`*_group_coordinator`** for TTS; **slave** entities do not support `play_media` / announce (notification on a slave would **unjoin** the group on firmware). See [TTS Guide](TTS_GUIDE.md). |
+| `tts.speak` / play_media not supported on entity | Entity is a **group slave**                                | Use **master** `media_player` or **group coordinator**; announcements on the master are heard on slaves.                                                                                                                                   |
 | TTS URL works in browser but no audio on device | Device gets 401 on TTS proxy                                | Configure HA HTTP (internal URL, trusted_networks, or allowlist) so device can fetch TTS without auth; see [HTTP docs](https://www.home-assistant.io/docs/configuration/http/) |
 | No TTS when using Spotify Connect               | Device/firmware may not interrupt Spotify for announcements | Device limitation; use WiFi source or check WiiM firmware updates                                                                                                              |
 

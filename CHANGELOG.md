@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.76] - 2026-03-30
+
+### Changed
+
+- Release version 1.0.76
+- **Dependency update**: `pywiim` **2.1.98** — WiiM Ultra LCD `set_display_enabled(True)` now defaults to full brightness on the device; optional `default_bright` (1–100) is supported. See upstream [API_REFERENCE](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) Display section.
+
+### Fixed
+
+- **WiiM Ultra display turns on at minimum brightness** ([Issue #213](https://github.com/mjcumming/wiim/issues/213)) — The Display light now always calls `set_display_enabled(True, default_bright=…)` with HA brightness mapped to **1–100**, so a simple "on" uses 100% on the device instead of only `disable=0` with implicit minimum brightness.
+
+### Documentation
+
+- **TTS / notifications and multiroom** — Documented that announcements targeted at the **master** (or group coordinator) play on **all slaves** in the group; **`play_media` / `announce` / `tts.speak` are not offered on slave `media_player` entities** because playing a notification **directly on a slave** would **unjoin** it from the group on LinkPlay/WiiM firmware. Updated [TTS Guide](docs/TTS_GUIDE.md), [User Guide](docs/user-guide.md), and [FAQ](docs/faq-and-troubleshooting.md). Removed outdated `tts_behavior` / “delegate to slave” examples that did not match the integration.
+- **Developer guide** — `development/HA_INTEGRATION_GUIDE.md` review date and pywiim 2.1.98 display API note.
+
 ## [1.0.74] - 2026-03-20
 
 ### Changed

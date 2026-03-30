@@ -234,32 +234,51 @@ class TestWiiMDisplayLightTurnOnOff:
     """Test Display turn on/off and brightness."""
 
     async def test_turn_on_enables_display(self, mock_coordinator_with_display, mock_coordinator):
-        """Test turn on calls set_display_enabled(True)."""
+        """Test turn on calls set_display_enabled with full brightness (pywiim 1–100 scale)."""
         mock_coordinator, mock_config_entry = mock_coordinator_with_display
         entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         await entity.async_turn_on()
 
-        mock_coordinator.player.set_display_enabled.assert_called_once_with(True)
+        mock_coordinator.player.set_display_enabled.assert_called_once_with(
+            True,
+            default_bright=100,
+        )
         mock_coordinator.player.set_display_config.assert_not_called()
         assert entity.is_on is True
         assert entity.brightness == 255
 
     async def test_turn_on_with_brightness(self, mock_coordinator_with_display, mock_coordinator):
-        """Test turn on with brightness calls set_display_config."""
+        """Test turn on with brightness passes default_bright to set_display_enabled."""
         mock_coordinator, mock_config_entry = mock_coordinator_with_display
         entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         await entity.async_turn_on(**{ATTR_BRIGHTNESS: 128})
 
-        mock_coordinator.player.set_display_enabled.assert_called_once_with(True)
-        mock_coordinator.player.set_display_config.assert_called_once()
-        call_kw = mock_coordinator.player.set_display_config.call_args[1]
-        assert call_kw["default_bright"] == 50
-        assert call_kw["disable"] == 0
+        mock_coordinator.player.set_display_enabled.assert_called_once_with(
+            True,
+            default_bright=50,
+        )
+        mock_coordinator.player.set_display_config.assert_not_called()
         assert entity.brightness == 128
+
+    async def test_turn_on_low_ha_brightness_maps_to_device_min(
+        self, mock_coordinator_with_display, mock_coordinator
+    ):
+        """HA brightness 1 maps to device minimum brightness (1), not 0."""
+        mock_coordinator, mock_config_entry = mock_coordinator_with_display
+        entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+
+        await entity.async_turn_on(**{ATTR_BRIGHTNESS: 1})
+
+        mock_coordinator.player.set_display_enabled.assert_called_once_with(
+            True,
+            default_bright=1,
+        )
+        assert entity.brightness == 1
 
     async def test_turn_off(self, mock_coordinator_with_display, mock_coordinator):
         """Test turn off display."""
