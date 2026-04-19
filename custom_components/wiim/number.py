@@ -47,6 +47,16 @@ async def async_setup_entry(
     except Exception as err:
         _LOGGER.debug("Skipping subwoofer level entity - error checking support: %s", err)
 
+    # Check if device supports channel balance control
+    try:
+        if hasattr(player, "set_channel_balance"):
+            entities.append(WiiMChannelBalanceNumber(coordinator, config_entry))
+            _LOGGER.debug("Creating channel balance number entity")
+        else:
+            _LOGGER.debug("Skipping channel balance entity - not supported")
+    except Exception as err:
+        _LOGGER.debug("Skipping channel balance entity - error checking support: %s", err)
+
     async_add_entities(entities)
     device_name = player.name or config_entry.title or "WiiM Speaker"
     _LOGGER.info("Created %d number entities for %s", len(entities), device_name)
@@ -112,5 +122,62 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
         # Schedule state update (async operation)
+        self.hass.async_create_task(self._update_state())
+        super()._handle_coordinator_update()
+
+
+class WiiMChannelBalanceNumber(WiimEntity, NumberEntity):
+    """Number entity for left/right channel balance adjustment."""
+
+    _attr_icon = "mdi:compare-horizontal"
+    _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = True
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = -1.0
+    _attr_native_max_value = 1.0
+    _attr_native_step = 0.1
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the channel balance number entity."""
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_channel_balance"
+        self._attr_name = "Channel Balance"
+        self._value: float = 0.0
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to Home Assistant."""
+        await super().async_added_to_hass()
+        await self._update_state()
+
+    async def _update_state(self) -> None:
+        """Fetch current channel balance from device if available."""
+        player = self.coordinator.player
+        try:
+            if hasattr(player, "get_channel_balance"):
+                value = await player.get_channel_balance()
+                self._value = max(-1.0, min(1.0, float(value)))
+            elif hasattr(player, "channel_balance"):
+                value = player.channel_balance
+                self._value = max(-1.0, min(1.0, float(value)))
+        except Exception as err:
+            _LOGGER.debug("Failed to get channel balance: %s", err)
+
+    @property
+    def native_value(self) -> float:
+        """Return the current channel balance."""
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the channel balance."""
+        clamped = max(-1.0, min(1.0, float(value)))
+        async with self.wiim_command(f"set channel balance to {clamped}"):
+            await self.coordinator.player.set_channel_balance(clamped)
+
+        self._value = clamped
+        self.async_write_ha_state()
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from coordinator."""
         self.hass.async_create_task(self._update_state())
         super()._handle_coordinator_update()
