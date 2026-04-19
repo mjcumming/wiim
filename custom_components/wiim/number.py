@@ -100,6 +100,11 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
 
+    async def _async_refresh_state(self) -> None:
+        """Refresh state and push it to Home Assistant immediately."""
+        await self._update_state()
+        self.async_write_ha_state()
+
     @property
     def native_value(self) -> float | None:
         """Return the current subwoofer level."""
@@ -122,7 +127,7 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
         # Schedule state update (async operation)
-        self.hass.async_create_task(self._update_state())
+        self.hass.async_create_task(self._async_refresh_state())
         super()._handle_coordinator_update()
 
 
@@ -154,14 +159,20 @@ class WiiMChannelBalanceNumber(WiimEntity, NumberEntity):
         """Fetch current channel balance from device if available."""
         player = self.coordinator.player
         try:
-            if hasattr(player, "get_channel_balance"):
-                value = await player.get_channel_balance()
-                self._value = max(-1.0, min(1.0, float(value)))
-            elif hasattr(player, "channel_balance"):
+            # Prefer coordinator-refreshed property for near-real-time updates
+            if hasattr(player, "channel_balance"):
                 value = player.channel_balance
+                self._value = max(-1.0, min(1.0, float(value)))
+            elif hasattr(player, "get_channel_balance"):
+                value = await player.get_channel_balance()
                 self._value = max(-1.0, min(1.0, float(value)))
         except Exception as err:
             _LOGGER.debug("Failed to get channel balance: %s", err)
+
+    async def _async_refresh_state(self) -> None:
+        """Refresh state and push it to Home Assistant immediately."""
+        await self._update_state()
+        self.async_write_ha_state()
 
     @property
     def native_value(self) -> float:
@@ -179,5 +190,5 @@ class WiiMChannelBalanceNumber(WiimEntity, NumberEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
-        self.hass.async_create_task(self._update_state())
+        self.hass.async_create_task(self._async_refresh_state())
         super()._handle_coordinator_update()
