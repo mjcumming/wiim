@@ -331,3 +331,26 @@ class TestChannelBalanceControl:
         await entity._update_state()
 
         assert entity.native_value == 0.3
+
+    def test_handle_coordinator_update_uses_property_immediately(self, mock_coordinator, mock_config_entry):
+        """Test coordinator update refreshes from property without async task."""
+        mock_coordinator.player.channel_balance = -0.4
+        entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
+        entity.hass = MagicMock()
+        entity.hass.async_create_task = MagicMock()
+
+        entity._handle_coordinator_update()
+
+        assert entity.native_value == -0.4
+        entity.hass.async_create_task.assert_not_called()
+
+    def test_handle_coordinator_update_fallbacks_to_async_refresh(self, mock_coordinator, mock_config_entry):
+        """Test coordinator update schedules async refresh when property is unavailable."""
+        del mock_coordinator.player.channel_balance
+        entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
+        entity.hass = MagicMock()
+        entity.hass.async_create_task = MagicMock()
+
+        entity._handle_coordinator_update()
+
+        entity.hass.async_create_task.assert_called_once()

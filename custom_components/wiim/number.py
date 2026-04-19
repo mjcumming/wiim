@@ -190,5 +190,14 @@ class WiiMChannelBalanceNumber(WiimEntity, NumberEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
-        self.hass.async_create_task(self._async_refresh_state())
+        player = self.coordinator.player
+        if hasattr(player, "channel_balance"):
+            try:
+                value = player.channel_balance
+                self._value = max(-1.0, min(1.0, float(value)))
+            except Exception as err:
+                _LOGGER.debug("Failed to refresh channel balance from coordinator state: %s", err)
+        else:
+            # Fallback for players that don't expose a refreshed property.
+            self.hass.async_create_task(self._async_refresh_state())
         super()._handle_coordinator_update()
