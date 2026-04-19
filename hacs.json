@@ -1,5 +1,5 @@
 {
-  "name": "WiiM Audio (LinkPlay) Dev PrincesseLulu",
+  "name": "WiiM Audio (LinkPlay)",
   "content_in_root": false,
   "hide_default_branch": true,
   "homeassistant": "2024.12.0",
