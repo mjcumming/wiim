@@ -312,6 +312,7 @@ class TestChannelBalanceControl:
     @pytest.mark.asyncio
     async def test_update_state_uses_async_getter(self, mock_coordinator, mock_config_entry):
         """Test _update_state fetches channel balance via async getter."""
+        del mock_coordinator.player.channel_balance
         mock_coordinator.player.get_channel_balance = AsyncMock(return_value=-0.7)
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
 
