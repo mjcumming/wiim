@@ -449,6 +449,13 @@ class TestCapabilityCacheRefresh:
         )
         entry.add_to_hass(hass)
 
+        # Version gate runs before capability logic; keep test independent of runner venv.
+        monkeypatch.setattr(
+            "custom_components.wiim.async_ensure_pywiim_version",
+            AsyncMock(return_value=REQUIRED_PYWIIM_VERSION),
+        )
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+
         # Fake temp client used for _detect_capabilities
         temp_client = MagicMock()
         temp_client._detect_capabilities = AsyncMock(

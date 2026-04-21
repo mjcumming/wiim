@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI / dev dependencies** — `requirements_dev.txt` now pins **`pywiim==2.2.2`**, matching `manifest.json` and `pywiim-version.txt` (GitHub Actions was installing 2.2.1, so `async_setup_entry` failed the version gate and broke `test_services` / capability-cache setup tests).
+
 ## [1.0.77] - 2026-04-20
 
 ### Changed
