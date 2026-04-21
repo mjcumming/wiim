@@ -38,9 +38,10 @@ def mock_coordinator():
     coordinator.player.subwoofer_status = {"plugged": True, "status": True, "level": 5}
     coordinator.player.get_subwoofer_status = AsyncMock(return_value={"plugged": True, "status": True, "level": 5})
     coordinator.player.set_subwoofer_level = AsyncMock()
-    coordinator.player.channel_balance = 0.0
+    coordinator.player.supports_channel_balance = False
+    coordinator.player.channel_balance = None
+    coordinator.player.get_channel_balance = AsyncMock(return_value=None)
     coordinator.player.set_channel_balance = AsyncMock()
-    coordinator.player.get_channel_balance = AsyncMock(return_value=0.0)
     return coordinator
 
 
@@ -70,6 +71,27 @@ class TestSubwooferLevelSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
+        assert len(entities) == 1
+        assert isinstance(entities[0], WiiMSubwooferLevelNumber)
+
+    @pytest.mark.asyncio
+    async def test_setup_creates_subwoofer_and_balance_when_both_supported(
+        self, mock_hass, mock_config_entry, mock_coordinator
+    ):
+        """Ultra-like device: subwoofer connected and channel balance probed true."""
+        mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_subwoofer = True
+        mock_coordinator.player.subwoofer_status = {"plugged": True, "status": True, "level": 5}
+        mock_coordinator.player.supports_channel_balance = True
+        mock_coordinator.player.channel_balance = 0.0
+
+        entities = []
+
+        def mock_add_entities(new_entities):
+            entities.extend(new_entities)
+
+        await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
+
         assert len(entities) == 2
         assert isinstance(entities[0], WiiMSubwooferLevelNumber)
         assert isinstance(entities[1], WiiMChannelBalanceNumber)
@@ -80,6 +102,26 @@ class TestSubwooferLevelSetup:
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
         mock_coordinator.player.supports_subwoofer = True
         mock_coordinator.player.subwoofer_status = {"plugged": False, "status": False, "level": 0}
+
+        entities = []
+
+        def mock_add_entities(new_entities):
+            entities.extend(new_entities)
+
+        await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
+
+        assert len(entities) == 0
+
+    @pytest.mark.asyncio
+    async def test_setup_creates_balance_when_supported_no_sub(
+        self, mock_hass, mock_config_entry, mock_coordinator
+    ):
+        """When only channel balance is supported, create that entity."""
+        mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_subwoofer = False
+        mock_coordinator.player.supports_channel_balance = True
+        mock_coordinator.player.channel_balance = 0.2
+        mock_coordinator.player.get_channel_balance = AsyncMock(return_value=0.2)
 
         entities = []
 
@@ -104,26 +146,7 @@ class TestSubwooferLevelSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
-        assert len(entities) == 1
-        assert isinstance(entities[0], WiiMChannelBalanceNumber)
-
-    @pytest.mark.asyncio
-    async def test_setup_skips_channel_balance_when_not_supported(
-        self, mock_hass, mock_config_entry, mock_coordinator
-    ):
-        """Test setup skips channel balance entity when unsupported."""
-        mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
-        del mock_coordinator.player.set_channel_balance
-
-        entities = []
-
-        def mock_add_entities(new_entities):
-            entities.extend(new_entities)
-
-        await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
-
-        assert len(entities) == 1
-        assert isinstance(entities[0], WiiMSubwooferLevelNumber)
+        assert len(entities) == 0
 
 
 class TestSubwooferLevelBasic:
@@ -273,24 +296,25 @@ class TestNumberPlatformConstants:
 
 
 class TestChannelBalanceBasic:
-    """Test basic channel balance number functionality."""
+    """Test channel balance number entity."""
 
     def test_initialization(self, mock_coordinator, mock_config_entry):
         """Test channel balance number initialization."""
+        mock_coordinator.player.supports_channel_balance = True
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
         assert entity.unique_id == "test-uuid_channel_balance"
-        assert entity.name == "Channel Balance"
+        assert entity.name == "Channel balance"
         assert entity.native_min_value == -1.0
         assert entity.native_max_value == 1.0
         assert entity.native_step == 0.1
 
 
 class TestChannelBalanceControl:
-    """Test channel balance number control methods."""
+    """Test channel balance control."""
 
     @pytest.mark.asyncio
     async def test_set_native_value(self, mock_coordinator, mock_config_entry):
-        """Test set_native_value sets channel balance."""
+        """Setting value calls pywiim and updates cache."""
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
@@ -301,56 +325,62 @@ class TestChannelBalanceControl:
         entity.async_write_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_set_native_value_clamps_range(self, mock_coordinator, mock_config_entry):
-        """Test set_native_value clamps out-of-range values."""
+    async def test_set_native_value_clamps(self, mock_coordinator, mock_config_entry):
+        """Out-of-range values are clamped."""
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
 
         await entity.async_set_native_value(3.0)
+
         mock_coordinator.player.set_channel_balance.assert_called_once_with(1.0)
         assert entity.native_value == 1.0
 
     @pytest.mark.asyncio
-    async def test_update_state_uses_async_getter(self, mock_coordinator, mock_config_entry):
-        """Test _update_state fetches channel balance via async getter."""
-        del mock_coordinator.player.channel_balance
-        mock_coordinator.player.get_channel_balance = AsyncMock(return_value=-0.7)
+    async def test_update_state_from_getter(self, mock_coordinator, mock_config_entry):
+        """When cache is empty, _update_state uses get_channel_balance."""
+        mock_coordinator.player.channel_balance = None
+        mock_coordinator.player.get_channel_balance = AsyncMock(return_value=-0.6)
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
 
         await entity._update_state()
 
         mock_coordinator.player.get_channel_balance.assert_called_once()
-        assert entity.native_value == -0.7
+        assert entity.native_value == -0.6
 
-    @pytest.mark.asyncio
-    async def test_update_state_fallbacks_to_property(self, mock_coordinator, mock_config_entry):
-        """Test _update_state falls back to channel_balance property."""
-        del mock_coordinator.player.get_channel_balance
-        mock_coordinator.player.channel_balance = 0.3
-        entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
-
-        await entity._update_state()
-
-        assert entity.native_value == 0.3
-
-    def test_handle_coordinator_update_uses_property_immediately(self, mock_coordinator, mock_config_entry):
-        """Test coordinator update refreshes from property without async task."""
-        mock_coordinator.player.channel_balance = -0.4
+    def test_handle_coordinator_update_reads_cache(self, mock_coordinator, mock_config_entry):
+        """Coordinator update uses channel_balance when present."""
+        mock_coordinator.player.channel_balance = -0.3
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
         entity.hass = MagicMock()
         entity.hass.async_create_task = MagicMock()
+        entity.async_write_ha_state = MagicMock()
 
         entity._handle_coordinator_update()
 
-        assert entity.native_value == -0.4
+        assert entity.native_value == -0.3
         entity.hass.async_create_task.assert_not_called()
 
-    def test_handle_coordinator_update_fallbacks_to_async_refresh(self, mock_coordinator, mock_config_entry):
-        """Test coordinator update schedules async refresh when property is unavailable."""
-        del mock_coordinator.player.channel_balance
+    @pytest.mark.asyncio
+    async def test_handle_coordinator_update_schedules_refresh_when_no_cache(
+        self, mock_coordinator, mock_config_entry
+    ):
+        """When cache is empty, schedule async refresh."""
+        mock_coordinator.player.channel_balance = None
+        mock_coordinator.player.get_channel_balance = AsyncMock(return_value=0.1)
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
         entity.hass = MagicMock()
-        entity.hass.async_create_task = MagicMock()
+        entity.async_write_ha_state = MagicMock()
+
+        scheduled: list = []
+
+        def capture_task(coro):
+            scheduled.append(coro)
+
+        entity.hass.async_create_task = capture_task
 
         entity._handle_coordinator_update()
 
-        entity.hass.async_create_task.assert_called_once()
+        assert len(scheduled) == 1
+        await scheduled[0]
+
+        assert entity.native_value == 0.1
