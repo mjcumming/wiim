@@ -5,7 +5,7 @@ Exposes device firmware update availability via Home Assistant's `update` domain
 pywiim provides firmware update support via Player properties/methods:
 - `player.firmware_update_available`: update downloaded & ready (bool)
 - `player.latest_firmware_version`: latest available version string (str | None)
-- `player.supports_firmware_install`: whether install via API is supported (bool; WiiM only)
+- `player.client.capabilities["supports_firmware_install"]`: whether install via API is supported (WiiM only)
 - `await player.install_firmware_update()`: start installation (WiiM only)
 
 This integration stays thin: we only expose pywiim's state and call its APIs.
@@ -27,6 +27,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .capability_flags import client_has_capability
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
@@ -49,7 +50,7 @@ async def async_setup_entry(
     UPDATE platform when supports_firmware_install is True.
 
     Per pywiim guide:
-    - WiiM devices: support API installation (supports_firmware_install = True)
+    - WiiM devices: support API installation (``supports_firmware_install`` in client capabilities)
     - Other devices: require reboot to install (not supported via HA update entity)
     """
     coordinator: WiiMCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
@@ -57,7 +58,7 @@ async def async_setup_entry(
 
     # Only create update entity for devices that support firmware installation via API
     # This matches the platform enablement check in __init__.py
-    if not getattr(player, "supports_firmware_install", False):
+    if not client_has_capability(player, "supports_firmware_install"):
         device_name = player.name or config_entry.title or "WiiM Speaker"
         _LOGGER.debug(
             "Skipping firmware update entity for %s (device does not support API-based firmware installation)",
@@ -89,7 +90,7 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
         self._attr_name = "Firmware Update"
 
         # Set supported features: INSTALL is always supported since we only create
-        # this entity when supports_firmware_install is True (checked in async_setup_entry)
+        # this entity when ``supports_firmware_install`` is set on ``player.client.capabilities``
         # PROGRESS allows us to keep HA UI in an "installing" state while the device
         # reboots/installs (otherwise HA clears in_progress as soon as async_install returns).
         self._attr_supported_features = UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
@@ -163,7 +164,7 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
 
         # Check if device supports API installation
-        if not getattr(self.player, "supports_firmware_install", False):
+        if not client_has_capability(self.player, "supports_firmware_install"):
             raise HomeAssistantError(
                 "Firmware installation via API is not supported on this device. "
                 "The update is downloaded and ready. Please reboot the device to install."

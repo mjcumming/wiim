@@ -91,6 +91,21 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Use pywiim's PollingStrategy to determine when to poll
         self._polling_strategy = PollingStrategy(self._capabilities) if self._capabilities else PollingStrategy({})
 
+    def update_capabilities(self, capabilities: dict[str, Any]) -> None:
+        """Apply a refreshed capabilities mapping (e.g. after firmware change).
+
+        Config entry data is updated separately in ``__init__``; this keeps the
+        coordinator, adaptive polling, and the pywiim client flags in sync.
+        """
+        merged = dict(capabilities)
+        self._capabilities.clear()
+        self._capabilities.update(merged)
+        client_caps = getattr(self.player.client, "_capabilities", None)
+        if client_caps is not None and client_caps is not self._capabilities:
+            client_caps.clear()
+            client_caps.update(merged)
+        self._polling_strategy = PollingStrategy(self._capabilities) if self._capabilities else PollingStrategy({})
+
     def _player_finder(self, host_or_uuid: str) -> Player | None:
         """Find a Player object across all coordinators by host IP or UUID.
 

@@ -50,7 +50,8 @@ def mock_coordinator_setup(mock_coordinator, mock_config_entry):
     mock_coordinator.player.device_info = MagicMock()
     mock_coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
     mock_coordinator.player.input_list = ["spotify", "bluetooth"]
-    mock_coordinator.player.supports_display_config = False
+    mock_coordinator.player.client = MagicMock()
+    mock_coordinator.player.client.capabilities = {"supports_display_config": False}
     return mock_coordinator, mock_config_entry
 
 
@@ -189,7 +190,8 @@ def mock_coordinator_with_display(mock_coordinator, mock_config_entry):
     mock_coordinator.player.name = "WiiM Ultra"
     mock_coordinator.player.model = "WiiM Ultra"
     mock_coordinator.player.host = "192.168.1.101"
-    mock_coordinator.player.supports_display_config = True
+    mock_coordinator.player.client = MagicMock()
+    mock_coordinator.player.client.capabilities = {"supports_display_config": True}
     mock_coordinator.player.device_info = MagicMock()
     mock_coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
     mock_config_entry.unique_id = "ultra-uuid"
@@ -306,7 +308,7 @@ class TestLightSetupEntry:
     ):
         """Test only LED entity is added when supports_display_config is False."""
         mock_coordinator, _ = mock_coordinator_setup
-        mock_coordinator.player.supports_display_config = False
+        mock_coordinator.player.client.capabilities = {"supports_display_config": False}
         hass = MagicMock(spec=HomeAssistant)
         hass.data = {DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator}}}
         add_entities = MagicMock()
@@ -323,7 +325,7 @@ class TestLightSetupEntry:
     ):
         """Test LED and Display entities added when supports_display_config is True."""
         mock_coordinator, _ = mock_coordinator_setup
-        mock_coordinator.player.supports_display_config = True
+        mock_coordinator.player.client.capabilities = {"supports_display_config": True}
         hass = MagicMock(spec=HomeAssistant)
         hass.data = {DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator}}}
         add_entities = MagicMock()

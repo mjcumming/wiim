@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
-from .subwoofer_helpers import subwoofer_level_from_status, subwoofer_plugged
+from .subwoofer_helpers import subwoofer_level_from_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,18 +32,13 @@ async def async_setup_entry(
 
     entities: list[NumberEntity] = []
 
-    # Check if device supports subwoofer control (WiiM Ultra with firmware 5.2+)
+    # Subwoofer level: pywiim capability only (supports_subwoofer).
     try:
         if player.supports_subwoofer:
-            # Check if subwoofer is actually connected via status
-            status = player.subwoofer_status
-            if status and subwoofer_plugged(status):
-                entities.append(WiiMSubwooferLevelNumber(coordinator, config_entry))
-                _LOGGER.debug("Creating subwoofer level number entity - subwoofer connected")
-            else:
-                _LOGGER.debug("Skipping subwoofer level entity - no subwoofer connected")
+            entities.append(WiiMSubwooferLevelNumber(coordinator, config_entry))
+            _LOGGER.debug("Creating subwoofer level number entity (supports_subwoofer)")
         else:
-            _LOGGER.debug("Skipping subwoofer level entity - device does not support subwoofer")
+            _LOGGER.debug("Skipping subwoofer level entity - supports_subwoofer false")
     except Exception as err:
         _LOGGER.debug("Skipping subwoofer level entity - error checking support: %s", err)
 
@@ -108,7 +103,11 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
     @property
     def available(self) -> bool:
         """Return entity availability."""
-        return self.coordinator.last_update_success and self._value is not None
+        return (
+            self.coordinator.last_update_success
+            and self.coordinator.player.supports_subwoofer
+            and self._value is not None
+        )
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the subwoofer level."""
@@ -201,8 +200,6 @@ class WiiMChannelBalanceNumber(WiimEntity, NumberEntity):
                 self._value = max(-1.0, min(1.0, float(cached)))
             except (TypeError, ValueError):
                 self.hass.async_create_task(self._async_refresh_state())
-            else:
-                self.async_write_ha_state()
         else:
             self.hass.async_create_task(self._async_refresh_state())
         super()._handle_coordinator_update()

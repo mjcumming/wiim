@@ -1,5 +1,22 @@
 # Development Rules & Guidelines
 
+This file is the **integration rules contract**: how we build, how we talk to each other, and where durable decisions live. It complements **[ARCHITECTURE.md](ARCHITECTURE.md)** (how the code is shaped) and **[adr/README.md](adr/README.md)** (numbered decisions).
+
+**Cursor / agents:** persistent seed context lives in **[`.cursor/rules/wiim-project.mdc`](../.cursor/rules/wiim-project.mdc)** (`alwaysApply: true`) and **[`AGENTS.md`](../AGENTS.md)** at the repo root—both point here.
+
+## Rules map (read this first)
+
+| Topic | What you need to know | Where |
+| ----- | ---------------------- | ----- |
+| **What this integration does** | Custom integration for **Home Assistant** that exposes WiiM / LinkPlay devices as entities (media players, sensors, etc.) and services. It does **not** reimplement the device protocol. | [ARCHITECTURE.md](ARCHITECTURE.md#architecture-overview); repo [README](../README.md) |
+| **How it works** | **Coordinator** polls / listens; **entities** read coordinator + call **pywiim** `Player` / services; config via **ConfigFlow**. Data flows: device ↔ pywiim ↔ coordinator ↔ entities. | [ARCHITECTURE.md](ARCHITECTURE.md) (overview, data flow, components) |
+| **How it uses pywiim** | **pywiim owns** HTTP/UPnP, parsing, multiroom, capabilities. This repo is a **thin glue layer**: map HA ↔ pywiim only. **Do not** paper over device bugs in the integration—**fix pywiim** (we maintain **both** repos; ship a library release + manifest bump when needed). **Do not edit a sibling pywiim checkout from here**—**Rule 2c**. **Operational gating**—**ADR 0007**. | **Rule 2 / 2a / 2b / 2c / 3**; [ADR 0007](adr/0007-capability-gating-strict-contract.md); [development/HA_INTEGRATION_GUIDE.md](../development/HA_INTEGRATION_GUIDE.md); upstream [HA_INTEGRATION](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md) |
+| **How we talk to each other** | **Issue** (or Discussion for open questions) before speculative code. **PR** references the issue; **review** addresses comments. If anything is ambiguous, **stop and ask**—no guessing. Deviations from these rules need **issue + explicit design sign-off**. | **Non-negotiables** §3; [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| **How we make contracts** | **User-facing:** behavior and releases = **CHANGELOG** + **user docs** (`docs/user-guide.md`, FAQ, TTS guide). **Machine/install:** `manifest.json`, `requirements.txt` / pywiim pin. **API surface:** public HA entity/service schemas only—no private HA internals. **Maintainer invariants:** **ADRs** when we must not “unlearn” a trade-off (see Rule 8). | CHANGELOG; `manifest.json`; **Rule 8**; [adr/README.md](adr/README.md) |
+| **How we do ADRs** | Numbered files in **`docs/adr/`**. Use when a PR encodes a **long-lived** guarantee, trade-off, or reversal—not for every bugfix. Draft with **Status: Proposed** if needed. Template: **[0000-template.md](adr/0000-template.md)**. | **Rule 8**; [adr/README.md](adr/README.md) |
+
+**Nothing “disappeared”**—rules were always split across this file, **ARCHITECTURE.md**, **CONTRIBUTING.md**, and changelogs. This table is the **index** so you land in the right place on day one.
+
 ## Non-Negotiables
 
 ### 1. File Location
@@ -18,7 +35,7 @@
 - Read the architecture document first
 - Understand the pattern before coding
 - Ask questions if unclear
-- Get approval before deviating
+- Get approval before deviating (for integration-level trade-offs, capture intent in **[docs/adr/](adr/README.md)** — see Rule 8)
 
 ### 3. Ask Questions
 
@@ -39,19 +56,21 @@
 
 **NEVER work around pywiim issues in the integration.**
 
+We maintain **both** [mjcumming/wiim](https://github.com/mjcumming/wiim) (this integration) and [mjcumming/pywiim](https://github.com/mjcumming/pywiim) (the library). “Fix upstream” means **open a pywiim PR** when the fault is in the library—not “ignore it because another team owns it.”
+
 If pywiim doesn't provide something:
 
-1. **FIX IT IN PYWIIM** - Go fix the pywiim library directly
-2. **DO NOT** add fallback detection logic
-3. **DO NOT** add conditional checks for missing features
-4. **DO NOT** work around pywiim bugs
+1. **FIX IT IN PYWIIM** - Implement or repair it in the library, release, then bump the integration’s `manifest.json` requirement if needed
+2. **DO NOT** add fallback detection logic in the integration to compensate
+3. **DO NOT** add conditional checks for missing features that belong on `Player`/client
+4. **DO NOT** duplicate device protocol logic here to avoid touching pywiim
 
 **Why:**
 
-- pywiim is THE source of truth
-- Working around creates technical debt
-- Fixes belong in pywiim so ALL users benefit
-- Integration should be thin wrapper, not compensating
+- pywiim is THE source of truth for device behavior
+- Working around creates technical debt and splits fixes between repos
+- Library fixes benefit every consumer of pywiim, not only Home Assistant
+- Integration stays a thin wrapper
 
 ### Rule 2a: Reference Upstream Documentation
 
@@ -79,6 +98,31 @@ When working with pywiim integration patterns or API usage:
 - Prevents documentation drift and stale information
 - Single source of truth reduces maintenance burden
 - Version tracking ensures compatibility awareness
+
+### Rule 2b: Fix in the right repository (integration vs pywiim)
+
+**Same maintainers, two products**—choose the layer that matches the bug.
+
+| Fix belongs in **WiiM integration** (`custom_components/wiim/`) when… | Fix belongs in **pywiim** when… |
+| ----------------------------------------------------------------------- | --------------------------------- |
+| HA entity state, attributes, or service schema are wrong or incomplete | HTTP command, response parsing, URL encoding, or API semantics are wrong |
+| Coordinator refresh timing, debouncing, or HA-specific error mapping | `Player` / `Group` / client behavior, capability flags, multiroom routing |
+| Config flow, device registry, translations, diagnostics formatting | Anything that would still be wrong if you called pywiim from a plain Python script (no HA) |
+
+**Heuristic:** If you need to read LinkPlay/WiiM **wire format** or **undocumented firmware behavior** to fix it → **pywiim**. If you only need **Home Assistant platform rules** → **integration**.
+
+**pywiim checkout:** the library repo includes **`pywiim.code-workspace`** (VS Code: venv, ruff, format-on-save). Use a multi-root workspace in your editor if you often edit **wiim + pywiim** together.
+
+**Home Assistant–oriented library docs** (read before inventing patterns): [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md), [HA_CAPABILITIES.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_CAPABILITIES.md), [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md), and the rest of **`docs/integration/`** in the pywiim tree.
+
+### Rule 2c: Do not edit the pywiim library from this repository (agents / automation)
+
+When your task is **WiiM Home Assistant integration** work in **this** repo (`mjcumming/wiim`):
+
+- **Do not** modify the **pywiim** source tree (e.g. a sibling checkout like `core/pywiim`, `../pywiim`, or any path outside this integration repo) to “finish” an integration change.
+- **Consume** pywiim by **released version only**: bump `custom_components/wiim/pywiim-version.txt`, `manifest.json` `requirements`, run **`pip install pywiim==…`** in the venv you use for tests/dev, and follow **Rule 2b** to open PRs on **[mjcumming/pywiim](https://github.com/mjcumming/pywiim)** for real library fixes.
+
+**Why:** The integration workspace and the library workspace are **separate checkouts**. Editing pywiim “next door” from an integration task creates unreviewed library drift and wrong git history. Agents default to **integration-only edits here**; **pywiim changes ship from the pywiim repo.**
 
 ### Rule 3: Thin Glue Layer
 
@@ -133,6 +177,20 @@ raise HomeAssistantError(f"Failed to set volume on {self.name}: {err}") from err
 raise HomeAssistantError("Error")
 ```
 
+### Rule 8: ADRs for invariants learned the hard way
+
+**Not every PR needs an ADR.** Most fixes belong in **CHANGELOG** + tests only.
+
+**Add or update a numbered ADR** (`docs/adr/NNNN-slug.md`, see [template](adr/0000-template.md)) when the PR encodes a **long-lived contract** we must not accidentally undo later—for example:
+
+- A **user-visible guarantee** or **explicit non-guarantee** (e.g. multiroom + TTS, `supported_features`, scene restore behavior).
+- A **non-obvious trade-off** discovered in production (firmware quirks, HA API limits, “why we don’t do X”).
+- **Reversing** a documented approach (supersede the old ADR; say so in CHANGELOG).
+
+If it is important but not fully baked, open an ADR with **Status: Proposed** and link the issue/PR—or track in a GitHub issue until the ADR lands.
+
+**Do not** rely on chat, closed PR threads, or tribal memory alone for those cases—the next person (or model) will not have that context.
+
 ## Mental Checklist
 
 Before writing code, ask yourself:
@@ -144,6 +202,7 @@ Before writing code, ask yourself:
 5. **How does this interact with multi-room state?**
 6. **What happens if the device is offline?** (timeouts, retries)
 7. **How will this appear in Home Assistant UI?** (state, attributes, services)
+8. **Does this change a long-lived invariant?** If yes → **ADR** (Rule 8), not only CHANGELOG—use **Proposed** status while in flight if needed.
 
 **If any answer is fuzzy—stop and clarify.**
 
@@ -300,6 +359,7 @@ Before submitting a PR:
 - [ ] Coverage ≥ 10% (target 80%+)
 - [ ] **Patch coverage ≥ 75% (Codecov requirement; run `./scripts/check-before-push.sh` to verify)**
 - [ ] Docs/changelog updated (if needed)
+- [ ] **ADR / design capture** (if applicable): long-lived trade-off or reversal → new or updated `docs/adr/NNNN-*.md` + issue link (Rule 8; **Proposed** OK until accepted)
 - [ ] Tested on real device (if applicable)
 - [ ] Follows architecture patterns
 - [ ] Type hints on all functions
@@ -310,7 +370,7 @@ Before submitting a PR:
 | Symptom                            | Root Cause                  | Fix                                     |
 | ---------------------------------- | --------------------------- | --------------------------------------- |
 | Accidentally imported HA internals | Breaking core encapsulation | Use public helpers only                 |
-| Working around pywiim issues       | Wrong layer for fix         | Fix in pywiim, not integration          |
+| Working around pywiim issues       | Wrong layer for fix         | Fix in pywiim (same maintainers); see **Rule 2b** |
 | Missing type hints                 | Code quality                | Add type hints to all functions         |
 | No error handling                  | Poor UX                     | Add try/except with actionable messages |
 | Missing tests                      | Regression risk             | Write test before fixing bug            |
@@ -346,6 +406,7 @@ Before submitting a PR:
 1. **Long-Term Reference**
 
    - ✅ Architecture documentation
+   - ✅ **Architecture Decision Records** (`docs/adr/`) — invariants and trade-offs (Rule 8)
    - ✅ Development rules and guidelines
    - ✅ Testing strategy
    - ✅ User guides and FAQs
@@ -369,6 +430,7 @@ Before submitting a PR:
    - ✅ `tests/README.md` - Test information
    - ✅ `docs/TESTING-CONSOLIDATED.md` - Testing strategy
    - ✅ `docs/ARCHITECTURE.md` - Architecture changes
+   - ✅ `docs/adr/` - ADRs when behavior or documented contracts change (Rule 8)
    - ✅ `docs/DEVELOPMENT-RULES.md` - This file (rules)
    - ✅ `docs/INDEX.md` - Documentation index
 
@@ -384,6 +446,7 @@ Before submitting a PR:
 **Files**:
 
 - `ARCHITECTURE.md` - Architecture and design
+- `adr/` - Numbered ADRs + template
 - `DEVELOPMENT-RULES.md` - Development rules
 - `TESTING-CONSOLIDATED.md` - Testing strategy (includes test directory explanation)
 - `PROJECT-STRUCTURE.md` - Project structure
@@ -441,7 +504,7 @@ Ask:
 
 ## When to Update Rules
 
-- When architectural decisions are made
+- When architectural decisions are made (**prefer an ADR** in `docs/adr/` for the durable part—Rule 8)
 - When patterns are established
 - When bugs reveal design issues
 - When new requirements emerge

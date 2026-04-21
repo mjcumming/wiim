@@ -8,7 +8,9 @@
 4. [Data Flow](#data-flow)
 5. [Project Structure](#project-structure)
 6. [Code Patterns](#code-patterns)
-7. [Decision Log](#decision-log)
+7. [Decision Log](#decision-log) (see also [Architecture Decision Records](adr/README.md))
+
+For **what this integration is for**, **how we collaborate**, **contracts** (changelog, manifest, ADRs), and **where rules live**, read **[DEVELOPMENT-RULES.md — Rules map](DEVELOPMENT-RULES.md#rules-map-read-this-first)** first; this document focuses on **structure and code patterns**.
 
 ## Core Principles
 
@@ -387,13 +389,16 @@ except WiiMError as err:
 
 ## Decision Log
 
-### Architecture Decisions
+Durable, numbered decisions live under **[docs/adr/](adr/README.md)** (ADR = Architecture Decision Record). Use the [ADR template](adr/0000-template.md) for new entries.
 
-| Date       | Decision                | Rationale                                 |
-| ---------- | ----------------------- | ----------------------------------------- |
-| 2025-11-28 | Thin glue layer pattern | Keeps integration simple, logic in pywiim |
-| 2025-11-28 | Two test directories    | Automated (tests/) vs manual (scripts/)   |
-| 2025-11-28 | Test-driven development | Prevents regression bugs                  |
+The table below is kept as a **quick index**; full text and consequences are in each ADR. Dates in the table were originally **2025-11-28**; git shows `docs/ARCHITECTURE.md` was **first added on 2025-11-30** (`43fe79e`).
+
+| Date (index) | ADR | Decision |
+| ------------ | --- | -------- |
+| 2025-11-28 | [0001](adr/0001-thin-glue-layer.md) | Thin glue layer pattern — logic in pywiim |
+| 2025-11-28 | [0002](adr/0002-test-directory-split.md) | Two test directories (`tests/` vs `scripts/`) |
+| 2025-11-28 | [0003](adr/0003-test-driven-development.md) | Test-driven development for regressions |
+| 2026-04-20 | [0005](adr/0005-slave-supported-features.md) | Slaves advertise `PLAY_MEDIA` and related media features |
 
 ### Design Patterns
 

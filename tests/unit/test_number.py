@@ -97,8 +97,10 @@ class TestSubwooferLevelSetup:
         assert isinstance(entities[1], WiiMChannelBalanceNumber)
 
     @pytest.mark.asyncio
-    async def test_setup_skips_entity_when_no_subwoofer(self, mock_hass, mock_config_entry, mock_coordinator):
-        """Test setup skips entity when no subwoofer connected."""
+    async def test_setup_creates_entity_when_supported_even_if_unplugged(
+        self, mock_hass, mock_config_entry, mock_coordinator
+    ):
+        """supports_subwoofer gates entity creation; physical plug state does not."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
         mock_coordinator.player.supports_subwoofer = True
         mock_coordinator.player.subwoofer_status = {"plugged": False, "status": False, "level": 0}
@@ -110,7 +112,8 @@ class TestSubwooferLevelSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
-        assert len(entities) == 0
+        assert len(entities) == 1
+        assert isinstance(entities[0], WiiMSubwooferLevelNumber)
 
     @pytest.mark.asyncio
     async def test_setup_creates_balance_when_supported_no_sub(

@@ -1,6 +1,6 @@
 """Unit tests for WiiM System Health - testing health check functionality."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -145,3 +145,19 @@ class TestSystemHealth:
                     health_info = await system_health_info(hass)
 
                     assert health_info["pywiim_version"] == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_system_health_pywiim_version_uses_executor(self, hass: HomeAssistant):
+        """System health resolves pywiim version via hass.async_add_executor_job."""
+        mock_entry = MagicMock()
+        mock_entry.domain = "wiim"
+
+        with patch.object(hass.config_entries, "async_entries", return_value=[mock_entry]):
+            with patch("custom_components.wiim.system_health.get_all_coordinators", return_value=[]):
+                with patch("importlib.metadata.version", return_value="9.9.9"):
+                    hass.async_add_executor_job = AsyncMock(side_effect=lambda func: func())
+
+                    health_info = await system_health_info(hass)
+
+                    assert health_info["pywiim_version"] == "9.9.9"
+                    hass.async_add_executor_job.assert_awaited_once()

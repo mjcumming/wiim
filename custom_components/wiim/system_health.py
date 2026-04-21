@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from importlib import metadata
 from typing import Any
 
 from homeassistant.components import system_health
@@ -10,6 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
 from .data import get_all_coordinators
+from .diagnostics import _get_pywiim_version
 
 
 @callback
@@ -44,12 +44,8 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
         first_coordinator = coordinators[0]
         first_device_health = await _check_device_health(first_coordinator)
 
-    # Get pywiim version
-    pywiim_version = "unknown"
-    try:
-        pywiim_version = metadata.version("pywiim")
-    except metadata.PackageNotFoundError:
-        pass
+    # Get pywiim version (metadata read runs in executor; see diagnostics._get_pywiim_version)
+    pywiim_version = await _get_pywiim_version(hass)
 
     return {
         "configured_devices": len(entries),

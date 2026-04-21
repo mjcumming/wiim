@@ -11,6 +11,16 @@
 
 **Always reference upstream pywiim documentation** (see "Reference Upstream Documentation" section below) instead of duplicating content.
 
+## CRITICAL: Do not edit pywiim from this workspace
+
+When working on **this** WiiM **Home Assistant integration** repository only:
+
+- **Never** modify files under a **separate pywiim checkout** (e.g. `../pywiim`, `core/pywiim`, or any path outside `custom_components/wiim` / this repo’s integration code).
+- **Use released pywiim**: `pip install pywiim==<version>`, keep `manifest.json` and `custom_components/wiim/pywiim-version.txt` in sync.
+- **Library bugs / new APIs** → fix in **[mjcumming/pywiim](https://github.com/mjcumming/pywiim)** in that repo, release, then bump the pin here.
+
+Human-readable policy: **docs/DEVELOPMENT-RULES.md — Rule 2c**.
+
 ## CRITICAL: Never Work Around pywiim Issues
 
 **NEVER create workarounds or fallbacks in the HA integration for missing pywiim functionality.**

@@ -44,6 +44,13 @@ This integration is a **thin glue layer** between the `pywiim` library and Home 
 
 **If it's not directly gluing pywiim to HA, it shouldn't be here.**
 
+### Two repositories (same maintainers)
+
+- **[mjcumming/wiim](https://github.com/mjcumming/wiim)** — this Home Assistant integration (`custom_components/wiim/`).
+- **[mjcumming/pywiim](https://github.com/mjcumming/pywiim)** — device library. VS Code: open **`pywiim.code-workspace`** in that repo for a configured Python venv and lint/format. **Home Assistant–focused docs** live under upstream **`docs/integration/`** ([HA_INTEGRATION](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md), [HA_CAPABILITIES](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_CAPABILITIES.md), [API_REFERENCE](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md)).
+
+When in doubt whether a fix belongs here or in pywiim, read **[Rule 2b in DEVELOPMENT-RULES.md](../docs/DEVELOPMENT-RULES.md#rule-2b-fix-in-the-right-repository-integration-vs-pywiim)**.
+
 For detailed API documentation, polling strategies, and UPnP architecture, see the [pywiim library documentation](https://github.com/mjcumming/pywiim).
 
 ## 📋 **Essential Technical Docs**

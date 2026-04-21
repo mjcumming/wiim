@@ -154,9 +154,6 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     def _update_supported_features(self) -> None:
         """Update supported features based on current state (LinkPlay pattern)."""
-        # Check if player is a slave in a multiroom group
-        is_slave = self._get_player().is_slave
-
         # Base features available to all players (including slaves)
         # Volume is device-specific, playback commands route to master automatically
         features = (
@@ -169,16 +166,17 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.TURN_OFF
         )
 
-        # Features only available to non-slaves (master or solo players)
-        # These don't make sense for slaves: source selection, media initiation, browsing
-        if not is_slave:
-            features |= (
-                MediaPlayerEntityFeature.SELECT_SOURCE
-                | MediaPlayerEntityFeature.PLAY_MEDIA
-                | MediaPlayerEntityFeature.BROWSE_MEDIA
-                | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
-                | MediaPlayerEntityFeature.CLEAR_PLAYLIST
-            )
+        # Source selection, media initiation, browsing, announcements — all roles.
+        # Callers who need a stable multiroom group should still target the master or
+        # *_group_coordinator for TTS/URL playback; firmware may unjoin a slave if
+        # notification-style media hits the slave device directly (see docs/adr/0005).
+        features |= (
+            MediaPlayerEntityFeature.SELECT_SOURCE
+            | MediaPlayerEntityFeature.PLAY_MEDIA
+            | MediaPlayerEntityFeature.BROWSE_MEDIA
+            | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
+            | MediaPlayerEntityFeature.CLEAR_PLAYLIST
+        )
 
         # Track controls work for slaves - pywiim routes commands to master automatically
         if self._next_track_supported():
@@ -205,8 +203,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if self._seek_supported():
             features |= MediaPlayerEntityFeature.SEEK
 
-        # Queue management only for non-slaves (slaves shouldn't modify queue)
-        if not is_slave and self._has_queue_support():
+        if self._has_queue_support():
             features |= MediaPlayerEntityFeature.MEDIA_ENQUEUE
 
         self._attr_supported_features = features
@@ -1362,6 +1359,13 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             "alarms": player.supports_alarms,
             "sleep_timer": player.supports_sleep_timer,
             "upnp": player.supports_upnp,
+            "subwoofer": player.supports_subwoofer,
+            "trigger_out": bool(player.client.capabilities.get("supports_trigger_out"))
+            if player.client
+            else None,
+            "display_config": bool(player.client.capabilities.get("supports_display_config"))
+            if player.client
+            else None,
         }
 
         # Add playback state attributes for debugging/automations

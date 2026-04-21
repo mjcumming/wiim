@@ -54,6 +54,8 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-03-30 (pywiim 2.1.98 update)._
+_Last reviewed against upstream on 2026-04-20 (pywiim capability refresh API)._
 
 **Notable upstream changes (2.1.98):** WiiM Ultra LCD control uses `setLightOperationBrightConfig` via `Player.set_display_enabled` / `set_display_config`. `set_display_enabled(True)` now applies `DISPLAY_DEFAULT_BRIGHTNESS` (100) when turning on unless `default_bright` is passed; brightness uses a **1–100** device scale (`DISPLAY_BRIGHTNESS_MIN` / `DISPLAY_BRIGHTNESS_MAX`). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
+
+**Capability refresh after firmware OTA:** `WiiMClient.refresh_capabilities()` and `_detect_capabilities(force=True)` re-run runtime probes when the client was constructed with cached `capabilities`. Home Assistant integrations that persist capabilities should use this when live firmware no longer matches cached metadata; see upstream [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md) (firmware / capabilities note) and [API_DESIGN_PATTERNS.md](https://github.com/mjcumming/pywiim/blob/main/docs/design/API_DESIGN_PATTERNS.md) (Library Support).

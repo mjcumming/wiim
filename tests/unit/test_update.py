@@ -7,6 +7,11 @@ from contextlib import suppress
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+
+def _attach_client_capabilities(player: MagicMock, capabilities: dict) -> None:
+    player.client = MagicMock()
+    player.client.capabilities = capabilities
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import HomeAssistantError
 
@@ -117,7 +122,7 @@ class TestFirmwareUpdateEntity:
         coordinator.player.device_info = None
         coordinator.player.firmware_update_available = True
         coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
-        coordinator.player.supports_firmware_install = True
+        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
         coordinator.player.install_firmware_update = AsyncMock()
         coordinator.player.get_update_install_status = AsyncMock(return_value={})
         coordinator.async_refresh = AsyncMock()
@@ -146,7 +151,7 @@ class TestFirmwareUpdateEntity:
         coordinator.player.firmware = "Linkplay.4.8.731953"
         coordinator.player.firmware_update_available = True
         coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
-        coordinator.player.supports_firmware_install = True
+        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
         coordinator.player.get_update_install_status = AsyncMock(return_value={})
         coordinator.async_refresh = AsyncMock()
 
@@ -185,7 +190,7 @@ class TestFirmwareUpdateEntity:
         coordinator.player.host = "192.168.1.100"
         coordinator.player.name = "Test WiiM"
         coordinator.player.device_info = None
-        coordinator.player.supports_firmware_install = True
+        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
         coordinator.player.firmware = "Linkplay.4.8.731953"
         coordinator.player.firmware_update_available = True
         coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
@@ -231,7 +236,7 @@ class TestFirmwareUpdateEntity:
         coordinator.player.host = "192.168.1.100"
         coordinator.player.name = "Test WiiM"
         coordinator.player.device_info = None
-        coordinator.player.supports_firmware_install = True
+        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
         coordinator.player.firmware = "Linkplay.4.8.731953"
         coordinator.player.latest_firmware_version = "Linkplay.4.8.731953"
 
@@ -267,7 +272,7 @@ class TestFirmwareUpdateEntity:
         coordinator.player.host = "192.168.1.100"
         coordinator.player.firmware_update_available = False
         coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
-        coordinator.player.supports_firmware_install = True
+        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
         coordinator.player.install_firmware_update = AsyncMock()
 
         entry = MagicMock(spec=ConfigEntry)
@@ -300,7 +305,7 @@ class TestUpdatePlatformSetup:
         coordinator = MagicMock()
         coordinator.player = MagicMock()
         coordinator.player.name = "Test WiiM"
-        coordinator.player.supports_firmware_install = True
+        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
         hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
 
         async_add_entities = MagicMock()
@@ -326,7 +331,7 @@ class TestUpdatePlatformSetup:
         coordinator = MagicMock()
         coordinator.player = MagicMock()
         coordinator.player.name = "Test WiiM"
-        coordinator.player.supports_firmware_install = False
+        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": False})
         hass.data = {DOMAIN: {config_entry.entry_id: {"coordinator": coordinator, "entry": config_entry}}}
 
         async_add_entities = MagicMock()

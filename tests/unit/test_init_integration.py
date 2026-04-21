@@ -379,8 +379,8 @@ class TestIntegrationServices:
         assert Platform.UPDATE not in platforms
 
     @pytest.mark.asyncio
-    async def test_get_enabled_platforms_falls_back_to_player_flag(self, hass: HomeAssistant) -> None:
-        """If capabilities are missing supports_firmware_install, fall back to runtime player flag."""
+    async def test_get_enabled_platforms_merges_live_client_capabilities(self, hass: HomeAssistant) -> None:
+        """UPDATE platform follows ``player.client.capabilities`` when coordinator exists."""
         from homeassistant.const import Platform
 
         from custom_components.wiim import get_enabled_platforms
@@ -396,7 +396,8 @@ class TestIntegrationServices:
 
         coordinator = MagicMock()
         coordinator.player = MagicMock()
-        coordinator.player.supports_firmware_install = True
+        coordinator.player.client = MagicMock()
+        coordinator.player.client.capabilities = {"supports_firmware_install": True}
         hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coordinator, "entry": entry}
 
         platforms = get_enabled_platforms(hass, entry, {})
@@ -463,7 +464,7 @@ class TestCapabilityCacheRefresh:
                 self.host = "192.168.1.116"
                 self.name = "Master Bedroom"
                 self.client = MagicMock(discovered_endpoint=None)
-                self.supports_firmware_install = True
+                self.client.capabilities = {"supports_firmware_install": True}
 
         class _FakeCoordinator:
             def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):

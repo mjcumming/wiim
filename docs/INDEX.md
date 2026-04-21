@@ -4,25 +4,21 @@
 
 ### Architecture & Design
 
-1. **[ARCHITECTURE.md](ARCHITECTURE.md)** ⭐ START HERE
+1. **[DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md)** ⭐ **Rules map first**
 
-   - Complete architecture overview
-   - Component responsibilities
-   - Data flow
-   - Project structure
-   - Code patterns
-   - Decision log
+   - **[Rules map (read this first)](DEVELOPMENT-RULES.md#rules-map-read-this-first)** — what the integration does, how it works, pywiim, collaboration, contracts, ADRs
+   - Non-negotiables, golden rules, Rule 8 (ADRs), PR checklist, doc standards
+   - **AI / Cursor seed:** [`.cursor/rules/wiim-project.mdc`](../.cursor/rules/wiim-project.mdc) (always on) and root [`AGENTS.md`](../AGENTS.md)
 
-2. **[DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md)**
+2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — Structure and patterns
 
-   - Non-negotiable rules
-   - Golden rules
-   - Code quality standards
-   - Documentation guidelines
-   - Mental checklist
-   - PR checklist
+   - Component responsibilities, data flow, project layout, decision log index
 
-3. **[TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md)**
+3. **[adr/README.md](adr/README.md)** — Architecture Decision Records (ADRs)
+
+   - Numbered decisions; [template](adr/0000-template.md)
+
+4. **[TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md)**
 
    - Complete testing strategy
    - 4-tier test approach
@@ -58,23 +54,25 @@ wiim/
 
 ### New Developer?
 
-1. Read [ARCHITECTURE.md](ARCHITECTURE.md) - Understand the design
-2. Read [DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md) - Learn the rules
-3. Read [TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md) - Understand testing
-4. Read [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution workflow
+1. Read [DEVELOPMENT-RULES.md — Rules map](DEVELOPMENT-RULES.md#rules-map-read-this-first) - What this is, pywiim, contracts, ADRs
+2. Read [ARCHITECTURE.md](ARCHITECTURE.md) - Structure and data flow
+3. Read [DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md) in full - Rules and checklists
+4. Read [TESTING-CONSOLIDATED.md](TESTING-CONSOLIDATED.md) - Understand testing
+5. Read [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution workflow
 
 ### Fixing a Bug?
 
-1. Read [bug-fix-testing-checklist.md](bug-fix-testing-checklist.md)
-2. Write failing test (TDD)
-3. Fix the bug
-4. Verify test passes
-5. Run full test suite
+1. Skim [Rules map](DEVELOPMENT-RULES.md#rules-map-read-this-first) if new to the repo
+2. Read [bug-fix-testing-checklist.md](bug-fix-testing-checklist.md)
+3. Write failing test (TDD)
+4. Fix the bug
+5. Verify test passes
+6. Run full test suite
 
 ### Adding a Feature?
 
-1. Read [ARCHITECTURE.md](ARCHITECTURE.md) - Understand where it fits
-2. Read [DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md) - Follow the rules
+1. Read [Rules map](DEVELOPMENT-RULES.md#rules-map-read-this-first) and [ARCHITECTURE.md](ARCHITECTURE.md) - Where it fits
+2. Read [DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md) - Follow the rules (including Rule 8 if needed)
 3. Write tests first (TDD)
 4. Implement feature
 5. Update documentation
@@ -83,7 +81,7 @@ wiim/
 
 ### When to Create Documentation
 
-- ✅ Architecture decisions
+- ✅ Architecture decisions ([adr/](adr/README.md) for durable ADRs)
 - ✅ Design patterns
 - ✅ Testing strategies
 - ✅ User guides

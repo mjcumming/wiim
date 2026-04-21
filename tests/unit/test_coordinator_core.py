@@ -81,6 +81,33 @@ class TestWiiMCoordinator:
         assert coordinator._capabilities is not None
         assert coordinator._polling_strategy is not None
 
+    def test_update_capabilities_shared_client_dict(self, coordinator):
+        """After firmware refresh, capabilities merge updates coordinator and client in place."""
+        shared: dict = coordinator._capabilities
+        coordinator.player.client._capabilities = shared
+        before_strategy = coordinator._polling_strategy
+
+        coordinator.update_capabilities({**shared, "firmware_version": "Linkplay.9.9.9", "supports_eq": False})
+
+        assert coordinator._capabilities is shared
+        assert coordinator._capabilities["firmware_version"] == "Linkplay.9.9.9"
+        assert coordinator._capabilities["supports_eq"] is False
+        assert coordinator.player.client._capabilities["firmware_version"] == "Linkplay.9.9.9"
+        assert coordinator._polling_strategy is not before_strategy
+
+    def test_update_capabilities_when_client_dict_differs(self, coordinator):
+        """If client uses a separate capabilities dict, it is updated too."""
+        shared = dict(coordinator._capabilities)
+        client_only: dict = {"supports_eq": True}
+        coordinator._capabilities = shared
+        coordinator.player.client._capabilities = client_only
+
+        coordinator.update_capabilities({**shared, "firmware_version": "Linkplay.2"})
+
+        assert coordinator._capabilities["firmware_version"] == "Linkplay.2"
+        assert client_only["firmware_version"] == "Linkplay.2"
+        assert client_only["supports_eq"] is True
+
     @pytest.mark.asyncio
     async def test_async_update_data_success(self, coordinator, mock_player):
         """Test successful data update."""

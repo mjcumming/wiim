@@ -5,7 +5,6 @@ from pywiim.api.subwoofer import SubwooferStatus
 from custom_components.wiim.subwoofer_helpers import (
     subwoofer_enabled_from_status,
     subwoofer_level_from_status,
-    subwoofer_plugged,
     subwoofer_status_for_diagnostics,
 )
 
@@ -25,20 +24,6 @@ def _sample_status() -> SubwooferStatus:
         linein_delay=0.0,
         delay_main_sub="",
     )
-
-
-class TestSubwooferPlugged:
-    """Test subwoofer_plugged."""
-
-    def test_dict_plugged(self) -> None:
-        assert subwoofer_plugged({"plugged": True}) is True
-        assert subwoofer_plugged({"plugged": False}) is False
-
-    def test_dataclass_plugged(self) -> None:
-        assert subwoofer_plugged(_sample_status()) is True
-
-    def test_none(self) -> None:
-        assert subwoofer_plugged(None) is False
 
 
 class TestSubwooferEnabled:

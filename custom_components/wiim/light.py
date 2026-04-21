@@ -28,8 +28,8 @@ async def async_setup_entry(
 
     entities: list[LightEntity] = [WiiMLEDLight(coordinator, config_entry)]
 
-    # Display (WiiM Ultra LCD) – on/off + brightness; only when supported
-    if getattr(player, "supports_display_config", False):
+    # Display (LCD) — ``client.capabilities["supports_display_config"]`` (pywiim detection).
+    if player.client and bool(player.client.capabilities.get("supports_display_config")):
         entities.append(WiiMDisplayLight(coordinator, config_entry))
 
     async_add_entities(entities)

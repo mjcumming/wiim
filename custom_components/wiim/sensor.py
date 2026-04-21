@@ -15,6 +15,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .capability_flags import client_has_capability, get_client_capability
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
@@ -225,7 +226,7 @@ class WiiMDiagnosticSensor(WiimEntity, SensorEntity):
             # Firmware update state (pywiim Player properties)
             "firmware_update_available": getattr(player, "firmware_update_available", None),
             "latest_firmware_version": getattr(player, "latest_firmware_version", None),
-            "supports_firmware_install": getattr(player, "supports_firmware_install", None),
+            "supports_firmware_install": get_client_capability(player, "supports_firmware_install"),
         }
 
         # Add adaptive polling diagnostics
@@ -300,7 +301,7 @@ class WiiMFirmwareSensor(WiimEntity, SensorEntity):
             latest = getattr(player, "latest_firmware_version", None)
             if latest:
                 attrs["latest_version"] = str(latest)
-            attrs["supports_firmware_install"] = bool(getattr(player, "supports_firmware_install", False))
+            attrs["supports_firmware_install"] = client_has_capability(player, "supports_firmware_install")
 
         # Prune None values
         return {k: v for k, v in attrs.items() if v is not None}

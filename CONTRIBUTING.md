@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to the WiiM Home Assistant integration! This document provides guidelines and best practices for contributing.
 
+**Where the real rules live:** the full **rules map** (what the integration does, how it uses pywiim, collaboration, contracts, ADRs) is in **[docs/DEVELOPMENT-RULES.md — “Rules map (read this first)”](docs/DEVELOPMENT-RULES.md#rules-map-read-this-first)**. Read that section once, then use this file for the contributor checklist and links.
+
 ## Development Guidelines
 
 ### Non-negotiables
@@ -11,7 +13,7 @@ Thank you for your interest in contributing to the WiiM Home Assistant integrati
    - Never modify `homeassistant/` core folders
    - Never import private HA internals
 
-2. **Follow Guidelines**: Follow this guide line-by-line. Deviations require an Issue + signed-off design note from the Tech Lead.
+2. **Follow Guidelines**: Follow this guide line-by-line. Deviations require an Issue + signed-off design note from the Tech Lead. **Integration-level trade-offs** (things we must not “unlearn” later) should also land in **[docs/adr/](docs/adr/README.md)** when they match [Rule 8 in DEVELOPMENT-RULES](docs/DEVELOPMENT-RULES.md#rule-8-adrs-for-invariants-learned-the-hard-way).
 
 3. **Ask Questions**: If you are confused, STOP → ask in GitHub Discussion. Guessing = bugs + rework.
 
@@ -36,6 +38,7 @@ Before writing code, ask yourself:
 5. How does this interact with multi-room state?
 6. What happens if the device is offline? (timeouts, retries)
 7. How will this appear in Home Assistant UI? (state, attributes, services)
+8. Does this change a long-lived invariant? If yes → ADR ([Rule 8](docs/DEVELOPMENT-RULES.md#rule-8-adrs-for-invariants-learned-the-hard-way); **Proposed** status OK while in flight)
 
 If any answer is fuzzy—stop and clarify.
 
@@ -54,6 +57,7 @@ If any answer is fuzzy—stop and clarify.
 - [ ] Added/updated unit + integration tests
 - [ ] Passes `pre-commit` & coverage ≥ 90%
 - [ ] Docs/changelog updated
+- [ ] **ADR / design capture** when the PR changes a **long-lived invariant** or **documented trade-off** (new or updated `docs/adr/NNNN-*.md` + issue link—see [Rule 8](docs/DEVELOPMENT-RULES.md#rule-8-adrs-for-invariants-learned-the-hard-way); **Proposed** OK until accepted)
 - [ ] Tested on real device (model & firmware listed)
 
 ## Documentation
@@ -61,6 +65,7 @@ If any answer is fuzzy—stop and clarify.
 For detailed architecture, development rules, and testing strategy:
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete architecture guide
+- **[docs/adr/README.md](docs/adr/README.md)** - Architecture Decision Records (invariants & trade-offs)
 - **[docs/DEVELOPMENT-RULES.md](docs/DEVELOPMENT-RULES.md)** - Development rules
 - **[docs/TESTING-CONSOLIDATED.md](docs/TESTING-CONSOLIDATED.md)** - Testing strategy
 - **[docs/PROJECT-STRUCTURE.md](docs/PROJECT-STRUCTURE.md)** - Project structure

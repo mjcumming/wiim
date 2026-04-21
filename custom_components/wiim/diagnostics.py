@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
+from .capability_flags import client_has_capability, get_client_capability
 from .data import get_all_coordinators, get_coordinator_from_entry
 from .subwoofer_helpers import subwoofer_status_for_diagnostics
 
@@ -150,10 +151,17 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "supports_alarms": getattr(player, "supports_alarms", None),
             "supports_sleep_timer": getattr(player, "supports_sleep_timer", None),
             "supports_led_control": getattr(player, "supports_led_control", None),
-            "supports_firmware_install": getattr(player, "supports_firmware_install", None),
+            "supports_firmware_install": get_client_capability(player, "supports_firmware_install"),
             "supports_enhanced_grouping": getattr(player, "supports_enhanced_grouping", None),
             "supports_next_track": getattr(player, "supports_next_track", None),
             "supports_metadata": getattr(player, "supports_metadata", None),
+            "supports_subwoofer": getattr(player, "supports_subwoofer", None),
+            "supports_trigger_out": (
+                player.client.capabilities.get("supports_trigger_out") if player.client else None
+            ),
+            "supports_display_config": (
+                player.client.capabilities.get("supports_display_config") if player.client else None
+            ),
         }
 
         # =================================================================
@@ -280,7 +288,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "update_available": getattr(player, "firmware_update_available", None),
             "latest_version": getattr(player, "latest_firmware_version", None),
             "current_version": player.firmware,
-            "supports_api_install": getattr(player, "supports_firmware_install", False),
+            "supports_api_install": client_has_capability(player, "supports_firmware_install"),
         }
 
         # =================================================================

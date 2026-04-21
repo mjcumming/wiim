@@ -226,7 +226,7 @@ data:
 **Announcements / TTS in a group**
 
 - **`tts.speak` / `media_player.play_media` with `announce: true`:** Use the **master** `media_player` for that group or the **`media_player.*_group_coordinator`** entity. You will hear the announcement on **all grouped speakers** (the master drives group playback, including notification URLs).
-- **Slave `media_player` entities** do **not** support `play_media` / announce in Home Assistant. On device firmware, playing a notification **directly on a slave** would **remove it from the group**; the integration avoids that by not exposing those actions on slaves.
+- **Slave `media_player` entities** also advertise `play_media` / announce (for compatibility with tools that require those feature bits), but **playing a notification directly on a slave** can **remove it from the group** on firmware. Prefer master or coordinator for group-wide TTS; see [ADR 0005](adr/0005-slave-supported-features.md).
 - Details: [TTS Guide](TTS_GUIDE.md#group-behavior-master-slave-coordinator).
 
 ### 📱 Dashboard Cards

@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.0.77] - 2026-04-20
+
+### Changed
+
+- Release version 1.0.77
+- **Dependency**: `pywiim` **2.2.2** (manifest and `pywiim-version.txt`).
+- **ADR 0007** — [Strict capability gating](docs/adr/0007-capability-gating-strict-contract.md): firmware install gating and related diagnostics/sensor fields read **`player.client.capabilities`** via **`capability_flags`** (no `getattr(player, "supports_firmware_install", …)` in the update platform).
+- **Subwoofer entities** — Switch and level number are created whenever **`player.supports_subwoofer`** (pywiim capability / `client.capabilities`) is true. The integration no longer uses **`plugged`** or cached status to decide whether to register those entities (physical connection remains visible in diagnostics and state).
+- **Media player extra attributes** — `capabilities.subwoofer` mirrors **`player.supports_subwoofer`** for debugging/automations.
+- **Group slaves and `supported_features`** ([Issue #223](https://github.com/mjcumming/wiim/issues/223)) — Slave `media_player` entities again advertise `PLAY_MEDIA`, `BROWSE_MEDIA`, `MEDIA_ANNOUNCE`, `SELECT_SOURCE`, `CLEAR_PLAYLIST`, and `MEDIA_ENQUEUE` (when the device supports queue add), so third-party consumers that gate on these bits (for example Music Assistant) can register slaves. **Trade-off:** notification or URL playback targeted at a **slave** may still **remove it from the multiroom group** on LinkPlay/WiiM firmware; prefer **master** or **`media_player.*_group_coordinator`** for group-wide TTS. Documented in [ADR 0005](docs/adr/0005-slave-supported-features.md); user docs updated accordingly.
+- **Architecture Decision Records** — Added [docs/adr/](docs/adr/README.md) (template + ADRs **0001–0003** migrated from the architecture decision table, **0005** for slaves). [ARCHITECTURE.md](docs/ARCHITECTURE.md) decision log now links here; git shows `ARCHITECTURE.md` was first added **2025-11-30** while the table used **2025-11-28**.
+
+### Fixed
+
+- **Capability refresh after firmware OTA** ([Issue #224](https://github.com/mjcumming/wiim/issues/224)) — Setup compared live firmware to cached metadata but the coordinator lacked `update_capabilities`, and pywiim skipped re-probing for pre-seeded clients. The coordinator now implements `update_capabilities` (runtime dict, client sync, `PollingStrategy` rebuild). When firmware differs from cache, setup calls `WiiMClient._detect_capabilities(force=True)` when the installed pywiim supports it; older pywiim falls back to `_detect_capabilities()` without `force` until upgraded.
+- **System health blocked the event loop** ([Issue #226](https://github.com/mjcumming/wiim/issues/226)) — Resolving the installed `pywiim` version for the System Health panel now uses the same executor-backed path as diagnostics, so Home Assistant no longer warns about blocking `open()` calls on the main thread.
+
 ## [1.0.76] - 2026-03-30
 
 ### Changed

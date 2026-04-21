@@ -1,6 +1,6 @@
 # WiiM TTS (Text-to-Speech) Guide
 
-The WiiM integration supports TTS announcements via `media_player.play_media` with `announce: true` and via `tts.speak`. For **multiroom groups**, target the **master** or **group coordinator** entity so every grouped speaker hears the announcement; **slave** entities cannot run these services (see [Group behavior](#group-behavior-master-slave-coordinator) below).
+The WiiM integration supports TTS announcements via `media_player.play_media` with `announce: true` and via `tts.speak`. For **multiroom groups**, still target the **master** or **group coordinator** entity so every grouped speaker hears the announcement without breaking the group. **Slave** `media_player` entities also advertise these services, but **firmware may remove a slave from its group** if notification-style playback hits the slave device directly (see [Group behavior](#group-behavior-master-slave-coordinator) and [ADR 0005](adr/0005-slave-supported-features.md)).
 
 ## Developer Tools / Actions (correct payload)
 
@@ -61,7 +61,7 @@ data:
 
 - **Solo** speaker: `media_player.play_media` / `tts.speak` with `announce: true` plays the notification on that unit only.
 - **Master** in a multiroom group: the same announcement is played through the **group audio path**. Slaves follow the master, so **they will play the announcement too** (it is still a URL fetched and rendered as part of grouped playback—you do not need to target each slave).
-- **Slave** speaker: on LinkPlay / WiiM firmware, starting a **notification-style URL on the slave itself** causes the device to **leave the group**. To avoid breaking groups by accident, Home Assistant **does not** expose `media_player.play_media` (or `announce`) on **slave** `media_player` entities—those actions are only available on **solo**, **master**, and **group coordinator** entities.
+- **Slave** speaker: on LinkPlay / WiiM firmware, starting a **notification-style URL on the slave itself** can cause the device to **leave the group**. The integration still exposes `media_player.play_media` / `announce` on slaves so tools such as Music Assistant can treat them as normal players; **for stable group-wide TTS, use the master or `*_group_coordinator`**, not the slave entity.
 
 ### What to target
 
@@ -69,7 +69,7 @@ data:
 | --------------------------------- | ----------------------------------------------------------------------------- |
 | Announce to the **whole group**   | The **master** `media_player` for that group, or `media_player.*_group_coordinator` |
 | Announce to one **ungrouped** box | That speaker’s `media_player` while it is **solo**                          |
-| Slave `media_player`              | **Do not use** for `play_media` / `tts.speak` / announce — use master or coordinator instead |
+| Slave `media_player`              | **Avoid** for group-wide `play_media` / `tts.speak` / announce — prefer **master** or **coordinator** so the group stays intact; direct slave playback may **unjoin** the device |
 
 ### Example: group-wide TTS (recommended)
 
@@ -133,7 +133,7 @@ TTS announcements automatically:
 
 ### Slave `media_player` and `tts.speak`
 
-Slave entities **do not** advertise support for `media_player.play_media`, so **`tts.speak`** and **Actions → play_media** with `announce: true` are not valid targets for a slave. That is intentional: on firmware, playing a notification **directly on a slave** would **remove it from the group**. Use the **master** or **`*_group_coordinator`** entity instead; the group will still hear the announcement when you target the master path.
+Slave entities **do** advertise `media_player.play_media` / announce (see [ADR 0005](adr/0005-slave-supported-features.md)), but **playing a notification directly on a slave** can still **remove it from the group** on firmware. For **group-wide** announcements, use the **master** or **`*_group_coordinator`** so all speakers hear it and membership stays predictable.
 
 ### Network issues
 
@@ -253,7 +253,7 @@ Click **Perform action**. Then open **Developer tools → Logs** (or Settings �
 | `Failed to resolve media source` / TTS error                            | TTS engine or media source problem                | Check **Settings → Voice assistants → Text-to-speech**: the engine in the URL (e.g. `tts.google_translate_en_com`) must exist. Test TTS from Media or another player.                                            |
 | `Media source resolved to empty URL`                                    | TTS returned no URL                               | Same as above: fix TTS engine / config.                                                                                                                                                                          |
 | `Cannot build playable URL` / `NoURLAvailableError`                     | HA has no Internal URL                            | **Settings → System → Network**: set **Internal URL** to your HA LAN address (e.g. `http://192.168.1.x:8123`).                                                                                                   |
-| Action / `tts.speak` “not supported” for entity                         | Target is a **group slave**                       | Use the **master** `media_player` or **`media_player.*_group_coordinator`**. Slaves intentionally cannot run `play_media` / announce (would unjoin the group on device).                                        |
+| Action / `tts.speak` fails or group breaks after TTS                    | Often targeting a **slave** with announce         | Use the **master** `media_player` or **`media_player.*_group_coordinator`** for group-wide TTS; see [ADR 0005](adr/0005-slave-supported-features.md).                                                            |
 | `Playing notification via device firmware: http://...` but **no sound** | WiiM cannot reach the URL or gets 401             | Internal URL must be the IP the WiiM can reach. Open that `http://...` URL in a browser on the same network; if it asks for login, the WiiM will get 401 (see “No audio even when the URL looks correct” below). |
 
 ### 3. Check the entity and payload

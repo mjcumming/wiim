@@ -5,15 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 
-def subwoofer_plugged(status: Any) -> bool:
-    """Return True if a subwoofer is physically connected."""
-    if status is None:
-        return False
-    if isinstance(status, dict):
-        return bool(status.get("plugged"))
-    return bool(getattr(status, "plugged", False))
-
-
 def subwoofer_enabled_from_status(status: Any) -> bool | None:
     """Return whether subwoofer output is enabled (None if unknown)."""
     if status is None:

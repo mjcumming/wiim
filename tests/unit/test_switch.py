@@ -1,7 +1,7 @@
 """Unit tests for WiiM Switch Entity - testing subwoofer control."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
@@ -35,7 +35,11 @@ def mock_coordinator():
     coordinator.player = MagicMock()
     coordinator.player.name = "Test WiiM"
     coordinator.player.host = "192.168.1.100"
-    coordinator.player.supports_trigger_out = False  # 12V trigger (pywiim 2.1.89+) - disable for subwoofer-only tests
+    coordinator.player.client = MagicMock()
+    coordinator.player.client.capabilities = {
+        "supports_trigger_out": False,
+        "supports_display_config": False,
+    }
     coordinator.player.supports_subwoofer = True
     coordinator.player.subwoofer_status = {"plugged": True, "status": True, "level": 0}
     coordinator.player.get_subwoofer_status = AsyncMock(return_value={"plugged": True, "status": True, "level": 0})
@@ -69,16 +73,18 @@ class TestSubwooferSwitchSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
-        # With supports_trigger_out=False we get only subwoofer; with True we'd get trigger + subwoofer
+        # With supports_trigger_out false in client.capabilities we get only subwoofer
         assert len(entities) >= 1
         subwoofer_entities = [e for e in entities if isinstance(e, WiiMSubwooferSwitch)]
         assert len(subwoofer_entities) == 1
 
     @pytest.mark.asyncio
-    async def test_setup_skips_entity_when_no_subwoofer(self, mock_hass, mock_config_entry, mock_coordinator):
-        """Test setup skips entity when no subwoofer connected."""
+    async def test_setup_creates_entity_when_supported_even_if_unplugged(
+        self, mock_hass, mock_config_entry, mock_coordinator
+    ):
+        """supports_subwoofer gates entity creation; physical plug state does not."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
-        mock_coordinator.player.supports_trigger_out = False
+        mock_coordinator.player.client.capabilities["supports_trigger_out"] = False
         mock_coordinator.player.supports_subwoofer = True
         mock_coordinator.player.subwoofer_status = {"plugged": False, "status": False}
 
@@ -90,13 +96,13 @@ class TestSubwooferSwitchSetup:
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
         subwoofer_entities = [e for e in entities if isinstance(e, WiiMSubwooferSwitch)]
-        assert len(subwoofer_entities) == 0
+        assert len(subwoofer_entities) == 1
 
     @pytest.mark.asyncio
     async def test_setup_skips_entity_when_not_supported(self, mock_hass, mock_config_entry, mock_coordinator):
         """Test setup skips entity when device doesn't support subwoofer."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
-        mock_coordinator.player.supports_trigger_out = False
+        mock_coordinator.player.client.capabilities["supports_trigger_out"] = False
         mock_coordinator.player.supports_subwoofer = False
 
         entities = []
@@ -233,7 +239,7 @@ class TestTriggerOutSwitchSetup:
     async def test_setup_creates_entity_when_trigger_supported(self, mock_hass, mock_config_entry, mock_coordinator):
         """Test setup creates 12V trigger entity when device supports it."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
-        mock_coordinator.player.supports_trigger_out = True
+        mock_coordinator.player.client.capabilities["supports_trigger_out"] = True
         mock_coordinator.player.supports_subwoofer = False
         mock_coordinator.player.subwoofer_status = {}
         mock_coordinator.player.get_trigger_out_status = AsyncMock(return_value=False)
@@ -253,7 +259,7 @@ class TestTriggerOutSwitchSetup:
     async def test_setup_skips_trigger_when_not_supported(self, mock_hass, mock_config_entry, mock_coordinator):
         """Test setup skips 12V trigger when device does not support it."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
-        mock_coordinator.player.supports_trigger_out = False
+        mock_coordinator.player.client.capabilities["supports_trigger_out"] = False
         mock_coordinator.player.supports_subwoofer = False
 
         entities = []
@@ -268,21 +274,17 @@ class TestTriggerOutSwitchSetup:
 
     @pytest.mark.asyncio
     async def test_setup_handles_trigger_check_exception(self, mock_hass, mock_config_entry, mock_coordinator):
-        """Test setup skips 12V trigger when checking support raises."""
+        """Test setup skips 12V trigger when client/capabilities are unavailable."""
         mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
         mock_coordinator.player.supports_subwoofer = False
-
-        def getattr_raise(obj, name, default=None):
-            if name == "supports_trigger_out":
-                raise RuntimeError("probe error")
-            return default
+        mock_coordinator.player.client = None
 
         entities = []
+
         def mock_add_entities(new_entities):
             entities.extend(new_entities)
 
-        with patch("custom_components.wiim.switch.getattr", side_effect=getattr_raise):
-            await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
+        await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
         trigger_entities = [e for e in entities if isinstance(e, WiiMTriggerOutSwitch)]
         assert len(trigger_entities) == 0
@@ -294,7 +296,7 @@ class TestTriggerOutSwitchBasic:
     @pytest.fixture
     def trigger_coordinator(self, mock_coordinator):
         """Coordinator with 12V trigger support."""
-        mock_coordinator.player.supports_trigger_out = True
+        mock_coordinator.player.client.capabilities["supports_trigger_out"] = True
         mock_coordinator.player.get_trigger_out_status = AsyncMock(return_value=True)
         mock_coordinator.player.set_trigger_out = AsyncMock()
         return mock_coordinator
@@ -322,7 +324,7 @@ class TestTriggerOutSwitchControl:
     @pytest.fixture
     def trigger_coordinator(self, mock_coordinator):
         """Coordinator with 12V trigger support."""
-        mock_coordinator.player.supports_trigger_out = True
+        mock_coordinator.player.client.capabilities["supports_trigger_out"] = True
         mock_coordinator.player.get_trigger_out_status = AsyncMock(return_value=False)
         mock_coordinator.player.set_trigger_out = AsyncMock()
         return mock_coordinator

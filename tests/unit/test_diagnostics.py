@@ -101,7 +101,6 @@ def mock_player():
     player.supports_alarms = True
     player.supports_sleep_timer = True
     player.supports_led_control = True
-    player.supports_firmware_install = True
     player.supports_enhanced_grouping = False
     player.supports_next_track = True
     player.supports_metadata = True
@@ -118,6 +117,13 @@ def mock_player():
 
     # UPnP
     player._upnp_client = None
+
+    player.client = MagicMock()
+    player.client.capabilities = {
+        "supports_firmware_install": True,
+        "supports_trigger_out": False,
+        "supports_display_config": False,
+    }
 
     return player
 

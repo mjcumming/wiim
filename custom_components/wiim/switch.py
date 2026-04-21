@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
-from .subwoofer_helpers import subwoofer_enabled_from_status, subwoofer_plugged
+from .subwoofer_helpers import subwoofer_enabled_from_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,26 +32,21 @@ async def async_setup_entry(
 
     entities: list[SwitchEntity] = []
 
-    # 12V trigger output (WiiM Ultra / Pro / Pro Plus) - pywiim 2.1.89+
+    # 12V trigger output — ``client.capabilities["supports_trigger_out"]`` (pywiim detection).
     try:
-        if getattr(player, "supports_trigger_out", False):
+        if player.client and bool(player.client.capabilities.get("supports_trigger_out")):
             entities.append(WiiMTriggerOutSwitch(coordinator, config_entry))
             _LOGGER.debug("Creating 12V trigger switch entity")
     except Exception as err:
         _LOGGER.debug("Skipping 12V trigger switch entity - error checking support: %s", err)
 
-    # Check if device supports subwoofer control (WiiM Ultra with firmware 5.2+)
+    # Subwoofer: pywiim capability only (supports_subwoofer); no integration-side probing.
     try:
         if player.supports_subwoofer:
-            # Check if subwoofer is actually connected via status
-            status = player.subwoofer_status
-            if status and subwoofer_plugged(status):
-                entities.append(WiiMSubwooferSwitch(coordinator, config_entry))
-                _LOGGER.debug("Creating subwoofer switch entity - subwoofer connected")
-            else:
-                _LOGGER.debug("Skipping subwoofer switch entity - no subwoofer connected")
+            entities.append(WiiMSubwooferSwitch(coordinator, config_entry))
+            _LOGGER.debug("Creating subwoofer switch entity (supports_subwoofer)")
         else:
-            _LOGGER.debug("Skipping subwoofer switch entity - device does not support subwoofer")
+            _LOGGER.debug("Skipping subwoofer switch entity - supports_subwoofer false")
     except Exception as err:
         _LOGGER.debug("Skipping subwoofer switch entity - error checking support: %s", err)
 
@@ -162,7 +157,11 @@ class WiiMSubwooferSwitch(WiimEntity, SwitchEntity):
     @property
     def available(self) -> bool:
         """Return entity availability."""
-        return self.coordinator.last_update_success and self._is_on is not None
+        return (
+            self.coordinator.last_update_success
+            and self.coordinator.player.supports_subwoofer
+            and self._is_on is not None
+        )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable subwoofer output."""
