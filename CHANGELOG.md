@@ -2,9 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.78] - 2026-04-24
+
+### Changed
+
+- Release version 1.0.78
+- **Dependency**: `pywiim` **2.2.3** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`).
+
 ### Fixed
 
-- **CI / dev dependencies** — `requirements_dev.txt` now pins **`pywiim==2.2.2`**, matching `manifest.json` and `pywiim-version.txt` (GitHub Actions was installing 2.2.1, so `async_setup_entry` failed the version gate and broke `test_services` / capability-cache setup tests).
+- **Qobuz Connect playback state and timeline** ([Issue #222](https://github.com/mjcumming/wiim/issues/222)) — Home Assistant now reflects playing state, position, and duration when using Qobuz Connect, via upstream pywiim 2.2.3 (HTTP `status` / mode handling and HTTP vs UPnP merge for this source).
 
 ## [1.0.77] - 2026-04-20
 
