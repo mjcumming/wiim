@@ -13,7 +13,7 @@ pytest-homeassistant-custom-component==0.13.251
 
 # Test utilities
 aresponses>=2.1.6
-freezegun>=1.2.2
+freezegun>=1.5.5
 zeroconf
 
 # Code quality
