@@ -1,5 +1,9 @@
 name: CI
 
+# Branch ruleset "Main branch protection" requires status check: Run tests
+# Keep the tests job name stable; avoid a single-entry matrix or the check
+# becomes "Run tests (3.N)" and GitHub branch protection must be updated.
+
 on:
   push:
     branches: [main]
@@ -14,9 +18,6 @@ jobs:
     name: Run tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      matrix:
-        python-version: ["3.13"]
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v5
@@ -25,10 +26,10 @@ jobs:
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ env.DEFAULT_PYTHON }}
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.DEFAULT_PYTHON }}
 
       - name: Install dependencies
         run: |
