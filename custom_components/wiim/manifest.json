@@ -14,7 +14,7 @@
   "issue_tracker": "https://github.com/mjcumming/wiim/issues",
   "quality_scale": "gold",
   "requirements": [
-    "pywiim==2.2.3"
+    "pywiim==2.2.4"
   ],
   "ssdp": [
     {
@@ -22,7 +22,7 @@
       "st": "urn:schemas-upnp-org:device:MediaRenderer:1"
     }
   ],
-  "version": "1.0.78",
+  "version": "1.0.79",
   "zeroconf": [
     {
       "type": "_linkplay._tcp.local."

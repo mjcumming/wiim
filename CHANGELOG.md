@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.79] - 2026-05-11
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.4** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). Upstream adds `loop_mode_scheme` in capabilities, fixes status LED and WiiM Ultra shuffle/repeat mapping, and tightens 12V trigger capability detection; see [pywiim CHANGELOG](https://github.com/mjcumming/pywiim/blob/main/CHANGELOG.md).
+
 ## [1.0.78] - 2026-04-24
 
 ### Changed
