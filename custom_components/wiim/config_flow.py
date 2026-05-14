@@ -338,8 +338,8 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show confirmation form only after onboarding is complete
         # Set title placeholders here where the UI actually processes them
         self.context["title_placeholders"] = {"name": self.data["name"]}
-        _LOGGER.info(
-            "🔍 DISCOVERY CONFIRM set title_placeholders: %s",
+        _LOGGER.debug(
+            "DISCOVERY CONFIRM set title_placeholders: %s",
             {"name": self.data["name"]},
         )
 
@@ -386,7 +386,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not slave_hosts:
                 return
 
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Master device at %s has %d slave(s), triggering discovery for them",
                 host,
                 len(slave_hosts),
@@ -406,7 +406,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.debug("Slave %s already configured, skipping", slave_ip)
                     continue
 
-                _LOGGER.info("Triggering discovery for slave: %s", slave_ip)
+                _LOGGER.debug("Triggering discovery for slave: %s", slave_ip)
 
                 # Trigger integration discovery for this slave
                 # Note: We only have IP, UUID/name will be fetched during validation
@@ -466,7 +466,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 device_uuid,
                             )
                         else:
-                            _LOGGER.info(
+                            _LOGGER.debug(
                                 "Migrating legacy IP-based unique_id from %s to %s",
                                 reconfigure_entry.unique_id,
                                 device_uuid,

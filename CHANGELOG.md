@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.80] - 2026-05-14
+
+### Changed
+
+- **Logging** — Routine setup, platform registration, coordinator polling for unreachable devices, discovery flow, group volume/mute connection blips, cover art misses, and similar paths now use **DEBUG** (or a single concise **INFO** per successful device setup). **INFO** remains for outcomes operators care about (for example **WiiM ready**, host rebind, firmware install started, reboot sent, pywiim version mismatch). Use **`logger: custom_components.wiim: debug`** when troubleshooting.
+
 ## [1.0.79] - 2026-05-11
 
 ### Changed

@@ -223,6 +223,17 @@ class TestWiiMGroupMediaPlayerVolume:
         with pytest.raises(HomeAssistantError, match="Failed to set group volume"):
             await entity.async_set_volume_level(0.75)
 
+    async def test_set_volume_level_connection_error_is_transient_message(
+        self, mock_group_master_setup, mock_master_player
+    ):
+        """Connection errors map to a user-facing transient message (logged at DEBUG)."""
+        mock_master_player.group.set_volume_all = AsyncMock(side_effect=WiiMConnectionError("offline"))
+
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        with pytest.raises(HomeAssistantError, match="temporarily unreachable"):
+            await entity.async_set_volume_level(0.75)
+
 
 class TestWiiMGroupMediaPlayerMute:
     """Test group mute functionality."""
@@ -264,6 +275,17 @@ class TestWiiMGroupMediaPlayerMute:
 
         mock_master_player.group.mute_all.assert_called_once_with(False)
         # No manual refresh - pywiim manages state updates via callbacks
+
+    async def test_mute_volume_connection_error_is_transient_message(
+        self, mock_group_master_setup, mock_master_player
+    ):
+        """Mute connection errors map to a user-facing transient message (logged at DEBUG)."""
+        mock_master_player.group.mute_all = AsyncMock(side_effect=WiiMTimeoutError("timeout"))
+
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        with pytest.raises(HomeAssistantError, match="temporarily unreachable"):
+            await entity.async_mute_volume(True)
 
 
 class TestWiiMGroupMediaPlayerPlayback:

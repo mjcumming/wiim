@@ -175,7 +175,6 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
             raise HomeAssistantError("Firmware installation already in progress.")
 
         try:
-            _LOGGER.info("Starting firmware installation for %s", device_name)
             await self.player.install_firmware_update()
             _LOGGER.info("Firmware installation started for %s", device_name)
         except Exception as err:  # noqa: BLE001

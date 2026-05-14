@@ -284,8 +284,8 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
-                # Connection/timeout errors are transient - log at warning level
-                _LOGGER.warning(
+                # Connection/timeout errors are transient during polling or user actions
+                _LOGGER.debug(
                     "Connection issue setting group volume on %s: %s. The device may be temporarily unreachable.",
                     self.name,
                     err,
@@ -314,8 +314,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             # State updates automatically via callback - no manual refresh needed
         except WiiMError as err:
             if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
-                # Connection/timeout errors are transient - log at warning level
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Connection issue setting group mute on %s: %s. The device may be temporarily unreachable.",
                     self.name,
                     err,

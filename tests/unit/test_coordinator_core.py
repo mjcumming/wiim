@@ -1,5 +1,6 @@
 """Core coordinator tests for WiiM - testing pywiim integration."""
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
@@ -164,6 +165,43 @@ class TestWiiMCoordinator:
         # Should raise UpdateFailed when no cache available
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_unreachable_wiim_error_logs_debug(
+        self, coordinator, mock_player, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Expected unreachable poll failures stay at DEBUG to avoid log spam."""
+
+        coordinator.data = {"player": mock_player}
+        mock_player.refresh.side_effect = WiiMError(
+            "Device unreachable at 192.168.1.100. Connection failed on all attempted protocols."
+        )
+        caplog.set_level(logging.DEBUG, logger="custom_components.wiim.coordinator")
+
+        await coordinator._async_update_data()
+
+        assert any(
+            r.levelno == logging.DEBUG and "Update failed" in r.getMessage() for r in caplog.records
+        ), caplog.records
+        assert not any(
+            r.levelno == logging.WARNING and "Update failed" in r.getMessage() for r in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_other_wiim_error_logs_warning(
+        self, coordinator, mock_player, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Non-connectivity WiiM errors remain visible at WARNING."""
+
+        coordinator.data = {"player": mock_player}
+        mock_player.refresh.side_effect = WiiMError("API returned malformed response")
+        caplog.set_level(logging.WARNING, logger="custom_components.wiim.coordinator")
+
+        await coordinator._async_update_data()
+
+        assert any(
+            r.levelno == logging.WARNING and "Update failed" in r.getMessage() for r in caplog.records
+        )
 
     @pytest.mark.asyncio
     async def test_async_update_data_adaptive_polling(self, coordinator, mock_player):

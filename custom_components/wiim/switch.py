@@ -52,7 +52,7 @@ async def async_setup_entry(
 
     async_add_entities(entities)
     device_name = player.name or config_entry.title or "WiiM Speaker"
-    _LOGGER.info("Created %d switch entities for %s", len(entities), device_name)
+    _LOGGER.debug("Created %d switch entities for %s", len(entities), device_name)
 
 
 class WiiMTriggerOutSwitch(WiimEntity, SwitchEntity):

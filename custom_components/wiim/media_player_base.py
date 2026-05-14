@@ -347,7 +347,7 @@ class WiiMMediaPlayerMixin:
         except AttributeError as e:
             _LOGGER.error("fetch_cover_art() method exists but raised AttributeError - possible pywiim issue: %s", e)
         except WiiMError as e:
-            _LOGGER.warning("WiiM error fetching cover art (may be normal if no cover art available): %s", e)
+            _LOGGER.debug("WiiM error fetching cover art (may be normal if no cover art available): %s", e)
         except Exception as e:
             _LOGGER.error("Unexpected error fetching cover art: %s", e, exc_info=True)
 

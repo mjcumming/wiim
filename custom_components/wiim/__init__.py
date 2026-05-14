@@ -178,7 +178,7 @@ def get_enabled_platforms(
             platforms.append(platform)
             _LOGGER.debug("Enabling platform %s based on option %s", platform, config_key)
 
-    _LOGGER.info(
+    _LOGGER.debug(
         "Enabled platforms for %s: %s",
         entry.title or entry.data.get("host", entry.entry_id),
         [p.value for p in platforms],
@@ -239,20 +239,22 @@ async def _register_ha_device(hass: HomeAssistant, coordinator: WiiMCoordinator,
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the WiiM integration domain."""
-    _LOGGER.info("WiiM integration async_setup called")
+    _LOGGER.debug("WiiM integration async_setup called")
     # Initialize domain data structure
     hass.data.setdefault(DOMAIN, {})
 
     # Services are now registered via EntityServiceDescription pattern in media_player.py
     # No need to register here - services are registered when entities are added
 
-    _LOGGER.info("WiiM integration async_setup completed")
+    _LOGGER.debug("WiiM integration async_setup completed")
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
-    _LOGGER.info("WiiM async_setup_entry called for entry: %s (host: %s)", entry.entry_id, entry.data.get("host"))
+    _LOGGER.debug(
+        "WiiM async_setup_entry called for entry: %s (host: %s)", entry.entry_id, entry.data.get("host")
+    )
 
     # Initialize domain data structure
     if DOMAIN not in hass.data:
@@ -330,7 +332,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     else:
         if cached_capabilities and not versions_match:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Capability cache invalidated for %s: pywiim %s->%s",
                 entry.data["host"],
                 cached_pywiim_version or "unknown",
@@ -363,7 +365,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 capabilities = detected or {}
 
             elapsed = time.monotonic() - start_time
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Detected device capabilities for %s in %.2fs: %s",
                 entry.data["host"],
                 elapsed,
@@ -385,25 +387,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     },
                 )
 
-            # Log audio output capability specifically for debugging
+            # Log audio output / EQ capability for troubleshooting (default log stays quiet)
             if capabilities.get("supports_audio_output"):
-                _LOGGER.info(
+                _LOGGER.debug(
                     "[AUDIO OUTPUT] Device %s supports audio output control",
                     entry.data["host"],
                 )
             else:
-                _LOGGER.info(
+                _LOGGER.debug(
                     "[AUDIO OUTPUT] Device %s does not support audio output control",
                     entry.data["host"],
                 )
-            # Log EQ capability specifically for debugging
             if capabilities.get("supports_eq"):
-                _LOGGER.info(
+                _LOGGER.debug(
                     "[EQ] Device %s supports EQ (detected by pywiim capability detection)",
                     entry.data["host"],
                 )
             else:
-                _LOGGER.info(
+                _LOGGER.debug(
                     "[EQ] Device %s - EQ support NOT detected by pywiim capability detection. Full capabilities: %s",
                     entry.data["host"],
                     capabilities,
@@ -452,16 +453,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Listen for config entry updates (e.g. options flow) so we can reload
     entry.async_on_unload(entry.add_update_listener(_update_listener))
 
-    _LOGGER.info(
+    _LOGGER.debug(
         "WiiM coordinator created for %s with adaptive polling (1s when playing, 5s when idle)",
         entry.data["host"],
     )
 
     # Initial data fetch with proper error handling
     try:
-        _LOGGER.info("Starting initial data fetch for %s", entry.data["host"])
+        _LOGGER.debug("Starting initial data fetch for %s", entry.data["host"])
         await coordinator.async_config_entry_first_refresh()
-        _LOGGER.info("Initial data fetch completed for %s", entry.data["host"])
+        _LOGGER.debug("Initial data fetch completed for %s", entry.data["host"])
 
         # Cached capabilities skip client-side detection on construction; merge any
         # new capability keys from the current pywiim (e.g. supports_subwoofer) once
@@ -505,7 +506,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         runtime_firmware = getattr(coordinator.player, "firmware", None)
         cached_cap_firmware = pre_detection_cap_firmware
         if runtime_firmware and cached_cap_firmware and runtime_firmware != cached_cap_firmware:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Capability cache invalidated for %s due to firmware change: %s -> %s",
                 entry.data["host"],
                 cached_cap_firmware,
@@ -534,7 +535,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             },
                         },
                     )
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "Refreshed capabilities after firmware change for %s",
                         entry.data["host"],
                     )
@@ -555,7 +556,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not cached_endpoint:
             discovered_endpoint = coordinator.player.client.discovered_endpoint
             if discovered_endpoint:
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Caching discovered endpoint for %s: %s",
                     entry.data["host"],
                     discovered_endpoint,
@@ -573,18 +574,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             host = entry.data.get("host", "")
             is_generic_title = entry.title.startswith("WiiM Device") or entry.title == host
             if is_generic_title:
-                _LOGGER.info(
-                    "Updating config entry title from '%s' to '%s'",
-                    entry.title,
-                    player_name,
-                )
+                _LOGGER.debug("Updating config entry title to '%s'", player_name)
                 hass.config_entries.async_update_entry(entry, title=player_name)
 
         # Register device in HA registry now that we have fresh coordinator data
-        _LOGGER.info("Registering device for %s", entry.data["host"])
+        _LOGGER.debug("Registering device for %s", entry.data["host"])
         try:
             await _register_ha_device(hass, coordinator, entry)
-            _LOGGER.info("Device registration completed for %s", entry.data["host"])
+            _LOGGER.debug("Device registration completed for %s", entry.data["host"])
         except Exception as setup_err:  # noqa: BLE001
             _LOGGER.error(
                 "Device registration failed for %s: %s",
@@ -597,7 +594,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Reset retry count on successful setup
         if hasattr(entry, "_setup_retry_count") and entry._setup_retry_count > 0:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Setup succeeded for %s after %d retries",
                 entry.data["host"],
                 entry._setup_retry_count,
@@ -730,7 +727,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, enabled_platforms)
 
     device_name = coordinator.player.name or entry.title or "WiiM Speaker"
-    _LOGGER.info(
+    _LOGGER.info("WiiM ready: %s", device_name)
+    _LOGGER.debug(
         "WiiM integration setup complete for %s (UUID: %s) with %d platforms",
         device_name,
         entry.unique_id or "unknown",
@@ -749,7 +747,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = entry_data.get("coordinator")
         if coordinator:
             device_name = coordinator.player.name or entry.title or "WiiM Speaker"
-            _LOGGER.info("Unloaded WiiM integration for %s", device_name)
+            _LOGGER.debug("Unloaded WiiM integration for %s", device_name)
     return unload_ok
 
 

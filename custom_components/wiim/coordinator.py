@@ -124,7 +124,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if getattr(p, "uuid", None) == host_or_uuid:
                     return p
             except Exception as err:
-                _LOGGER.warning("Error in player_finder for %s: %s", host_or_uuid, _compact_wiim_error(err))
+                _LOGGER.debug("Error in player_finder for %s: %s", host_or_uuid, _compact_wiim_error(err))
         return None
 
     def _all_players_finder(self) -> list[Player]:
@@ -140,7 +140,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 players.append(c.player)
             except Exception as err:
-                _LOGGER.warning("Error in all_players_finder: %s", _compact_wiim_error(err))
+                _LOGGER.debug("Error in all_players_finder: %s", _compact_wiim_error(err))
         return players
 
     @callback
@@ -193,7 +193,10 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return result
 
         except WiiMError as err:
-            _LOGGER.warning("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
+            if _is_expected_unreachable_error(err):
+                _LOGGER.debug("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
+            else:
+                _LOGGER.warning("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
             # Return cached Player object even on error
             if self.data:
                 return self.data

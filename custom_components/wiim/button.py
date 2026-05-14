@@ -45,7 +45,7 @@ async def async_setup_entry(
 
     async_add_entities(entities)
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
-    _LOGGER.info("Created %d button entities for %s", len(entities), device_name)
+    _LOGGER.debug("Created %d button entities for %s", len(entities), device_name)
 
 
 class WiiMRebootButton(WiimEntity, ButtonEntity):
@@ -73,15 +73,15 @@ class WiiMRebootButton(WiimEntity, ButtonEntity):
         """
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         try:
-            _LOGGER.info("Initiating reboot for %s", device_name)
+            _LOGGER.info("Reboot sent to %s", device_name)
             await self.coordinator.player.reboot()
-            _LOGGER.info("Reboot command sent successfully to %s", device_name)
+            _LOGGER.debug("Reboot command completed for %s", device_name)
             # State updates automatically via callback - no manual refresh needed
 
         except Exception as err:
             # Reboot commands often don't return proper responses
             # Log the attempt but don't fail the button press
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Reboot command sent to %s (device may not respond): %s",
                 device_name,
                 err,
@@ -114,6 +114,6 @@ class WiiMSyncTimeButton(WiimEntity, ButtonEntity):
         ensuring accurate timestamps for media metadata and logs.
         """
         async with self.wiim_command("sync time"):
-            _LOGGER.info("Synchronizing time for %s", self.name)
+            _LOGGER.debug("Synchronizing time for %s", self.name)
             await self.coordinator.player.sync_time()
             # State updates automatically via callback - no manual refresh needed

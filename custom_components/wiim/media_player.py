@@ -408,7 +408,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         player = self._get_player()
         if player.available_sources:
             return [str(s) for s in player.available_sources]
-        _LOGGER.warning(
+        _LOGGER.debug(
             "[%s] source_list: No sources available - available_sources=%s", self.name, player.available_sources
         )
         return []
@@ -431,7 +431,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             # context but are not directly selectable via switchmode. Scene
             # restoration may still try to re-apply them; treat as a no-op
             # instead of hard-failing the entire scene restore.
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "[%s] Skipping source selection for non-selectable source '%s'. Available sources: %s",
                 self.name,
                 source,
@@ -576,7 +576,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             async with self.wiim_command("play notification"):
                 result = await self.coordinator.player.play_notification(play_url)
             if result.likely_interrupted:
-                _LOGGER.info(
+                _LOGGER.debug(
                     "[%s] Announcement played via %s (source was '%s'). Original media was likely interrupted%s.",
                     self.name,
                     result.method_used,
@@ -795,7 +795,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             if master_entity_id and master_entity_id not in members:
                 members.append(master_entity_id)
             elif not master_entity_id:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "[%s] Failed to resolve master entity ID. Master name: %s, Master UUID: %s, Master host: %s",
                     self.name,
                     getattr(group.master, "name", None),
@@ -1247,11 +1247,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         try:
             await self.coordinator.player.reboot()
-            _LOGGER.info("Reboot command sent to %s", device_name)
+            _LOGGER.info("Reboot sent to %s", device_name)
         except Exception as err:
             # Restart: command sent; device may reboot before responding.
             # Treat no response / connection closed / timeout as success (issue #179).
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Reboot command sent to %s (device may not respond): %s",
                 device_name,
                 err,
@@ -1261,7 +1261,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Synchronize device time with Home Assistant (pywiim v2.1.37+)."""
         async with self.wiim_command("sync time"):
             await self.coordinator.player.sync_time()
-            _LOGGER.info("Time sync command sent to %s", self.name)
+            _LOGGER.debug("Time sync command sent to %s", self.name)
 
     # ===== UNOFFICIAL API ACTIONS =====
 
@@ -1276,7 +1276,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         try:
             async with self.wiim_command("scan for Bluetooth devices"):
                 await self.coordinator.player.scan_for_bluetooth_devices(duration=duration)
-                _LOGGER.info("Bluetooth scan started on %s (duration: %ds)", self.name, duration)
+                _LOGGER.debug("Bluetooth scan started on %s (duration: %ds)", self.name, duration)
         except AttributeError as exc:
             raise HomeAssistantError(
                 "Bluetooth scanning not available. This may require a newer version of pywiim."

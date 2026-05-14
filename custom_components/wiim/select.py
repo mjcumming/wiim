@@ -41,7 +41,7 @@ async def async_setup_entry(
 
     async_add_entities(entities)
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
-    _LOGGER.info(
+    _LOGGER.debug(
         "Created %d select entities for %s",
         len(entities),
         device_name,

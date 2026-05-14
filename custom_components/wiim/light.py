@@ -34,7 +34,7 @@ async def async_setup_entry(
 
     async_add_entities(entities)
     device_name = player.name or config_entry.title or "WiiM Speaker"
-    _LOGGER.info(
+    _LOGGER.debug(
         "Created light entities for %s: LED%s",
         device_name,
         " + Display" if len(entities) > 1 else "",
