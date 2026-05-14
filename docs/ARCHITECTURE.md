@@ -121,6 +121,31 @@ For **what this integration is for**, **how we collaborate**, **contracts** (cha
   - Provide data to entities
 - **DO NOT**: Implement polling logic (pywiim handles this)
 
+### Polling Contract
+
+The integration has two polling classes:
+
+1. **Fast polling** for playback-critical state.
+   - Owned by `WiiMCoordinator` + `pywiim.PollingStrategy`.
+   - Covers play state, position-ish state, source/track metadata, volume, and mute.
+   - Expected cadence is seconds-scale: fast while active, slower while idle.
+
+2. **Slow polling** for configuration and hardware settings.
+   - Owned by pywiim/player refresh logic or an explicit throttled integration owner.
+   - Covers EQ presets/status, audio output mode, presets, Bluetooth history, subwoofer status, channel balance, 12V trigger state, and similar slow-moving state.
+   - HA entities should read cached `Player` properties during `_handle_coordinator_update`; they should not perform direct HTTP reads on every listener update.
+
+EQ already follows the desired pattern: pywiim refresh owns the slow reads, and HA reads cached `player.eq_preset` / `player.eq_presets`. Leave that path unchanged unless pywiim's contract changes.
+
+#### Follow-up: issue #239 polling cleanup
+
+- Keep the 1-5 second coordinator polling policy unchanged for now.
+- Change subwoofer switch/number coordinator updates to read cached `player.subwoofer_status` instead of calling `get_subwoofer_status()` on each listener wave.
+- Change 12V trigger switch coordinator updates to read cached `player.trigger_out_on`; add a single slow/throttled owner if freshness is needed.
+- Make channel balance coordinator updates cache-first only; direct reads should happen on startup, explicit user action, or slow/throttled refresh.
+- Avoid duplicate listener waves from coordinator refreshes; a timed refresh should normally produce one HA entity update pass.
+- Add tests proving entity `_handle_coordinator_update()` does not call slow HTTP getters.
+
 #### `data.py`
 
 - **Purpose**: Minimal Speaker wrapper

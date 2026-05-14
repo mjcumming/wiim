@@ -283,6 +283,18 @@ class TestSubwooferLevelControl:
         # Should not crash and should not change value on error
         assert entity._value == 3.0
 
+    def test_handle_coordinator_update_reads_cache_without_fetch(self, mock_coordinator, mock_config_entry):
+        """Coordinator updates use cached subwoofer status without HTTP fetch."""
+        mock_coordinator.player.subwoofer_status = {"plugged": True, "status": True, "level": -4}
+        mock_coordinator.player.get_subwoofer_status = AsyncMock()
+        entity = WiiMSubwooferLevelNumber(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+
+        entity._handle_coordinator_update()
+
+        assert entity.native_value == -4.0
+        mock_coordinator.player.get_subwoofer_status.assert_not_called()
+
 
 class TestNumberPlatformConstants:
     """Test number platform constants and configuration."""
@@ -363,27 +375,18 @@ class TestChannelBalanceControl:
         assert entity.native_value == -0.3
         entity.hass.async_create_task.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_handle_coordinator_update_schedules_refresh_when_no_cache(
+    def test_handle_coordinator_update_no_fetch_when_no_cache(
         self, mock_coordinator, mock_config_entry
     ):
-        """When cache is empty, schedule async refresh."""
+        """When cache is empty, coordinator updates do not fetch slow state."""
         mock_coordinator.player.channel_balance = None
-        mock_coordinator.player.get_channel_balance = AsyncMock(return_value=0.1)
+        mock_coordinator.player.get_channel_balance = AsyncMock()
         entity = WiiMChannelBalanceNumber(mock_coordinator, mock_config_entry)
         entity.hass = MagicMock()
         entity.async_write_ha_state = MagicMock()
 
-        scheduled: list = []
-
-        def capture_task(coro):
-            scheduled.append(coro)
-
-        entity.hass.async_create_task = capture_task
-
         entity._handle_coordinator_update()
 
-        assert len(scheduled) == 1
-        await scheduled[0]
-
-        assert entity.native_value == 0.1
+        assert entity.native_value is None
+        entity.hass.async_create_task.assert_not_called()
+        mock_coordinator.player.get_channel_balance.assert_not_called()

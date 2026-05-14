@@ -42,6 +42,7 @@ def mock_coordinator():
     }
     coordinator.player.supports_subwoofer = True
     coordinator.player.subwoofer_status = {"plugged": True, "status": True, "level": 0}
+    coordinator.player.trigger_out_on = None
     coordinator.player.get_subwoofer_status = AsyncMock(return_value={"plugged": True, "status": True, "level": 0})
     coordinator.player.set_subwoofer_enabled = AsyncMock()
     return coordinator
@@ -226,6 +227,18 @@ class TestSubwooferSwitchControl:
         # Should not crash and should not change state on error
         assert entity._is_on is True
 
+    def test_handle_coordinator_update_reads_cache_without_fetch(self, mock_coordinator, mock_config_entry):
+        """Coordinator updates use cached subwoofer status without HTTP fetch."""
+        mock_coordinator.player.subwoofer_status = {"plugged": True, "status": False, "level": 0}
+        mock_coordinator.player.get_subwoofer_status = AsyncMock()
+        entity = WiiMSubwooferSwitch(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+
+        entity._handle_coordinator_update()
+
+        assert entity._is_on is False
+        mock_coordinator.player.get_subwoofer_status.assert_not_called()
+
 
 # =============================================================================
 # 12V trigger switch (WiiM Ultra / Pro / Pro Plus - pywiim 2.1.89+)
@@ -395,3 +408,16 @@ class TestTriggerOutSwitchControl:
         await entity._update_state()
 
         assert entity._is_on is True
+
+    def test_handle_coordinator_update_reads_cache_without_fetch(self, trigger_coordinator, mock_config_entry):
+        """Coordinator updates use cached trigger status without HTTP fetch."""
+        trigger_coordinator.player.trigger_out_on = False
+        trigger_coordinator.player.get_trigger_out_status = AsyncMock()
+        entity = WiiMTriggerOutSwitch(trigger_coordinator, mock_config_entry)
+        entity._is_on = True
+        entity.async_write_ha_state = MagicMock()
+
+        entity._handle_coordinator_update()
+
+        assert entity._is_on is False
+        trigger_coordinator.player.get_trigger_out_status.assert_not_called()

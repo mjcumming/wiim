@@ -137,6 +137,28 @@ class TestWiiMCoordinator:
         assert "metadata" not in data
 
     @pytest.mark.asyncio
+    async def test_refresh_callback_does_not_notify_listeners_twice(self, coordinator, mock_player):
+        """pywiim callbacks during coordinator refresh do not publish a second listener wave."""
+        coordinator.async_update_listeners = MagicMock()
+
+        async def refresh_with_callback():
+            coordinator._on_player_state_changed()
+
+        mock_player.refresh = AsyncMock(side_effect=refresh_with_callback)
+
+        await coordinator._async_update_data()
+
+        coordinator.async_update_listeners.assert_not_called()
+
+    def test_command_callback_notifies_listeners(self, coordinator):
+        """pywiim callbacks outside timed refresh still publish immediate updates."""
+        coordinator.async_update_listeners = MagicMock()
+
+        coordinator._on_player_state_changed()
+
+        coordinator.async_update_listeners.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_async_update_data_wiim_error_returns_cached(self, coordinator, mock_player):
         """Test that WiiMError returns cached data if available."""
         # Set initial data
@@ -614,4 +636,3 @@ class TestWiiMCoordinator:
             result = coordinator._all_players_finder()
 
         assert result == [mock_player]
-

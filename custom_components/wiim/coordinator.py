@@ -90,6 +90,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Use pywiim's PollingStrategy to determine when to poll
         self._polling_strategy = PollingStrategy(self._capabilities) if self._capabilities else PollingStrategy({})
+        self._refresh_in_progress = False
 
     def update_capabilities(self, capabilities: dict[str, Any]) -> None:
         """Apply a refreshed capabilities mapping (e.g. after firmware change).
@@ -158,7 +159,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.data = {"player": self.player}
 
         # Directly notify all entities to refresh their state from the player
-        # This bypasses DataUpdateCoordinator's throttling for immediate UI updates
+        # This bypasses DataUpdateCoordinator's throttling for immediate UI updates,
+        # except while the coordinator is already performing a timed refresh. In
+        # that case DataUpdateCoordinator publishes the completed refresh once.
+        if self._refresh_in_progress:
+            return
         self.async_update_listeners()
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -166,7 +171,11 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             # Call player.refresh() to poll device and update cached state
             # PollingStrategy determines WHEN to poll (adaptive intervals)
-            await self.player.refresh()
+            self._refresh_in_progress = True
+            try:
+                await self.player.refresh()
+            finally:
+                self._refresh_in_progress = False
 
             # Update polling interval using pywiim's PollingStrategy
             role = self.player.role
@@ -188,8 +197,6 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
             result = {"player": self.player}
-            # Notify listeners after successful update
-            self.async_update_listeners()
             return result
 
         except WiiMError as err:

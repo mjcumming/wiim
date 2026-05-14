@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.81] - 2026-05-14
+
+### Fixed
+
+- **WiiM Ultra subwoofer / 12V trigger polling** ([Issue #239](https://github.com/mjcumming/wiim/issues/239)) — Subwoofer switch, subwoofer level, 12V trigger, and channel balance entities now read cached pywiim state during coordinator listener updates instead of issuing slow HTTP status reads on every update wave. Initial setup and explicit user actions can still refresh/confirm state, while routine configuration-style polling remains owned by pywiim or a throttled owner. Coordinator refresh callbacks are also suppressed during timed refreshes so one poll produces one Home Assistant entity update pass.
+
 ## [1.0.80] - 2026-05-14
 
 ### Changed

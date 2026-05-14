@@ -87,6 +87,12 @@ class WiiMTriggerOutSwitch(WiimEntity, SwitchEntity):
         except Exception as err:
             _LOGGER.debug("Failed to get 12V trigger status: %s", err)
 
+    def _update_state_from_cache(self) -> None:
+        """Update state from pywiim's cached trigger status."""
+        status = getattr(self.coordinator.player, "trigger_out_on", None)
+        if status is not None:
+            self._is_on = bool(status)
+
     @property
     def is_on(self) -> bool | None:
         """Return True if 12V trigger output is on."""
@@ -113,7 +119,7 @@ class WiiMTriggerOutSwitch(WiimEntity, SwitchEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
-        self.hass.async_create_task(self._update_state())
+        self._update_state_from_cache()
         super()._handle_coordinator_update()
 
 
@@ -149,6 +155,12 @@ class WiiMSubwooferSwitch(WiimEntity, SwitchEntity):
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
 
+    def _update_state_from_cache(self) -> None:
+        """Update state from pywiim's cached subwoofer status."""
+        enabled = subwoofer_enabled_from_status(self.coordinator.player.subwoofer_status)
+        if enabled is not None:
+            self._is_on = bool(enabled)
+
     @property
     def is_on(self) -> bool | None:
         """Return True if subwoofer is enabled."""
@@ -181,6 +193,5 @@ class WiiMSubwooferSwitch(WiimEntity, SwitchEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
-        # Schedule state update (async operation)
-        self.hass.async_create_task(self._update_state())
+        self._update_state_from_cache()
         super()._handle_coordinator_update()

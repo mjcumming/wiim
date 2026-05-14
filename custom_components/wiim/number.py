@@ -95,6 +95,12 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
         except Exception as err:
             _LOGGER.debug("Failed to get subwoofer status: %s", err)
 
+    def _update_state_from_cache(self) -> None:
+        """Update state from pywiim's cached subwoofer status."""
+        level = subwoofer_level_from_status(self.coordinator.player.subwoofer_status)
+        if level is not None:
+            self._value = level
+
     @property
     def native_value(self) -> float | None:
         """Return the current subwoofer level."""
@@ -120,7 +126,7 @@ class WiiMSubwooferLevelNumber(WiimEntity, NumberEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from coordinator."""
-        self.hass.async_create_task(self._async_refresh_state())
+        self._update_state_from_cache()
         super()._handle_coordinator_update()
 
     async def _async_refresh_state(self) -> None:
@@ -199,7 +205,5 @@ class WiiMChannelBalanceNumber(WiimEntity, NumberEntity):
             try:
                 self._value = max(-1.0, min(1.0, float(cached)))
             except (TypeError, ValueError):
-                self.hass.async_create_task(self._async_refresh_state())
-        else:
-            self.hass.async_create_task(self._async_refresh_state())
+                _LOGGER.debug("Ignoring invalid cached channel balance: %s", cached)
         super()._handle_coordinator_update()
