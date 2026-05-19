@@ -35,6 +35,8 @@ def mock_coordinator():
     coordinator.async_request_refresh = AsyncMock()
     coordinator.player = MagicMock()
     coordinator.player.set_led = AsyncMock(return_value=True)
+    coordinator.player.get_led_indicator = AsyncMock(return_value=None)
+    coordinator.player.led_indicator_on = None
     coordinator.player.set_display_enabled = AsyncMock(return_value=True)
     coordinator.player.set_display_config = AsyncMock(return_value=True)
     return coordinator
@@ -86,12 +88,6 @@ class TestWiiMLEDLightBasic:
         mock_coordinator, mock_config_entry = mock_coordinator_setup
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         assert entity._attr_has_entity_name is True
-
-    def test_assumed_state(self, mock_coordinator_setup):
-        """Test assumed_state property."""
-        mock_coordinator, mock_config_entry = mock_coordinator_setup
-        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
-        assert entity._attr_assumed_state is True
 
     def test_available_mirrors_coordinator(self, mock_coordinator_setup):
         """Test availability mirrors coordinator last_update_success."""
@@ -179,6 +175,31 @@ class TestWiiMLEDLightTurnOnOff:
 
         with pytest.raises(Exception, match="LED error"):
             await entity.async_turn_off()
+
+    async def test_update_state_fetches_led_indicator(self, mock_coordinator_setup):
+        """Test _update_state reads get_led_indicator."""
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        mock_coordinator.player.get_led_indicator = AsyncMock(return_value=False)
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
+
+        await entity._update_state()
+
+        mock_coordinator.player.get_led_indicator.assert_called_once()
+        assert entity.is_on is False
+
+    def test_handle_coordinator_update_reads_cache_without_fetch(self, mock_coordinator_setup):
+        """Coordinator updates use cached LED status without HTTP fetch."""
+        mock_coordinator, mock_config_entry = mock_coordinator_setup
+        mock_coordinator.player.led_indicator_on = True
+        mock_coordinator.player.get_led_indicator = AsyncMock()
+        entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
+        entity._is_on = False
+        entity.async_write_ha_state = MagicMock()
+
+        entity._handle_coordinator_update()
+
+        assert entity.is_on is True
+        mock_coordinator.player.get_led_indicator.assert_not_called()
 
 
 # ----- WiiMDisplayLight -----

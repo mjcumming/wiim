@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.82] - 2026-05-19
+
+### Fixed
+
+- **12V trigger sync** ([Issue #240](https://github.com/mjcumming/wiim/issues/240)) — pywiim now polls and caches `player.trigger_out_on` on a configuration-tier interval, so the HA switch stays aligned when the trigger changes in WiiM Home or from playback automation.
+- **Status LED state** — The LED light entity reads cached `player.led_indicator_on` on coordinator updates (and fetches once at startup), matching pywiim’s corrected `LED_SWITCH_GET` read path instead of staying stuck “on”.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.5** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). Upstream adds slow polling for 12V trigger and status LED caches; fixes status LED read always reporting on; see [pywiim release v2.2.5](https://github.com/mjcumming/pywiim/releases/tag/v2.2.5).
+
 ## [1.0.81] - 2026-05-14
 
 ### Fixed
