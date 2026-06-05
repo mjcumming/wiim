@@ -14,14 +14,18 @@ from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant.components import onboarding
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import (
+    SOURCE_INTEGRATION_DISCOVERY,
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pywiim.discovery import DiscoveredDevice, discover_devices, validate_device
-
-from homeassistant import config_entries
 
 from .const import (
     CONF_ENABLE_MAINTENANCE_BUTTONS,
@@ -45,7 +49,7 @@ def _is_ip_literal(value: str | None) -> bool:
         return False
 
 
-class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle WiiM config flow."""
 
     VERSION = 1
@@ -58,7 +62,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        config_entry: ConfigEntry,
     ) -> WiiMOptionsFlow:
         """Return the options flow."""
         return WiiMOptionsFlow(config_entry)
@@ -352,7 +356,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders=description_placeholders,
         )
 
-    def is_matching(self, other_flow: config_entries.ConfigFlow) -> bool:
+    def is_matching(self, other_flow: ConfigFlow) -> bool:
         """Check if two flows are matching."""
         return False
 
@@ -414,7 +418,7 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.hass.async_create_task(
                     self.hass.config_entries.flow.async_init(
                         DOMAIN,
-                        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
+                        context={"source": SOURCE_INTEGRATION_DISCOVERY},
                         data={
                             CONF_HOST: slave_ip,
                             "device_name": f"WiiM Device ({slave_ip})",
@@ -511,10 +515,10 @@ class WiiMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class WiiMOptionsFlow(config_entries.OptionsFlow):
+class WiiMOptionsFlow(OptionsFlow):
     """Handle WiiM options."""
 
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, entry: ConfigEntry) -> None:
         """Initialize options flow."""
         self.entry = entry
 
