@@ -13,7 +13,6 @@ from typing import Any
 from urllib.parse import urlparse
 
 import voluptuous as vol
-from homeassistant import config_entries
 from homeassistant.components import onboarding
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST
@@ -21,6 +20,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pywiim.discovery import DiscoveredDevice, discover_devices, validate_device
+
+from homeassistant import config_entries
 
 from .const import (
     CONF_ENABLE_MAINTENANCE_BUTTONS,

@@ -54,7 +54,7 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-05-19 (pywiim 2.2.5: 12V trigger and status LED configuration-tier polling / `led_indicator_on` cache)._
+_Last reviewed against upstream on 2026-06-05 (pywiim 2.2.6: LinkPlay GetInfoEx artwork fallback for Arylic/generic LinkPlay devices)._
 
 **Notable upstream changes (2.1.98):** WiiM Ultra LCD control uses `setLightOperationBrightConfig` via `Player.set_display_enabled` / `set_display_config`. `set_display_enabled(True)` now applies `DISPLAY_DEFAULT_BRIGHTNESS` (100) when turning on unless `default_bright` is passed; brightness uses a **1–100** device scale (`DISPLAY_BRIGHTNESS_MIN` / `DISPLAY_BRIGHTNESS_MAX`). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
 

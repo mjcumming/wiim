@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.83] - 2026-06-05
+
+### Fixed
+
+- **Arylic album art** ([Issue #244](https://github.com/mjcumming/wiim/issues/244)) — Cover art on Arylic and other generic LinkPlay devices that omit artwork from HTTP status now comes from pywiim’s UPnP `GetInfoEx` fallback. No HA integration workaround; existing `media_image_url` / `fetch_cover_art()` path unchanged.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.6** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). Upstream adds guarded `GetInfoEx` metadata enrichment, UPnP description probing on port `59152`, and fixes WiiM Amp Chromecast sessions reporting `source=bluetooth` when `vendor=CAST` ([pywiim#19](https://github.com/mjcumming/pywiim/issues/19)); see [pywiim CHANGELOG](https://github.com/mjcumming/pywiim/blob/main/CHANGELOG.md).
+
 ## [1.0.82] - 2026-05-19
 
 ### Fixed
