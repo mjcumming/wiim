@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.84] - 2026-06-05
+
+### Fixed
+
+- **Arylic album art follow-up** ([Issue #244](https://github.com/mjcumming/wiim/issues/244)) — pywiim 2.2.7 fixes the `GetInfoEx` fallback introduced in 2.2.6 so parsed artwork is exposed through `Player.media_image_url`. It also tries raw SOAP when the advertised UPnP action returns no usable artwork and tolerates bare `&` characters in DIDL metadata.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.7** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). No integration protocol workaround was added; the HA media image path remains the existing pywiim-backed `media_image_url` / `fetch_cover_art()` flow.
+
 ## [1.0.83] - 2026-06-05
 
 ### Fixed
