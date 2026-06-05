@@ -38,6 +38,10 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class _DeviceValidationFailed(Exception):
+    """Raised when pywiim returns an unvalidated discovery result."""
+
+
 def _is_ip_literal(value: str | None) -> bool:
     """Return True when value is an IPv4/IPv6 literal."""
     if not value:
@@ -47,6 +51,19 @@ def _is_ip_literal(value: str | None) -> bool:
         return True
     except ValueError:
         return False
+
+
+async def _validate_config_device(host: str) -> DiscoveredDevice:
+    """Validate a host for config-entry creation.
+
+    pywiim.validate_device() soft-fails for discovery scans by returning
+    validated=False. Config flows must treat that as failure.
+    """
+    discovered_device = DiscoveredDevice(ip=host)
+    validated_device = await validate_device(discovered_device)
+    if not getattr(validated_device, "validated", False):
+        raise _DeviceValidationFailed(f"{host} did not validate as a WiiM/LinkPlay device")
+    return validated_device
 
 
 class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -131,29 +148,35 @@ class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle manual IP entry."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
 
-            discovered_device = DiscoveredDevice(ip=host)
-            validated_device = await validate_device(discovered_device)
+            try:
+                validated_device = await _validate_config_device(host)
+            except Exception as err:
+                _LOGGER.debug("Device validation failed for manual host %s: %s", host, err)
+                errors["base"] = "cannot_connect"
+            else:
+                device_name = validated_device.name or f"WiiM Device ({host})"
+                device_uuid = validated_device.uuid or host
+                unique_id = device_uuid
 
-            device_name = validated_device.name or f"WiiM Device ({host})"
-            device_uuid = validated_device.uuid or host
-            unique_id = device_uuid
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
 
-            await self.async_set_unique_id(unique_id)
-            self._abort_if_unique_id_configured()
+                # Trigger slave discovery in background
+                self.hass.async_create_task(self._discover_slaves(host))
 
-            # Trigger slave discovery in background
-            self.hass.async_create_task(self._discover_slaves(host))
-
-            return self.async_create_entry(title=device_name, data={CONF_HOST: host})
+                return self.async_create_entry(title=device_name, data={CONF_HOST: host})
 
         schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of your WiiM device"): str})
 
         return self.async_show_form(
             step_id="manual",
             data_schema=schema,
+            errors=errors,
             description_placeholders={"example_ip": "192.168.1.100"},
         )
 
@@ -167,6 +190,8 @@ class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
         discovered = []
         for device in devices:
             if not device.ip:
+                continue
+            if not getattr(device, "validated", False):
                 continue
             if device.ip in known_hosts:
                 continue
@@ -190,8 +215,15 @@ class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="already_configured")
 
         # Validate device to get UUID
-        discovered_device = DiscoveredDevice(ip=host)
-        validated_device = await validate_device(discovered_device)
+        try:
+            validated_device = await _validate_config_device(host)
+        except Exception as err:
+            _LOGGER.debug(
+                "Device validation failed for %s (not a WiiM/LinkPlay device): %s",
+                host,
+                err,
+            )
+            return self.async_abort(reason="not_wiim_device")
 
         device_name = validated_device.name or f"WiiM Device ({host})"
         device_uuid = validated_device.uuid or host
@@ -224,9 +256,8 @@ class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # HTTP validation: Call device HTTP API to confirm it's actually a WiiM/LinkPlay device
         # validate_device makes HTTP calls to the device to verify it responds as a LinkPlay/WiiM device
-        discovered_device = DiscoveredDevice(ip=host)
         try:
-            validated_device = await validate_device(discovered_device)
+            validated_device = await _validate_config_device(host)
         except Exception as err:
             # validate_device failed - device is not a WiiM/LinkPlay device or not reachable
             # Silently abort (following python-linkplay pattern of skipping invalid devices)
@@ -272,8 +303,15 @@ class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
             if entry.data.get(CONF_HOST) == host:
                 return self.async_abort(reason="already_configured")
 
-        discovered_device = DiscoveredDevice(ip=host)
-        validated_device = await validate_device(discovered_device)
+        try:
+            validated_device = await _validate_config_device(host)
+        except Exception as err:
+            _LOGGER.debug(
+                "Device validation failed for %s (not a WiiM/LinkPlay device): %s",
+                host,
+                err,
+            )
+            return self.async_abort(reason="not_wiim_device")
 
         final_name = validated_device.name or device_name
         final_uuid = validated_device.uuid or device_uuid or host
@@ -295,21 +333,24 @@ class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
 
-            discovered_device = DiscoveredDevice(ip=host)
-            validated_device = await validate_device(discovered_device)
-
-            if validated_device.uuid != device_uuid:
-                errors["base"] = "uuid_mismatch"
-                _LOGGER.warning("UUID mismatch: expected %s, got %s", device_uuid, validated_device.uuid)
+            try:
+                validated_device = await _validate_config_device(host)
+            except Exception as err:
+                _LOGGER.debug("Device validation failed for missing device host %s: %s", host, err)
+                errors["base"] = "cannot_connect"
             else:
-                device_name = validated_device.name or f"WiiM Device ({host})"
-                await self.async_set_unique_id(device_uuid)
-                self._abort_if_unique_id_configured()
+                if validated_device.uuid != device_uuid:
+                    errors["base"] = "uuid_mismatch"
+                    _LOGGER.warning("UUID mismatch: expected %s, got %s", device_uuid, validated_device.uuid)
+                else:
+                    device_name = validated_device.name or f"WiiM Device ({host})"
+                    await self.async_set_unique_id(device_uuid)
+                    self._abort_if_unique_id_configured()
 
-                # Trigger slave discovery in background
-                self.hass.async_create_task(self._discover_slaves(host))
+                    # Trigger slave discovery in background
+                    self.hass.async_create_task(self._discover_slaves(host))
 
-                return self.async_create_entry(title=device_name, data={CONF_HOST: host})
+                    return self.async_create_entry(title=device_name, data={CONF_HOST: host})
 
         schema = vol.Schema({vol.Required(CONF_HOST, description="IP address of the missing device"): str})
 
@@ -438,10 +479,8 @@ class WiiMConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
 
-            # Validate device at new IP address
-            discovered_device = DiscoveredDevice(ip=host)
             try:
-                validated_device = await validate_device(discovered_device)
+                validated_device = await _validate_config_device(host)
             except Exception as err:
                 _LOGGER.debug("Device validation failed for %s: %s", host, err)
                 errors["base"] = "cannot_connect"

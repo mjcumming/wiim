@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.data_entry_flow import FlowResultType
+from pywiim.discovery import DiscoveredDevice
 
 from custom_components.wiim.config_flow import WiiMConfigFlow, WiiMOptionsFlow
 from custom_components.wiim.const import (
@@ -136,12 +137,11 @@ class TestWiiMConfigFlow:
         # Mock discovery to return empty list so it goes to manual
         with patch("custom_components.wiim.config_flow.discover_devices", return_value=[]):
             with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-                from pywiim.models import DeviceInfo
-
-                mock_device = DeviceInfo(
+                mock_device = DiscoveredDevice(
                     ip="192.168.1.100",
                     uuid="test-uuid",
                     name="Test WiiM",
+                    validated=True,
                 )
                 mock_validate.return_value = mock_device
                 # Mock async_set_unique_id and _abort_if_unique_id_configured
@@ -176,12 +176,25 @@ class TestWiiMConfigFlow:
                 # If form shown, submit manual entry
                 if result["type"] == FlowResultType.FORM:
                     user_input = {CONF_HOST: "192.168.1.100"}
-                    # The error will propagate - test that it raises the exception
-                    with pytest.raises(WiiMConnectionError):
-                        await config_flow.async_step_manual(user_input)
+                    result = await config_flow.async_step_manual(user_input)
+
+                    assert result["type"] == FlowResultType.FORM
+                    assert result["errors"]["base"] == "cannot_connect"
                 else:
                     # If no form, the error should have been raised
                     pytest.fail("Expected form to be shown")
+
+    @pytest.mark.asyncio
+    async def test_manual_step_rejects_unvalidated_device(self, config_flow, hass):
+        """Manual IP setup must not create entries for soft validation failures."""
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            mock_validate.return_value = DiscoveredDevice(ip="192.168.1.100", validated=False)
+
+            result = await config_flow.async_step_manual({CONF_HOST: "192.168.1.100"})
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "manual"
+        assert result["errors"]["base"] == "cannot_connect"
 
     @pytest.mark.asyncio
     async def test_discovery_step(self, config_flow, hass):
@@ -197,12 +210,11 @@ class TestWiiMConfigFlow:
         )
 
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            from pywiim.models import DeviceInfo
-
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.100",
                 uuid="test-uuid",
                 name="Test WiiM",
+                validated=True,
             )
             mock_validate.return_value = mock_device
             # Initialize config_flow.data
@@ -224,6 +236,26 @@ class TestWiiMConfigFlow:
             assert result["type"] in (FlowResultType.FORM, FlowResultType.CREATE_ENTRY, FlowResultType.ABORT)
 
     @pytest.mark.asyncio
+    async def test_ssdp_step_rejects_unvalidated_device(self, config_flow, hass):
+        """SSDP discovery must abort when pywiim soft-fails validation."""
+        from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
+
+        discovery_info = SsdpServiceInfo(
+            ssdp_location="http://192.168.1.101:49152/description.xml",
+            ssdp_st="upnp:rootdevice",
+            ssdp_usn="uuid:not-wiim::upnp:rootdevice",
+            upnp={},
+        )
+
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            mock_validate.return_value = DiscoveredDevice(ip="192.168.1.101", validated=False)
+
+            result = await config_flow.async_step_ssdp(discovery_info)
+
+        assert result["type"] == FlowResultType.ABORT
+        assert result["reason"] == "not_wiim_device"
+
+    @pytest.mark.asyncio
     async def test_discovery_step_handles_duplicate(self, config_flow, hass):
         """Test discovery step handles duplicate entries."""
         from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
@@ -242,12 +274,11 @@ class TestWiiMConfigFlow:
         existing_entry.data = {CONF_HOST: "192.168.1.100"}
 
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            from pywiim.models import DeviceInfo
-
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.100",
                 uuid="test-uuid",
                 name="Test WiiM",
+                validated=True,
             )
             mock_validate.return_value = mock_device
             # Initialize config_flow.data
@@ -282,12 +313,11 @@ class TestWiiMConfigFlow:
         )
 
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            from pywiim.models import DeviceInfo
-
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.100",
                 uuid="test-uuid",
                 name="Test WiiM",
+                validated=True,
             )
             mock_validate.return_value = mock_device
             # Initialize config_flow.data
@@ -309,18 +339,42 @@ class TestWiiMConfigFlow:
             assert result["type"] in (FlowResultType.FORM, FlowResultType.CREATE_ENTRY, FlowResultType.ABORT)
 
     @pytest.mark.asyncio
+    async def test_zeroconf_step_rejects_unvalidated_device(self, config_flow, hass):
+        """Zeroconf discovery must abort when pywiim soft-fails validation."""
+        from ipaddress import IPv4Address
+
+        from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+
+        zeroconf_info = ZeroconfServiceInfo(
+            ip_address=IPv4Address("192.168.1.101"),
+            ip_addresses=[IPv4Address("192.168.1.101")],
+            hostname="not-wiim.local",
+            name="Not WiiM",
+            port=8080,
+            properties={},
+            type="_linkplay._tcp.local.",
+        )
+
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            mock_validate.return_value = DiscoveredDevice(ip="192.168.1.101", validated=False)
+
+            result = await config_flow.async_step_zeroconf(zeroconf_info)
+
+        assert result["type"] == FlowResultType.ABORT
+        assert result["reason"] == "not_wiim_device"
+
+    @pytest.mark.asyncio
     async def test_missing_device_step(self, config_flow, hass):
         """Test missing_device step."""
-        from pywiim.models import DeviceInfo
-
         config_flow.context = {"unique_id": "test-uuid"}
         config_flow.data = {"device_name": "Test Device"}
 
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.100",
                 uuid="test-uuid",
                 name="Test WiiM",
+                validated=True,
             )
             mock_validate.return_value = mock_device
             config_flow.async_set_unique_id = AsyncMock()
@@ -339,18 +393,34 @@ class TestWiiMConfigFlow:
             mock_validate.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_integration_discovery_rejects_unvalidated_device(self, config_flow, hass):
+        """Integration discovery must abort when validation soft-fails."""
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            mock_validate.return_value = DiscoveredDevice(ip="192.168.1.101", validated=False)
+
+            result = await config_flow.async_step_integration_discovery(
+                {
+                    CONF_HOST: "192.168.1.101",
+                    "device_name": "WiiM Device (192.168.1.101)",
+                    "device_uuid": None,
+                }
+            )
+
+        assert result["type"] == FlowResultType.ABORT
+        assert result["reason"] == "not_wiim_device"
+
+    @pytest.mark.asyncio
     async def test_missing_device_step_uuid_mismatch(self, config_flow, hass):
         """Test missing_device step with UUID mismatch."""
-        from pywiim.models import DeviceInfo
-
         config_flow.context = {"unique_id": "expected-uuid"}
         config_flow.data = {"device_name": "Test Device"}
 
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.100",
                 uuid="different-uuid",  # Mismatch
                 name="Test WiiM",
+                validated=True,
             )
             mock_validate.return_value = mock_device
 
@@ -359,6 +429,21 @@ class TestWiiMConfigFlow:
 
             assert result["type"] == FlowResultType.FORM
             assert "base" in result.get("errors", {})
+
+    @pytest.mark.asyncio
+    async def test_missing_device_step_rejects_unvalidated_device(self, config_flow, hass):
+        """Missing-device IP entry must reject soft validation failures."""
+        config_flow.context = {"unique_id": "expected-uuid"}
+        config_flow.data = {"device_name": "Test Device"}
+
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            mock_validate.return_value = DiscoveredDevice(ip="192.168.1.100", validated=False)
+
+            result = await config_flow.async_step_missing_device({CONF_HOST: "192.168.1.100"})
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "missing_device"
+        assert result["errors"]["base"] == "cannot_connect"
 
     @pytest.mark.asyncio
     async def test_discovery_confirm_step(self, config_flow, hass):
@@ -493,12 +578,11 @@ class TestWiiMConfigFlow:
 
         # Mock validate_device to return device with matching UUID
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            from pywiim.models import DeviceInfo
-
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.200",
                 uuid="test-uuid",
                 name="Test WiiM",
+                validated=True,
             )
             mock_validate.return_value = mock_device
 
@@ -547,6 +631,25 @@ class TestWiiMConfigFlow:
             assert result  # Suppress unused variable warning
 
     @pytest.mark.asyncio
+    async def test_reconfigure_step_rejects_unvalidated_device(self, config_flow, hass):
+        """Reconfigure must not update an entry to an unvalidated host."""
+        reconfigure_entry = MagicMock(spec=ConfigEntry)
+        reconfigure_entry.unique_id = "test-uuid"
+        reconfigure_entry.title = "Test WiiM Device"
+        reconfigure_entry.data = {CONF_HOST: "192.168.1.100"}
+
+        config_flow._get_reconfigure_entry = MagicMock(return_value=reconfigure_entry)
+
+        with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
+            mock_validate.return_value = DiscoveredDevice(ip="192.168.1.200", validated=False)
+
+            result = await config_flow.async_step_reconfigure({CONF_HOST: "192.168.1.200"})
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+        assert result["errors"]["base"] == "cannot_connect"
+
+    @pytest.mark.asyncio
     async def test_reconfigure_step_uuid_mismatch(self, config_flow, hass):
         """Test reconfigure step detects UUID mismatch."""
         # Create mock reconfigure entry
@@ -560,12 +663,11 @@ class TestWiiMConfigFlow:
 
         # Mock validate_device to return device with different UUID
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            from pywiim.models import DeviceInfo
-
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.200",
                 uuid="different-uuid",
                 name="Different Device",
+                validated=True,
             )
             mock_validate.return_value = mock_device
 
@@ -595,12 +697,11 @@ class TestWiiMConfigFlow:
         config_flow._async_current_entries = MagicMock(return_value=[reconfigure_entry])
 
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            from pywiim.models import DeviceInfo
-
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.6.250",
                 uuid="FF98F09CC21FF6EC8C9A3F58",
                 name="Cabin",
+                validated=True,
             )
             mock_validate.return_value = mock_device
 
@@ -638,12 +739,11 @@ class TestWiiMConfigFlow:
 
         # Mock validate_device to return device
         with patch("custom_components.wiim.config_flow.validate_device") as mock_validate:
-            from pywiim.models import DeviceInfo
-
-            mock_device = DeviceInfo(
+            mock_device = DiscoveredDevice(
                 ip="192.168.1.200",
                 uuid="test-uuid",
                 name="Test WiiM",
+                validated=True,
             )
             mock_validate.return_value = mock_device
 

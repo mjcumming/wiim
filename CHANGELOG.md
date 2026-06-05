@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.85] - 2026-06-05
+
+### Fixed
+
+- **Discovery false positives** ([Issue #241](https://github.com/mjcumming/wiim/issues/241)) — Config flows now treat pywiim
+  `validate_device()` results with `validated=False` as validation failures. SSDP/Zeroconf/internal discovery abort quietly for
+  non-WiiM hosts, while manual IP, missing-device, and reconfigure flows stay on the form with a connection error instead of creating
+  IP-named entries.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.8** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). Upstream adds
+  `validate_device_strict()` for exception-style validation in manual setup flows while preserving soft validation for discovery scans.
+
 ## [1.0.84] - 2026-06-05
 
 ### Fixed
