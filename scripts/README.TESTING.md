@@ -13,7 +13,9 @@ This file is a **script-focused companion** (flags, tables, examples). It does n
 
 ## Dev container (HA + this integration)
 
-Use the **Home Assistant devcontainer** from the **core** repo (`.devcontainer/devcontainer.json` under your HA core checkout). The dev workspace mounts the parent folder as **`/workspaces`**, so both repos are visible (e.g. `/workspaces/core`, `/workspaces/wiim`).
+**Standalone:** Reopen this repo in the **WiiM** dev container (`.devcontainer/devcontainer.json`), then `./scripts/develop` (after `make pre-run` if you changed code).
+
+**HA core workspace:** Use the **Home Assistant devcontainer** from the **core** repo. The dev workspace mounts the parent folder as **`/workspaces`**, so both repos are visible (e.g. `/workspaces/core`, `/workspaces/wiim`).
 
 **WiiM in that HA config:** `core`’s dev config already links the integration (no copy step):
 

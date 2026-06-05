@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Run Home Assistant locally with the WiiM integration loaded for development.
+# The integration is symlinked from this repo into a throwaway ./config dir,
+# so edits to custom_components/wiim are picked up on the next HA restart.
+set -e
+
+cd "$(dirname "$0")/.."
+
+# First-run: create a minimal Home Assistant config
+if [ ! -f config/configuration.yaml ]; then
+    mkdir -p config
+    hass --config config --script ensure_config
+    cat >> config/configuration.yaml <<'EOF'
+
+# Verbose logging for the integration under development
+logger:
+  default: info
+  logs:
+    custom_components.wiim: debug
+EOF
+fi
+
+# Expose the integration to Home Assistant (live source, not a copy)
+mkdir -p config/custom_components
+ln -sfn "$(pwd)/custom_components/wiim" config/custom_components/wiim
+
+echo "Starting Home Assistant — open http://localhost:8123 (first start takes a minute)"
+exec hass --config config --debug

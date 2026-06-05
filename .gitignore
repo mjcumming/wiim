@@ -154,6 +154,7 @@ ehthumbs.db
 Desktop.ini
 
 # Home Assistant
+/config/
 home-assistant.log
 home-assistant_v2.db
 *.db-journal

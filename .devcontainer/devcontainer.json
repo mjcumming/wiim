@@ -1,0 +1,36 @@
+{
+  "name": "WiiM Integration Dev",
+  // Prebuilt image — no compiling, no source build. Pulls in ~1 minute.
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.13-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  // Home Assistant UI
+  "forwardPorts": [8123],
+  "portsAttributes": {
+    "8123": {
+      "label": "Home Assistant",
+      "onAutoForward": "notify"
+    }
+  },
+  // Match CI/setup.sh: constraints, libturbojpeg, HA config symlink, pre-commit
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends libturbojpeg0 && ./scripts/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "GitHub.vscode-pull-request-github"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        }
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

@@ -4,20 +4,29 @@ Technical documentation for WiiM integration developers and contributors.
 
 ## 🚀 **Quick Start - Running Home Assistant**
 
-To start Home Assistant with the WiiM integration for development:
+### Standalone (this repo only)
+
+Open the repo in a **Dev Container** (`.devcontainer/devcontainer.json`) or run setup locally:
 
 ```bash
-# 1. Run quick checks first (catches syntax/lint errors before starting HA)
-make pre-run
+./scripts/setup.sh          # once: deps, config/, integration symlink
+make pre-run                # optional: syntax, lint, imports
+./scripts/develop           # HA at http://localhost:8123
+```
 
-# 2. From any directory, start HA with explicit config path
+`./config/` is gitignored (runtime DB, logs, symlink). Edits under `custom_components/wiim/` apply after HA restart.
+
+### Home Assistant core workspace
+
+If you use the **HA core** devcontainer with sibling checkouts (`/workspaces/core` + `/workspaces/wiim`):
+
+```bash
+make pre-run
+source /home/vscode/.local/ha-venv/bin/activate
 hass -c /workspaces/core/config --open-ui
 ```
 
-**Important**:
-
-- Always use the `-c /workspaces/core/config` flag to ensure HA loads the correct configuration directory with the symlinked WiiM integration.
-- Run `make pre-run` before starting HA to catch syntax errors, linting issues, and import problems early.
+Use `-c /workspaces/core/config` so HA loads the symlinked integration (`core/config/custom_components/wiim` → this repo).
 
 ## 🏗️ **Architecture Overview**
 

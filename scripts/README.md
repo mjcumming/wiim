@@ -156,6 +156,18 @@ Sets up development environment with all dependencies.
 ./scripts/setup.sh
 ```
 
+### `develop` - Run Home Assistant Locally
+
+Starts Home Assistant with `./config/` and a live symlink to `custom_components/wiim` (no HA core checkout required).
+
+**Usage:**
+
+```bash
+./scripts/develop
+```
+
+Run `./scripts/setup.sh` first if dependencies or `config/` are missing. The dev container runs `setup.sh` on create.
+
 ---
 
 ## Makefile Targets
