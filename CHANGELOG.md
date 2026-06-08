@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.86] - 2026-06-08
+
+### Fixed
+
+- **Arylic paused album art** ([Issue #244](https://github.com/mjcumming/wiim/issues/244)) — pywiim now keeps
+  `GetInfoEx` artwork in the UPnP metadata lane and allows explicit enrichment metadata to apply while playback is paused,
+  preventing Arylic/LinkPlay devices from falling back to the embedded WiiM logo when paused tracks still expose album art.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.9** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). Verified against
+  a real Arylic UP2STREAM AMP V4 on `192.168.6.95` while paused: `GetInfoEx` returned Spotify album art and
+  `Player.media_image_url` retained the artwork URL.
+
 ## [1.0.85] - 2026-06-05
 
 ### Fixed
