@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.0.87] - 2026-06-08
+
+### Fixed
+
+- **Arylic grouped playback artwork** ([Issue #244](https://github.com/mjcumming/wiim/issues/244)) — pywiim now refreshes
+  `GetInfoEx` enrichment on track changes even when the previous track left behind a valid-looking artwork URL. Master players
+  propagate metadata to slaves after enrichment, and propagated metadata is applied even when a slave reports idle/paused state.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.10** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). This is an upstream
+  library fix; the Home Assistant integration remains a thin wrapper around pywiim media image state.
+
 ## [1.0.86] - 2026-06-08
 
 ### Fixed
