@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.0.88] - 2026-06-11
+
+### Fixed
+
+- **Arylic artwork stuck on first track** ([Issue #244](https://github.com/mjcumming/wiim/issues/244)) — pywiim now forces
+  `GetInfoEx` on track changes even when HTTP `getMetaInfo` returns a valid-looking but stale artwork URL. This targets the
+  remaining case where Home Assistant saw titles advance from track to track while the media image stayed on the first loaded cover.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.11** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`). The integration remains
+  a thin consumer of pywiim media image state; no Home Assistant-side artwork workaround was added.
+
 ## [1.0.87] - 2026-06-08
 
 ### Fixed
