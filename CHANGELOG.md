@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Internal cleanup**: removed dead cover-art fallback code now that pywiim's `Player.media_image_url` always returns a value
+  (a real URL or the WiiM-logo sentinel, never `None`). The `wiim://cover-art/<hash>` / `wiim://group-cover-art/<hash>`
+  placeholder branches and the `_generate_cover_art_hash` helper in `media_player_base.py` / `group_media_player.py` were
+  unreachable and were dropped. Behaviour is unchanged: `media_image_remotely_accessible` is `False`, so Home Assistant still
+  fetches bytes via `async_get_media_image()` → `fetch_cover_art()`, and `media_image_hash` (now `sha256(url)`) still changes per
+  track because pywiim keys the URL by track identity. Verified via live + DLNA-controller probing for
+  [Issue #245](https://github.com/mjcumming/wiim/issues/245) that pywiim 2.2.12 surfaces fresh artwork on every track change.
+
 ## [1.0.88] - 2026-06-11
 
 ### Fixed

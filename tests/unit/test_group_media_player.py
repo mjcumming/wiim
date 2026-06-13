@@ -783,16 +783,20 @@ class TestWiiMGroupMediaPlayerImageHandling:
 
         assert entity.media_image_url is None
 
-    def test_media_image_url_returns_placeholder_when_no_url(self, mock_group_master_setup, mock_master_player):
-        """Test media_image_url returns placeholder when player has no URL."""
+    def test_media_image_url_returns_none_when_player_has_no_url(self, mock_group_master_setup, mock_master_player):
+        """Test media_image_url returns None when neither group nor player has a URL.
+
+        pywiim guarantees player.media_image_url is non-None in practice (a real
+        URL or the WiiM-logo sentinel), so the group player surfaces it directly;
+        the old wiim://group-cover-art/<hash> placeholder branch was unreachable
+        and was removed.
+        """
         mock_master_player.media_image_url = None
         mock_master_player.media_title = "Test Song"
         mock_master_player.media_artist = "Test Artist"
         entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
 
-        url = entity.media_image_url
-        assert url is not None
-        assert url.startswith("wiim://group-cover-art/")
+        assert entity.media_image_url is None
 
     def test_media_image_remotely_accessible(self, mock_group_master_setup):
         """Test media_image_remotely_accessible returns False."""

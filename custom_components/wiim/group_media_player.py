@@ -585,17 +585,11 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if hasattr(group, "media_image_url") and group.media_image_url:
             return group.media_image_url
 
-        # Fallback to master player's image URL
-        if player.media_image_url:
-            return player.media_image_url
-
-        # Use mixin's placeholder URL logic (calls async_get_media_image)
-        title = self.media_title or ""
-        artist = self.media_artist or ""
-        state = str(self.state or "idle")
-
-        track_hash = self._generate_cover_art_hash(state, title, artist)
-        return f"wiim://group-cover-art/{track_hash}"
+        # Fall back to the master player's image URL. pywiim guarantees this is
+        # non-None (a real URL or the WiiM-logo sentinel), and
+        # media_image_remotely_accessible is False so HA fetches the bytes via
+        # async_get_media_image() regardless of the URL value.
+        return player.media_image_url
 
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
         """Return image bytes and content type of current playing media from group.
