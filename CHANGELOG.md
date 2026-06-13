@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.89] - 2026-06-13
+
 ### Fixed
 
 - **Cover art one track behind** ([Issue #245](https://github.com/mjcumming/wiim/issues/245)) — delivered via pywiim **2.2.13**.

@@ -22,7 +22,7 @@
       "st": "urn:schemas-upnp-org:device:MediaRenderer:1"
     }
   ],
-  "version": "1.0.88",
+  "version": "1.0.89",
   "zeroconf": [
     {
       "type": "_linkplay._tcp.local."
