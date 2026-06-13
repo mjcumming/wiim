@@ -2,7 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cover art one track behind** ([Issue #245](https://github.com/mjcumming/wiim/issues/245)) — delivered via pywiim **2.2.13**.
+  On the HTTP polling path (used when UPnP eventing is degraded), the track-change signal was consumed by the EQ/source trigger
+  logic before the artwork enrichment could read it, so a valid-but-stale previous-track artwork URL was never refreshed and the
+  media image stayed one track behind. pywiim now computes the track-change edge once per refresh and threads it to every
+  consumer, so `getMetaInfo`/`GetInfoEx` enrichment runs on each track change.
+
 ### Changed
+
+- **Dependency**: `pywiim` **2.2.13** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.2.11.
 
 - **Internal cleanup**: removed dead cover-art fallback code now that pywiim's `Player.media_image_url` always returns a value
   (a real URL or the WiiM-logo sentinel, never `None`). The `wiim://cover-art/<hash>` / `wiim://group-cover-art/<hash>`
@@ -10,7 +20,7 @@
   unreachable and were dropped. Behaviour is unchanged: `media_image_remotely_accessible` is `False`, so Home Assistant still
   fetches bytes via `async_get_media_image()` → `fetch_cover_art()`, and `media_image_hash` (now `sha256(url)`) still changes per
   track because pywiim keys the URL by track identity. Verified via live + DLNA-controller probing for
-  [Issue #245](https://github.com/mjcumming/wiim/issues/245) that pywiim 2.2.12 surfaces fresh artwork on every track change.
+  [Issue #245](https://github.com/mjcumming/wiim/issues/245) that pywiim surfaces fresh artwork on every track change.
 
 ## [1.0.88] - 2026-06-11
 
