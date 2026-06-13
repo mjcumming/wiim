@@ -207,93 +207,32 @@ class WiiMMediaPlayerMixin:
     def media_image_url(self) -> str | None:
         """Image url of current playing media.
 
-        Returns a placeholder URL to ensure Home Assistant calls async_get_media_image(),
-        which allows pywiim to serve its default WiiM logo when nothing is playing
-        or no cover art is available.
+        pywiim's media_image_url always returns a URL (or its WiiM-logo sentinel
+        when nothing is playing), never None, so we surface it directly.
+        media_image_remotely_accessible is False, so HA always calls
+        async_get_media_image() to fetch the bytes via fetch_cover_art() — the
+        returned URL is only a trigger/cache key, never fetched by HA itself.
         """
         if not self.available:
             return None
         player = self._get_metadata_player()
         if not player:
             return None
-
-        # If pywiim has a URL, use it directly
-        # pywiim guarantees media_image_url is always a property (may be None)
-        if player.media_image_url:
-            return player.media_image_url
-
-        # Always return a placeholder URL to trigger async_get_media_image()
-        # This ensures HA calls our override in all states (including IDLE)
-        # When nothing is playing, pywiim can serve its default WiiM logo
-        # Create a unique identifier based on current state and metadata
-        title = self.media_title or ""
-        artist = self.media_artist or ""
-        state = str(self.state or "idle")
-
-        # Use state + metadata to generate hash, ensuring it changes when track/state changes
-        track_hash = self._generate_cover_art_hash(state, title, artist)
-        # Use different URL scheme for group vs individual players
-        url_prefix = (
-            "wiim://group-cover-art/"
-            if hasattr(self, "_attr_unique_id") and "group_coordinator" in str(self._attr_unique_id)
-            else "wiim://cover-art/"
-        )
-        return f"{url_prefix}{track_hash}"
+        return player.media_image_url
 
     @property
     def media_image_hash(self) -> str | None:
         """Hash value for media image.
 
-        Uses state and track metadata to generate a hash that changes when
-        track or state changes, ensuring Home Assistant fetches new cover art.
+        pywiim guarantees media_image_url is non-None and keys it by track
+        identity (it changes per track and per state), so hashing it makes HA
+        re-fetch the image whenever the track or state changes.
         """
         player = self._get_metadata_player()
         if not player:
             return None
-
-        # If we have a URL from pywiim, hash it
-        # pywiim guarantees media_image_url is always a property (may be None)
-        if player.media_image_url:
-            return hashlib.sha256(player.media_image_url.encode("utf-8")).hexdigest()[:16]
-
-        # Always create hash from state and metadata (including IDLE state)
-        # This ensures cover art updates when state changes (e.g., IDLE -> PLAYING)
-        title = self.media_title or ""
-        artist = self.media_artist or ""
-        album = self.media_album_name or ""
-        state = str(self.state or "idle")
-
-        return self._generate_cover_art_hash(state, title, artist, album)
-
-    def _generate_cover_art_hash(
-        self,
-        state: str | None,
-        title: str | None,
-        artist: str | None,
-        album: str | None = None,
-    ) -> str:
-        """Generate a hash for cover art based on state and metadata.
-
-        Args:
-            state: Current media player state
-            title: Media title
-            artist: Media artist
-            album: Media album (optional)
-
-        Returns:
-            Hex digest hash string (16 characters)
-        """
-        title = title or ""
-        artist = artist or ""
-        album = album or ""
-        state = str(state or "idle")
-
-        if album:
-            track_id = f"{state}|{title}|{artist}|{album}".encode()
-        else:
-            track_id = f"{state}|{title}|{artist}".encode()
-
-        return hashlib.sha256(track_id).hexdigest()[:16]
+        url = player.media_image_url
+        return hashlib.sha256(url.encode("utf-8")).hexdigest()[:16] if url else None
 
     @property
     def media_image_remotely_accessible(self) -> bool:
