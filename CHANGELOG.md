@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.90] - 2026-06-17
+
+### Fixed
+
+- **Arylic polling performance and device detection** ([Issue #248](https://github.com/mjcumming/wiim/issues/248)) — delivered via pywiim **2.2.14**.
+  Arylic devices that answered on slow HTTPS:443 had that endpoint cached permanently even when plain HTTP was ~10× faster; the client now re-points to HTTP when the device profile prefers it and HTTP responds. S10+ (`S10P_WIFI`) is correctly identified as Arylic instead of `linkplay_generic`. Devices that return a non-JSON `unknown command` body for `getMetaInfo` no longer retry it every poll cycle.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.14** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.2.13.
+
 ## [1.0.89] - 2026-06-13
 
 ### Fixed

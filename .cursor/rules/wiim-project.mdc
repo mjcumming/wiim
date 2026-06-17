@@ -1,0 +1,26 @@
+---
+description: WiiM Home Assistant integration — project context for AI and contributors
+alwaysApply: true
+---
+
+# WiiM integration (this repo)
+
+## Read first (source of truth)
+
+1. **[docs/DEVELOPMENT-RULES.md](docs/DEVELOPMENT-RULES.md#rules-map-read-this-first)** — Rules map: what this is, how it works, pywiim, collaboration, contracts, ADRs.
+2. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — Coordinator, entities, data flow, patterns.
+3. **[docs/adr/README.md](docs/adr/README.md)** — Numbered decisions; use **[Rule 8](docs/DEVELOPMENT-RULES.md#rule-8-adrs-for-invariants-learned-the-hard-way)** before changing long-lived behavior.
+
+## Non-negotiables (short)
+
+- **Code:** only under `custom_components/wiim/` (plus `tests/`, `docs/`, `scripts/` as appropriate). No Home Assistant core forks, no private HA internals.
+- **pywiim:** owns device I/O and logic; this repo is a **thin glue layer**. We maintain **both** [wiim](https://github.com/mjcumming/wiim) and [pywiim](https://github.com/mjcumming/pywiim)—fix device/protocol bugs **in pywiim** (see **[Rule 2b](docs/DEVELOPMENT-RULES.md#rule-2b-fix-in-the-right-repository-integration-vs-pywiim)**), integration-only for HA wiring.
+- **Design changes:** Issue + sign-off; durable trade-offs → **ADR** (Status **Proposed** until accepted if needed).
+- **Users:** ship behavior in **CHANGELOG** and user docs when behavior changes.
+
+## Layout
+
+- `custom_components/wiim/` — integration code  
+- `docs/` — architecture, rules, ADRs, user guides  
+- `tests/` — pytest  
+- `scripts/` — manual / device validation  
