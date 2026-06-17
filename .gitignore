@@ -134,6 +134,7 @@ dmypy.json
 !.vscode/cSpell.json
 !.vscode/extensions.json
 !.vscode/tasks.json
+.cursor/
 core.code-workspace
 .env
 
