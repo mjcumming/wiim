@@ -501,6 +501,76 @@ class TestCapabilityCacheRefresh:
         assert "update" in [p.value for p in forwarded]
 
     @pytest.mark.asyncio
+    async def test_async_setup_entry_drops_stale_https_endpoint_for_http_first_device(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Stale HTTPS endpoint is dropped when device capabilities prefer HTTP (Issue #248).
+
+        pywiim 2.2.15 treats a replayed endpoint as user intent and won't re-probe,
+        so the integration must drop a previously mis-persisted HTTPS:443 endpoint
+        for an HTTP-first device and let pywiim re-probe and re-persist HTTP.
+        """
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Living Room Amp",
+            data={
+                "host": "192.168.1.95",
+                # Mis-persisted by pre-2.2.15 pywiim for an HTTP-first Arylic device.
+                "endpoint": "https://192.168.1.95:443",
+                "capabilities": {
+                    "device_type": "UP2STREAM_AMP_V4",
+                    "vendor": "arylic",
+                    "protocol_priority": ["http", "https"],
+                    "supports_firmware_install": False,
+                },
+                "capabilities_cache_meta": {"pywiim_version": REQUIRED_PYWIIM_VERSION},
+            },
+            unique_id="ARYLIC_UP2STREAM_AMP_V4_95",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.async_ensure_pywiim_version",
+            AsyncMock(return_value=REQUIRED_PYWIIM_VERSION),
+        )
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+
+        captured: dict[str, object] = {}
+
+        class _FakePlayer:
+            def __init__(self):
+                self.host = "192.168.1.95"
+                self.name = "Living Room Amp"
+                # pywiim re-probes and lands on HTTP since the endpoint was dropped.
+                self.client = MagicMock(discovered_endpoint="http://192.168.1.95:80")
+
+        class _FakeCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                captured["port"] = port
+                captured["protocol"] = protocol
+                self.hass = hass
+                self.player = _FakePlayer()
+                self.last_update_success = True
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FakeCoordinator)
+        monkeypatch.setattr("custom_components.wiim._register_ha_device", AsyncMock())
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        ok = await async_setup_entry(hass, entry)
+        assert ok is True
+
+        # Coordinator must NOT be pinned to the stale HTTPS endpoint.
+        assert captured["port"] is None
+        assert captured["protocol"] is None
+        # Stale endpoint removed so pywiim re-probes; re-persisted as HTTP after refresh.
+        assert entry.data.get("endpoint") == "http://192.168.1.95:80"
+
+    @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:
         """Test get_enabled_platforms with optional features enabled."""
         from homeassistant.const import Platform
@@ -748,3 +818,22 @@ class TestInitCapabilityDetection:
 
         # Custom title should be preserved (not start with "WiiM Device")
         assert entry.title == "My Custom Device Name"
+
+
+@pytest.mark.parametrize(
+    ("capabilities", "expected"),
+    [
+        ({"protocol_priority": ["http", "https"]}, True),
+        ({"protocol_priority": ("http", "https")}, True),
+        ({"protocol_priority": ["https", "http"]}, False),
+        ({"protocol_priority": ["https"]}, False),
+        ({"protocol_priority": []}, False),
+        ({}, False),
+        (None, False),
+    ],
+)
+def test_capabilities_prefer_http(capabilities, expected) -> None:
+    """_capabilities_prefer_http only returns True with positive HTTP-first evidence."""
+    from custom_components.wiim import _capabilities_prefer_http
+
+    assert _capabilities_prefer_http(capabilities) is expected

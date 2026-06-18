@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.91] - 2026-06-18
+
+### Fixed
+
+- **Arylic HTTP-first devices still pinned to HTTPS:443** ([Issue #248](https://github.com/mjcumming/wiim/issues/248)) — Follow-up to 1.0.90. pywiim **2.2.15** fixes the remaining persistence gap: the poll/coordinator client now orders its probe list by the device's `protocol_priority` (so an Arylic device probes and persists HTTP directly without re-detection), and `_probe_and_cache_endpoint()` syncs the client port to the cached endpoint so discovery no longer mis-persists HTTPS. Integration side: a previously mis-persisted `https://…:443` endpoint is treated by pywiim as explicit user intent and would never be re-probed, so setup now **drops a stored HTTPS endpoint when the device's capabilities prefer HTTP** and lets pywiim re-probe and re-persist HTTP once. Already-affected devices self-heal on the next restart — no delete/re-add required.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.15** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.2.14.
+
 ## [1.0.90] - 2026-06-17
 
 ### Fixed
