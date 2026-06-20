@@ -54,8 +54,10 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-06-11 (pywiim 2.2.11: Arylic/LinkPlay track-change artwork refresh stays in pywiim; no Home Assistant API contract change)._
+_Last reviewed against upstream on 2026-06-20 (pywiim 2.2.16: WiiM Ultra display-on now defaults `auto_sense_enable=1` in pywiim; integration continues to pass `default_bright` for manual HA brightness)._
 
-**Notable upstream changes (2.1.98):** WiiM Ultra LCD control uses `setLightOperationBrightConfig` via `Player.set_display_enabled` / `set_display_config`. `set_display_enabled(True)` now applies `DISPLAY_DEFAULT_BRIGHTNESS` (100) when turning on unless `default_bright` is passed; brightness uses a **1–100** device scale (`DISPLAY_BRIGHTNESS_MIN` / `DISPLAY_BRIGHTNESS_MAX`). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
+**Notable upstream changes (2.2.16):** `set_display_enabled(True)` now enables adaptive brightness (`auto_sense_enable=1`) by default so the LCD actually relights; optional `auto_sense_enable` keyword on client and player (pass `0` for fixed brightness). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
+
+**Notable upstream changes (2.1.98):** WiiM Ultra LCD control uses `setLightOperationBrightConfig` via `Player.set_display_enabled` / `set_display_config`. `set_display_enabled(True)` applies `DISPLAY_DEFAULT_BRIGHTNESS` (100) when turning on unless `default_bright` is passed; brightness uses a **1–100** device scale (`DISPLAY_BRIGHTNESS_MIN` / `DISPLAY_BRIGHTNESS_MAX`).
 
 **Capability refresh after firmware OTA:** `WiiMClient.refresh_capabilities()` and `_detect_capabilities(force=True)` re-run runtime probes when the client was constructed with cached `capabilities`. Home Assistant integrations that persist capabilities should use this when live firmware no longer matches cached metadata; see upstream [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md) (firmware / capabilities note) and [API_DESIGN_PATTERNS.md](https://github.com/mjcumming/pywiim/blob/main/docs/design/API_DESIGN_PATTERNS.md) (Library Support).

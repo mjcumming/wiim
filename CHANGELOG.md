@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.92] - 2026-06-20
+
+### Fixed
+
+- **WiiM Ultra / Amp Ultra display reported "on" but panel stayed dark** ([Issue #250](https://github.com/mjcumming/wiim/issues/250)) — delivered via pywiim **2.2.16**. Turning the LCD back on could register as enabled while the panel stayed dark and adaptive brightness was silently disabled until toggled in the WiiM app. pywiim now sends the full `setLightOperationBrightConfig` payload and defaults `auto_sense_enable=1` when turning the display on so the screen actually relights.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.16** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.2.15.
+
 ## [1.0.91] - 2026-06-18
 
 ### Fixed
