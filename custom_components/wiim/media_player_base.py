@@ -108,6 +108,14 @@ class WiiMMediaPlayerMixin:
             self._attr_media_duration = new_duration
         elif current_state == MediaPlayerState.IDLE:
             self._attr_media_duration = None
+        elif (
+            self._attr_media_duration is not None
+            and new_position is not None
+            and new_position > self._attr_media_duration
+        ):
+            # Position has run past the cached duration, so it is stale (a long
+            # track whose duration pywiim retracts to None); clear it. (#251)
+            self._attr_media_duration = None
         # Else: Keep existing duration (don't clear on transient errors during playback)
 
         # Simple Position Update (Robust)

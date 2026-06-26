@@ -1763,6 +1763,45 @@ class TestWiiMMediaPlayerUpdatePosition:
         assert media_player._media_cleared_by_turn_off is False
         assert media_player._attr_state == MediaPlayerState.PLAYING
 
+    def test_update_position_clears_stale_duration_when_position_exceeds_it(
+        self, media_player, mock_coordinator
+    ):
+        """Clear a cached duration once the live position runs past it (issue #251)."""
+        media_player._attr_media_duration = 41  # stale value cached from an earlier read
+
+        player = mock_coordinator.player
+        player.is_slave = False
+        player.group = None
+        player.is_playing = True  # _derive_state_from_player reads is_playing, not play_state
+        player.is_paused = False
+        player.is_buffering = False
+        player.media_position = 304  # live position has run well past the cached 41
+        player.media_duration = None  # device cannot report a duration for the long track
+
+        media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_position == 304
+        assert media_player._attr_media_duration is None
+
+    def test_update_position_keeps_duration_on_transient_none_within_bounds(
+        self, media_player, mock_coordinator
+    ):
+        """Keep the cached duration when a transient None arrives within bounds."""
+        media_player._attr_media_duration = 180
+
+        player = mock_coordinator.player
+        player.is_slave = False
+        player.group = None
+        player.is_playing = True  # _derive_state_from_player reads is_playing, not play_state
+        player.is_paused = False
+        player.is_buffering = False
+        player.media_position = 60  # still within the cached duration
+        player.media_duration = None  # transient miss
+
+        media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_duration == 180
+
 
 class TestWiiMMediaPlayerServiceHandlers:
     """Test service handler methods."""

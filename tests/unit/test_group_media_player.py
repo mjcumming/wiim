@@ -544,6 +544,21 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         entity._update_position_from_coordinator()
         assert entity.media_position == 60
 
+    def test_update_position_clears_stale_duration_when_position_exceeds_it(
+        self, mock_group_master_setup, mock_master_player
+    ):
+        """Clear a cached group duration once the position runs past it (issue #251)."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        entity._attr_media_duration = 41  # stale value cached from an earlier read
+
+        mock_master_player.group.play_state = "play"
+        mock_master_player.group.media_position = 304  # past the cached 41
+        mock_master_player.group.media_duration = None  # device cannot report a duration
+
+        entity._update_position_from_coordinator()
+
+        assert entity._attr_media_duration is None
+
 
 class TestWiiMGroupMediaPlayerShuffleRepeat:
     """Test group shuffle and repeat functionality."""

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Very long tracks showed a stale, incorrect duration** ([Issue #251](https://github.com/mjcumming/wiim/issues/251)). When the device cannot report a duration for a very long track, pywiim retracts it (`raw_dur=None`), but the media player kept republishing the last cached value, so a long track could display as e.g. 41s while the position ran past it. The integration now clears a cached duration once the live position exceeds it, showing an unknown duration instead of an impossible position > duration. The "Impossible media position" log itself originates in pywiim and is unchanged.
+
 ## [1.0.92] - 2026-06-20
 
 ### Fixed
