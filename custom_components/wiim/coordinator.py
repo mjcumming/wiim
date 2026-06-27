@@ -13,6 +13,32 @@ from pywiim import Player, PollingStrategy, WiiMClient
 from pywiim.exceptions import WiiMError
 
 _LOGGER = logging.getLogger(__name__)
+_PYWIIM_MISC_LOGGER_NAME = "pywiim.api.misc"
+_LED_READ_FALLBACK_MESSAGE = "LED indicator read not available for device (no API or read failed); assuming on"
+_EXPECTED_PYWIIM_LOG_FILTER_INSTALLED = False
+
+
+class _ExpectedPywiimFallbackFilter(logging.Filter):
+    """Suppress pywiim fallback warnings that are expected in HA polling."""
+
+    _wiim_expected_pywiim_fallback_filter = True
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False for known noisy pywiim fallback records."""
+        return record.getMessage() != _LED_READ_FALLBACK_MESSAGE
+
+
+def _install_expected_pywiim_log_filter() -> None:
+    """Install log filtering for pywiim fallbacks that HA should not surface."""
+    global _EXPECTED_PYWIIM_LOG_FILTER_INSTALLED
+
+    if _EXPECTED_PYWIIM_LOG_FILTER_INSTALLED:
+        return
+
+    logger = logging.getLogger(_PYWIIM_MISC_LOGGER_NAME)
+    if not any(getattr(log_filter, "_wiim_expected_pywiim_fallback_filter", False) for log_filter in logger.filters):
+        logger.addFilter(_ExpectedPywiimFallbackFilter())
+    _EXPECTED_PYWIIM_LOG_FILTER_INSTALLED = True
 
 
 def _is_expected_unreachable_error(err: Exception) -> bool:
@@ -42,6 +68,7 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         timeout: int = 10,
     ) -> None:
         """Initialize the coordinator."""
+        _install_expected_pywiim_log_filter()
         super().__init__(
             hass,
             _LOGGER,

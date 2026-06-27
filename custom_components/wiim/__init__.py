@@ -98,6 +98,27 @@ def _capabilities_prefer_http(capabilities: dict[str, Any] | None) -> bool:
     return priority[0] == "http"
 
 
+def _capabilities_require_https(capabilities: dict[str, Any] | None) -> bool:
+    """Return True when cached capabilities identify an HTTPS-only device."""
+    if not capabilities:
+        return False
+
+    securemode = capabilities.get("securemode")
+    if securemode is not None and str(securemode).strip() == "1":
+        return True
+
+    security = capabilities.get("security")
+    if security is not None and "https" in str(security).lower():
+        return True
+
+    profile_fields = (
+        capabilities.get("project"),
+        capabilities.get("device_type"),
+        capabilities.get("model"),
+    )
+    return any(str(field).upper() == "ARYLIC_H50" for field in profile_fields if field)
+
+
 async def _try_rebind_host_from_uuid(hass: HomeAssistant, entry: ConfigEntry) -> str | None:
     """Try to rediscover and rebind host by config entry UUID.
 
@@ -268,9 +289,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WiiM from a config entry."""
-    _LOGGER.debug(
-        "WiiM async_setup_entry called for entry: %s (host: %s)", entry.entry_id, entry.data.get("host")
-    )
+    _LOGGER.debug("WiiM async_setup_entry called for entry: %s (host: %s)", entry.entry_id, entry.data.get("host"))
 
     # Initialize domain data structure
     if DOMAIN not in hass.data:
@@ -342,10 +361,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # treats a replayed endpoint as explicit user intent and will NOT re-probe. So
     # if our stored endpoint is HTTPS while the device's capabilities prefer HTTP,
     # drop the stored endpoint once and let pywiim re-probe and re-persist HTTP.
-    if cached_endpoint and protocol == "https" and _capabilities_prefer_http(cached_capabilities):
+    if (
+        cached_endpoint
+        and protocol == "https"
+        and _capabilities_prefer_http(cached_capabilities)
+        and not _capabilities_require_https(cached_capabilities)
+    ):
         _LOGGER.info(
-            "Dropping stale HTTPS endpoint for %s; device prefers HTTP, letting pywiim "
-            "re-probe (Issue #248)",
+            "Dropping stale HTTPS endpoint for %s; device prefers HTTP, letting pywiim " "re-probe (Issue #248)",
             entry.data["host"],
         )
         port = None

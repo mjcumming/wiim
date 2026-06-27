@@ -9,9 +9,59 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pywiim import Player, WiiMClient
 from pywiim.exceptions import WiiMError
 
+from custom_components.wiim import coordinator as coordinator_module
 from custom_components.wiim.const import DOMAIN
-from custom_components.wiim.coordinator import WiiMCoordinator
+from custom_components.wiim.coordinator import (
+    _LED_READ_FALLBACK_MESSAGE,
+    _PYWIIM_MISC_LOGGER_NAME,
+    WiiMCoordinator,
+    _install_expected_pywiim_log_filter,
+)
 from tests.const import MOCK_CONFIG, MOCK_DEVICE_DATA
+
+
+def test_expected_pywiim_log_filter_only_suppresses_led_fallback() -> None:
+    """Known LED read fallback warnings from pywiim are filtered, but other warnings pass."""
+    logger = logging.getLogger(_PYWIIM_MISC_LOGGER_NAME)
+    original_filters = list(logger.filters)
+    original_installed = coordinator_module._EXPECTED_PYWIIM_LOG_FILTER_INSTALLED
+
+    logger.filters.clear()
+    coordinator_module._EXPECTED_PYWIIM_LOG_FILTER_INSTALLED = False
+    try:
+        _install_expected_pywiim_log_filter()
+
+        wiim_filters = [
+            log_filter
+            for log_filter in logger.filters
+            if getattr(log_filter, "_wiim_expected_pywiim_fallback_filter", False)
+        ]
+        assert len(wiim_filters) == 1
+
+        led_record = logging.LogRecord(
+            _PYWIIM_MISC_LOGGER_NAME,
+            logging.WARNING,
+            "misc.py",
+            199,
+            _LED_READ_FALLBACK_MESSAGE,
+            (),
+            None,
+        )
+        other_record = logging.LogRecord(
+            _PYWIIM_MISC_LOGGER_NAME,
+            logging.WARNING,
+            "misc.py",
+            199,
+            "Different pywiim warning",
+            (),
+            None,
+        )
+
+        assert wiim_filters[0].filter(led_record) is False
+        assert wiim_filters[0].filter(other_record) is True
+    finally:
+        logger.filters[:] = original_filters
+        coordinator_module._EXPECTED_PYWIIM_LOG_FILTER_INSTALLED = original_installed
 
 
 class TestWiiMCoordinator:
@@ -205,9 +255,7 @@ class TestWiiMCoordinator:
         assert any(
             r.levelno == logging.DEBUG and "Update failed" in r.getMessage() for r in caplog.records
         ), caplog.records
-        assert not any(
-            r.levelno == logging.WARNING and "Update failed" in r.getMessage() for r in caplog.records
-        )
+        assert not any(r.levelno == logging.WARNING and "Update failed" in r.getMessage() for r in caplog.records)
 
     @pytest.mark.asyncio
     async def test_async_update_data_other_wiim_error_logs_warning(
@@ -221,9 +269,7 @@ class TestWiiMCoordinator:
 
         await coordinator._async_update_data()
 
-        assert any(
-            r.levelno == logging.WARNING and "Update failed" in r.getMessage() for r in caplog.records
-        )
+        assert any(r.levelno == logging.WARNING and "Update failed" in r.getMessage() for r in caplog.records)
 
     @pytest.mark.asyncio
     async def test_async_update_data_adaptive_polling(self, coordinator, mock_player):

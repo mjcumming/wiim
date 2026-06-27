@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.93] - 2026-06-27
+
+### Fixed
+
+- **Status LED log noise** — The LED light entity now initializes from pywiim's cached `led_indicator_on` state instead of
+  issuing its own `get_led_indicator()` read when Home Assistant adds the entity. This removes the `custom_components/wiim/light.py`
+  warning path for devices where pywiim falls back to assuming the LED is on.
+- **Coordinator LED fallback warning spam** — The coordinator installs a narrow log filter for pywiim's known
+  `LED indicator read not available ... assuming on` fallback message so Home Assistant no longer surfaces routine LED read
+  fallback polling as a custom-integration warning. Other pywiim warnings remain visible.
+- **ARYLIC H50 HTTPS-only setup loop** — The Issue #248 stale-endpoint self-heal now preserves a cached HTTPS endpoint when
+  cached capabilities identify an HTTPS-only device (`securemode: 1`, `security: https/...`, or `ARYLIC_H50`). This prevents
+  working `https://host:443` entries from being wiped and re-probed as dead HTTP:80 endpoints.
+
 ## [1.0.92] - 2026-06-20
 
 ### Fixed

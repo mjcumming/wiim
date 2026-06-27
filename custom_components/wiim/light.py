@@ -60,20 +60,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
     async def async_added_to_hass(self) -> None:
         """Run when entity is added to Home Assistant."""
         await super().async_added_to_hass()
-        await self._update_state()
-
-    async def _update_state(self) -> None:
-        """Fetch current status LED state from device."""
-        try:
-            status = await self.coordinator.player.get_led_indicator()
-            if status is not None:
-                self._is_on = status
-                return
-        except Exception as err:
-            _LOGGER.debug("Failed to get LED indicator status: %s", err)
-        cached = getattr(self.coordinator.player, "led_indicator_on", None)
-        if cached is not None:
-            self._is_on = bool(cached)
+        self._update_state_from_cache()
 
     def _update_state_from_cache(self) -> None:
         """Update state from pywiim's cached LED indicator status."""

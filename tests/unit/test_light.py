@@ -176,15 +176,16 @@ class TestWiiMLEDLightTurnOnOff:
         with pytest.raises(Exception, match="LED error"):
             await entity.async_turn_off()
 
-    async def test_update_state_fetches_led_indicator(self, mock_coordinator_setup):
-        """Test _update_state reads get_led_indicator."""
+    async def test_added_to_hass_reads_cache_without_fetch(self, mock_coordinator_setup):
+        """Entity add uses cached LED status without HTTP fetch."""
         mock_coordinator, mock_config_entry = mock_coordinator_setup
-        mock_coordinator.player.get_led_indicator = AsyncMock(return_value=False)
+        mock_coordinator.player.led_indicator_on = False
+        mock_coordinator.player.get_led_indicator = AsyncMock()
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
 
-        await entity._update_state()
+        await entity.async_added_to_hass()
 
-        mock_coordinator.player.get_led_indicator.assert_called_once()
+        mock_coordinator.player.get_led_indicator.assert_not_called()
         assert entity.is_on is False
 
     def test_handle_coordinator_update_reads_cache_without_fetch(self, mock_coordinator_setup):
@@ -287,9 +288,7 @@ class TestWiiMDisplayLightTurnOnOff:
         mock_coordinator.player.set_display_config.assert_not_called()
         assert entity.brightness == 128
 
-    async def test_turn_on_low_ha_brightness_maps_to_device_min(
-        self, mock_coordinator_with_display, mock_coordinator
-    ):
+    async def test_turn_on_low_ha_brightness_maps_to_device_min(self, mock_coordinator_with_display, mock_coordinator):
         """HA brightness 1 maps to device minimum brightness (1), not 0."""
         mock_coordinator, mock_config_entry = mock_coordinator_with_display
         entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
@@ -324,9 +323,7 @@ class TestWiiMDisplayLightTurnOnOff:
 class TestLightSetupEntry:
     """Test light platform async_setup_entry."""
 
-    async def test_setup_adds_only_led_when_no_display_support(
-        self, mock_coordinator_setup, mock_config_entry
-    ):
+    async def test_setup_adds_only_led_when_no_display_support(self, mock_coordinator_setup, mock_config_entry):
         """Test only LED entity is added when supports_display_config is False."""
         mock_coordinator, _ = mock_coordinator_setup
         mock_coordinator.player.client.capabilities = {"supports_display_config": False}
@@ -341,9 +338,7 @@ class TestLightSetupEntry:
         assert len(entities) == 1
         assert isinstance(entities[0], WiiMLEDLight)
 
-    async def test_setup_adds_led_and_display_when_display_supported(
-        self, mock_coordinator_setup, mock_config_entry
-    ):
+    async def test_setup_adds_led_and_display_when_display_supported(self, mock_coordinator_setup, mock_config_entry):
         """Test LED and Display entities added when supports_display_config is True."""
         mock_coordinator, _ = mock_coordinator_setup
         mock_coordinator.player.client.capabilities = {"supports_display_config": True}

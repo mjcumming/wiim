@@ -571,6 +571,75 @@ class TestCapabilityCacheRefresh:
         assert entry.data.get("endpoint") == "http://192.168.1.95:80"
 
     @pytest.mark.asyncio
+    async def test_async_setup_entry_preserves_https_endpoint_for_https_only_h50(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HTTPS-only ARYLIC H50 entries must not lose a working cached HTTPS endpoint."""
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Main Deck",
+            data={
+                "host": "192.168.6.50",
+                "endpoint": "https://192.168.6.50:443",
+                "capabilities": {
+                    "device_type": "ARYLIC_H50",
+                    "vendor": "arylic",
+                    "project": "ARYLIC_H50",
+                    "securemode": "1",
+                    "security": "https/2.0",
+                    "protocol_priority": ["http", "https"],
+                    "firmware_version": "Linkplay.4.6.529755",
+                    "supports_firmware_install": False,
+                },
+                "capabilities_cache_meta": {
+                    "pywiim_version": REQUIRED_PYWIIM_VERSION,
+                    "firmware_version": "Linkplay.4.6.529755",
+                },
+            },
+            unique_id="ARYLIC_H50_MAIN_DECK",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.async_ensure_pywiim_version",
+            AsyncMock(return_value=REQUIRED_PYWIIM_VERSION),
+        )
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+
+        captured: dict[str, object] = {}
+
+        class _FakePlayer:
+            def __init__(self):
+                self.host = "192.168.6.50"
+                self.name = "Main Deck"
+                self.firmware = "Linkplay.4.6.529755"
+                self.client = MagicMock(discovered_endpoint="https://192.168.6.50:443")
+
+        class _FakeCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                captured["port"] = port
+                captured["protocol"] = protocol
+                self.hass = hass
+                self.player = _FakePlayer()
+                self.last_update_success = True
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FakeCoordinator)
+        monkeypatch.setattr("custom_components.wiim._register_ha_device", AsyncMock())
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        ok = await async_setup_entry(hass, entry)
+        assert ok is True
+
+        assert captured["port"] == 443
+        assert captured["protocol"] == "https"
+        assert entry.data.get("endpoint") == "https://192.168.6.50:443"
+
+    @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:
         """Test get_enabled_platforms with optional features enabled."""
         from homeassistant.const import Platform
@@ -837,3 +906,24 @@ def test_capabilities_prefer_http(capabilities, expected) -> None:
     from custom_components.wiim import _capabilities_prefer_http
 
     assert _capabilities_prefer_http(capabilities) is expected
+
+
+@pytest.mark.parametrize(
+    ("capabilities", "expected"),
+    [
+        ({"securemode": "1"}, True),
+        ({"securemode": 1}, True),
+        ({"security": "https/2.0"}, True),
+        ({"project": "ARYLIC_H50"}, True),
+        ({"device_type": "ARYLIC_H50"}, True),
+        ({"model": "ARYLIC_H50"}, True),
+        ({"securemode": "0", "security": "http"}, False),
+        ({}, False),
+        (None, False),
+    ],
+)
+def test_capabilities_require_https(capabilities, expected) -> None:
+    """_capabilities_require_https recognizes HTTPS-only device evidence."""
+    from custom_components.wiim import _capabilities_require_https
+
+    assert _capabilities_require_https(capabilities) is expected
