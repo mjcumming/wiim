@@ -14,12 +14,12 @@
   the raw duration exceeds the old heuristic threshold, so very long tracks no longer collapse to tiny durations or produce false
   position-greater-than-duration warnings. WiiM Ultra `UDisk*` playback now reports canonical source `usb`.
 - **HA Core 2026.6 dependency install retry path** ([Issue #253](https://github.com/mjcumming/wiim/issues/253)) — bumped the
-  pinned pywiim requirement to **2.2.18** so Home Assistant retries dependency installation with a fresh requirement string on
+  pinned pywiim requirement to **2.2.19** so Home Assistant retries dependency installation with a fresh requirement string on
   Python 3.14 installs that cached a failed `pywiim==2.2.16` attempt.
 
 ### Changed
 
-- **Dependency**: `pywiim` **2.2.18** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.2.16.
+- **Dependency**: `pywiim` **2.2.19** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.2.16.
 
 ## [1.0.93] - 2026-06-27
 
