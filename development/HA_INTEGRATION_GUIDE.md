@@ -54,9 +54,17 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-06-20 (pywiim 2.2.16: WiiM Ultra display-on now defaults `auto_sense_enable=1` in pywiim; integration continues to pass `default_bright` for manual HA brightness)._
+_Last reviewed against upstream on 2026-06-30 (pywiim 2.2.18: no HA integration API changes required; keeps the 2.2.17 long
+local URL / USB media duration parsing behavior and WiiM Ultra `UDisk*` source normalization)._
 
 **Notable upstream changes (2.2.16):** `set_display_enabled(True)` now enables adaptive brightness (`auto_sense_enable=1`) by default so the LCD actually relights; optional `auto_sense_enable` keyword on client and player (pass `0` for fixed brightness). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
+
+**Notable upstream changes (2.2.17):** `curpos` / `totlen` parsing is source-aware for long local URL and USB/UDisk media,
+and `vendor=UDisk*` status on WiiM Ultra normalizes to source `usb`. No breaking changes were found in the upstream integration
+guide or API reference.
+
+**Notable upstream changes (2.2.18):** no Home Assistant integration API changes required. Integration pin updated so HA Core
+2026.6 / Python 3.14 installs retry pywiim dependency resolution with a fresh requirement string.
 
 **Notable upstream changes (2.1.98):** WiiM Ultra LCD control uses `setLightOperationBrightConfig` via `Player.set_display_enabled` / `set_display_config`. `set_display_enabled(True)` applies `DISPLAY_DEFAULT_BRIGHTNESS` (100) when turning on unless `default_bright` is passed; brightness uses a **1–100** device scale (`DISPLAY_BRIGHTNESS_MIN` / `DISPLAY_BRIGHTNESS_MAX`).
 

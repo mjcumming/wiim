@@ -56,7 +56,9 @@ This integration is a **thin glue layer** between the `pywiim` library and Home 
 ### Two repositories (same maintainers)
 
 - **[mjcumming/wiim](https://github.com/mjcumming/wiim)** — this Home Assistant integration (`custom_components/wiim/`).
-- **[mjcumming/pywiim](https://github.com/mjcumming/pywiim)** — device library. VS Code: open **`pywiim.code-workspace`** in that repo for a configured Python venv and lint/format. **Home Assistant–focused docs** live under upstream **`docs/integration/`** ([HA_INTEGRATION](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md), [HA_CAPABILITIES](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_CAPABILITIES.md), [API_REFERENCE](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md)).
+- **[mjcumming/pywiim](https://github.com/mjcumming/pywiim)** — device library. Keep it as a sibling checkout at `/workspaces/pywiim`; open **`wiim-pywiim.code-workspace`** from this repo for combined work, or **`../pywiim/pywiim.code-workspace`** for pywiim-only work. **Home Assistant–focused docs** live under upstream **`docs/integration/`** ([HA_INTEGRATION](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md), [HA_CAPABILITIES](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_CAPABILITIES.md), [API_REFERENCE](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md)).
+
+Cross-repo work is allowed when the fix belongs in pywiim. Keep separate branches, commits, PRs, and release steps for each repo. Use editable installs such as `pip install -e ../pywiim` only for local development; integration PRs should depend on a released pywiim pin before merge/release.
 
 When in doubt whether a fix belongs here or in pywiim, read **[Rule 2b in DEVELOPMENT-RULES.md](../docs/DEVELOPMENT-RULES.md#rule-2b-fix-in-the-right-repository-integration-vs-pywiim)**.
 

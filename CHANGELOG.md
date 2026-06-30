@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.94] - 2026-06-30
+
+### Fixed
+
+- **ARYLIC H50 HTTPS endpoint recovery** — If an HTTPS-only H50 entry already had its cached endpoint removed by the
+  HTTP-first self-heal path, setup now restores `https://host:443` from cached HTTPS-only capabilities and passes that endpoint
+  to pywiim. This covers entries stuck retrying dead HTTP:80 after the working HTTPS endpoint was wiped.
+- **Long local / USB media durations** ([Issue #251](https://github.com/mjcumming/wiim/issues/251)) — delivered via pywiim
+  **2.2.17**. Source-aware `curpos` / `totlen` parsing keeps local URL playback and USB tracks in millisecond units even when
+  the raw duration exceeds the old heuristic threshold, so very long tracks no longer collapse to tiny durations or produce false
+  position-greater-than-duration warnings. WiiM Ultra `UDisk*` playback now reports canonical source `usb`.
+- **HA Core 2026.6 dependency install retry path** ([Issue #253](https://github.com/mjcumming/wiim/issues/253)) — bumped the
+  pinned pywiim requirement to **2.2.18** so Home Assistant retries dependency installation with a fresh requirement string on
+  Python 3.14 installs that cached a failed `pywiim==2.2.16` attempt.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.2.18** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.2.16.
+
 ## [1.0.93] - 2026-06-27
 
 ### Fixed

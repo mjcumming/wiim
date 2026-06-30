@@ -1,0 +1,43 @@
+{
+  "folders": [
+    {
+      "name": "wiim",
+      "path": "."
+    },
+    {
+      "name": "pywiim",
+      "path": "../pywiim"
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder:wiim}/.venv/bin/python",
+    "editor.formatOnSave": true,
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.pyc": true,
+      "**/.pytest_cache": true,
+      "**/.mypy_cache": true,
+      "**/.ruff_cache": true
+    },
+    "terminal.integrated.profiles.linux": {
+      "bash": {
+        "path": "/bin/bash"
+      },
+      "wiim venv": {
+        "path": "/bin/bash",
+        "args": [
+          "-c",
+          "cd ${workspaceFolder:wiim} && source .venv/bin/activate && exec bash"
+        ]
+      },
+      "pywiim venv": {
+        "path": "/bin/bash",
+        "args": [
+          "-c",
+          "cd ${workspaceFolder:pywiim} && source .venv/bin/activate && exec bash"
+        ]
+      }
+    },
+    "terminal.integrated.defaultProfile.linux": "bash"
+  }
+}

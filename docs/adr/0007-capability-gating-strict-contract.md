@@ -20,7 +20,7 @@ The Home Assistant integration must not **infer** device features (model heurist
 
 For “**may this device expose feature X in Home Assistant?**” the integration uses **only**:
 
-- **`WiiMClient.capabilities`** (the same mapping `Player` reads), after pywiim’s capability detection / `refresh_capabilities()` / firmware refresh paths have run; and/or  
+- **`WiiMClient.capabilities`** (the same mapping `Player` reads), after pywiim’s capability detection / `refresh_capabilities()` / firmware refresh paths have run; and/or
 - **`Player.supports_*`** properties **that are defined in pywiim as reading `client.capabilities`** (same underlying data as (1)).
 
 **Forbidden** in `custom_components/wiim/`:
@@ -55,4 +55,4 @@ pywiim **must** populate `client.capabilities["supports_*"]` keys (via `WiiMCapa
 ## Notes
 
 - UPnP-derived flags (`supports_queue_browse`, etc.) remain defined inside pywiim; the integration still reads **`Player.supports_*`** where those properties are the documented API.
-- Workspace boundary: library edits ship from the **pywiim** repository; this ADR governs the **integration** repo ([Rule 2c](../DEVELOPMENT-RULES.md#rule-2c-do-not-edit-the-pywiim-library-from-this-repository-agents--automation)).
+- Workspace boundary: library edits ship from the **pywiim** repository even when made from a sibling checkout in the same workspace; this ADR governs the **integration** repo ([Rule 2c](../DEVELOPMENT-RULES.md#rule-2c-cross-repository-pywiim-work-agents--automation)).

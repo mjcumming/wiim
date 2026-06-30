@@ -10,6 +10,6 @@
 
 We maintain **both** repositories ([wiim](https://github.com/mjcumming/wiim), [pywiim](https://github.com/mjcumming/pywiim)). Put fixes in the **right layer**: HA entities/services/coordinator → integration; HTTP/API/`Player`/`Group`/parsing → **pywiim** (then bump the integration dependency if needed). See **[Rule 2b](docs/DEVELOPMENT-RULES.md#rule-2b-fix-in-the-right-repository-integration-vs-pywiim)**.
 
-**Agent/workspace boundary:** In **this** repo, **do not edit the pywiim source tree** (sibling checkout or `core/pywiim`). Use **`pip install pywiim==…`** + manifest pin; library edits belong in the **pywiim** repo. See **[Rule 2c](docs/DEVELOPMENT-RULES.md#rule-2c-do-not-edit-the-pywiim-library-from-this-repository-agents--automation)**.
+**Agent/workspace boundary:** This workspace may include a sibling **pywiim** checkout at `../pywiim`. You may edit that checkout when the fix belongs in the library, but keep **wiim** and **pywiim** as separate git repos with separate commits/PRs/releases. Do not vendor or copy pywiim into this repo. See **[Rule 2c](docs/DEVELOPMENT-RULES.md#rule-2c-cross-repository-pywiim-work-agents--automation)**.
 
-pywiim documents Home Assistant usage under **`docs/integration/`** in that repo (e.g. [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md)). The library checkout includes **`pywiim.code-workspace`** for VS Code (venv, ruff, format-on-save).
+pywiim documents Home Assistant usage under **`docs/integration/`** in that repo (e.g. [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md)). Use **`wiim-pywiim.code-workspace`** here for the combined workspace, or **`../pywiim/pywiim.code-workspace`** for pywiim-only work.

@@ -10,7 +10,7 @@ This file is the **integration rules contract**: how we build, how we talk to ea
 | ----- | ---------------------- | ----- |
 | **What this integration does** | Custom integration for **Home Assistant** that exposes WiiM / LinkPlay devices as entities (media players, sensors, etc.) and services. It does **not** reimplement the device protocol. | [ARCHITECTURE.md](ARCHITECTURE.md#architecture-overview); repo [README](../README.md) |
 | **How it works** | **Coordinator** polls / listens; **entities** read coordinator + call **pywiim** `Player` / services; config via **ConfigFlow**. Data flows: device ↔ pywiim ↔ coordinator ↔ entities. | [ARCHITECTURE.md](ARCHITECTURE.md) (overview, data flow, components) |
-| **How it uses pywiim** | **pywiim owns** HTTP/UPnP, parsing, multiroom, capabilities. This repo is a **thin glue layer**: map HA ↔ pywiim only. **Do not** paper over device bugs in the integration—**fix pywiim** (we maintain **both** repos; ship a library release + manifest bump when needed). **Do not edit a sibling pywiim checkout from here**—**Rule 2c**. **Operational gating**—**ADR 0007**. | **Rule 2 / 2a / 2b / 2c / 3**; [ADR 0007](adr/0007-capability-gating-strict-contract.md); [development/HA_INTEGRATION_GUIDE.md](../development/HA_INTEGRATION_GUIDE.md); upstream [HA_INTEGRATION](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md) |
+| **How it uses pywiim** | **pywiim owns** HTTP/UPnP, parsing, multiroom, capabilities. This repo is a **thin glue layer**: map HA ↔ pywiim only. **Do not** paper over device bugs in the integration—**fix pywiim** (we maintain **both** repos; ship a library release + manifest bump when needed). A sibling `../pywiim` checkout is allowed for library work; keep repo history and releases separate—**Rule 2c**. **Operational gating**—**ADR 0007**. | **Rule 2 / 2a / 2b / 2c / 3**; [ADR 0007](adr/0007-capability-gating-strict-contract.md); [development/HA_INTEGRATION_GUIDE.md](../development/HA_INTEGRATION_GUIDE.md); upstream [HA_INTEGRATION](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md) |
 | **How we talk to each other** | **Issue** (or Discussion for open questions) before speculative code. **PR** references the issue; **review** addresses comments. If anything is ambiguous, **stop and ask**—no guessing. Deviations from these rules need **issue + explicit design sign-off**. | **Non-negotiables** §3; [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | **How we make contracts** | **User-facing:** behavior and releases = **CHANGELOG** + **user docs** (`docs/user-guide.md`, FAQ, TTS guide). **Machine/install:** `manifest.json`, `requirements.txt` / pywiim pin. **API surface:** public HA entity/service schemas only—no private HA internals. **Maintainer invariants:** **ADRs** when we must not “unlearn” a trade-off (see Rule 8). | CHANGELOG; `manifest.json`; **Rule 8**; [adr/README.md](adr/README.md) |
 | **How we do ADRs** | Numbered files in **`docs/adr/`**. Use when a PR encodes a **long-lived** guarantee, trade-off, or reversal—not for every bugfix. Draft with **Status: Proposed** if needed. Template: **[0000-template.md](adr/0000-template.md)**. | **Rule 8**; [adr/README.md](adr/README.md) |
@@ -115,14 +115,21 @@ When working with pywiim integration patterns or API usage:
 
 **Home Assistant–oriented library docs** (read before inventing patterns): [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md), [HA_CAPABILITIES.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_CAPABILITIES.md), [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md), and the rest of **`docs/integration/`** in the pywiim tree.
 
-### Rule 2c: Do not edit the pywiim library from this repository (agents / automation)
+### Rule 2c: Cross-repository pywiim work (agents / automation)
 
-When your task is **WiiM Home Assistant integration** work in **this** repo (`mjcumming/wiim`):
+This workspace may include both maintained repositories as sibling checkouts:
 
-- **Do not** modify the **pywiim** source tree (e.g. a sibling checkout like `core/pywiim`, `../pywiim`, or any path outside this integration repo) to “finish” an integration change.
-- **Consume** pywiim by **released version only**: bump `custom_components/wiim/pywiim-version.txt`, `manifest.json` `requirements`, run **`pip install pywiim==…`** in the venv you use for tests/dev, and follow **Rule 2b** to open PRs on **[mjcumming/pywiim](https://github.com/mjcumming/pywiim)** for real library fixes.
+- `/workspaces/wiim` — Home Assistant integration (`mjcumming/wiim`)
+- `/workspaces/pywiim` — device library (`mjcumming/pywiim`)
 
-**Why:** The integration workspace and the library workspace are **separate checkouts**. Editing pywiim “next door” from an integration task creates unreviewed library drift and wrong git history. Agents default to **integration-only edits here**; **pywiim changes ship from the pywiim repo.**
+When a fix belongs in **pywiim**, you may edit the sibling `../pywiim` checkout from this workspace. Keep these boundaries:
+
+1. **Separate git history:** create commits/branches/PRs in the repo that owns the change. Do not commit pywiim files in the wiim repo, and do not copy/vendor pywiim under `custom_components/wiim/`.
+2. **Released dependency for integration merge/release:** integration changes must consume pywiim by released version before they merge or ship. After a pywiim release, bump `custom_components/wiim/pywiim-version.txt`, `manifest.json` `requirements`, install with `pip install pywiim==...`, and document the bump.
+3. **Local editable installs are for development only:** using `pip install -e ../pywiim` is acceptable while reproducing or testing cross-repo behavior, but do not leave the integration depending on an editable checkout.
+4. **Test in the owning repo first:** library parser/API/`Player`/`Group` fixes need pywiim tests; HA entity/coordinator/service behavior needs wiim tests. Cross-repo issues may need both.
+
+**Why:** We own both repos, so agents should be able to fix the right layer end to end. Keeping separate checkout, PR, and release boundaries avoids unreviewed library drift while still making cross-repo debugging practical.
 
 ### Rule 3: Thin Glue Layer
 
