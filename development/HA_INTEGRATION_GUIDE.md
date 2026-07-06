@@ -54,9 +54,10 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-06-30 (pywiim 2.2.19: adds read-only WiiM diagnostic/client APIs, with no HA
-integration API changes required; keeps the 2.2.17 long local URL / USB media duration parsing behavior and WiiM Ultra
-`UDisk*` source normalization)._
+_Last reviewed against upstream on 2026-07-06 (pywiim 2.3.0: wires the read-only WiiM input APIs into source enumeration —
+custom labels, enable-filtering, and authoritative input lists — consumed transparently through `available_sources` /
+`source` / `source_name` with no HA integration API changes required; keeps the 2.2.17 long local URL / USB media duration
+parsing behavior and WiiM Ultra `UDisk*` source normalization)._
 
 **Notable upstream changes (2.2.16):** `set_display_enabled(True)` now enables adaptive brightness (`auto_sense_enable=1`) by default so the LCD actually relights; optional `auto_sense_enable` keyword on client and player (pass `0` for fixed brightness). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
 
@@ -69,6 +70,12 @@ guide or API reference.
 **Notable upstream changes (2.2.19):** read-only WiiM helpers for `getAudioInputCapbility`, Eq10HP graphic EQ, and
 room-correction diagnostics. No Home Assistant integration API changes required. Integration pin updated so HA Core 2026.6 /
 Python 3.14 installs retry pywiim dependency resolution with a fresh requirement string.
+
+**Notable upstream changes (2.3.0):** `available_sources` / `source_catalog` now overlay the read-only WiiM input APIs
+(`getModeRename`, `getAudioInputEnable`, `getAudioInputCapbility`) on WiiM devices — user custom input labels are shown,
+disabled inputs are hidden, and the authoritative input list fills gaps left by `plm_support` guessing. `set_source()` resolves
+the custom label plus the previous/canonical names, so the integration consumes this transparently through the existing
+`source` / `source_name` / `select_source` surface. No Home Assistant integration API changes required ([Issue #257](https://github.com/mjcumming/wiim/issues/257)).
 
 **Notable upstream changes (2.1.98):** WiiM Ultra LCD control uses `setLightOperationBrightConfig` via `Player.set_display_enabled` / `set_display_config`. `set_display_enabled(True)` applies `DISPLAY_DEFAULT_BRIGHTNESS` (100) when turning on unless `default_bright` is passed; brightness uses a **1–100** device scale (`DISPLAY_BRIGHTNESS_MIN` / `DISPLAY_BRIGHTNESS_MAX`).
 

@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.95] - 2026-07-06
+
+### Added
+
+- **Input selection with custom names** ([Issue #257](https://github.com/mjcumming/wiim/issues/257)) — delivered via pywiim
+  **2.3.0**. On WiiM devices the source dropdown now reflects the WiiM app configuration:
+  - Inputs you **renamed** in the WiiM app (e.g. Optical → "Optical Mike") show that custom label in the source list and as the
+    current source. Selecting the renamed source still works, and existing automations that use the old name (e.g. "Optical In")
+    or canonical name keep working.
+  - Inputs you **disabled** in the WiiM app are hidden from the source list (the currently active source is always shown).
+  - The device's **authoritative input list** replaces model-based guessing, so physical inputs that were previously missing now
+    appear.
+
+  These enhancements use read-only WiiM APIs and are WiiM-only; other LinkPlay/OEM devices keep their existing source behavior.
+
+### Changed
+
+- Bumped the pinned pywiim requirement to **2.3.0**.
+
 ## [1.0.94] - 2026-06-30
 
 ### Fixed
