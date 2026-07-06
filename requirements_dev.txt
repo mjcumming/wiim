@@ -1,5 +1,5 @@
 # Development dependencies
-ruff>=0.15.16
+ruff>=0.15.20
 black>=26.5.1
 mypy>=2.1.0
 pre-commit>=4.6.0
