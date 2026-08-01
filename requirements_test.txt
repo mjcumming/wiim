@@ -18,5 +18,5 @@ zeroconf
 
 # Code quality
 flake8>=7.3.0
-ruff>=0.15.16
-diff-cover>=10.3.0
+ruff>=0.16.0
+diff-cover>=10.4.1
