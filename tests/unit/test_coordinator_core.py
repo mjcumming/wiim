@@ -7,7 +7,7 @@ import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pywiim import Player, WiiMClient
-from pywiim.exceptions import WiiMError
+from pywiim.exceptions import WiiMConnectionError, WiiMError
 
 from custom_components.wiim import coordinator as coordinator_module
 from custom_components.wiim.const import DOMAIN
@@ -250,12 +250,24 @@ class TestWiiMCoordinator:
         )
         caplog.set_level(logging.DEBUG, logger="custom_components.wiim.coordinator")
 
-        await coordinator._async_update_data()
+        with pytest.raises(UpdateFailed, match="device unreachable"):
+            await coordinator._async_update_data()
 
         assert any(
             r.levelno == logging.DEBUG and "Update failed" in r.getMessage() for r in caplog.records
         ), caplog.records
         assert not any(r.levelno == logging.WARNING and "Update failed" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_connection_error_raises_update_failed(
+        self, coordinator, mock_player
+    ) -> None:
+        """WiiMConnectionError marks the entity unavailable (issue #259)."""
+        coordinator.data = {"player": mock_player}
+        mock_player.refresh.side_effect = WiiMConnectionError("Connection refused")
+
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
 
     @pytest.mark.asyncio
     async def test_async_update_data_other_wiim_error_logs_warning(

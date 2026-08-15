@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pywiim import Player, PollingStrategy, WiiMClient
-from pywiim.exceptions import WiiMError
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 _LOGGER = logging.getLogger(__name__)
 _PYWIIM_MISC_LOGGER_NAME = "pywiim.api.misc"
@@ -43,6 +43,8 @@ def _install_expected_pywiim_log_filter() -> None:
 
 def _is_expected_unreachable_error(err: Exception) -> bool:
     """Return True when error indicates expected offline/unreachable device."""
+    if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
+        return True
     err_text = str(err).lower()
     return "device unreachable" in err_text or "connection failed on all attempted protocols" in err_text
 
@@ -229,9 +231,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except WiiMError as err:
             if _is_expected_unreachable_error(err):
                 _LOGGER.debug("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
-            else:
-                _LOGGER.warning("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
-            # Return cached Player object even on error
+                # Powered-off / unreachable devices must go unavailable so automations
+                # that wait on availability (e.g. smart-plug scripts) can proceed.
+                raise UpdateFailed(
+                    f"Failed to communicate with {self.player.host}: {_compact_wiim_error(err)}"
+                ) from err
+            _LOGGER.warning("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
+            # Return cached Player object for non-connectivity errors (parse blips, etc.)
             if self.data:
                 return self.data
             raise UpdateFailed(f"Failed to communicate with {self.player.host}: {_compact_wiim_error(err)}") from err

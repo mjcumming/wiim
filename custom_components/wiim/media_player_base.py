@@ -103,12 +103,9 @@ class WiiMMediaPlayerMixin:
             new_duration,
         )
 
-        # Update duration (keep existing if new is invalid during playback)
-        if new_duration:
-            self._attr_media_duration = new_duration
-        elif current_state == MediaPlayerState.IDLE:
-            self._attr_media_duration = None
-        # Else: Keep existing duration (don't clear on transient errors during playback)
+        # Publish pywiim's duration as-is. None/0 means unknown (live stream,
+        # Bluetooth, or device cleared totlen) — do not keep the previous track.
+        self._attr_media_duration = new_duration
 
         # Simple Position Update (Robust)
         if new_position is None:

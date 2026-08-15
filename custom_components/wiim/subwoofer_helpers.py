@@ -14,6 +14,25 @@ def subwoofer_enabled_from_status(status: Any) -> bool | None:
     return getattr(status, "enabled", None)
 
 
+def main_speaker_bass_from_status(status: Any) -> bool | None:
+    """Return True when bass is sent to the main speakers (None if unknown).
+
+    Device API uses inverted ``main_filter``: 1 = filter bass from mains,
+    0 = send bass to mains. ``SubwooferStatus.main_filter_enabled`` follows
+    that same inverted flag.
+    """
+    if status is None:
+        return None
+    if isinstance(status, dict):
+        if "main_filter" not in status:
+            return None
+        return int(status.get("main_filter", 0)) == 0
+    main_filter_enabled = getattr(status, "main_filter_enabled", None)
+    if main_filter_enabled is None:
+        return None
+    return not bool(main_filter_enabled)
+
+
 def subwoofer_level_from_status(status: Any) -> float | None:
     """Return subwoofer level in dB, or None if unknown."""
     if status is None:

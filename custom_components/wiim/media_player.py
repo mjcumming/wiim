@@ -223,11 +223,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         return self._get_player().supports_queue_add
 
     async def _ensure_upnp_ready(self) -> None:
-        """Ensure UPnP client is available when queue management is requested."""
-        # Check if UPnP is supported (required for queue management)
-        if not self._get_player().supports_upnp:
+        """Ensure UPnP AVTransport is available when queue management is requested."""
+        if not self._get_player().supports_queue_add:
             raise HomeAssistantError(
-                "Queue management not available. The device may not support UPnP or it may not be initialized yet."
+                "Queue management not available. The device does not advertise "
+                "AVTransport AddURIToQueue or PlayQueue enqueue actions."
             )
 
     @property
@@ -1102,10 +1102,11 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
     async def async_get_queue(self) -> ServiceResponse:
         """Handle get_queue service call - returns queue contents."""
-        # get_queue requires supports_queue_browse (full queue retrieval via ContentDirectory)
+        # get_queue requires supports_queue_browse (ContentDirectory or PlayQueue BrowseQueue)
         if not self._get_player().supports_queue_browse:
             raise HomeAssistantError(
-                "Queue browsing not available. This feature requires UPnP ContentDirectory support (WiiM Amp/Ultra + USB only)."
+                "Queue browsing not available. The device does not advertise "
+                "UPnP ContentDirectory or PlayQueue BrowseQueue."
             )
         async with self.wiim_command("get queue"):
             queue = await self.coordinator.player.get_queue()

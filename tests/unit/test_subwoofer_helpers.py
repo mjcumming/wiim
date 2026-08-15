@@ -3,6 +3,7 @@
 from pywiim.api.subwoofer import SubwooferStatus
 
 from custom_components.wiim.subwoofer_helpers import (
+    main_speaker_bass_from_status,
     subwoofer_enabled_from_status,
     subwoofer_level_from_status,
     subwoofer_status_for_diagnostics,
@@ -38,6 +39,22 @@ class TestSubwooferEnabled:
 
     def test_none(self) -> None:
         assert subwoofer_enabled_from_status(None) is None
+
+
+class TestMainSpeakerBass:
+    """Test main_speaker_bass_from_status (inverted main_filter)."""
+
+    def test_dict(self) -> None:
+        assert main_speaker_bass_from_status({"main_filter": 0}) is True
+        assert main_speaker_bass_from_status({"main_filter": 1}) is False
+        assert main_speaker_bass_from_status({"status": 1}) is None
+
+    def test_dataclass(self) -> None:
+        # sample status has main_filter_enabled=True → bass NOT sent to mains
+        assert main_speaker_bass_from_status(_sample_status()) is False
+
+    def test_none(self) -> None:
+        assert main_speaker_bass_from_status(None) is None
 
 
 class TestSubwooferLevel:

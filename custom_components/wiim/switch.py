@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 from .entity import WiimEntity
-from .subwoofer_helpers import subwoofer_enabled_from_status
+from .subwoofer_helpers import main_speaker_bass_from_status, subwoofer_enabled_from_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +44,8 @@ async def async_setup_entry(
     try:
         if player.supports_subwoofer:
             entities.append(WiiMSubwooferSwitch(coordinator, config_entry))
-            _LOGGER.debug("Creating subwoofer switch entity (supports_subwoofer)")
+            entities.append(WiiMMainSpeakerBassSwitch(coordinator, config_entry))
+            _LOGGER.debug("Creating subwoofer and main-speaker-bass switch entities (supports_subwoofer)")
         else:
             _LOGGER.debug("Skipping subwoofer switch entity - supports_subwoofer false")
     except Exception as err:
@@ -188,6 +189,81 @@ class WiiMSubwooferSwitch(WiimEntity, SwitchEntity):
         async with self.wiim_command("disable subwoofer"):
             await self.coordinator.player.set_subwoofer_enabled(False)
 
+        self._is_on = False
+        self.async_write_ha_state()
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from coordinator."""
+        self._update_state_from_cache()
+        super()._handle_coordinator_update()
+
+
+class WiiMMainSpeakerBassSwitch(WiimEntity, SwitchEntity):
+    """Switch for 'Main Speaker Output Bass' (send bass to mains vs sub only)."""
+
+    _attr_icon = "mdi:sine-wave"
+    _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = True
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the main speaker bass switch entity."""
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_main_speaker_bass"
+        self._attr_name = "Main speaker bass"
+        self._is_on: bool | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to Home Assistant."""
+        await super().async_added_to_hass()
+        await self._update_state()
+
+    async def _update_state(self) -> None:
+        """Fetch current main-speaker bass state from the device."""
+        try:
+            status = await self.coordinator.player.get_subwoofer_status()
+            enabled = main_speaker_bass_from_status(status)
+            if enabled is not None:
+                self._is_on = bool(enabled)
+        except Exception as err:
+            _LOGGER.debug("Failed to get main speaker bass status: %s", err)
+
+    def _update_state_from_cache(self) -> None:
+        """Update state from pywiim's cached subwoofer status."""
+        player = self.coordinator.player
+        cached = getattr(player, "main_speaker_bass", None)
+        if isinstance(cached, bool):
+            self._is_on = cached
+            return
+        enabled = main_speaker_bass_from_status(player.subwoofer_status)
+        if enabled is not None:
+            self._is_on = bool(enabled)
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if bass is sent to the main speakers."""
+        return self._is_on
+
+    @property
+    def available(self) -> bool:
+        """Return entity availability."""
+        return (
+            self.coordinator.last_update_success
+            and self.coordinator.player.supports_subwoofer
+            and self._is_on is not None
+        )
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Send bass to the main speakers."""
+        async with self.wiim_command("enable main speaker bass"):
+            await self.coordinator.player.set_main_speaker_bass(True)
+        self._is_on = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Filter bass from the main speakers (subwoofer only)."""
+        async with self.wiim_command("disable main speaker bass"):
+            await self.coordinator.player.set_main_speaker_bass(False)
         self._is_on = False
         self.async_write_ha_state()
 

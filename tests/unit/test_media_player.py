@@ -389,6 +389,24 @@ class TestWiiMMediaPlayerMediaInfo:
         media_player._update_position_from_coordinator()
         assert media_player.media_duration == 180
 
+    def test_media_duration_clears_when_pywiim_reports_none(self, media_player, mock_coordinator):
+        """None/0 from pywiim must clear the previous duration (issue #263)."""
+        from homeassistant.components.media_player import MediaPlayerState
+
+        player = mock_coordinator.player
+        player.is_playing = True
+        player.is_paused = False
+        player.is_buffering = False
+        player.media_duration = 180
+        player.media_position = 10
+        media_player._update_position_from_coordinator()
+        assert media_player._attr_media_duration == 180
+
+        player.media_duration = None
+        media_player._update_position_from_coordinator()
+        assert media_player._attr_media_duration is None
+        assert media_player.state == MediaPlayerState.PLAYING
+
     def test_media_position(self, media_player, mock_coordinator):
         """Test media position property."""
         from homeassistant.components.media_player import MediaPlayerState
@@ -1595,6 +1613,21 @@ class TestWiiMMediaPlayerPlayMediaEdgeCases:
         media_player.hass = MagicMock()
 
         with pytest.raises(HomeAssistantError, match="Failed to add media to queue"):
+            await media_player.async_play_media(
+                "music", "http://example.com/song.mp3", **{ATTR_MEDIA_ENQUEUE: MediaPlayerEnqueue.ADD}
+            )
+
+    @pytest.mark.asyncio
+    async def test_play_media_enqueue_requires_queue_add(self, media_player, mock_coordinator):
+        """enqueue: add must require supports_queue_add, not just a UPnP client (issue #264)."""
+        from homeassistant.components.media_player import ATTR_MEDIA_ENQUEUE, MediaPlayerEnqueue
+        from homeassistant.exceptions import HomeAssistantError
+
+        mock_coordinator.player.supports_queue_add = False
+        mock_coordinator.player.supports_upnp = True
+        media_player.hass = MagicMock()
+
+        with pytest.raises(HomeAssistantError, match="Queue management not available"):
             await media_player.async_play_media(
                 "music", "http://example.com/song.mp3", **{ATTR_MEDIA_ENQUEUE: MediaPlayerEnqueue.ADD}
             )

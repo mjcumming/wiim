@@ -110,12 +110,9 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         # If duration is 0, return None (unknown) to avoid 00:00 display
         new_duration = group.media_duration if group.media_duration else None
 
-        # Update duration (keep existing if new is invalid during playback)
-        if new_duration:
-            self._attr_media_duration = new_duration
-        elif current_state == MediaPlayerState.IDLE:
-            self._attr_media_duration = None
-        # Else: Keep existing duration (don't clear on transient errors during playback)
+        # Publish pywiim's duration as-is. None/0 means unknown — do not keep
+        # the previous track's duration across source changes.
+        self._attr_media_duration = new_duration
 
         # Simple Position Update (Robust)
         if new_position is None:

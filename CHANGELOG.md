@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.0.96] - 2026-08-15
+
+### Fixed
+
+- **Powered-off / stopped devices report the wrong state** ([Issue #259](https://github.com/mjcumming/wiim/issues/259)) — coordinator poll failures that mean the device is unreachable (`WiiMConnectionError`, `WiiMTimeoutError`, or “device unreachable”) now raise `UpdateFailed` so entities go `unavailable` instead of keeping the last `paused` state. pywiim **2.3.1** also maps HTTP/UPnP `stop` / `stopped` / `none` to `idle` instead of `pause`.
+- **Stale title / artist / duration after source change** ([Issue #263](https://github.com/mjcumming/wiim/issues/263)) — the media player no longer keeps the previous track’s duration when pywiim reports `None` or `0`. pywiim **2.3.1** clears leftover firmware metadata on source change.
+- **Queue enqueue on WiiM Pro / Pro Plus** ([Issue #264](https://github.com/mjcumming/wiim/issues/264)) — `enqueue: add` requires `supports_queue_add`. pywiim **2.3.1** reports that for AVTransport `AddURIToQueue` **or** WiiM PlayQueue enqueue actions. `get_queue` is no longer described as Amp/Ultra + USB only. Verified on a WiiM Pro through Home Assistant.
+- **WiiM Amp reboot no-op** ([Issue #260](https://github.com/mjcumming/wiim/issues/260)) — delivered via pywiim **2.3.1**. If `reboot` returns `unknown command`, the library tries `StartRebootTime:1` then `StartRebootTime:0` and caches the working command.
+- **Audio Pro C5 MkII stuck initializing** ([Issue #266](https://github.com/mjcumming/wiim/issues/266)) — delivered via pywiim **2.3.1**. Vendor detection now matches `c5` and compact `AudioPro` names so C5 MkII gets the Audio Pro MkII profile.
+
+### Added
+
+- **Main speaker bass switch** ([Issue #265](https://github.com/mjcumming/wiim/issues/265)) — when `player.supports_subwoofer` is true, expose a “Main speaker bass” switch so automations can send bass to the mains when the subwoofer is off. Delivered via pywiim **2.3.1** `Player.set_main_speaker_bass()`.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.1** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.0.
+
 ## [1.0.95] - 2026-07-06
 
 ### Added

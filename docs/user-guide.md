@@ -458,11 +458,11 @@ automation:
 
 Queue management requires UPnP support. Check device capabilities in the entity attributes.
 
-> **⚠️ Limited Device Support**: Full queue browsing (`get_queue`) only works on **WiiM Amp and WiiM Ultra with a USB drive connected**. These devices expose the UPnP ContentDirectory service required for queue retrieval. Other devices (Mini, Pro, Pro Plus) function as UPnP renderers only and do not support queue browsing. Queue position and count are available on all devices via the `queue_position` and `queue_count` entity attributes.
+> **Device support**: Queue add/play/remove works when the device advertises AVTransport `AddURIToQueue` **or** WiiM PlayQueue (Pro / Pro Plus). `get_queue` works with ContentDirectory (Amp/Ultra USB) or PlayQueue `BrowseQueue`. Queue position and count are available on all devices via the `queue_position` and `queue_count` entity attributes.
 >
 > See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for technical details.
 
-**Play from Queue Position** (requires UPnP AVTransport)
+**Play from Queue Position** (AVTransport or PlayQueue)
 
 ```yaml
 service: wiim.play_queue
@@ -472,7 +472,7 @@ data:
   queue_position: 0 # 0-based index
 ```
 
-**Remove from Queue** (requires UPnP AVTransport)
+**Remove from Queue** (AVTransport or PlayQueue)
 
 ```yaml
 service: wiim.remove_from_queue
@@ -482,14 +482,14 @@ data:
   queue_position: 3 # Remove item at position 3
 ```
 
-**Get Queue Contents** (WiiM Amp/Ultra + USB only)
+**Get Queue Contents** (ContentDirectory or PlayQueue `BrowseQueue`)
 
 ```yaml
 service: wiim.get_queue
 target:
   entity_id: media_player.living_room
 # Returns: queue items with title, artist, album, URL
-# Only works on WiiM Amp/Ultra with USB drive connected
+# Works on Amp/Ultra USB (ContentDirectory) and WiiM Pro / Pro Plus (PlayQueue)
 ```
 
 **Check Queue Support**

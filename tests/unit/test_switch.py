@@ -7,6 +7,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntry
 
 from custom_components.wiim.switch import (
+    WiiMMainSpeakerBassSwitch,
     WiiMSubwooferSwitch,
     WiiMTriggerOutSwitch,
     async_setup_entry,
@@ -45,6 +46,8 @@ def mock_coordinator():
     coordinator.player.trigger_out_on = None
     coordinator.player.get_subwoofer_status = AsyncMock(return_value={"plugged": True, "status": True, "level": 0})
     coordinator.player.set_subwoofer_enabled = AsyncMock()
+    coordinator.player.set_main_speaker_bass = AsyncMock()
+    coordinator.player.main_speaker_bass = True
     return coordinator
 
 
@@ -74,10 +77,12 @@ class TestSubwooferSwitchSetup:
 
         await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
 
-        # With supports_trigger_out false in client.capabilities we get only subwoofer
-        assert len(entities) >= 1
+        # With supports_trigger_out false we get subwoofer + main speaker bass
+        assert len(entities) >= 2
         subwoofer_entities = [e for e in entities if isinstance(e, WiiMSubwooferSwitch)]
+        bass_entities = [e for e in entities if isinstance(e, WiiMMainSpeakerBassSwitch)]
         assert len(subwoofer_entities) == 1
+        assert len(bass_entities) == 1
 
     @pytest.mark.asyncio
     async def test_setup_creates_entity_when_supported_even_if_unplugged(
@@ -421,3 +426,59 @@ class TestTriggerOutSwitchControl:
 
         assert entity._is_on is False
         trigger_coordinator.player.get_trigger_out_status.assert_not_called()
+
+
+class TestMainSpeakerBassSwitch:
+    """Test main speaker bass switch (issue #265)."""
+
+    def test_initialization(self, mock_coordinator, mock_config_entry):
+        """Test main speaker bass switch initialization."""
+        entity = WiiMMainSpeakerBassSwitch(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_main_speaker_bass"
+        assert entity.name == "Main speaker bass"
+
+    def test_is_on_from_cache(self, mock_coordinator, mock_config_entry):
+        """Cached player.main_speaker_bass drives is_on."""
+        mock_coordinator.player.main_speaker_bass = False
+        entity = WiiMMainSpeakerBassSwitch(mock_coordinator, mock_config_entry)
+        entity._update_state_from_cache()
+        assert entity.is_on is False
+        assert entity.available is True
+
+    @pytest.mark.asyncio
+    async def test_turn_on_calls_player(self, mock_coordinator, mock_config_entry):
+        """Turning on sends bass to the main speakers."""
+        entity = WiiMMainSpeakerBassSwitch(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+        await entity.async_turn_on()
+        mock_coordinator.player.set_main_speaker_bass.assert_called_once_with(True)
+        assert entity.is_on is True
+
+    @pytest.mark.asyncio
+    async def test_turn_off_calls_player(self, mock_coordinator, mock_config_entry):
+        """Turning off filters bass from the main speakers."""
+        entity = WiiMMainSpeakerBassSwitch(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+        await entity.async_turn_off()
+        mock_coordinator.player.set_main_speaker_bass.assert_called_once_with(False)
+        assert entity.is_on is False
+
+    @pytest.mark.asyncio
+    async def test_update_state_from_status(self, mock_coordinator, mock_config_entry):
+        """Initial fetch uses inverted main_filter from subwoofer status."""
+        mock_coordinator.player.get_subwoofer_status = AsyncMock(return_value={"main_filter": 1})
+        entity = WiiMMainSpeakerBassSwitch(mock_coordinator, mock_config_entry)
+        await entity._update_state()
+        assert entity.is_on is False
+
+    @pytest.mark.asyncio
+    async def test_setup_skips_bass_when_subwoofer_unsupported(
+        self, mock_hass, mock_config_entry, mock_coordinator
+    ):
+        """Main speaker bass is gated on supports_subwoofer only."""
+        mock_hass.data["wiim"]["test_entry_id"]["coordinator"] = mock_coordinator
+        mock_coordinator.player.supports_subwoofer = False
+        mock_coordinator.player.client.capabilities["supports_trigger_out"] = False
+        entities: list = []
+        await async_setup_entry(mock_hass, mock_config_entry, entities.extend)
+        assert [e for e in entities if isinstance(e, WiiMMainSpeakerBassSwitch)] == []

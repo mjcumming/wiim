@@ -220,7 +220,7 @@
     },
     "get_queue": {
       "name": "Get Queue",
-      "description": "Get the current queue contents with metadata (title, artist, album, URL). Requires UPnP ContentDirectory support (WiiM Amp/Ultra + USB only)."
+      "description": "Get the current queue contents with metadata (title, artist, album, URL). Requires UPnP ContentDirectory or PlayQueue BrowseQueue (WiiM Amp/Ultra USB, and WiiM Pro / Pro Plus PlayQueue)."
     },
     "scan_bluetooth": {
       "name": "Scan for Bluetooth Devices",
