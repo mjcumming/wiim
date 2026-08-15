@@ -41,12 +41,30 @@ def _install_expected_pywiim_log_filter() -> None:
     _EXPECTED_PYWIIM_LOG_FILTER_INSTALLED = True
 
 
+_UNREACHABLE_ERROR_MARKERS = (
+    "device unreachable",
+    "connection failed on all attempted protocols",
+    "cannot connect to host",
+    "connect call failed",
+    "connection refused",
+    "connection reset",
+    "network is unreachable",
+    "name or service not known",
+)
+
+
 def _is_expected_unreachable_error(err: Exception) -> bool:
     """Return True when error indicates expected offline/unreachable device."""
     if isinstance(err, (WiiMConnectionError, WiiMTimeoutError)):
         return True
+    last_error = getattr(err, "last_error", None)
+    if last_error is not None and last_error is not err and _is_expected_unreachable_error(last_error):
+        return True
+    # Powered-off devices often surface as WiiMRequestError after retries
+    # ("Request failed after 2 attempts: Cannot connect to host"), not as
+    # WiiMConnectionError. Treat those connect failures as unreachable too.
     err_text = str(err).lower()
-    return "device unreachable" in err_text or "connection failed on all attempted protocols" in err_text
+    return any(marker in err_text for marker in _UNREACHABLE_ERROR_MARKERS)
 
 
 def _compact_wiim_error(err: Exception) -> str:

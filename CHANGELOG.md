@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.97] - 2026-08-15
+
+### Fixed
+
+- **Powered-off devices still stay `idle`** ([Issue #259](https://github.com/mjcumming/wiim/issues/259)) — connect failures after retries (`Cannot connect to host` / `Connect call failed`) now raise `UpdateFailed` so the entity goes `unavailable` instead of returning cached `idle`. pywiim **2.3.2** also raises `WiiMConnectionError` after exhausted connect retries.
+- **Stale title / art after source change** ([Issue #263](https://github.com/mjcumming/wiim/issues/263)) — delivered via pywiim **2.3.2**. The synchronizer no longer falls back to leftover firmware fields on the raw status model after it has already cleared title/artist/album/art.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.2** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.1.
+
 ## [1.0.96] - 2026-08-15
 
 ### Fixed

@@ -7,7 +7,7 @@ import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pywiim import Player, WiiMClient
-from pywiim.exceptions import WiiMConnectionError, WiiMError
+from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMRequestError
 
 from custom_components.wiim import coordinator as coordinator_module
 from custom_components.wiim.const import DOMAIN
@@ -267,6 +267,23 @@ class TestWiiMCoordinator:
         mock_player.refresh.side_effect = WiiMConnectionError("Connection refused")
 
         with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_request_cannot_connect_raises_update_failed(
+        self, coordinator, mock_player
+    ) -> None:
+        """Connect failures wrapped as WiiMRequestError must go unavailable (#259)."""
+        coordinator.data = {"player": mock_player}
+        mock_player.refresh.side_effect = WiiMRequestError(
+            "Request failed after 2 attempts: Request to https://192.168.1.50:443/"
+            "httpapi.asp?command=getPlayerStatusEx failed: Cannot connect to host:443 "
+            "ssl:<ssl.SSLContext> [Connect call failed ('192.168.1.50', 443)]",
+            endpoint="/httpapi.asp?command=getPlayerStatusEx",
+            attempts=2,
+        )
+
+        with pytest.raises(UpdateFailed, match="device unreachable"):
             await coordinator._async_update_data()
 
     @pytest.mark.asyncio
