@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.98] - 2026-08-16
+
 ### Fixed
 
 - **Queue position/count missing on media player** ([Issue #268](https://github.com/mjcumming/wiim/issues/268)) — expose `queue_position` and `queue_count` from pywiim on the media player entity attributes (documented in the user guide but previously never wired). Values come from pywiim (`plicurr`/`plicount`, or the PlayQueue overlay).
