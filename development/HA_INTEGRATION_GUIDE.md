@@ -54,8 +54,8 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-08-15 (pywiim 2.3.2: exhausted connect retries raise `WiiMConnectionError`;
-`_status_field` no longer falls back to leftover firmware title/art after the synchronizer cleared them). Keep using
+_Last reviewed against upstream on 2026-08-16 (pywiim 2.3.3: PlayQueue auto-advance after `PlayQueueWithIndex`;
+`queue_count`/`queue_position` overlay from BrowseQueue/GetQueueIndex when HTTP `plicount`/`plicurr` stay empty). Keep using
 `Player.supports_*` only — do not add HA fallbacks._
 
 **Notable upstream changes (2.2.16):** `set_display_enabled(True)` now enables adaptive brightness (`auto_sense_enable=1`) by default so the LCD actually relights; optional `auto_sense_enable` keyword on client and player (pass `0` for fixed brightness). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
