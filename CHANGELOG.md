@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.0.98] - 2026-08-16
+
+### Fixed
+
+- **Queue position/count missing on media player** ([Issue #268](https://github.com/mjcumming/wiim/issues/268)) — expose `queue_position` and `queue_count` from pywiim on the media player entity attributes (documented in the user guide but previously never wired). Values come from pywiim (`plicurr`/`plicount`, or the PlayQueue overlay).
+- **Stale title after source change** ([Issue #263](https://github.com/mjcumming/wiim/issues/263)) — delivered via pywiim **2.3.4**. Stream → Spotify shows the new title on the first poll; leftover Spotify → radio titles stay cleared; `play_url()` filename fallback works for `custompushurl`.
+- **Slave volume/mute from buttons and the app** ([Issue #269](https://github.com/mjcumming/wiim/issues/269)) — delivered via pywiim **2.3.4**. Slave polls write volume/mute into the synchronizer so HA sees hardware/app changes.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.4** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.2. Delivers PlayQueue auto-advance and queue overlay ([Issue #268](https://github.com/mjcumming/wiim/issues/268)), the remaining #263 leftover-guard fix, and slave volume/mute from buttons ([Issue #269](https://github.com/mjcumming/wiim/issues/269)).
+
 ## [1.0.97] - 2026-08-15
 
 ### Fixed

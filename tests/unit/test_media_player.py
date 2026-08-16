@@ -1258,6 +1258,8 @@ class TestWiiMMediaPlayerExtraState:
         mock_coordinator.player.is_master = True
         mock_coordinator.player.supports_eq = True
         mock_coordinator.player.eq_preset = "Off"
+        mock_coordinator.player.queue_position = 1
+        mock_coordinator.player.queue_count = 4
 
         attrs = media_player.extra_state_attributes
 
@@ -1270,6 +1272,29 @@ class TestWiiMMediaPlayerExtraState:
         assert attrs["music_assistant_compatible"] is True
         assert attrs["integration_purpose"] == "individual_speaker_control"
         assert attrs["sound_mode"] == "Off"
+        assert attrs["queue_position"] == 1
+        assert attrs["queue_count"] == 4
+
+    def test_extra_state_attributes_queue_none(self, media_player, mock_coordinator):
+        """queue_position/queue_count are included even when pywiim reports None."""
+        mock_coordinator.player.model = "WiiM Pro"
+        mock_coordinator.player.firmware = "1.0.0"
+        mock_coordinator.player.host = "192.168.1.50"
+        mock_coordinator.player.device_info = MagicMock()
+        mock_coordinator.player.device_info.mac = None
+        mock_coordinator.player.role = "solo"
+        mock_coordinator.player.is_master = False
+        mock_coordinator.player.supports_eq = False
+        mock_coordinator.player.eq_preset = None
+        mock_coordinator.player.queue_position = None
+        mock_coordinator.player.queue_count = None
+
+        attrs = media_player.extra_state_attributes
+
+        assert "queue_position" in attrs
+        assert "queue_count" in attrs
+        assert attrs["queue_position"] is None
+        assert attrs["queue_count"] is None
 
 
 class TestWiiMMediaPlayerHelperFunctions:

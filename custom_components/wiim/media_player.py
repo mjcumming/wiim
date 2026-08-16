@@ -1376,4 +1376,9 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         attrs["is_buffering"] = player.is_buffering if hasattr(player, "is_buffering") else None
         attrs["play_state"] = player.play_state if hasattr(player, "play_state") else None
 
+        # Queue position/count from pywiim (HTTP plicurr/plicount, or PlayQueue overlay).
+        # Documented in docs/user-guide.md; required for end-of-queue automations (issue #268).
+        attrs["queue_position"] = player.queue_position
+        attrs["queue_count"] = player.queue_count
+
         return attrs
