@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.99] - 2026-08-17
+
+### Fixed
+
+- **WiiM Sound Lite audio output modes** ([Issue #270](https://github.com/mjcumming/wiim/issues/270)) — delivered via pywiim **2.3.5**. Sound / Sound Lite show **Speaker Out** instead of Line/Optical/Coax. Speaker Out is hardware mode 7 (`source=0`); Bluetooth Out is the same hardware with `source=1`. Amp Ultra HDMI (also mode 7) is unchanged.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.5** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.4.
+
 ## [1.0.98] - 2026-08-16
 
 ### Fixed
