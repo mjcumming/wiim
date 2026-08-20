@@ -18,6 +18,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 - ⏰ Set alarms and sleep timers
 - 🎚️ Customize equalizer settings
+- 📋 Enqueue URLs and inspect queue position/count (device dependent)
 - 🔗 Create complex multiroom automations
 - 📊 Monitor audio quality and device health
 - 🎤 Text-to-speech announcements
@@ -125,7 +126,7 @@ Each speaker creates these entities:
 
 ## 🛠️ Supported Devices
 
-- **WiiM**: Mini, Pro, Pro Plus, Amp, Ultra
+- **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
 - **LinkPlay Compatible**: Arylic, Dayton Audio, DOSS, iEast, and many more
 - **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
 

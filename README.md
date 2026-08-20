@@ -37,7 +37,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ## Supported Devices
 
-- **WiiM**: Mini, Pro, Pro Plus, Amp, Ultra
+- **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
 - **LinkPlay Compatible**: Arylic, Audio Pro (including Gen1: A26, C10, C5a and MkII models), Dayton Audio, DOSS, and many more
 - **Enhanced Compatibility**: Automatic protocol fallback for devices with non-standard configurations
 - **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
@@ -70,6 +70,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 | **Shuffle & Repeat** | Toggle shuffle and repeat modes for playlists                                     |
 | **Presets**          | Hardware preset buttons (device dependent, up to 20)                              |
 | **URL Playback**     | Play audio from any URL (radio streams, files, playlists)                         |
+| **Playback Queue**   | Enqueue URLs (`add` / `next`) on devices with AVTransport or WiiM PlayQueue (Pro / Pro Plus). Position and count on the media player. |
 
 ### 🎛️ Audio Enhancement
 
@@ -78,7 +79,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 | **EQ Control**     | 10-band equalizer with 24 presets (Flat, Rock, Jazz, Classical, Pop, etc.)         |
 | **Custom EQ**      | Fine-tune each of 10 frequency bands (-12dB to +12dB)                              |
 | **Subwoofer**      | Enable/disable and adjust level (-15 to +15 dB) for connected subwoofers           |
-| **Audio Output**   | Control hardware output modes (Line Out, Optical, Coax, Bluetooth, Headphone, USB) |
+| **Audio Output**   | Hardware outputs vary by model (Line Out, Optical, Coax, Speaker Out, HDMI, USB, headphone). Paired Bluetooth devices appear as `BT: …`. |
 | **Audio Quality**  | Real-time sensors for sample rate, bit depth, and bit rate                         |
 | **Format Support** | Lossless (FLAC, WAV, ALAC up to 24-bit/192kHz) and compressed formats              |
 
@@ -175,20 +176,28 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 ### Audio Output Control
 
-```yaml
-# Switch to Bluetooth output
-- service: select.select_option
-  target: select.living_room_audio_output_mode
-  data:
-    option: "Bluetooth Out"
+Options on `select.{device}_audio_output_mode` are model-specific. Pair Bluetooth in the WiiM app first; Home Assistant then shows `BT: Device Name`, not a generic `"Bluetooth Out"`.
 
-# Switch to Line Out
+```yaml
+# Streamer: Line Out
 - service: select.select_option
   target: select.living_room_audio_output_mode
   data:
     option: "Line Out"
 
-# Switch to USB DAC (WiiM Ultra)
+# WiiM Sound / Sound Lite: built-in speakers
+- service: select.select_option
+  target: select.kitchen_audio_output_mode
+  data:
+    option: "Speaker Out"
+
+# Already-paired Bluetooth device
+- service: select.select_option
+  target: select.living_room_audio_output_mode
+  data:
+    option: "BT: Sony WH-1000XM4"
+
+# USB DAC (WiiM Ultra)
 - service: select.select_option
   target: select.living_room_audio_output_mode
   data:
@@ -291,11 +300,12 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 ### Queue Management Actions
 
-> **Device support**: Queue add/play/remove works on devices with AVTransport `AddURIToQueue` **or** WiiM PlayQueue (Pro / Pro Plus). `get_queue` works when ContentDirectory or PlayQueue `BrowseQueue` is available. Queue position/count is available on all devices. See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for details.
+> **Device support**: Enqueue (`media_player.play_media` with `enqueue: add` / `next`) and play/remove work when the device advertises AVTransport `AddURIToQueue` **or** WiiM PlayQueue (Pro / Pro Plus). `get_queue` works when ContentDirectory or PlayQueue `BrowseQueue` is available. `queue_position` and `queue_count` are on the media player for all devices. See the [User Guide](docs/user-guide.md#queue-management) and [pywiim](https://github.com/mjcumming/pywiim/tree/main/docs).
 
 | Action                   | Description                                                      |
 | ------------------------ | ---------------------------------------------------------------- |
-| `wiim.play_queue`        | Play from queue at specific position (AVTransport or PlayQueue) |
+| `media_player.play_media` | Play a URL, or enqueue with `enqueue: add` / `next` / `play`   |
+| `wiim.play_queue`        | Play from queue at a specific position (AVTransport or PlayQueue) |
 | `wiim.remove_from_queue` | Remove item from queue at position (AVTransport or PlayQueue)   |
 | `wiim.get_queue`         | Get queue contents with metadata (ContentDirectory or PlayQueue) |
 
@@ -331,55 +341,11 @@ Access via **Browse Media → Quick Stations** on any WiiM device.
 
 See the [User Guide](docs/user-guide.md) for complete action documentation with examples.
 
-## Source Customization
+## Source Names
 
-### Why Source Renaming Isn't Supported
+On **WiiM** devices, the source list follows the WiiM app: labels you set there appear in Home Assistant, and inputs you disabled in the app are hidden. Automations can still use the previous names (for example `"Optical In"`). Home Assistant does not add a second rename layer — the device is the source of truth.
 
-The WiiM integration doesn't support custom source names for several reasons:
-
-- **Device Limitation**: Source names come directly from the device's firmware and API
-- **Consistency**: Other major integrations (Sonos, Denon, Yamaha) also don't support source renaming
-- **API Compatibility**: The device expects specific source names for proper functionality
-- **Automation Reliability**: Custom names could break existing automations and scripts
-
-### How to Work Around This
-
-Instead of renaming sources, you can customize the display in several ways:
-
-#### 1. Rename the Media Player Entity
-
-```yaml
-# In customize.yaml
-media_player.living_room_speaker:
-  friendly_name: "Living Room TV Audio"
-```
-
-#### 2. Use Templates in Automations
-
-```yaml
-# In automations.yaml
-- alias: "When HDMI is selected"
-  trigger:
-    platform: state
-    entity_id: media_player.living_room_speaker
-    attribute: source
-    to: "HDMI"
-  action:
-    - service: notify.persistent_notification
-      data:
-        message: "TV audio is now active"
-```
-
-#### 3. Create Custom Dashboard Cards
-
-```yaml
-# In Lovelace dashboard
-type: entities
-entities:
-  - entity: media_player.living_room_speaker
-    name: "TV Audio"
-    secondary_info: "{{ states('media_player.living_room_speaker').attributes.source }}"
-```
+To change how the **entity** appears on dashboards, rename the media player in Home Assistant (or use a card `name:`). That does not change the source list.
 
 ## Platforms & Entities
 
@@ -387,7 +353,7 @@ The integration creates multiple entity types for comprehensive control:
 
 ### Media Player
 
-- Main media player entity with full transport controls
+- Main media player entity with full transport controls (`queue_position` and `queue_count` attributes)
 - Group coordinator entities for multiroom groups
 - Browse media support for all Home Assistant media sources
 
@@ -402,7 +368,7 @@ The integration creates multiple entity types for comprehensive control:
 
 ### Select Entities
 
-- **Audio Output Mode** - Line Out, Optical, Coax, Bluetooth, Headphone (device dependent)
+- **Audio Output Mode** - Model-specific hardware modes (Line Out, Optical, Coax, Speaker Out, HDMI, USB, headphone) plus paired `BT: …` devices
 - **EQ Preset** - 24 equalizer presets
 - **Sound Mode** - Audio processing modes
 

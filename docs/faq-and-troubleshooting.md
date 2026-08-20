@@ -12,14 +12,15 @@ Quick answers to common questions and solutions to common problems.
 
 All WiiM and LinkPlay-based devices:
 
-- **WiiM**: Mini, Pro, Pro Plus, Amp, Ultra
+- **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
 - **LinkPlay Partners**: Arylic, DOSS, Dayton Audio, iEast, and many more
 
 **Q: Do I need the WiiM Home app?**
 
 Not required for basic operation, but recommended for:
 
-- Initial WiFi setup and firmware updates
+- Initial WiFi setup
+- Firmware updates (on WiiM devices, also via the Home Assistant **Firmware Update** entity)
 - Configuring presets and advanced audio settings
 - Initial speaker pairing (groups sync to Home Assistant automatically)
 
@@ -495,7 +496,7 @@ The integration requires `pywiim>=1.0.22`. If you encounter issues:
 2. **DHCP Reservations** - Assign static IPs to prevent connection issues
 3. **Group Coordinators** - Use `*_group_coordinator` entities for group operations
 4. **Network Monitoring** - Enable connectivity sensor for better diagnostics
-5. **Keep Firmware Updated** - Check WiiM app regularly for updates
+5. **Keep Firmware Updated** - Use the **Firmware Update** entity on WiiM devices, or the WiiM app
 
 ---
 

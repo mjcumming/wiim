@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.100] - 2026-08-20
+
+### Fixed
+
+- **Firmware Update button looked like a no-op** — Clicking **Update** starts the speaker OTA immediately, but Home Assistant clears `in_progress` when the start command returns, and regular coordinator polls skip device info (so they never see the new firmware). The dialog could show **Update available** with the old version while the speaker was still flashing or after a successful reboot. Install tracking now continues in a background task after that service returns, pauses coordinator polling during OTA, and only finishes when `player.refresh(full=True)` shows a new firmware string. Idle `progress: 0` is no longer shown as 0%.
+
+### Documentation
+
+- GitHub/HACS landing docs: list Sound / Sound Lite (and Amp Ultra), document Speaker Out and `BT: …` output selection, and document PlayQueue enqueue (`play_media` `enqueue`) plus `queue_position` / `queue_count`. Source names now described as following the WiiM app.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.6** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.5. Documentation-only library release (Sound / Sound Lite Speaker Out and PlayQueue API notes).
+
 ## [1.0.99] - 2026-08-17
 
 ### Fixed

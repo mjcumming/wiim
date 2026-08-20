@@ -54,9 +54,9 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-08-17 (pywiim 2.3.5: Sound / Sound Lite
-audio output catalog is Speaker Out; hardware 7 maps to Speaker Out on those
-models and remains HDMI Out on Amp Ultra; Bluetooth Out is source=1). Keep using
+_Last reviewed against upstream on 2026-08-20 (pywiim 2.3.6: documentation
+clarifies Sound / Sound Lite Speaker Out, PlayQueue enqueue, and that
+`getSoundCardModeSupportList` does not drive the output dropdown). Keep using
 `Player.supports_*` only — do not add HA fallbacks._
 
 **Notable upstream changes (2.2.16):** `set_display_enabled(True)` now enables adaptive brightness (`auto_sense_enable=1`) by default so the LCD actually relights; optional `auto_sense_enable` keyword on client and player (pass `0` for fixed brightness). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).

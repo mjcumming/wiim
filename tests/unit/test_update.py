@@ -3,17 +3,59 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import HomeAssistantError
 
 
 def _attach_client_capabilities(player: MagicMock, capabilities: dict) -> None:
     player.client = MagicMock()
     player.client.capabilities = capabilities
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.exceptions import HomeAssistantError
+
+
+def _firmware_entity(
+    *,
+    update_available: bool = True,
+    firmware: str = "Linkplay.4.8.731953",
+    latest: str = "Linkplay.4.8.738046",
+    supports_install: bool = True,
+) -> tuple[MagicMock, MagicMock, object]:
+    from custom_components.wiim.update import WiiMFirmwareUpdateEntity
+
+    coordinator = MagicMock()
+    coordinator.async_refresh = AsyncMock()
+    coordinator.last_update_success = True
+    coordinator.player = MagicMock()
+    coordinator.player.host = "192.168.1.100"
+    coordinator.player.name = "Test WiiM"
+    coordinator.player.device_info = None
+    coordinator.player.firmware = firmware
+    coordinator.player.firmware_update_available = update_available
+    coordinator.player.latest_firmware_version = latest
+    _attach_client_capabilities(coordinator.player, {"supports_firmware_install": supports_install})
+    coordinator.player.install_firmware_update = AsyncMock()
+    coordinator.player.get_update_install_status = AsyncMock(return_value={})
+    coordinator.player.refresh = AsyncMock()
+    coordinator.async_set_updated_data = MagicMock()
+    coordinator.update_interval = timedelta(seconds=5)
+
+    entry = MagicMock(spec=ConfigEntry)
+    entry.unique_id = "test-uuid"
+    entry.title = "Test WiiM"
+
+    entity = WiiMFirmwareUpdateEntity(coordinator, entry)
+    entity.hass = MagicMock()
+    entity.async_write_ha_state = MagicMock()
+    def _bg(_hass: object, coro: object, _name: str, eager_start: bool = True) -> MagicMock:
+        if hasattr(coro, "close"):
+            coro.close()
+        return MagicMock()
+
+    entry.async_create_background_task = MagicMock(side_effect=_bg)
+    return coordinator, entry, entity
 
 
 class TestFirmwareUpdateEntity:
@@ -111,66 +153,69 @@ class TestFirmwareUpdateEntity:
         assert entity.latest_version == "Linkplay.4.8.738046"
 
     @pytest.mark.asyncio
-    async def test_async_install_calls_pywiim_install_when_supported(self) -> None:
-        """async_install should call pywiim install method when supported."""
-        from custom_components.wiim.update import WiiMFirmwareUpdateEntity
+    async def test_async_install_starts_background_tracking(self) -> None:
+        """async_install should start the device update then return while still installing."""
+        coordinator, entry, entity = _firmware_entity()
+        seen_in_progress: list[bool] = []
 
-        coordinator = MagicMock()
-        coordinator.player = MagicMock()
-        coordinator.player.host = "192.168.1.100"
-        coordinator.player.name = "Test WiiM"
-        coordinator.player.device_info = None
-        coordinator.player.firmware_update_available = True
-        coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
-        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
-        coordinator.player.install_firmware_update = AsyncMock()
-        coordinator.player.get_update_install_status = AsyncMock(return_value={})
-        coordinator.async_refresh = AsyncMock()
+        async def _install() -> None:
+            seen_in_progress.append(entity.in_progress)
 
-        entry = MagicMock(spec=ConfigEntry)
-        entry.unique_id = "test-uuid"
-        entry.title = "Test WiiM"
+        coordinator.player.install_firmware_update = AsyncMock(side_effect=_install)
 
-        entity = WiiMFirmwareUpdateEntity(coordinator, entry)
-        # Unit-test context: entity isn't added to HA, so avoid scheduling background tracking.
-        entity._start_install_tracking = MagicMock()
         await entity.async_install(version=None, backup=False)
 
+        assert seen_in_progress == [True]
+        assert entity.in_progress is True
         coordinator.player.install_firmware_update.assert_called_once()
+        entry.async_create_background_task.assert_called_once()
+        assert entry.async_create_background_task.call_args.kwargs["eager_start"] is False
 
     @pytest.mark.asyncio
-    async def test_start_install_tracking_sets_in_progress(self) -> None:
-        """Starting install tracking should mark the entity as in progress."""
-        from custom_components.wiim.update import WiiMFirmwareUpdateEntity
+    async def test_async_install_raises_when_already_in_progress(self) -> None:
+        """A second install click should fail while the first is still running."""
+        coordinator, _entry, entity = _firmware_entity()
+        entity._installing = True
 
-        coordinator = MagicMock()
-        coordinator.player = MagicMock()
-        coordinator.player.host = "192.168.1.100"
-        coordinator.player.name = "Test WiiM"
-        coordinator.player.device_info = None
-        coordinator.player.firmware = "Linkplay.4.8.731953"
-        coordinator.player.firmware_update_available = True
-        coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
-        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
-        coordinator.player.get_update_install_status = AsyncMock(return_value={})
-        coordinator.async_refresh = AsyncMock()
+        with pytest.raises(HomeAssistantError, match="already in progress"):
+            await entity.async_install(version=None, backup=False)
 
-        entry = MagicMock(spec=ConfigEntry)
-        entry.unique_id = "test-uuid"
-        entry.title = "Test WiiM"
+        coordinator.player.install_firmware_update.assert_not_called()
 
-        entity = WiiMFirmwareUpdateEntity(coordinator, entry)
-        # Provide a fake hass + no-op state write so tracking can start in unit-test context.
-        entity.hass = MagicMock()
-        entity.async_write_ha_state = MagicMock()
+    @pytest.mark.asyncio
+    async def test_async_install_clears_in_progress_when_start_fails(self) -> None:
+        """in_progress should clear if the device rejects the start command."""
+        coordinator, _entry, entity = _firmware_entity()
+        coordinator.player.install_firmware_update = AsyncMock(side_effect=RuntimeError("busy"))
 
-        entity._start_install_tracking()
-        assert entity._attr_in_progress is True
-        assert entity._install_task is not None
+        with pytest.raises(HomeAssistantError, match="Failed to start firmware update install"):
+            await entity.async_install(version=None, backup=False)
 
-        entity._install_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await entity._install_task
+        assert entity.in_progress is False
+
+    def test_available_stays_true_during_install(self) -> None:
+        """Entity should stay available while installing even if the coordinator fails."""
+        coordinator, _entry, entity = _firmware_entity()
+        coordinator.last_update_success = False
+
+        assert entity.available is False
+
+        entity._installing = True
+        assert entity.available is True
+
+    def test_apply_install_progress_ignores_idle_zero(self) -> None:
+        """Idle devices report progress 0; that must not show as 0% in HA."""
+        _coordinator, _entry, entity = _firmware_entity()
+        entity._installing = True
+
+        entity._apply_install_progress({"progress": "0"})
+        assert entity.update_percentage is None
+
+        entity._apply_install_progress({"progress": "50"})
+        assert entity.update_percentage == 50
+
+        entity._apply_install_progress({"progress": "not-a-number"})
+        assert entity.update_percentage == 50
 
     @pytest.mark.asyncio
     async def test_async_track_install_reports_progress_and_completes_on_firmware_change(
@@ -178,108 +223,101 @@ class TestFirmwareUpdateEntity:
     ) -> None:
         """Install tracking should update progress and finish when firmware changes."""
         import custom_components.wiim.update as update_mod
-        from custom_components.wiim.update import WiiMFirmwareUpdateEntity
 
-        # Speed up loop
         monkeypatch.setattr(update_mod, "_INSTALL_POLL_INTERVAL_SECONDS", 0)
         monkeypatch.setattr(update_mod, "_INSTALL_TIMEOUT_SECONDS", 2)
 
-        coordinator = MagicMock()
-        coordinator.async_refresh = AsyncMock()
-        coordinator.player = MagicMock()
-        coordinator.player.host = "192.168.1.100"
-        coordinator.player.name = "Test WiiM"
-        coordinator.player.device_info = None
-        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
-        coordinator.player.firmware = "Linkplay.4.8.731953"
-        coordinator.player.firmware_update_available = True
-        coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
-
-        # First poll returns progress 50, then coordinator refresh flips firmware to new version.
+        coordinator, _entry, entity = _firmware_entity()
         coordinator.player.get_update_install_status = AsyncMock(return_value={"progress": "50"})
 
-        async def _refresh_side_effect():
+        async def _refresh_side_effect(*_args: object, **_kwargs: object) -> None:
             coordinator.player.firmware = "Linkplay.4.8.738046"
 
-        coordinator.async_refresh.side_effect = _refresh_side_effect
+        coordinator.player.refresh = AsyncMock(side_effect=_refresh_side_effect)
+        coordinator.async_set_updated_data = MagicMock()
 
-        entry = MagicMock(spec=ConfigEntry)
-        entry.unique_id = "test-uuid"
-        entry.title = "Test WiiM"
-
-        entity = WiiMFirmwareUpdateEntity(coordinator, entry)
-        entity.hass = MagicMock()
-        entity.async_write_ha_state = MagicMock()
-
-        # Mark in-progress like _start_install_tracking would.
-        entity._attr_in_progress = True
+        entity._installing = True
         await entity._async_track_install()
 
-        assert entity._attr_in_progress is False
-        assert entity._attr_update_percentage is None
-
-        # We should have surfaced progress at least once.
+        assert entity.update_percentage is None
+        assert entity.in_progress is False
+        assert coordinator.update_interval == timedelta(seconds=5)
         assert entity.async_write_ha_state.call_count >= 1
 
     @pytest.mark.asyncio
-    async def test_async_track_install_completes_when_update_clears(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Install tracking should finish when update flag clears and versions match."""
+    async def test_async_track_install_does_not_finish_when_update_flag_clears(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Clearing VersionUpdate without a new firmware string is not completion.
+
+        During OTA the device may omit NewVer / VersionUpdate. latest_version then
+        falls back to installed_version, which previously ended tracking early.
+        """
         import custom_components.wiim.update as update_mod
-        from custom_components.wiim.update import WiiMFirmwareUpdateEntity
+
+        monkeypatch.setattr(update_mod, "_INSTALL_POLL_INTERVAL_SECONDS", 0)
+        monkeypatch.setattr(update_mod, "_INSTALL_TIMEOUT_SECONDS", 0.05)
+
+        coordinator, _entry, entity = _firmware_entity()
+        coordinator.player.firmware_update_available = True
+
+        async def _refresh_side_effect(*_args: object, **_kwargs: object) -> None:
+            coordinator.player.firmware_update_available = False
+            coordinator.player.latest_firmware_version = None
+
+        coordinator.player.refresh = AsyncMock(side_effect=_refresh_side_effect)
+        coordinator.async_set_updated_data = MagicMock()
+
+        entity._installing = True
+        await entity._async_track_install()
+
+        assert coordinator.player.refresh.call_count >= 2
+        coordinator.player.refresh.assert_called_with(full=True)
+        assert coordinator.player.firmware == "Linkplay.4.8.731953"
+        assert entity.in_progress is False
+        assert coordinator.update_interval == timedelta(seconds=5)
+
+    @pytest.mark.asyncio
+    async def test_async_track_install_pauses_coordinator_polling(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """OTA tracking should pause coordinator polls so they cannot cancel it."""
+        import custom_components.wiim.update as update_mod
 
         monkeypatch.setattr(update_mod, "_INSTALL_POLL_INTERVAL_SECONDS", 0)
         monkeypatch.setattr(update_mod, "_INSTALL_TIMEOUT_SECONDS", 2)
 
-        coordinator = MagicMock()
-        coordinator.async_refresh = AsyncMock()
-        coordinator.player = MagicMock()
-        coordinator.player.host = "192.168.1.100"
-        coordinator.player.name = "Test WiiM"
-        coordinator.player.device_info = None
-        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
-        coordinator.player.firmware = "Linkplay.4.8.731953"
-        coordinator.player.latest_firmware_version = "Linkplay.4.8.731953"
+        coordinator, _entry, entity = _firmware_entity()
+        seen_intervals: list[object] = []
 
-        # update_available true once, then clears
-        coordinator.player.firmware_update_available = True
+        async def _refresh_side_effect(*_args: object, **_kwargs: object) -> None:
+            seen_intervals.append(coordinator.update_interval)
+            coordinator.player.firmware = "Linkplay.4.8.738046"
 
-        async def _refresh_side_effect():
-            coordinator.player.firmware_update_available = False
-
-        coordinator.async_refresh.side_effect = _refresh_side_effect
-        coordinator.player.get_update_install_status = AsyncMock(return_value={})
-
-        entry = MagicMock(spec=ConfigEntry)
-        entry.unique_id = "test-uuid"
-        entry.title = "Test WiiM"
-
-        entity = WiiMFirmwareUpdateEntity(coordinator, entry)
-        entity.hass = MagicMock()
-        entity.async_write_ha_state = MagicMock()
-        entity._attr_in_progress = True
-
+        coordinator.player.refresh = AsyncMock(side_effect=_refresh_side_effect)
+        entity._installing = True
         await entity._async_track_install()
 
-        assert entity._attr_in_progress is False
+        assert seen_intervals == [None]
+        assert coordinator.update_interval == timedelta(seconds=5)
+
+    @pytest.mark.asyncio
+    async def test_async_track_install_clears_progress_when_cancelled(self) -> None:
+        """Config-entry unload should clear in_progress and restore polling."""
+        coordinator, _entry, entity = _firmware_entity()
+        coordinator.player.get_update_install_status = AsyncMock(side_effect=asyncio.CancelledError)
+
+        entity._installing = True
+        with pytest.raises(asyncio.CancelledError):
+            await entity._async_track_install()
+
+        assert entity.in_progress is False
+        assert coordinator.update_interval == timedelta(seconds=5)
 
     @pytest.mark.asyncio
     async def test_async_install_raises_when_no_update(self) -> None:
         """async_install should raise when no update is available."""
-        from custom_components.wiim.update import WiiMFirmwareUpdateEntity
-
-        coordinator = MagicMock()
-        coordinator.player = MagicMock()
-        coordinator.player.host = "192.168.1.100"
-        coordinator.player.firmware_update_available = False
-        coordinator.player.latest_firmware_version = "Linkplay.4.8.738046"
-        _attach_client_capabilities(coordinator.player, {"supports_firmware_install": True})
-        coordinator.player.install_firmware_update = AsyncMock()
-
-        entry = MagicMock(spec=ConfigEntry)
-        entry.unique_id = "test-uuid"
-        entry.title = "Test WiiM"
-
-        entity = WiiMFirmwareUpdateEntity(coordinator, entry)
+        coordinator, _entry, entity = _firmware_entity(update_available=False)
 
         with pytest.raises(HomeAssistantError):
             await entity.async_install(version=None, backup=False)

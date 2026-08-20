@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.update import (
@@ -89,13 +90,18 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
         self._attr_unique_id = f"{uuid}_fw_update"
         self._attr_name = "Firmware Update"
 
-        # Set supported features: INSTALL is always supported since we only create
-        # this entity when ``supports_firmware_install`` is set on ``player.client.capabilities``
-        # PROGRESS allows us to keep HA UI in an "installing" state while the device
-        # reboots/installs (otherwise HA clears in_progress as soon as async_install returns).
+        # INSTALL is always supported since we only create this entity when
+        # ``supports_firmware_install`` is set on ``player.client.capabilities``.
+        # PROGRESS is reported natively via ``in_progress`` / ``update_percentage``.
+        # Home Assistant's ``async_install_with_progress`` always sets
+        # ``_attr_in_progress = False`` when ``async_install`` returns, so tracking
+        # continues in a config-entry background task (started after that finally
+        # runs) and we re-assert progress there.
         self._attr_supported_features = UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
-
+        self._installing = False
+        self._install_percentage: int | None = None
         self._install_task: asyncio.Task[None] | None = None
+        self._saved_update_interval: timedelta | None = None
 
     @property
     def installed_version(self) -> str | None:  # type: ignore[override]
@@ -152,94 +158,169 @@ class WiiMFirmwareUpdateEntity(WiimEntity, UpdateEntity):
         """Return release notes for the latest version (not provided by device)."""
         return None
 
-    async def async_install(self, version: str | None, backup: bool, **kwargs: Any) -> None:  # type: ignore[override]
-        """Install the update.
+    @property
+    def in_progress(self) -> bool:  # type: ignore[override]
+        """Return True while a firmware install is running on the device."""
+        return self._installing
 
-        For WiiM devices: Uses API installation via install_firmware_update()
-        For other devices: Update is already downloaded, reboot required (not supported via HA)
+    @property
+    def update_percentage(self) -> int | float | None:  # type: ignore[override]
+        """Return flash percentage, or None for an indeterminate installer."""
+        if not self._installing:
+            return None
+        return self._install_percentage
+
+    @property
+    def available(self) -> bool:
+        """Return True while firmware install is running.
+
+        The speaker often reboots (or stops answering) mid-install. Without this,
+        coordinator failure would hide the update dialog before flashing finishes.
+        """
+        if self._installing:
+            return True
+        return super().available
+
+    async def async_install(self, version: str | None, backup: bool, **kwargs: Any) -> None:  # type: ignore[override]
+        """Start firmware installation.
+
+        ``getMvRemoteUpdateStart`` returns immediately; flashing and reboot take
+        minutes. Home Assistant may cancel this service call when the UI times
+        out, so tracking runs as a config-entry background task. ``in_progress``
+        stays True until the installed firmware string actually changes.
         """
         if not self.update_available:
             raise HomeAssistantError("No firmware update is ready to install.")
 
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
 
-        # Check if device supports API installation
         if not client_has_capability(self.player, "supports_firmware_install"):
             raise HomeAssistantError(
                 "Firmware installation via API is not supported on this device. "
                 "The update is downloaded and ready. Please reboot the device to install."
             )
 
-        # If we already have an install task running, don't start another.
-        if self._install_task and not self._install_task.done():
+        if self._installing:
             raise HomeAssistantError("Firmware installation already in progress.")
+
+        self._set_install_progress_state(True)
 
         try:
             await self.player.install_firmware_update()
-            _LOGGER.info("Firmware installation started for %s", device_name)
         except Exception as err:  # noqa: BLE001
+            self._set_install_progress_state(False)
             raise HomeAssistantError(f"Failed to start firmware update install: {err}") from err
 
-        # Start background tracking so HA UI reflects that installation is ongoing.
-        # We intentionally do NOT block this service call for minutes while the device
-        # installs/reboots; instead we mark in-progress and poll for completion.
-        self._start_install_tracking()
+        _LOGGER.info("Firmware installation started for %s", device_name)
+        # eager_start=False so this task starts after HA's install finally block
+        # has cleared _attr_in_progress; tracking immediately sets it True again.
+        self._install_task = self._config_entry.async_create_background_task(
+            self.hass,
+            self._async_track_install(),
+            f"{device_name} firmware install",
+            eager_start=False,
+        )
 
-    def _start_install_tracking(self) -> None:
-        """Start background polling for firmware install progress/completion."""
-        if self._install_task and not self._install_task.done():
+    def _apply_install_progress(self, status: dict[str, Any]) -> None:
+        """Surface flash progress from pywiim when the device is actually burning.
+
+        Idle/downloading devices report ``progress: "0"``; treating that as 0%
+        would look stuck. HA shows an indeterminate bar when percentage is None.
+        """
+        progress_raw = status.get("progress")
+        if progress_raw is None:
             return
+        try:
+            progress = int(str(progress_raw).strip())
+        except ValueError:
+            return
+        if 1 <= progress <= 100 and progress != self._install_percentage:
+            self._install_percentage = progress
+            self._attr_update_percentage = progress
+            self.async_write_ha_state()
 
-        self._attr_in_progress = True
-        self._attr_update_percentage = None
+    def _set_install_progress_state(self, installing: bool, percentage: int | None = None) -> None:
+        """Publish install progress using both the local flag and HA's _attr cache."""
+        self._installing = installing
+        if installing:
+            self._install_percentage = percentage
+            self._attr_in_progress = True
+            self._attr_update_percentage = percentage
+        else:
+            self._install_percentage = None
+            self._attr_in_progress = False
+            self._attr_update_percentage = None
         self.async_write_ha_state()
-        self._install_task = asyncio.create_task(self._async_track_install())
+
+    def _pause_coordinator_polling(self) -> None:
+        """Stop 5s coordinator polls so they cannot cancel in-flight OTA requests."""
+        if self._saved_update_interval is None:
+            self._saved_update_interval = self.coordinator.update_interval
+        self.coordinator.update_interval = None
+
+    def _resume_coordinator_polling(self) -> None:
+        """Restore coordinator polling after firmware install tracking stops."""
+        saved = self._saved_update_interval
+        self._saved_update_interval = None
+        if saved is None:
+            return
+        self.coordinator.update_interval = saved
 
     async def _async_track_install(self) -> None:
-        """Poll pywiim for install progress and refresh after reboot."""
+        """Poll pywiim for install progress until firmware version changes."""
         start_firmware = self.installed_version
+        device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
+        # Re-assert after HA's async_install_with_progress finally cleared _attr_in_progress.
+        self._set_install_progress_state(True, self._install_percentage)
+        self._pause_coordinator_polling()
 
         try:
             async with asyncio.timeout(_INSTALL_TIMEOUT_SECONDS):
                 while True:
-                    # Attempt to read install progress from pywiim.
                     try:
-                        status: dict[str, Any] = await self.player.get_update_install_status()
-                        progress_raw = status.get("progress")
-                        if progress_raw is not None:
-                            try:
-                                progress = int(str(progress_raw).strip())
-                            except ValueError:
-                                progress = None
-                            if progress is not None and 0 <= progress <= 100:
-                                self._attr_update_percentage = progress
-                                self.async_write_ha_state()
+                        status = await self.player.get_update_install_status()
+                        if isinstance(status, dict):
+                            self._apply_install_progress(status)
                     except Exception:  # noqa: BLE001
                         # Device may be rebooting/unreachable; keep polling.
                         pass
 
-                    # Refresh coordinator/player state; device may be rebooting.
                     try:
-                        await self.coordinator.async_refresh()
+                        # Regular coordinator polls skip device_info (firmware / VersionUpdate).
+                        # A full refresh is required to see the new firmware after OTA.
+                        await self.player.refresh(full=True)
+                        self.coordinator.async_set_updated_data({"player": self.player})
                     except Exception:  # noqa: BLE001
                         pass
 
-                    # Completion conditions:
-                    # - firmware version changed
-                    # - or update flag cleared and latest==installed
                     current_firmware = self.installed_version
                     if current_firmware and start_firmware and current_firmware != start_firmware:
-                        return
-                    if not self.update_available and self.latest_version == self.installed_version:
+                        _LOGGER.info(
+                            "Firmware installation finished for %s (%s -> %s)",
+                            device_name,
+                            start_firmware,
+                            current_firmware,
+                        )
                         return
 
                     await asyncio.sleep(_INSTALL_POLL_INTERVAL_SECONDS)
         except TimeoutError:
-            _LOGGER.warning("[%s] Firmware install tracking timed out", self.name)
+            _LOGGER.warning(
+                "[%s] Firmware install tracking timed out (still on %s)",
+                device_name,
+                self.installed_version,
+            )
+        except asyncio.CancelledError:
+            _LOGGER.info("Firmware install tracking cancelled for %s", device_name)
+            raise
         finally:
-            self._attr_in_progress = False
-            self._attr_update_percentage = None
-            self.async_write_ha_state()
+            self._resume_coordinator_polling()
+            self._set_install_progress_state(False)
+            _LOGGER.debug(
+                "Firmware install tracking stopped for %s (installed %s)",
+                device_name,
+                self.installed_version,
+            )
 
     # Some HA type-checkers/pylint versions expect a synchronous `install` method.
     # Provide it as a thin wrapper to satisfy tooling without changing behavior.

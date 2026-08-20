@@ -126,6 +126,8 @@ data:
   source: "Bluetooth" # or "Line In", "Optical", "USB", etc.
 ```
 
+On WiiM devices, names you set in the WiiM app appear in this list, and inputs you disabled in the app are hidden. Existing automations that use the previous names still work.
+
 **Smart Source Detection**
 
 The integration shows what's actually playing instead of technical details:
@@ -337,14 +339,14 @@ data:
 
 **Select Output Mode**
 
-Available options vary by device model:
+Available options vary by device. Streamers typically list Line Out / Optical Out / Coax Out (plus USB or HDMI where the hardware has those jacks). **WiiM Sound** and **Sound Lite** list **Speaker Out** (the built-in speakers).
 
 ```yaml
 service: select.select_option
 target:
   entity_id: select.living_room_audio_output_mode
 data:
-  option: "Line Out" # or "Optical Out", "Coaxial Out", "HDMI ARC"
+  option: "Line Out" # or "Optical Out", "Coax Out", "Speaker Out", "USB Out", "HDMI Out"
 ```
 
 **Bluetooth Output**
@@ -366,7 +368,7 @@ data:
 
 The **Audio Output Mode** select entity (`select.{device}_audio_output_mode`) is the recommended way to check if Bluetooth output is active:
 
-- Shows "Line Out", "Optical Out", etc. when those outputs are active
+- Shows the current hardware mode ("Line Out", "Speaker Out", "Optical Out", and so on) when that output is active
 - Shows "BT: [Device Name]" when audio is being sent to a Bluetooth device
 
 Use this in automations to detect Bluetooth output:
@@ -456,11 +458,23 @@ automation:
 
 ### 📋 Queue Management
 
-Queue management requires UPnP support. Check device capabilities in the entity attributes.
+Enqueue a URL with Home Assistant's native `play_media` action, or use the WiiM queue actions below. Gate on the device: queue add/play/remove needs AVTransport `AddURIToQueue` **or** WiiM PlayQueue (Pro / Pro Plus). `get_queue` needs ContentDirectory (Amp/Ultra USB) or PlayQueue `BrowseQueue`. `queue_position` and `queue_count` are on the media player for all devices (HTTP `plicurr`/`plicount`, or a PlayQueue overlay when those stay empty).
 
-> **Device support**: Queue add/play/remove works when the device advertises AVTransport `AddURIToQueue` **or** WiiM PlayQueue (Pro / Pro Plus). `get_queue` works with ContentDirectory (Amp/Ultra USB) or PlayQueue `BrowseQueue`. Queue position and count are available on all devices via the `queue_position` and `queue_count` entity attributes.
->
-> See [pywiim documentation](https://github.com/mjcumming/pywiim/tree/main/docs) for technical details.
+> See [pywiim documentation](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_CAPABILITIES.md) for technical details.
+
+**Enqueue a URL** (AVTransport or PlayQueue)
+
+```yaml
+service: media_player.play_media
+target:
+  entity_id: media_player.living_room
+data:
+  media_content_type: music
+  media_content_id: "http://example.com/track.mp3"
+  enqueue: add # or next / play / replace
+```
+
+Queued URLs play through in order (PlayQueue auto-advance). Streaming apps such as Spotify keep their own queue — `queue_count` may stay `0` even when next/previous still work.
 
 **Play from Queue Position** (AVTransport or PlayQueue)
 
@@ -562,7 +576,7 @@ Complete reference for all entities, configuration options, and technical detail
 
 **Selects**
 
-- `select.{device_name}_audio_output_mode` - Output mode selection (Line Out, Optical, Bluetooth, etc.)
+- `select.{device_name}_audio_output_mode` - Output mode (model-specific: Line Out, Speaker Out, Optical, `BT: …`, and so on)
 
 **Switches**
 
@@ -577,6 +591,10 @@ Complete reference for all entities, configuration options, and technical detail
 
 - `light.{device_name}_led` - Front panel LED (on/off only)
 - `light.{device_name}_display` - WiiM Ultra LCD screen (on/off and brightness; Ultra only). Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale (pywiim `set_display_enabled` / `setLightOperationBrightConfig`). Turning the display on sends an explicit level so the screen does not stay at minimum brightness (requires **pywiim 2.1.98+**). For adaptive brightness, use the WiiM app; the integration uses manual levels when you set brightness here.
+
+**Updates** (WiiM devices that support API firmware install)
+
+- `update.{device_name}_firmware_update` - Shows the installed and latest firmware and installs the downloaded update. After you click **Update**, the dialog stays in installing until the speaker finishes flashing and reboots. Do not power off the speaker during this process. Non-WiiM LinkPlay devices still apply a downloaded update by rebooting (maintenance **Reboot** button).
 
 **Binary Sensors** (optional - enable network monitoring)
 
