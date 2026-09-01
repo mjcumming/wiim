@@ -20,14 +20,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Validate standalone integration structure with Home Assistant hassfest action
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
 
       - name: Set up Python ${{ env.DEFAULT_PYTHON }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
 
@@ -58,6 +58,6 @@ jobs:
           pytest tests/ --cov=custom_components/wiim --cov-report=xml
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
