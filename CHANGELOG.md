@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.101] - 2026-09-12
+
+### Added
+
+- **EQ Preset select entity** ([Issue #272](https://github.com/mjcumming/wiim/issues/272)) — when `player.supports_eq` is true, create `select.{device}_eq_preset` from `player.eq_presets` / `player.set_eq_preset()`. Same control as media player sound mode (including **Off**).
+
+### Documentation
+
+- README: document the EQ Preset select and remove the phantom **Sound Mode** select (EQ is media player sound mode, not a second select).
+
 ## [1.0.100] - 2026-08-20
 
 ### Fixed

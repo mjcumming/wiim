@@ -149,7 +149,7 @@ Note: Many test files define their own local fixtures for specific scenarios. Se
 - `test_group_media_player.py` - Group coordinator entity (42 tests)
 - `test_config_flow.py` - Config and options flow (12+ tests)
 - `test_light.py` - LED light entity (18 tests)
-- `test_select.py` - Output mode selection (18 tests)
+- `test_select.py` - Output mode and EQ preset selection
 - `test_services.py` - Custom services (9 tests)
 - `test_diagnostics.py` - Diagnostics (4 tests)
 - `test_data.py` - Speaker data class (6 tests)

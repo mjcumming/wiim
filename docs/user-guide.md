@@ -314,9 +314,17 @@ data:
 
 **Select EQ Preset**
 
-Available presets: Flat, Rock, Jazz, Classical, Pop, Bass, Treble, Vocal
+Devices that support EQ get a dedicated **EQ Preset** select (`select.{device}_eq_preset`). The same list is also the media player's sound mode. Available names come from the device (typically including Off, Flat, Rock, Jazz, and others).
 
 ```yaml
+# Recommended: dedicated select entity
+service: select.select_option
+target:
+  entity_id: select.living_room_eq_preset
+data:
+  option: "Rock"
+
+# Same control via the media player
 service: media_player.select_sound_mode
 target:
   entity_id: media_player.living_room

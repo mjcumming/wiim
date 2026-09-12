@@ -39,6 +39,13 @@ async def async_setup_entry(
     # Bluetooth device selection is now integrated into Audio Output Mode select
     # No separate Bluetooth device select entity needed
 
+    # EQ presets: same list as media_player sound_mode (player.supports_eq / eq_presets)
+    if coordinator.player.supports_eq:
+        entities.append(WiiMEQPresetSelect(coordinator, config_entry))
+        _LOGGER.debug("Creating EQ preset select entity - device supports EQ")
+    else:
+        _LOGGER.debug("Skipping EQ preset select entity - device does not support EQ")
+
     async_add_entities(entities)
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
     _LOGGER.debug(
@@ -127,3 +134,49 @@ class WiiMOutputModeSelect(WiimEntity, SelectEntity):
                 ) from err
             # Other errors - re-raise as HomeAssistantError
             raise HomeAssistantError(f"Failed to select audio output '{option}': {err}") from err
+
+
+class WiiMEQPresetSelect(WiimEntity, SelectEntity):
+    """Select entity for EQ preset control.
+
+    Mirrors media player sound mode: ``player.eq_preset`` / ``player.eq_presets``
+    and ``player.set_eq_preset()``. Created only when ``player.supports_eq``.
+    """
+
+    _attr_icon = "mdi:equalizer"
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_eq_preset"
+        self._attr_name = "EQ Preset"
+
+    @property
+    def options(self) -> list[str]:
+        """Return available EQ presets, always including Off."""
+        eq_presets = self.coordinator.player.eq_presets
+        if not eq_presets:
+            return ["Off"]
+        presets = [str(preset) for preset in eq_presets]
+        if "Off" not in presets:
+            presets.insert(0, "Off")
+        return presets
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current EQ preset, or Off when EQ is disabled."""
+        options = self.options
+        eq_preset = self.coordinator.player.eq_preset
+        current = str(eq_preset) if eq_preset else "Off"
+        if current in options:
+            return current
+        for option in options:
+            if option.lower() == current.lower():
+                return option
+        return "Off"
+
+    async def async_select_option(self, option: str) -> None:
+        """Apply the selected EQ preset (Off disables EQ)."""
+        async with self.wiim_command(f"select EQ preset '{option}'"):
+            await self.coordinator.player.set_eq_preset(option)

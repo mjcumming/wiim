@@ -369,8 +369,7 @@ The integration creates multiple entity types for comprehensive control:
 ### Select Entities
 
 - **Audio Output Mode** - Model-specific hardware modes (Line Out, Optical, Coax, Speaker Out, HDMI, USB, headphone) plus paired `BT: …` devices
-- **EQ Preset** - 24 equalizer presets
-- **Sound Mode** - Audio processing modes
+- **EQ Preset** - Device equalizer presets (created when the device supports EQ). The same list is also the media player's **sound mode**.
 
 ### Buttons
 

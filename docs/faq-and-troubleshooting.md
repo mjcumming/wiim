@@ -244,8 +244,17 @@ Not all speakers support all features:
 
 **Q: How do I use the equalizer?**
 
+Use the **EQ Preset** select (`select.{device}_eq_preset`) or the media player's sound mode. Both call the same pywiim preset API.
+
 ```yaml
-# Select preset
+# Dedicated select entity
+service: select.select_option
+target:
+  entity_id: select.living_room_eq_preset
+data:
+  option: "Rock"
+
+# Same control via the media player
 service: media_player.select_sound_mode
 target:
   entity_id: media_player.living_room

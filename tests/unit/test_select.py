@@ -1,4 +1,4 @@
-"""Unit tests for WiiM Select Entity - testing output mode selection."""
+"""Unit tests for WiiM Select Entity - output mode and EQ preset selection."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -7,7 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import HomeAssistantError
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
-from custom_components.wiim.select import WiiMOutputModeSelect
+from custom_components.wiim.select import WiiMEQPresetSelect, WiiMOutputModeSelect
 
 
 @pytest.fixture
@@ -36,6 +36,10 @@ def mock_coordinator():
     coordinator.player.audio = MagicMock()
     coordinator.player.audio.select_output = AsyncMock(return_value=True)
     coordinator.player.name = "Test WiiM"
+    coordinator.player.supports_eq = False
+    coordinator.player.eq_preset = "Flat"
+    coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
+    coordinator.player.set_eq_preset = AsyncMock()
     return coordinator
 
 
@@ -252,3 +256,214 @@ class TestWiiMOutputModeSelectPlatformSetup:
         await async_setup_entry(hass, mock_config_entry, add_entities)
 
         assert len(entities) == 0
+
+
+class TestWiiMEQPresetSelectBasic:
+    """Test basic EQ preset select functionality."""
+
+    def test_initialization(self, mock_coordinator, mock_config_entry):
+        """Test EQ preset select initialization."""
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_eq_preset"
+        assert entity.name == "EQ Preset"
+
+    def test_initialization_falls_back_to_host(self, mock_coordinator, mock_config_entry):
+        """Test unique_id uses player host when config entry has no unique_id."""
+        mock_config_entry.unique_id = None
+        mock_coordinator.player.host = "192.168.1.48"
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "192.168.1.48_eq_preset"
+
+    def test_icon(self, mock_coordinator, mock_config_entry):
+        """Test icon property."""
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.icon == "mdi:equalizer"
+
+    def test_has_entity_name(self, mock_coordinator, mock_config_entry):
+        """Test has_entity_name property."""
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity._attr_has_entity_name is True
+
+
+class TestWiiMEQPresetSelectOptions:
+    """Test EQ preset options."""
+
+    def test_options_returns_presets(self, mock_coordinator, mock_config_entry):
+        """Test options returns device presets when Off is already present."""
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == ["Off", "Flat", "Rock", "Jazz"]
+
+    def test_options_prepends_off_when_missing(self, mock_coordinator, mock_config_entry):
+        """Test options inserts Off when pywiim omits it."""
+        mock_coordinator.player.eq_presets = ["Flat", "Rock"]
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == ["Off", "Flat", "Rock"]
+
+    def test_options_returns_off_when_empty(self, mock_coordinator, mock_config_entry):
+        """Test options returns Off when no presets are available."""
+        mock_coordinator.player.eq_presets = []
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == ["Off"]
+
+    def test_options_returns_off_when_none(self, mock_coordinator, mock_config_entry):
+        """Test options returns Off when eq_presets is None."""
+        mock_coordinator.player.eq_presets = None
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == ["Off"]
+
+
+class TestWiiMEQPresetSelectCurrentOption:
+    """Test current EQ preset option."""
+
+    def test_current_option_returns_preset(self, mock_coordinator, mock_config_entry):
+        """Test current option returns the active EQ preset."""
+        mock_coordinator.player.eq_preset = "Rock"
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Rock"
+
+    def test_current_option_returns_off_when_none(self, mock_coordinator, mock_config_entry):
+        """Test current option returns Off when eq_preset is None."""
+        mock_coordinator.player.eq_preset = None
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Off"
+
+    def test_current_option_returns_off_when_empty(self, mock_coordinator, mock_config_entry):
+        """Test current option returns Off when eq_preset is empty."""
+        mock_coordinator.player.eq_preset = ""
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Off"
+
+    def test_current_option_case_insensitive_match(self, mock_coordinator, mock_config_entry):
+        """Test current option matches preset labels case-insensitively."""
+        mock_coordinator.player.eq_preset = "rock"
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Rock"
+
+    def test_current_option_off_case_insensitive(self, mock_coordinator, mock_config_entry):
+        """Test lowercase off matches the Off option."""
+        mock_coordinator.player.eq_preset = "off"
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Off"
+
+    def test_current_option_unmatched_falls_back_to_off(self, mock_coordinator, mock_config_entry):
+        """Test unmatched preset labels fall back to Off."""
+        mock_coordinator.player.eq_preset = "Unknown"
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Off"
+
+
+class TestWiiMEQPresetSelectSelectOption:
+    """Test selecting an EQ preset."""
+
+    async def test_select_option(self, mock_coordinator, mock_config_entry):
+        """Test selecting an EQ preset."""
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        await entity.async_select_option("Rock")
+        mock_coordinator.player.set_eq_preset.assert_called_once_with("Rock")
+
+    async def test_select_option_off(self, mock_coordinator, mock_config_entry):
+        """Test selecting Off disables EQ."""
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        await entity.async_select_option("Off")
+        mock_coordinator.player.set_eq_preset.assert_called_once_with("Off")
+
+    async def test_select_option_handles_error(self, mock_coordinator, mock_config_entry):
+        """Test select option wraps WiiMError."""
+        mock_coordinator.player.set_eq_preset = AsyncMock(side_effect=WiiMError("EQ failed"))
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="Failed to select EQ preset"):
+            await entity.async_select_option("Rock")
+
+    async def test_select_option_handles_connection_error(self, mock_coordinator, mock_config_entry):
+        """Test select option handles connection errors."""
+        mock_coordinator.player.set_eq_preset = AsyncMock(side_effect=WiiMConnectionError("Connection lost"))
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="device unreachable"):
+            await entity.async_select_option("Rock")
+
+    async def test_select_option_handles_timeout_error(self, mock_coordinator, mock_config_entry):
+        """Test select option handles timeout errors."""
+        mock_coordinator.player.set_eq_preset = AsyncMock(side_effect=WiiMTimeoutError("Timeout"))
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="device unreachable"):
+            await entity.async_select_option("Rock")
+
+
+class TestWiiMEQPresetSelectPlatformSetup:
+    """Test platform setup for EQ preset select entities."""
+
+    @pytest.mark.asyncio
+    async def test_setup_with_eq_support(self, hass, mock_coordinator, mock_config_entry):
+        """Test setup creates EQ select when the device supports EQ."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = False
+        mock_coordinator.player.supports_eq = True
+        mock_config_entry.entry_id = "test-entry"
+
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 1
+        assert isinstance(entities[0], WiiMEQPresetSelect)
+
+    @pytest.mark.asyncio
+    async def test_setup_with_audio_output_and_eq(self, hass, mock_coordinator, mock_config_entry):
+        """Test setup creates both select entities when both are supported."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = True
+        mock_coordinator.player.supports_eq = True
+        mock_config_entry.entry_id = "test-entry"
+
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 2
+        assert isinstance(entities[0], WiiMOutputModeSelect)
+        assert isinstance(entities[1], WiiMEQPresetSelect)
+
+    @pytest.mark.asyncio
+    async def test_setup_without_eq_support(self, hass, mock_coordinator, mock_config_entry):
+        """Test setup skips EQ select when the device does not support EQ."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = True
+        mock_coordinator.player.supports_eq = False
+        mock_config_entry.entry_id = "test-entry"
+
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 1
+        assert isinstance(entities[0], WiiMOutputModeSelect)
