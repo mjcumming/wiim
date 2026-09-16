@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.102] - 2026-09-16
+
+### Fixed
+
+- **Offline speaker stalls all coordinator polling** ([Issue #273](https://github.com/mjcumming/wiim/issues/273)) — delivered via pywiim **2.3.7**. One unreachable device no longer makes every other speaker's poll take 10–15s (WiFi Direct role inference no longer live-queries other hosts). Hard connect failures fail fast instead of a 16s retry loop.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.7** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.6.
+
 ## [1.0.101] - 2026-09-12
 
 ### Added
