@@ -54,7 +54,7 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-09-27 (pywiim 2.3.8: Audio Pro MkII
+_Last reviewed against upstream on 2026-09-27 (pywiim 2.3.9: Audio Pro MkII
 play state is filled from the existing UPnP poll when HTTP status omits it.
 No Home Assistant API changes required). Keep using `Player.supports_*` only —
 do not add HA fallbacks._
