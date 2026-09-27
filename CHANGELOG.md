@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.103] - 2026-09-27
+
+### Fixed
+
+- **Audio Pro MkII group stays idle while playing** ([Issue #274](https://github.com/mjcumming/wiim/issues/274)) — delivered via pywiim **2.3.8**. MkII masters such as the Audio Pro Drumfire D-2 do not report transport state over HTTP. The library now reads it with the same UPnP poll already used for volume. Group members follow the master, so they leave `idle` once the master is playing.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.8** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.7.
+
 ## [1.0.102] - 2026-09-16
 
 ### Fixed
