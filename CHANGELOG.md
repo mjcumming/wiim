@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **EDIFIER MS50A initialization loop** ([Issue #275](https://github.com/mjcumming/wiim/issues/275)) — restrict stale cached HTTPS endpoint recovery to Arylic devices. Generic LinkPlay devices retain their working HTTPS endpoint even when capabilities prefer HTTP, preventing repeated endpoint rewrites and reloads. Arylic stale-HTTPS recovery and HTTPS-only H50 handling are preserved.
+
 ## [1.0.102] - 2026-09-16
 
 ### Fixed

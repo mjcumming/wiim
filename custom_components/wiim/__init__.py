@@ -354,21 +354,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # pywiim version (e.g. supports_subwoofer) that older cache files omit.
     used_capability_cache = bool(cached_capabilities and versions_match)
 
-    # Self-heal a stale cached HTTPS endpoint (Issue #248).
+    # Self-heal a stale cached HTTPS endpoint for Arylic devices (Issue #248).
     # pywiim < 2.2.15 could persist an HTTPS:443 endpoint for HTTP-first devices
     # (e.g. Arylic) because the poll client re-probed HTTPS-first regardless of the
     # device's protocol_priority. pywiim 2.2.15 fixes the probe ordering, but it
-    # treats a replayed endpoint as explicit user intent and will NOT re-probe. So
-    # if our stored endpoint is HTTPS while the device's capabilities prefer HTTP,
-    # drop the stored endpoint once and let pywiim re-probe and re-persist HTTP.
+    # treats a replayed endpoint as explicit user intent and will NOT re-probe.
+    # Only apply this recovery to Arylic: generic LinkPlay devices can legitimately
+    # use HTTPS despite an HTTP-first priority (EDIFIER MS50A, Issue #275). Dropping
+    # their working endpoint causes re-persistence and repeated config-entry reloads.
     if (
         cached_endpoint
         and protocol == "https"
+        and cached_capabilities is not None
+        and cached_capabilities.get("vendor") == "arylic"
         and _capabilities_prefer_http(cached_capabilities)
         and not _capabilities_require_https(cached_capabilities)
     ):
         _LOGGER.info(
-            "Dropping stale HTTPS endpoint for %s; device prefers HTTP, letting pywiim " "re-probe (Issue #248)",
+            "Dropping stale HTTPS endpoint for %s; device prefers HTTP, letting pywiim re-probe (Issue #248)",
             entry.data["host"],
         )
         port = None

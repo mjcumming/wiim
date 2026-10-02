@@ -571,6 +571,78 @@ class TestCapabilityCacheRefresh:
         assert entry.data.get("endpoint") == "http://192.168.1.95:80"
 
     @pytest.mark.asyncio
+    async def test_async_setup_entry_preserves_https_endpoint_for_generic_ms50a(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HTTP-first generic LinkPlay devices retain working HTTPS endpoints (Issue #275)."""
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Badezimmer",
+            data={
+                "host": "192.168.1.142",
+                "endpoint": "https://192.168.1.142:443",
+                "capabilities": {
+                    "device_type": "EDIFIER MS50A",
+                    "vendor": "linkplay_generic",
+                    "protocol_priority": ["http", "https"],
+                    "firmware_version": "Linkplay.4.6.430230",
+                    "supports_firmware_install": False,
+                },
+                "capabilities_cache_meta": {
+                    "pywiim_version": REQUIRED_PYWIIM_VERSION,
+                    "firmware_version": "Linkplay.4.6.430230",
+                },
+            },
+            unique_id="EDIFIER_MS50A_BADEZIMMER",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.async_ensure_pywiim_version",
+            AsyncMock(return_value=REQUIRED_PYWIIM_VERSION),
+        )
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+
+        captured: dict[str, object] = {}
+
+        class _FakePlayer:
+            def __init__(self):
+                self.host = "192.168.1.142"
+                self.name = "Badezimmer"
+                self.firmware = "Linkplay.4.6.430230"
+                self.client = MagicMock(discovered_endpoint="https://192.168.1.142:443")
+
+        class _FakeCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                captured["port"] = port
+                captured["protocol"] = protocol
+                self.hass = hass
+                self.player = _FakePlayer()
+                self.last_update_success = True
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FakeCoordinator)
+        monkeypatch.setattr("custom_components.wiim._register_ha_device", AsyncMock())
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        update_entry = MagicMock(wraps=hass.config_entries.async_update_entry)
+        monkeypatch.setattr(hass.config_entries, "async_update_entry", update_entry)
+
+        ok = await async_setup_entry(hass, entry)
+        assert ok is True
+
+        assert captured["port"] == 443
+        assert captured["protocol"] == "https"
+        assert entry.data.get("endpoint") == "https://192.168.1.142:443"
+
+        # No endpoint removal/re-persistence to trigger another setup reload.
+        update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_async_setup_entry_preserves_https_endpoint_for_https_only_h50(
         self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
     ) -> None:
