@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.104] - 2026-10-02
+
+### Fixed
+
+- **Edifier MS50A stuck on Initializing** ([Issue #275](https://github.com/mjcumming/wiim/issues/275)) — Generic LinkPlay speakers whose profile prefers HTTP can still only answer on HTTPS. Setup was deleting that working `https://…:443` endpoint, pywiim probed back to the same address, and saving it reloaded the entry. That loop never left Initializing. A probe that keeps HTTPS is now remembered for the current pywiim version, and setup no longer reloads itself when it saves the endpoint.
+
+### Documentation
+
+- **Edifier MS50A** is listed with the other supported LinkPlay devices.
+
 ## [1.0.103] - 2026-09-27
 
 ### Fixed

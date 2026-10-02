@@ -127,7 +127,7 @@ Each speaker creates these entities:
 ## 🛠️ Supported Devices
 
 - **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
-- **LinkPlay Compatible**: Arylic, Dayton Audio, DOSS, iEast, and many more
+- **LinkPlay Compatible**: Arylic, Dayton Audio, DOSS, Edifier (MS50A), iEast, and many more
 - **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
 
 ## 📚 Documentation

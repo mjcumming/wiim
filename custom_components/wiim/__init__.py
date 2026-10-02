@@ -38,6 +38,7 @@ except ModuleNotFoundError:  # pragma: no cover – only executed in test env
     importlib.import_module("homeassistant")
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
 
@@ -96,6 +97,27 @@ def _capabilities_prefer_http(capabilities: dict[str, Any] | None) -> bool:
     if not priority:
         return False
     return priority[0] == "http"
+
+
+# Remembered when a fresh probe keeps HTTPS for an HTTP-first profile.
+# Keyed by pywiim version so a later library release can try HTTP once more.
+_ENDPOINT_HEAL_KEY = "endpoint_protocol_heal"
+
+
+def _https_endpoint_confirmed(entry_data: Mapping[str, Any] | None, pywiim_version: str) -> bool:
+    """Return True when a fresh probe already kept HTTPS for this pywiim version.
+
+    HTTP-first profiles still include devices that only answer on HTTPS (for example
+    an Edifier MS50A reported as generic LinkPlay). Issue #248 drops a cached HTTPS
+    endpoint so pywiim can re-probe. If that probe selects HTTPS again, dropping it
+    on the next setup writes the endpoint back and reloads forever (Issue #275).
+    """
+    if not entry_data:
+        return False
+    heal = entry_data.get(_ENDPOINT_HEAL_KEY)
+    if not isinstance(heal, dict):
+        return False
+    return heal.get("kept") == "https" and heal.get("pywiim_version") == pywiim_version
 
 
 def _capabilities_require_https(capabilities: dict[str, Any] | None) -> bool:
@@ -224,7 +246,13 @@ def get_enabled_platforms(
 
 
 async def _update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options updates by reloading the entry."""
+    """Reload the entry after the user changes options.
+
+    Registered only after setup finishes writing config-entry data. Those writes
+    must not reload the entry: Home Assistant runs update listeners by reloading,
+    and a setup that both clears and re-saves the endpoint otherwise loops
+    (Issue #275).
+    """
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -361,24 +389,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # treats a replayed endpoint as explicit user intent and will NOT re-probe. So
     # if our stored endpoint is HTTPS while the device's capabilities prefer HTTP,
     # drop the stored endpoint once and let pywiim re-probe and re-persist HTTP.
+    #
+    # Some HTTP-first profiles still only answer on HTTPS (Edifier MS50A / generic
+    # LinkPlay). Re-probing then selects HTTPS again. Dropping that result on every
+    # setup writes it back and the options listener reloads forever (Issue #275).
+    # A prior probe that kept HTTPS for this pywiim version is left in place.
     if (
         cached_endpoint
         and protocol == "https"
         and _capabilities_prefer_http(cached_capabilities)
         and not _capabilities_require_https(cached_capabilities)
     ):
-        _LOGGER.info(
-            "Dropping stale HTTPS endpoint for %s; device prefers HTTP, letting pywiim " "re-probe (Issue #248)",
-            entry.data["host"],
-        )
-        port = None
-        protocol = None
-        cached_endpoint = None
-        if "endpoint" in entry.data:
-            hass.config_entries.async_update_entry(
-                entry,
-                data={k: v for k, v in entry.data.items() if k != "endpoint"},
+        if _https_endpoint_confirmed(entry.data, installed_pywiim_version):
+            _LOGGER.debug(
+                "Keeping cached HTTPS endpoint for %s; a previous probe confirmed HTTPS for pywiim %s (Issue #275)",
+                entry.data["host"],
+                installed_pywiim_version,
             )
+        else:
+            _LOGGER.info(
+                "Dropping stale HTTPS endpoint for %s; device prefers HTTP, letting pywiim re-probe (Issue #248)",
+                entry.data["host"],
+            )
+            port = None
+            protocol = None
+            cached_endpoint = None
+            if "endpoint" in entry.data:
+                hass.config_entries.async_update_entry(
+                    entry,
+                    data={k: v for k, v in entry.data.items() if k != "endpoint"},
+                )
 
     if not cached_endpoint and _capabilities_require_https(cached_capabilities):
         host = entry.data["host"]
@@ -525,9 +565,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "entry": entry,  # platform access to options
     }
 
-    # Listen for config entry updates (e.g. options flow) so we can reload
-    entry.async_on_unload(entry.add_update_listener(_update_listener))
-
     _LOGGER.debug(
         "WiiM coordinator created for %s with adaptive polling (1s when playing, 5s when idle)",
         entry.data["host"],
@@ -636,10 +673,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     entry.data["host"],
                     discovered_endpoint,
                 )
-                hass.config_entries.async_update_entry(
-                    entry,
-                    data={**entry.data, "endpoint": discovered_endpoint},
-                )
+                updated_data = {**entry.data, "endpoint": discovered_endpoint}
+                if (
+                    str(discovered_endpoint).startswith("https://")
+                    and _capabilities_prefer_http(capabilities)
+                    and not _capabilities_require_https(capabilities)
+                ):
+                    # Probe was free to choose HTTP and still selected HTTPS.
+                    # Remember that so the next setup does not drop it again.
+                    updated_data[_ENDPOINT_HEAL_KEY] = {
+                        "kept": "https",
+                        "pywiim_version": installed_pywiim_version,
+                    }
+                    _LOGGER.info(
+                        "Keeping HTTPS endpoint for %s; probe selected HTTPS even though "
+                        "the device profile prefers HTTP (Issue #275)",
+                        entry.data["host"],
+                    )
+                else:
+                    updated_data.pop(_ENDPOINT_HEAL_KEY, None)
+                hass.config_entries.async_update_entry(entry, data=updated_data)
 
         # Update config entry title if we now have the real device name
         # This fixes manual add showing "WiiM Device (IP)" instead of actual name
@@ -809,6 +862,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.unique_id or "unknown",
         len(enabled_platforms),
     )
+
+    # After every setup-time entry write. An earlier listener would reload the
+    # entry when those writes change data (Issue #275).
+    entry.async_on_unload(entry.add_update_listener(_update_listener))
     return True
 
 

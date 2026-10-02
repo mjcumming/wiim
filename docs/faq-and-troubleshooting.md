@@ -13,7 +13,7 @@ Quick answers to common questions and solutions to common problems.
 All WiiM and LinkPlay-based devices:
 
 - **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
-- **LinkPlay Partners**: Arylic, DOSS, Dayton Audio, iEast, and many more
+- **LinkPlay Partners**: Arylic, DOSS, Dayton Audio, Edifier (MS50A), iEast, and many more
 
 **Q: Do I need the WiiM Home app?**
 

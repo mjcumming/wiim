@@ -569,6 +569,8 @@ class TestCapabilityCacheRefresh:
         assert captured["protocol"] is None
         # Stale endpoint removed so pywiim re-probes; re-persisted as HTTP after refresh.
         assert entry.data.get("endpoint") == "http://192.168.1.95:80"
+        # HTTP rediscovery must not lock the device onto HTTPS.
+        assert "endpoint_protocol_heal" not in entry.data
 
     @pytest.mark.asyncio
     async def test_async_setup_entry_preserves_https_endpoint_for_https_only_h50(
@@ -705,6 +707,222 @@ class TestCapabilityCacheRefresh:
         assert captured["port"] == 443
         assert captured["protocol"] == "https"
         assert entry.data.get("endpoint") == "https://192.168.6.50:443"
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_remembers_https_when_http_first_probe_keeps_https(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Edifier-style LinkPlay devices stay up when HTTPS is the working endpoint (Issue #275).
+
+        The profile prefers HTTP, so a cached HTTPS endpoint is probed once. If that probe
+        still selects HTTPS, setup must remember it and must not reload the entry.
+        """
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Badezimmer",
+            data={
+                "host": "192.168.168.142",
+                "endpoint": "https://192.168.168.142:443",
+                "capabilities": {
+                    "device_type": "EDIFIER MS50A",
+                    "vendor": "linkplay_generic",
+                    "protocol_priority": ["http", "https"],
+                    "supports_firmware_install": False,
+                },
+                "capabilities_cache_meta": {"pywiim_version": REQUIRED_PYWIIM_VERSION},
+            },
+            unique_id="FF97F002491D6785B5EC3E02",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.async_ensure_pywiim_version",
+            AsyncMock(return_value=REQUIRED_PYWIIM_VERSION),
+        )
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+
+        reloads: list[str] = []
+
+        async def _spy_update_listener(_hass: HomeAssistant, updated: MockConfigEntry) -> None:
+            reloads.append(updated.entry_id)
+
+        monkeypatch.setattr("custom_components.wiim._update_listener", _spy_update_listener)
+
+        captured: dict[str, object] = {}
+
+        class _FakePlayer:
+            def __init__(self):
+                self.host = "192.168.168.142"
+                self.name = "Badezimmer"
+                self.client = MagicMock(discovered_endpoint="https://192.168.168.142:443")
+
+        class _FakeCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                captured["port"] = port
+                captured["protocol"] = protocol
+                self.hass = hass
+                self.player = _FakePlayer()
+                self.last_update_success = True
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FakeCoordinator)
+        monkeypatch.setattr("custom_components.wiim._register_ha_device", AsyncMock())
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        ok = await async_setup_entry(hass, entry)
+        await hass.async_block_till_done()
+        assert ok is True
+
+        # This setup still probes (the stale HTTPS cache is dropped once).
+        assert captured["port"] is None
+        assert captured["protocol"] is None
+        assert entry.data.get("endpoint") == "https://192.168.168.142:443"
+        assert entry.data.get("endpoint_protocol_heal") == {
+            "kept": "https",
+            "pywiim_version": REQUIRED_PYWIIM_VERSION,
+        }
+        # Saving that endpoint must not schedule a reload.
+        assert reloads == []
+        assert entry.update_listeners
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_keeps_confirmed_https_endpoint_for_http_first_device(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A remembered HTTPS probe is not dropped again on the next setup (Issue #275)."""
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Badezimmer",
+            data={
+                "host": "192.168.168.142",
+                "endpoint": "https://192.168.168.142:443",
+                "endpoint_protocol_heal": {
+                    "kept": "https",
+                    "pywiim_version": REQUIRED_PYWIIM_VERSION,
+                },
+                "capabilities": {
+                    "device_type": "EDIFIER MS50A",
+                    "vendor": "linkplay_generic",
+                    "protocol_priority": ["http", "https"],
+                    "supports_firmware_install": False,
+                },
+                "capabilities_cache_meta": {"pywiim_version": REQUIRED_PYWIIM_VERSION},
+            },
+            unique_id="FF97F002491D6785B5EC3E02",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.async_ensure_pywiim_version",
+            AsyncMock(return_value=REQUIRED_PYWIIM_VERSION),
+        )
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+
+        captured: dict[str, object] = {}
+
+        class _FakePlayer:
+            def __init__(self):
+                self.host = "192.168.168.142"
+                self.name = "Badezimmer"
+                self.client = MagicMock(discovered_endpoint="https://192.168.168.142:443")
+
+        class _FakeCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                captured["port"] = port
+                captured["protocol"] = protocol
+                self.hass = hass
+                self.player = _FakePlayer()
+                self.last_update_success = True
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FakeCoordinator)
+        monkeypatch.setattr("custom_components.wiim._register_ha_device", AsyncMock())
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        ok = await async_setup_entry(hass, entry)
+        assert ok is True
+
+        assert captured["port"] == 443
+        assert captured["protocol"] == "https"
+        assert entry.data.get("endpoint") == "https://192.168.168.142:443"
+        assert entry.data.get("endpoint_protocol_heal") == {
+            "kept": "https",
+            "pywiim_version": REQUIRED_PYWIIM_VERSION,
+        }
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_retries_http_when_https_confirmation_is_stale(
+        self, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A pywiim upgrade forgets the old HTTPS confirmation and probes HTTP once more."""
+        from custom_components.wiim import async_setup_entry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Living Room Amp",
+            data={
+                "host": "192.168.1.95",
+                "endpoint": "https://192.168.1.95:443",
+                "endpoint_protocol_heal": {
+                    "kept": "https",
+                    "pywiim_version": "0.0.0",
+                },
+                "capabilities": {
+                    "device_type": "UP2STREAM_AMP_V4",
+                    "vendor": "arylic",
+                    "protocol_priority": ["http", "https"],
+                    "supports_firmware_install": False,
+                },
+                "capabilities_cache_meta": {"pywiim_version": REQUIRED_PYWIIM_VERSION},
+            },
+            unique_id="ARYLIC_UP2STREAM_AMP_V4_95",
+        )
+        entry.add_to_hass(hass)
+
+        monkeypatch.setattr(
+            "custom_components.wiim.async_ensure_pywiim_version",
+            AsyncMock(return_value=REQUIRED_PYWIIM_VERSION),
+        )
+        monkeypatch.setattr("custom_components.wiim.is_pywiim_version_compatible", lambda _version: True)
+
+        captured: dict[str, object] = {}
+
+        class _FakePlayer:
+            def __init__(self):
+                self.host = "192.168.1.95"
+                self.name = "Living Room Amp"
+                self.client = MagicMock(discovered_endpoint="http://192.168.1.95:80")
+
+        class _FakeCoordinator:
+            def __init__(self, hass, host, entry=None, capabilities=None, port=None, protocol=None, timeout=10):
+                captured["port"] = port
+                captured["protocol"] = protocol
+                self.hass = hass
+                self.player = _FakePlayer()
+                self.last_update_success = True
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        monkeypatch.setattr("custom_components.wiim.WiiMCoordinator", _FakeCoordinator)
+        monkeypatch.setattr("custom_components.wiim._register_ha_device", AsyncMock())
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        ok = await async_setup_entry(hass, entry)
+        assert ok is True
+
+        assert captured["port"] is None
+        assert captured["protocol"] is None
+        assert entry.data.get("endpoint") == "http://192.168.1.95:80"
+        assert "endpoint_protocol_heal" not in entry.data
 
     @pytest.mark.asyncio
     async def test_get_enabled_platforms_with_optional_features(self, hass: HomeAssistant) -> None:
@@ -994,3 +1212,29 @@ def test_capabilities_require_https(capabilities, expected) -> None:
     from custom_components.wiim import _capabilities_require_https
 
     assert _capabilities_require_https(capabilities) is expected
+
+
+@pytest.mark.parametrize(
+    ("entry_data", "pywiim_version", "expected"),
+    [
+        (
+            {"endpoint_protocol_heal": {"kept": "https", "pywiim_version": "2.3.9"}},
+            "2.3.9",
+            True,
+        ),
+        (
+            {"endpoint_protocol_heal": {"kept": "https", "pywiim_version": "2.3.9"}},
+            "2.3.10",
+            False,
+        ),
+        ({"endpoint_protocol_heal": {"kept": "http", "pywiim_version": "2.3.9"}}, "2.3.9", False),
+        ({"endpoint_protocol_heal": "https"}, "2.3.9", False),
+        ({}, "2.3.9", False),
+        (None, "2.3.9", False),
+    ],
+)
+def test_https_endpoint_confirmed(entry_data, pywiim_version, expected) -> None:
+    """Only a same-version HTTPS probe result suppresses the stale-endpoint drop."""
+    from custom_components.wiim import _https_endpoint_confirmed
+
+    assert _https_endpoint_confirmed(entry_data, pywiim_version) is expected
