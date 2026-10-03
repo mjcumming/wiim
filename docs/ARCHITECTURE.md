@@ -188,7 +188,7 @@ EQ already follows the desired pattern: pywiim refresh owns the slow reads, and 
 #### `group_media_player.py`
 
 - **Purpose**: Virtual group coordinator entity
-- **Pattern**: Appears when master has slaves
+- **Pattern**: Hidden unless this speaker is group master. `unavailable` means the speaker cannot be reached. See [ADR 0008](adr/0008-group-coordinator-visibility.md).
 - **Key Properties**:
   - `volume_level`: `group.volume_level` (MAX of all)
   - `is_volume_muted`: `group.is_muted` (ALL muted)

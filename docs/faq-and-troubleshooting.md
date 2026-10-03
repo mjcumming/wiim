@@ -69,13 +69,13 @@ The role sensor is **always visible** - it's one of the most important entities 
 **Q: What's the difference between the speaker entity and the group coordinator?**
 
 - **Speaker entity** (`media_player.living_room`): Controls individual speaker, always present
-- **Group coordinator** (`media_player.living_room_group_coordinator`): Virtual entity that appears when speaker is master with slaves, controls entire group
+- **Group coordinator** (`media_player.living_room_group_coordinator`): Virtual entity shown while that speaker is master with slaves. Hidden otherwise. Controls the whole group.
 
 Use the speaker entity for individual control and Music Assistant integration. Use the group coordinator for controlling the whole group at once.
 
 **Q: What's the group coordinator entity?**
 
-When a speaker becomes master with slaves, a virtual group coordinator appears:
+When a speaker becomes master with slaves, Home Assistant shows the group coordinator:
 
 ```yaml
 media_player.living_room_group_coordinator
@@ -83,12 +83,11 @@ media_player.living_room_group_coordinator
 
 Features:
 
-- Only exists when actively coordinating a group (master + slaves)
-- Provides unified control for entire group
-- Automatically appears/disappears with group changes
-- Name changes based on role:
-  - Solo: `"Living Room"`
-  - Group Master: `"Living Room Group Master"`
+- Hidden unless this speaker is master. The entity id does not come and go
+- `unavailable` means the speaker cannot be reached, not that the group ended
+- Provides unified control for the entire group
+- Name stays `"Living Room Group Master"`
+- Detect group membership with `sensor.living_room_multiroom_role` or the `group_status` attribute (`active` / `inactive`)
 
 **Q: Why does my group keep breaking apart?**
 
@@ -353,13 +352,14 @@ Alarm times are in **UTC**, not your local time. Convert your local time to UTC 
 4. Try creating group in WiiM app first
 5. Check router multicast/IGMP settings
 
-**Problem: Group coordinator not appearing**
+**Problem: Group coordinator not showing**
 
 **Reasons:**
 
-- Group coordinator only appears when master **has slaves**
-- Solo speakers and slave speakers don't show group coordinator
-- Check role sensor: must show "Master" with slaves present
+- It is hidden unless this speaker is master
+- Solo speakers and slave speakers keep the entity, hidden
+- Check the role sensor: it must show "Master"
+- A hide you set in the entity settings stays hidden until you show it again
 
 **Problem: Group audio out of sync**
 

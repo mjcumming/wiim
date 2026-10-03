@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.105] - 2026-10-03
+
+### Breaking
+
+- **Group coordinator is hidden when it is not a group master, instead of `unavailable`.** `media_player.*_group_coordinator` stays available while the speaker is solo or a slave, and Home Assistant hides it. It is shown again when that speaker is the master. `unavailable` now means the speaker cannot be reached. Automations that treated `unavailable` on the coordinator as "not in a group" should use `sensor.*_multiroom_role` or the coordinator attribute `group_status` (`active` / `inactive`). Forming a group while idle does not change the coordinator state. A service call to the coordinator while it is not master fails with an error. A hide you set yourself is left in place.
+
 ## [1.0.104] - 2026-10-02
 
 ### Fixed

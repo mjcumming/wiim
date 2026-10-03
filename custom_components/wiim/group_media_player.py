@@ -1,7 +1,7 @@
 """WiiM virtual group coordinator media player.
 
-This entity appears when a speaker becomes master with slaves, providing
-unified control for the entire multiroom group.
+Hidden unless this speaker is a group master. ``unavailable`` means the
+speaker cannot be reached, not that the group was disbanded.
 """
 
 from __future__ import annotations
@@ -35,9 +35,9 @@ _LOGGER = logging.getLogger(__name__)
 class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     """Virtual group coordinator media player for WiiM multiroom groups.
 
-    This entity dynamically appears when a speaker becomes master with slaves,
-    providing unified control for the entire multiroom group. It disappears when
-    the group is disbanded (no slaves remain).
+    The entity is always registered. Home Assistant hides it until this speaker
+    is a group master, and shows it again when a group forms. Reachability uses
+    the base ``available`` property (coordinator success).
 
     Design decisions per pywiim grouping architecture:
     - Volume shows MAX of all devices (LinkPlay firmware behavior)
@@ -50,6 +50,8 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     - All state management handled by pywiim via callbacks (no manual sync needed)
     """
 
+    _attr_entity_registry_visible_default = False
+
     def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize the group coordinator media player."""
         super().__init__(coordinator, config_entry)
@@ -58,14 +60,62 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         self._attr_name = None  # Use dynamic name property
         self._media_cleared_by_turn_off = False  # Issue #180: turn_off clears media state until next play
 
+    def _coordinating(self) -> bool:
+        """Return True when this speaker is the master of a multiroom group."""
+        if not self.coordinator.last_update_success:
+            return False
+        player = self._get_player()
+        return bool(player and player.is_master)
+
+    def _require_coordinating(self) -> None:
+        """Reject a command unless this speaker is an active group master."""
+        if not self._coordinating():
+            raise HomeAssistantError(f"{self.name} is not coordinating a group")
+
+    async def async_added_to_hass(self) -> None:
+        """Hide or show the coordinator once the entity is registered."""
+        await super().async_added_to_hass()
+        self._sync_hidden()
+
+    @callback
+    def _sync_hidden(self) -> None:
+        """Hide unless this speaker is group master.
+
+        A failed poll does not change visibility. A user hide is left alone.
+        """
+        if (
+            self.hass is None
+            or self.entity_id is None
+            or self.registry_entry is None
+            or not self.coordinator.last_update_success
+        ):
+            return
+        player = self._get_player()
+        if not player:
+            return
+
+        hidden_by = self.registry_entry.hidden_by
+        if player.is_master:
+            if hidden_by != er.RegistryEntryHider.INTEGRATION:
+                return
+            updated: er.RegistryEntryHider | None = None
+        elif hidden_by is not None:
+            return
+        else:
+            updated = er.RegistryEntryHider.INTEGRATION
+
+        self.registry_entry = er.async_get(self.hass).async_update_entity(self.entity_id, hidden_by=updated)
+        _LOGGER.debug("[%s] group coordinator hidden_by=%s", self.name, updated)
+
     def _update_position_from_coordinator(self) -> None:
         """Update media position attributes from coordinator data (LinkPlay pattern).
 
         Uses group object properties (pywiim 2.1.45+) for virtual group media state.
         """
         # Override mixin to skip feature updates (group player doesn't need them)
-        if not self.available:
-            self._attr_state = None
+        if not self._coordinating():
+            self._media_cleared_by_turn_off = False
+            self._attr_state = MediaPlayerState.IDLE if self.available else None
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
             self._attr_media_duration = None
@@ -134,32 +184,10 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
         Always returns a distinct name to ensure entity_id doesn't collide with
         the main player entity. The entity_id is set during first registration and
-        never changes, so we need a unique name even when unavailable.
+        never changes, so the name stays unique while the entity is hidden.
         """
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         return f"{device_name} Group Master"
-
-    @property
-    def available(self) -> bool:
-        """Return True only when master with slaves.
-
-        This entity dynamically appears/disappears based on group status:
-        - Appears when device is master with at least one slave
-        - Disappears when group is disbanded (no slaves) or device is slave/solo
-
-        Uses player.role (device API source of truth), NOT group.all_players which
-        may be empty even if device has slaves.
-        """
-        if not self.coordinator.last_update_success:
-            return False
-
-        player = self._get_player()
-        if not player:
-            return False
-
-        # Virtual group only available for masters
-        # player.is_master is computed from device API state (source of truth)
-        return player.is_master
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
@@ -178,8 +206,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         - BROWSE_MEDIA (browse from individual entity)
         - MEDIA_ENQUEUE (queue management on individual entity)
         """
-        if not self.available:
-            # Return basic features even when unavailable
+        if not self._coordinating():
             return (
                 MediaPlayerEntityFeature.VOLUME_SET
                 | MediaPlayerEntityFeature.VOLUME_MUTE
@@ -217,6 +244,8 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Return the current state."""
         if not self.available:
             return None
+        if not self._coordinating():
+            return MediaPlayerState.IDLE
         if self._media_cleared_by_turn_off:
             return MediaPlayerState.OFF
         if self._attr_state is not None:
@@ -231,7 +260,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
         Uses player.group.volume_level which returns the MAXIMUM volume of any device.
         """
-        if not self.available:
+        if not self._coordinating():
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -244,7 +273,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
         Uses player.group.is_muted which returns True only if ALL devices are muted.
         """
-        if not self.available:
+        if not self._coordinating():
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -269,8 +298,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         master is at 50% and slave at 30% (60% of master), setting group to
         80% results in master at 80% and slave at 48% (still 60% of master).
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         player = self._get_player()
         if not player or not player.group:
@@ -299,8 +327,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
 
         Uses pywiim's group.mute_all() which sets mute state on all members.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         player = self._get_player()
         if not player or not player.group:
@@ -329,8 +356,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Commands sent to coordinator.player (the physical master) are automatically
         synchronized to all slaves by the LinkPlay firmware.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         try:
             player = self.coordinator.player
@@ -348,8 +374,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Commands sent to coordinator.player (the physical master) are automatically
         synchronized to all slaves by the LinkPlay firmware.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         try:
             await self.coordinator.player.pause()
@@ -363,8 +388,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Commands sent to coordinator.player (the physical master) are automatically
         synchronized to all slaves by the LinkPlay firmware.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         try:
             await self.coordinator.player.stop()
@@ -378,8 +402,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Stops playback on master (slaves follow) and clears displayed media state
         so the entity shows as off with no track info (like Google Cast).
         """
-        if not self.available:
-            return
+        self._require_coordinating()
         try:
             await self.coordinator.player.stop()
         except WiiMError as err:
@@ -397,8 +420,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Commands sent to coordinator.player (the physical master) are automatically
         synchronized to all slaves by the LinkPlay firmware.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         try:
             await self.coordinator.player.next_track()
@@ -412,8 +434,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         Commands sent to coordinator.player (the physical master) are automatically
         synchronized to all slaves by the LinkPlay firmware.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         try:
             await self.coordinator.player.previous_track()
@@ -429,8 +450,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         the master entity resolves them to a playable URL before calling the
         library.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
 
         master_entity_id = self._master_entity_id()
         if master_entity_id:
@@ -478,8 +498,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         State changes are automatically synchronized via pywiim's on_state_changed
         callback, which triggers coordinator updates for all entities.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
         try:
             await self.coordinator.player.set_shuffle(shuffle)
             # State updates automatically via callback - no manual refresh needed
@@ -492,8 +511,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         State changes are automatically synchronized via pywiim's on_state_changed
         callback, which triggers coordinator updates for all entities.
         """
-        if not self.available:
-            return
+        self._require_coordinating()
         try:
             await self.coordinator.player.set_repeat(repeat.value)
             # State updates automatically via callback - no manual refresh needed
@@ -537,7 +555,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_title(self) -> str | None:
         """Return media title from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available or self._media_cleared_by_turn_off:
+        if not self._coordinating() or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -548,7 +566,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_artist(self) -> str | None:
         """Return media artist from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available or self._media_cleared_by_turn_off:
+        if not self._coordinating() or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -559,7 +577,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_album_name(self) -> str | None:
         """Return media album from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available or self._media_cleared_by_turn_off:
+        if not self._coordinating() or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -570,7 +588,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @property
     def media_image_url(self) -> str | None:
         """Image url of current playing media from group (pywiim 2.1.45+ provides group metadata)."""
-        if not self.available or self._media_cleared_by_turn_off:
+        if not self._coordinating() or self._media_cleared_by_turn_off:
             return None
         player = self._get_player()
         if not player or not player.group:
@@ -588,12 +606,33 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         # async_get_media_image() regardless of the URL value.
         return player.media_image_url
 
+    @property
+    def media_image_hash(self) -> str | None:
+        """Return None unless this speaker is coordinating a group."""
+        if not self._coordinating():
+            return None
+        return super().media_image_hash
+
+    @property
+    def shuffle(self) -> bool | None:
+        """Return shuffle only while coordinating a group."""
+        if not self._coordinating():
+            return None
+        return super().shuffle
+
+    @property
+    def repeat(self) -> RepeatMode | None:
+        """Return repeat only while coordinating a group."""
+        if not self._coordinating():
+            return None
+        return super().repeat
+
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
         """Return image bytes and content type of current playing media from group.
 
         Uses group object for metadata (pywiim 2.1.45+).
         """
-        if not self.available:
+        if not self._coordinating():
             return None, None
 
         player = self._get_player()
@@ -617,6 +656,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        self._sync_hidden()
         self._update_position_from_coordinator()
         super()._handle_coordinator_update()
 
@@ -634,6 +674,6 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         device_name = self.player.name or self._config_entry.title or "WiiM Speaker"
         attrs = {
             "group_leader": device_name,
-            "group_status": "active" if self.available else "inactive",
+            "group_status": "active" if self._coordinating() else "inactive",
         }
         return attrs

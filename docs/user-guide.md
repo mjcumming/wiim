@@ -182,7 +182,7 @@ target:
 
 ### 👥 Group Coordinator (Virtual Group Master)
 
-When a speaker becomes a master controlling other speakers, a special **group coordinator** entity automatically appears:
+When a speaker becomes a master controlling other speakers, Home Assistant shows the **group coordinator** entity:
 
 ```yaml
 media_player.living_room_group_coordinator
@@ -191,9 +191,9 @@ media_player.living_room_group_coordinator
 **What It Does:**
 
 - Controls the entire group with one entity
-- Automatically appears when a speaker has slaves
-- Automatically disappears when the group is disbanded
-- Shows group status and all member speakers
+- Hidden until this speaker is a group master, then shown again
+- Stays available while hidden. `unavailable` means the speaker cannot be reached
+- `group_status` is `active` while coordinating and `inactive` otherwise
 
 **Using the Group Coordinator:**
 
@@ -561,7 +561,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Media Players**
 
 - `media_player.{device_name}` - Main device control
-- `media_player.{device_name}_group_coordinator` - Virtual group master (appears when master has slaves)
+- `media_player.{device_name}_group_coordinator` - Virtual group master (hidden unless this speaker is master)
 
 **Sensors** (always created)
 

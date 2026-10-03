@@ -15,6 +15,7 @@ Formal decisions for the WiiM Home Assistant integration live here as short, dur
 | [0005-slave-supported-features.md](0005-slave-supported-features.md) | Slave `media_player` `supported_features` (e.g. `PLAY_MEDIA`) |
 | [0006-pywiim-capabilities-only.md](0006-pywiim-capabilities-only.md) | Use pywiim `supports_*` / capabilities only — no parallel detection in the integration |
 | [0007-capability-gating-strict-contract.md](0007-capability-gating-strict-contract.md) | Strict capability gating: no integration-side feature inference; merged `client.capabilities` |
+| [0008-group-coordinator-visibility.md](0008-group-coordinator-visibility.md) | Group coordinator uses hide/show; `unavailable` means the speaker cannot be reached |
 
 ## How to add an ADR
 

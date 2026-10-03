@@ -74,7 +74,7 @@ data:
     - media_player.bedroom
 ```
 
-The **group coordinator** entity automatically appears when speakers are grouped:
+The **group coordinator** entity is shown when speakers are grouped, and hidden when they are not:
 
 ```yaml
 # Control entire group with one entity
@@ -102,7 +102,7 @@ Each speaker creates these entities:
 **Always Available:**
 
 - `media_player.{device_name}` - Your speaker (use this for Music Assistant)
-- `media_player.{device_name}_group_coordinator` - Virtual group master (appears when speaker controls other speakers)
+- `media_player.{device_name}_group_coordinator` - Virtual group master (hidden unless this speaker is master)
 - `sensor.{device_name}_multiroom_role` - Shows if speaker is Solo, Master, or Slave
 
 **Optional (Based on Configuration):**
