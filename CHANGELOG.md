@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.106] - 2026-10-04
+
+### Fixed
+
+- **LED toggle reverts** ([Issue #277](https://github.com/mjcumming/wiim/issues/277)) — The status LED entity wrote `setLED:` through `set_led()`, which current WiiM firmware accepts and ignores. It now writes with `set_led_indicator()` (`LED_SWITCH_SET`), the same command the entity already reads.
+
 ## [1.0.105] - 2026-10-03
 
 ### Breaking

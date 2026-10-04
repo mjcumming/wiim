@@ -35,6 +35,7 @@ def mock_coordinator():
     coordinator.async_request_refresh = AsyncMock()
     coordinator.player = MagicMock()
     coordinator.player.set_led = AsyncMock(return_value=True)
+    coordinator.player.set_led_indicator = AsyncMock(return_value=None)
     coordinator.player.get_led_indicator = AsyncMock(return_value=None)
     coordinator.player.led_indicator_on = None
     coordinator.player.set_display_enabled = AsyncMock(return_value=True)
@@ -118,26 +119,28 @@ class TestWiiMLEDLightBasic:
 class TestWiiMLEDLightTurnOnOff:
     """Test LED turn on/off (no brightness)."""
 
-    async def test_turn_on_calls_set_led_true_only(self, mock_coordinator_setup, mock_coordinator):
-        """Test turn on only calls set_led(True); no brightness."""
+    async def test_turn_on_calls_set_led_indicator_true_only(self, mock_coordinator_setup, mock_coordinator):
+        """Test turn on only calls set_led_indicator(True); no brightness."""
         mock_coordinator, mock_config_entry = mock_coordinator_setup
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         await entity.async_turn_on()
 
-        mock_coordinator.player.set_led.assert_called_once_with(True)
+        mock_coordinator.player.set_led_indicator.assert_called_once_with(True)
+        mock_coordinator.player.set_led.assert_not_called()
         assert entity.is_on is True
 
     async def test_turn_on_ignores_brightness_kwarg(self, mock_coordinator_setup, mock_coordinator):
-        """Test turn on with brightness kwarg still only calls set_led(True)."""
+        """Test turn on with brightness kwarg still only calls set_led_indicator(True)."""
         mock_coordinator, mock_config_entry = mock_coordinator_setup
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
 
         await entity.async_turn_on(**{ATTR_BRIGHTNESS: 128})
 
-        mock_coordinator.player.set_led.assert_called_once_with(True)
+        mock_coordinator.player.set_led_indicator.assert_called_once_with(True)
+        mock_coordinator.player.set_led.assert_not_called()
         assert entity.is_on is True
 
     async def test_turn_off(self, mock_coordinator_setup, mock_coordinator):
@@ -151,13 +154,14 @@ class TestWiiMLEDLightTurnOnOff:
 
         await entity.async_turn_off()
 
-        mock_coordinator.player.set_led.assert_called_once_with(False)
+        mock_coordinator.player.set_led_indicator.assert_called_once_with(False)
+        mock_coordinator.player.set_led.assert_not_called()
         assert entity.is_on is False
 
     async def test_turn_on_handles_error(self, mock_coordinator_setup, mock_coordinator):
         """Test turn on handles errors."""
         mock_coordinator, mock_config_entry = mock_coordinator_setup
-        mock_coordinator.player.set_led.side_effect = Exception("LED error")
+        mock_coordinator.player.set_led_indicator.side_effect = Exception("LED error")
 
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
 
@@ -169,7 +173,7 @@ class TestWiiMLEDLightTurnOnOff:
     async def test_turn_off_handles_error(self, mock_coordinator_setup, mock_coordinator):
         """Test turn off handles errors."""
         mock_coordinator, mock_config_entry = mock_coordinator_setup
-        mock_coordinator.player.set_led.side_effect = Exception("LED error")
+        mock_coordinator.player.set_led_indicator.side_effect = Exception("LED error")
 
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
 

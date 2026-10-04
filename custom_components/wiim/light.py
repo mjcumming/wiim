@@ -95,14 +95,14 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         """Turn LED on. Brightness is ignored (legacy LED is on/off only)."""
         _ = kwargs.get(ATTR_BRIGHTNESS)  # ignored
         async with self.wiim_command("turn on LED"):
-            await self.coordinator.player.set_led(True)
+            await self.coordinator.player.set_led_indicator(True)
         self._is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:  # type: ignore[override]
         """Turn LED off."""
         async with self.wiim_command("turn off LED"):
-            await self.coordinator.player.set_led(False)
+            await self.coordinator.player.set_led_indicator(False)
         self._is_on = False
         self.async_write_ha_state()
 
