@@ -120,7 +120,7 @@ class TestWiiMLEDLightTurnOnOff:
     """Test LED turn on/off (no brightness)."""
 
     async def test_turn_on_calls_set_led_indicator_true_only(self, mock_coordinator_setup, mock_coordinator):
-        """Test turn on only calls set_led_indicator(True); no brightness."""
+        """Test turn on uses LED_SWITCH_SET via set_led_indicator(True), not legacy setLED."""
         mock_coordinator, mock_config_entry = mock_coordinator_setup
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
         entity.async_write_ha_state = MagicMock()
@@ -164,6 +164,7 @@ class TestWiiMLEDLightTurnOnOff:
         mock_coordinator.player.set_led_indicator.side_effect = Exception("LED error")
 
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
 
         with pytest.raises(Exception, match="LED error"):
             await entity.async_turn_on()
@@ -176,6 +177,7 @@ class TestWiiMLEDLightTurnOnOff:
         mock_coordinator.player.set_led_indicator.side_effect = Exception("LED error")
 
         entity = WiiMLEDLight(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
 
         with pytest.raises(Exception, match="LED error"):
             await entity.async_turn_off()

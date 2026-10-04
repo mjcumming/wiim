@@ -42,7 +42,12 @@ async def async_setup_entry(
 
 
 class WiiMLEDLight(WiimEntity, LightEntity):
-    """Light entity for the speaker front-panel LED (on/off only)."""
+    """Light entity for the speaker status LED (on/off only).
+
+    Reads ``player.led_indicator_on`` (LED_SWITCH_GET) and writes via
+    ``player.set_led_indicator()`` (LED_SWITCH_SET), so read and write use the
+    same API. The legacy ``setLED:`` command is ignored by WiiM firmware.
+    """
 
     _attr_supported_color_modes = {ColorMode.ONOFF}
     _attr_color_mode = ColorMode.ONOFF
@@ -92,7 +97,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         return ColorMode.ONOFF
 
     async def async_turn_on(self, **kwargs: Any) -> None:  # type: ignore[override]
-        """Turn LED on. Brightness is ignored (legacy LED is on/off only)."""
+        """Turn LED on via LED_SWITCH_SET. Brightness is ignored (status LED is on/off only)."""
         _ = kwargs.get(ATTR_BRIGHTNESS)  # ignored
         async with self.wiim_command("turn on LED"):
             await self.coordinator.player.set_led_indicator(True)
@@ -100,7 +105,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:  # type: ignore[override]
-        """Turn LED off."""
+        """Turn LED off via LED_SWITCH_SET."""
         async with self.wiim_command("turn off LED"):
             await self.coordinator.player.set_led_indicator(False)
         self._is_on = False

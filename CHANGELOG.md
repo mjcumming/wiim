@@ -6,7 +6,7 @@
 
 ### Fixed
 
-- **LED toggle reverts** ([Issue #277](https://github.com/mjcumming/wiim/issues/277)) — The status LED entity wrote `setLED:` through `set_led()`, which current WiiM firmware accepts and ignores. It now writes with `set_led_indicator()` (`LED_SWITCH_SET`), the same command the entity already reads.
+- **LED light switches back after turning it on or off** ([Issue #277](https://github.com/mjcumming/wiim/issues/277), [PR #278](https://github.com/mjcumming/wiim/pull/278)) — The LED light read its state with `LED_SWITCH_GET` but wrote with the legacy `setLED:` command, which WiiM firmware ignores. The toggle went back to the device state on the next poll. It now writes with `LED_SWITCH_SET` through pywiim's `set_led_indicator()`, so read and write use the same command. Tested on a WiiM Pro Plus. If the LED command cannot reach the speaker (timeout, no connection, HTTP error), Home Assistant now shows an error instead of reporting success. Thanks to @dariusz-rudzinski.
 
 ## [1.0.105] - 2026-10-03
 
