@@ -573,6 +573,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Audio Quality Sensors** (when supported)
 
 - `sensor.{device_name}_audio_quality` - Overall quality indicator
+  - **`codec` attribute**: the current codec in lowercase, for example `flac` or `mp3` for streams. On HDMI, optical and line inputs it reports the input codec from the device, for example `ac3` for a Dolby Digital bitstream (the exact values depend on firmware). A decoded surround bitstream shows the same sample rate, bit depth and bit rate as stereo PCM, so this attribute is the way to tell them apart (for example to switch a surround setup on automatically).
 - `sensor.{device_name}_sample_rate` - Sample rate (Hz)
 - `sensor.{device_name}_bit_depth` - Bit depth
 - `sensor.{device_name}_bit_rate` - Bit rate (kbps)

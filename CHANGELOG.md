@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- **Audio Quality `codec` attribute**: the user guide now describes the `codec` attribute on `sensor.*_audio_quality`. With [mjcumming/pywiim#25](https://github.com/mjcumming/pywiim/pull/25) it reports the input codec on HDMI, optical and line inputs (for example `ac3` for Dolby Digital), which is how surround content can be told apart from stereo PCM. Tests now cover the attribute. The pywiim requirement will be bumped once that change is released.
+
 ## [1.0.106] - 2026-10-04
 
 ### Fixed
