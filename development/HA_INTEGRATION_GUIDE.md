@@ -54,10 +54,12 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-09-27 (pywiim 2.3.9: Audio Pro MkII
-play state is filled from the existing UPnP poll when HTTP status omits it.
-No Home Assistant API changes required). Keep using `Player.supports_*` only —
-do not add HA fallbacks._
+_Last reviewed against upstream on 2026-10-13 (pywiim 2.3.10: `Player.media_codec`
+includes the fixed-input codec from UPnP `song:coding_f` when HTTP status has
+none. The Audio Quality sensor already exposes that property. No new Home
+Assistant API). Keep using `Player.supports_*` only — do not add HA fallbacks._
+
+**Notable upstream changes (2.3.10):** `Player.media_codec` reads LinkPlay `song:coding_f` for fixed inputs and still uses the HTTP status codec for network streams when that value is present. No integration code changes; the Audio Quality `codec` attribute already copies `media_codec`.
 
 **Notable upstream changes (2.2.16):** `set_display_enabled(True)` now enables adaptive brightness (`auto_sense_enable=1`) by default so the LCD actually relights; optional `auto_sense_enable` keyword on client and player (pass `0` for fixed brightness). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
 

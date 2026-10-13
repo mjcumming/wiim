@@ -2,9 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.107] - 2026-10-13
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.10** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.9. `Player.media_codec` now includes the fixed-input codec from UPnP `song:coding_f` when HTTP status has no codec.
+
 ### Documentation
 
-- **Audio Quality `codec` attribute**: the user guide now describes the `codec` attribute on `sensor.*_audio_quality`. With [mjcumming/pywiim#25](https://github.com/mjcumming/pywiim/pull/25) it reports the input codec on HDMI, optical and line inputs (for example `ac3` for Dolby Digital), which is how surround content can be told apart from stereo PCM. Tests now cover the attribute. The pywiim requirement will be bumped once that change is released.
+- **Audio Quality `codec` attribute** ([PR #280](https://github.com/mjcumming/wiim/pull/280)) — the user guide describes the existing `codec` attribute on `sensor.*_audio_quality`. On HDMI, optical, and line inputs it can show the device codec, for example `ac3`. The last value remains until the source changes or a new codec arrives. Thanks to @Frosbe.
 
 ## [1.0.106] - 2026-10-04
 
