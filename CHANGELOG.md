@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.108] - 2026-10-15
+
+### Added
+
+- **WiiM Sound display** ([Issue #281](https://github.com/mjcumming/wiim/issues/281)) — `light.*_display` is created for WiiM Sound as well as the Ultra family. On/off and brightness use the same control as Ultra. Sound Lite has no screen.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.11** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.10. `supports_display_config` is now true for WiiM Sound.
+
 ## [1.0.107] - 2026-10-13
 
 ### Changed

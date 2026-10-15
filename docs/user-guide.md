@@ -599,7 +599,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Lights** (device dependent)
 
 - `light.{device_name}_led` - Front panel LED (on/off only)
-- `light.{device_name}_display` - WiiM Ultra LCD screen (on/off and brightness; Ultra only). Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale (pywiim `set_display_enabled` / `setLightOperationBrightConfig`). Turning the display on sends an explicit level so the screen does not stay at minimum brightness (requires **pywiim 2.1.98+**). For adaptive brightness, use the WiiM app; the integration uses manual levels when you set brightness here.
+- `light.{device_name}_display` - LCD screen on WiiM Ultra and WiiM Sound (on/off and brightness). Sound Lite has no screen. Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale (pywiim `set_display_enabled` / `setLightOperationBrightConfig`). Turning the display on sends an explicit level so the screen does not stay at minimum brightness (Ultra since **pywiim 2.1.98+**; Sound since **pywiim 2.3.11+**). For adaptive brightness, use the WiiM app; the integration uses manual levels when you set brightness here.
 
 **Updates** (WiiM devices that support API firmware install)
 

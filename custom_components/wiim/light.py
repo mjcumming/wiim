@@ -113,7 +113,7 @@ class WiiMLEDLight(WiimEntity, LightEntity):
 
 
 class WiiMDisplayLight(WiimEntity, LightEntity):
-    """Light entity for WiiM Ultra LCD display (on/off + brightness).
+    """Light entity for a WiiM LCD display (on/off + brightness).
 
     Brightness uses the device's 1–100 scale (pywiim ``DISPLAY_BRIGHTNESS_*``);
     Home Assistant's 0–255 value is mapped into that range. Turning on always

@@ -54,10 +54,12 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-10-13 (pywiim 2.3.10: `Player.media_codec`
-includes the fixed-input codec from UPnP `song:coding_f` when HTTP status has
-none. The Audio Quality sensor already exposes that property. No new Home
-Assistant API). Keep using `Player.supports_*` only — do not add HA fallbacks._
+_Last reviewed against upstream on 2026-10-15 (pywiim 2.3.11: `supports_display_config`
+is true for WiiM Sound as well as the Ultra family. The display light already
+follows that capability. No new Home Assistant API). Keep using `Player.supports_*`
+only — do not add HA fallbacks._
+
+**Notable upstream changes (2.3.11):** `supports_display_config` includes WiiM Sound. Sound Lite stays false. Display on/off and brightness still go through `Player.set_display_enabled` / `set_display_config`. No integration code changes ([Issue #281](https://github.com/mjcumming/wiim/issues/281)).
 
 **Notable upstream changes (2.3.10):** `Player.media_codec` reads LinkPlay `song:coding_f` for fixed inputs and still uses the HTTP status codec for network streams when that value is present. No integration code changes; the Audio Quality `codec` attribute already copies `media_codec`.
 

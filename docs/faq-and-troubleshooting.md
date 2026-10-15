@@ -236,7 +236,7 @@ Switching sources will disconnect Bluetooth and stop playback. You can create an
 Not all speakers support all features:
 
 - **EQ**: Pro/Pro Plus/Ultra only
-- **Ultra LCD (`light.*_display`)**: Requires **pywiim 2.1.98+** and a current integration release so turning the display on sets brightness explicitly (1–100 on the device). If the screen stays barely readable after “on”, upgrade dependencies; adaptive brightness is controlled in the WiiM app, not Home Assistant.
+- **Display (`light.*_display`)**: WiiM Ultra and WiiM Sound. Sound Lite has no screen. Requires **pywiim 2.1.98+** for Ultra and **pywiim 2.3.11+** for Sound, so turning the display on sets brightness explicitly (1–100 on the device). If the screen stays barely readable after “on”, upgrade dependencies; adaptive brightness is controlled in the WiiM app, not Home Assistant.
 - **Presets**: Check available slots in WiiM app
 - **Sources**: Varies by model
 - **Alarms/Sleep Timer**: WiiM devices only
