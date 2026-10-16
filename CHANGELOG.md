@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.109] - 2026-10-16
+
+### Fixed
+
+- **Display light state** ([Issue #281](https://github.com/mjcumming/wiim/issues/281)) — `light.*_display` follows the WiiM Sound and WiiM Ultra screen after Home Assistant starts and after the screen is changed in the WiiM app. pywiim reads `getLightOperationBrightConfig` on startup and about every 60 seconds. Until that read succeeds, the light stays unknown. Brightness is the configured level (1–100), including while adaptive brightness is on.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.12** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.11.
+
 ## [1.0.108] - 2026-10-15
 
 ### Added

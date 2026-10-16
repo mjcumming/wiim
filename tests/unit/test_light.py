@@ -40,6 +40,8 @@ def mock_coordinator():
     coordinator.player.led_indicator_on = None
     coordinator.player.set_display_enabled = AsyncMock(return_value=True)
     coordinator.player.set_display_config = AsyncMock(return_value=True)
+    coordinator.player.display_on = None
+    coordinator.player.display_brightness = None
     return coordinator
 
 
@@ -249,6 +251,37 @@ class TestWiiMDisplayLightBasic:
         entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
         assert entity.is_on is None
         assert entity.brightness is None
+        assert entity.assumed_state is False
+
+    def test_coordinator_update_reads_device_display(self, mock_coordinator_with_display):
+        """Test a device read replaces unknown state after startup or an app change."""
+        mock_coordinator, mock_config_entry = mock_coordinator_with_display
+        entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+        mock_coordinator.player.display_on = False
+        mock_coordinator.player.display_brightness = 40
+        entity._handle_coordinator_update()
+        assert entity.is_on is False
+        assert entity.brightness == round(40 * 255 / 100)
+
+        mock_coordinator.player.display_on = True
+        mock_coordinator.player.display_brightness = 100
+        entity._handle_coordinator_update()
+        assert entity.is_on is True
+        assert entity.brightness == 255
+
+    def test_coordinator_update_keeps_state_when_unread(self, mock_coordinator_with_display):
+        """Test a failed read does not wipe a known state."""
+        mock_coordinator, mock_config_entry = mock_coordinator_with_display
+        entity = WiiMDisplayLight(mock_coordinator, mock_config_entry)
+        entity.async_write_ha_state = MagicMock()
+        entity._is_on = True
+        entity._brightness = 255
+        mock_coordinator.player.display_on = None
+        mock_coordinator.player.display_brightness = None
+        entity._handle_coordinator_update()
+        assert entity.is_on is True
+        assert entity.brightness == 255
 
     def test_state_attributes_include_color_mode_when_on(self, mock_coordinator_with_display):
         """Test HA state attributes render display color mode without errors."""

@@ -54,10 +54,12 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-10-15 (pywiim 2.3.11: `supports_display_config`
-is true for WiiM Sound as well as the Ultra family. The display light already
-follows that capability. No new Home Assistant API). Keep using `Player.supports_*`
-only — do not add HA fallbacks._
+_Last reviewed against upstream on 2026-10-16 (pywiim 2.3.12: display power and
+configured brightness are `Player.display_on` / `Player.display_brightness`,
+filled by `getLightOperationBrightConfig` during refresh). Keep using
+`Player.supports_*` only — do not add HA fallbacks._
+
+**Notable upstream changes (2.3.12):** `get_display_config()` reads `getLightOperationBrightConfig` for WiiM Ultra and WiiM Sound. `display_on` and `display_brightness` (1–100) update on startup and about every 60 seconds. A failed read leaves the cache unchanged ([Issue #281](https://github.com/mjcumming/wiim/issues/281)).
 
 **Notable upstream changes (2.3.11):** `supports_display_config` includes WiiM Sound. Sound Lite stays false. Display on/off and brightness still go through `Player.set_display_enabled` / `set_display_config`. No integration code changes ([Issue #281](https://github.com/mjcumming/wiim/issues/281)).
 
