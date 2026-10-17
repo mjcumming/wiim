@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -45,6 +46,13 @@ async def async_setup_entry(
         _LOGGER.debug("Creating EQ preset select entity - device supports EQ")
     else:
         _LOGGER.debug("Skipping EQ preset select entity - device does not support EQ")
+
+    # DAC filter: pywiim sets supports_digital_filter only when the device returns a list.
+    if coordinator.player.supports_digital_filter:
+        entities.append(WiiMDACFilterSelect(coordinator, config_entry))
+        _LOGGER.debug("Creating DAC filter select entity - device supports digital filter")
+    else:
+        _LOGGER.debug("Skipping DAC filter select entity - device does not support digital filter")
 
     async_add_entities(entities)
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
@@ -180,3 +188,40 @@ class WiiMEQPresetSelect(WiimEntity, SelectEntity):
         """Apply the selected EQ preset (Off disables EQ)."""
         async with self.wiim_command(f"select EQ preset '{option}'"):
             await self.coordinator.player.set_eq_preset(option)
+
+
+class WiiMDACFilterSelect(WiimEntity, SelectEntity):
+    """Select entity for the DAC digital filter.
+
+    Created only when ``player.supports_digital_filter`` is true. Options and the
+    current value come from pywiim's cached list. The filter affects analog Line Out.
+    """
+
+    _attr_icon = "mdi:sine-wave"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "dac_filter"
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_dac_filter"
+        self._attr_name = "DAC Filter"
+
+    @property
+    def options(self) -> list[str]:
+        """Return filter names from the device."""
+        return list(self.coordinator.player.digital_filter_types or [])
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current filter name when it is one of the options."""
+        current = self.coordinator.player.digital_filter
+        if current and current in self.options:
+            return str(current)
+        return None
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the DAC filter by the name pywiim cached from the device."""
+        async with self.wiim_command(f"select DAC filter '{option}'"):
+            await self.coordinator.player.set_digital_filter(option)

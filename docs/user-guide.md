@@ -586,6 +586,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Selects**
 
 - `select.{device_name}_audio_output_mode` - Output mode (model-specific: Line Out, Speaker Out, Optical, `BT: …`, and so on)
+- `select.{device_name}_dac_filter` - DAC digital filter, when the device returns a filter list (WiiM Pro Plus). Applies to analog Line Out only.
 
 **Switches**
 

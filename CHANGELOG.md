@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.110] - 2026-10-17
+
+### Added
+
+- **DAC filter select** ([Issue #282](https://github.com/mjcumming/wiim/issues/282)) — `select.*_dac_filter` is created when the device returns a DAC filter list. The options are the device's names. Choosing one calls `set_digital_filter`. It applies to analog Line Out. Confirmed on a WiiM Pro Plus (`Linkplay.4.8.827634`): six filters, current value Sharp Roll-Off Filter. WiiM Pro and Arylic Up2Stream AMP V4 do not return a list, so they do not get the entity. Thanks to @dariusz-rudzinski.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.13** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.12.
+
 ## [1.0.109] - 2026-10-16
 
 ### Fixed

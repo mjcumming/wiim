@@ -80,6 +80,12 @@
     }
   },
   "entity": {
+    "select": {
+      "dac_filter": {
+        "name": "DAC Filter",
+        "description": "Applies to analog Line Out. No effect on optical or coax."
+      }
+    },
     "switch": {
       "subwoofer": {
         "name": "Subwoofer",

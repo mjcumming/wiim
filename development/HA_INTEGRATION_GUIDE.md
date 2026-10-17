@@ -54,10 +54,12 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-10-16 (pywiim 2.3.12: display power and
-configured brightness are `Player.display_on` / `Player.display_brightness`,
-filled by `getLightOperationBrightConfig` during refresh). Keep using
+_Last reviewed against upstream on 2026-10-17 (pywiim 2.3.13: DAC digital filter
+names and the current filter are `Player.digital_filter_types` /
+`Player.digital_filter`, gated by `Player.supports_digital_filter`). Keep using
 `Player.supports_*` only — do not add HA fallbacks._
+
+**Notable upstream changes (2.3.13):** `supports_digital_filter` is true only when `getDigitalFilterTypeSupportList` returns filter names. `set_digital_filter(name)` sends that list's 1-based index. The select reads the cached names ([Issue #282](https://github.com/mjcumming/wiim/issues/282)).
 
 **Notable upstream changes (2.3.12):** `get_display_config()` reads `getLightOperationBrightConfig` for WiiM Ultra and WiiM Sound. `display_on` and `display_brightness` (1–100) update on startup and about every 60 seconds. A failed read leaves the cache unchanged ([Issue #281](https://github.com/mjcumming/wiim/issues/281)).
 

@@ -37,6 +37,10 @@ def mock_coordinator():
     coordinator.player.audio.select_output = AsyncMock(return_value=True)
     coordinator.player.name = "Test WiiM"
     coordinator.player.supports_eq = False
+    coordinator.player.supports_digital_filter = False
+    coordinator.player.digital_filter_types = []
+    coordinator.player.digital_filter = None
+    coordinator.player.set_digital_filter = AsyncMock()
     coordinator.player.eq_preset = "Flat"
     coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
     coordinator.player.set_eq_preset = AsyncMock()
@@ -467,3 +471,112 @@ class TestWiiMEQPresetSelectPlatformSetup:
 
         assert len(entities) == 1
         assert isinstance(entities[0], WiiMOutputModeSelect)
+
+
+FILTERS = [
+    "Sharp Roll-Off Filter",
+    "Slow Roll-Off Filter",
+    "Short Delay Sharp Roll-Off Filter",
+]
+
+
+class TestWiiMDACFilterSelect:
+    """DAC filter select reads pywiim's cached names and sets by name."""
+
+    def test_initialization(self, mock_coordinator, mock_config_entry):
+        """Test unique id, name, and configuration category."""
+        from homeassistant.const import EntityCategory
+
+        from custom_components.wiim.select import WiiMDACFilterSelect
+
+        entity = WiiMDACFilterSelect(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_dac_filter"
+        assert entity.name == "DAC Filter"
+        assert entity.entity_category is EntityCategory.CONFIG
+        assert entity.icon == "mdi:sine-wave"
+
+    def test_options_and_current(self, mock_coordinator, mock_config_entry):
+        """Options and the current value come from the cached player properties."""
+        from custom_components.wiim.select import WiiMDACFilterSelect
+
+        mock_coordinator.player.digital_filter_types = FILTERS
+        mock_coordinator.player.digital_filter = "Slow Roll-Off Filter"
+        entity = WiiMDACFilterSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == FILTERS
+        assert entity.current_option == "Slow Roll-Off Filter"
+
+    def test_current_option_unknown_is_none(self, mock_coordinator, mock_config_entry):
+        """A missing or unmatched filter does not invent a selection."""
+        from custom_components.wiim.select import WiiMDACFilterSelect
+
+        mock_coordinator.player.digital_filter_types = FILTERS
+        mock_coordinator.player.digital_filter = None
+        entity = WiiMDACFilterSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option is None
+
+        mock_coordinator.player.digital_filter = "Not a filter"
+        assert entity.current_option is None
+
+    async def test_select_option(self, mock_coordinator, mock_config_entry):
+        """Selecting a name calls set_digital_filter with that name."""
+        from custom_components.wiim.select import WiiMDACFilterSelect
+
+        entity = WiiMDACFilterSelect(mock_coordinator, mock_config_entry)
+        await entity.async_select_option("Sharp Roll-Off Filter")
+        mock_coordinator.player.set_digital_filter.assert_called_once_with("Sharp Roll-Off Filter")
+
+    async def test_select_option_handles_error(self, mock_coordinator, mock_config_entry):
+        """WiiMError from the setter becomes a Home Assistant error."""
+        from custom_components.wiim.select import WiiMDACFilterSelect
+
+        mock_coordinator.player.set_digital_filter = AsyncMock(side_effect=WiiMError("Filter failed"))
+        entity = WiiMDACFilterSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="Failed to select DAC filter"):
+            await entity.async_select_option("Sharp Roll-Off Filter")
+
+    @pytest.mark.asyncio
+    async def test_setup_creates_entity_when_supported(self, hass, mock_coordinator, mock_config_entry):
+        """The select exists only when pywiim reports a filter list."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import WiiMDACFilterSelect, async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = False
+        mock_coordinator.player.supports_eq = False
+        mock_coordinator.player.supports_digital_filter = True
+        mock_config_entry.entry_id = "test-entry"
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 1
+        assert isinstance(entities[0], WiiMDACFilterSelect)
+
+    @pytest.mark.asyncio
+    async def test_setup_skips_entity_when_unsupported(self, hass, mock_coordinator, mock_config_entry):
+        """No filter select when the support list was empty."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = True
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.supports_digital_filter = False
+        mock_config_entry.entry_id = "test-entry"
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 2
