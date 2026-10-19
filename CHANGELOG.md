@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Channel select**: `select.*_channel` with options Stereo, Left and Right, created when pywiim reports `supports_output_channel` (the device's player status has a `ch` field). The current value is read from every status poll, so a change made in the vendor app shows up on the next poll. It works on a grouped speaker too, so two speakers can play the left and right channel of the same stream. Needs pywiim with `Player.output_channel` (not released yet). The pywiim calls behind it were confirmed on an AudioCast AMP (A31, firmware 4.6.629929) and an iEAST-02 (A31, firmware 4.6.629930).
+
 ## [1.0.111] - 2026-10-18
 
 ### Added
