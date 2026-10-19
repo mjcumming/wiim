@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.111] - 2026-10-18
+
+### Added
+
+- **RoomFit select** ([Issue #283](https://github.com/mjcumming/wiim/issues/283)) — `select.*_room_fit` is created when the device has at least one saved RoomFit profile. Options are Off plus those names. Off turns RoomFit off. Choosing a name loads that profile. The current value is Off while RoomFit is disabled, even if the app still shows the last profile as selected. A device with no saved profiles does not get the entity until the integration is reloaded after the first profile is saved.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.15** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.13.
+
 ## [1.0.110] - 2026-10-17
 
 ### Added

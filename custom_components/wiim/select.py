@@ -54,6 +54,14 @@ async def async_setup_entry(
     else:
         _LOGGER.debug("Skipping DAC filter select entity - device does not support digital filter")
 
+    # RoomFit: created when the device has saved profiles. An empty list means
+    # none are saved yet, so a later first profile needs an integration reload.
+    if coordinator.player.room_correction_profiles:
+        entities.append(WiiMRoomFitSelect(coordinator, config_entry))
+        _LOGGER.debug("Creating RoomFit select entity - device has saved profiles")
+    else:
+        _LOGGER.debug("Skipping RoomFit select entity - no saved profiles")
+
     async_add_entities(entities)
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
     _LOGGER.debug(
@@ -225,3 +233,40 @@ class WiiMDACFilterSelect(WiimEntity, SelectEntity):
         """Set the DAC filter by the name pywiim cached from the device."""
         async with self.wiim_command(f"select DAC filter '{option}'"):
             await self.coordinator.player.set_digital_filter(option)
+
+
+class WiiMRoomFitSelect(WiimEntity, SelectEntity):
+    """Select entity for a saved RoomFit profile.
+
+    Created only when ``player.room_correction_profiles`` is non-empty. ``Off``
+    disables RoomFit. Any other option loads that saved profile.
+    """
+
+    _attr_icon = "mdi:chart-bell-curve"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "room_fit"
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_room_fit"
+        self._attr_name = "RoomFit"
+
+    @property
+    def options(self) -> list[str]:
+        """Return Off plus the saved profile names."""
+        return ["Off", *list(self.coordinator.player.room_correction_profiles or [])]
+
+    @property
+    def current_option(self) -> str | None:
+        """Return Off while RoomFit is disabled, otherwise the selected profile."""
+        current = self.coordinator.player.room_correction
+        if current and current in self.options:
+            return str(current)
+        return None
+
+    async def async_select_option(self, option: str) -> None:
+        """Load the selected RoomFit profile, or turn RoomFit off."""
+        async with self.wiim_command(f"select RoomFit '{option}'"):
+            await self.coordinator.player.set_room_correction(option)

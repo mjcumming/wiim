@@ -54,10 +54,13 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-10-17 (pywiim 2.3.13: DAC digital filter
-names and the current filter are `Player.digital_filter_types` /
-`Player.digital_filter`, gated by `Player.supports_digital_filter`). Keep using
-`Player.supports_*` only — do not add HA fallbacks._
+_Last reviewed against upstream on 2026-10-18 (pywiim 2.3.15: RoomFit profiles
+and the Off/on value are `Player.room_correction_profiles` /
+`Player.room_correction`, refreshed about every 60 seconds when
+`supports_peq` is true). Keep using `Player.supports_*` only — do not add HA
+fallbacks._
+
+**Notable upstream changes (2.3.15):** `room_correction` is `Off` while RoomFit is disabled, even though the device still reports the selected profile name. `set_room_correction(name)` loads a saved profile or turns RoomFit off. The select is created when the cached profile list is non-empty ([Issue #283](https://github.com/mjcumming/wiim/issues/283)).
 
 **Notable upstream changes (2.3.13):** `supports_digital_filter` is true only when `getDigitalFilterTypeSupportList` returns filter names. `set_digital_filter(name)` sends that list's 1-based index. The select reads the cached names ([Issue #282](https://github.com/mjcumming/wiim/issues/282)).
 

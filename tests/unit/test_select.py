@@ -7,7 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import HomeAssistantError
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
-from custom_components.wiim.select import WiiMEQPresetSelect, WiiMOutputModeSelect
+from custom_components.wiim.select import WiiMEQPresetSelect, WiiMOutputModeSelect, WiiMRoomFitSelect
 
 
 @pytest.fixture
@@ -41,6 +41,9 @@ def mock_coordinator():
     coordinator.player.digital_filter_types = []
     coordinator.player.digital_filter = None
     coordinator.player.set_digital_filter = AsyncMock()
+    coordinator.player.room_correction_profiles = []
+    coordinator.player.room_correction = None
+    coordinator.player.set_room_correction = AsyncMock()
     coordinator.player.eq_preset = "Flat"
     coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
     coordinator.player.set_eq_preset = AsyncMock()
@@ -580,3 +583,105 @@ class TestWiiMDACFilterSelect:
         await async_setup_entry(hass, mock_config_entry, add_entities)
 
         assert len(entities) == 2
+
+
+class TestWiiMRoomFitSelect:
+    """RoomFit select follows the cached profile list and Off switch."""
+
+    def test_init(self, mock_coordinator, mock_config_entry):
+        """Unique id and name come from the config entry."""
+        entity = WiiMRoomFitSelect(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_room_fit"
+        assert entity.name == "RoomFit"
+
+    def test_options_include_off(self, mock_coordinator, mock_config_entry):
+        """Options are Off plus the saved profile names."""
+        mock_coordinator.player.room_correction_profiles = ["Bed", "Desk"]
+        entity = WiiMRoomFitSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == ["Off", "Bed", "Desk"]
+
+    def test_current_option_is_off_when_disabled(self, mock_coordinator, mock_config_entry):
+        """The select shows Off while RoomFit is disabled."""
+        mock_coordinator.player.room_correction_profiles = ["Bed", "Desk"]
+        mock_coordinator.player.room_correction = "Off"
+        entity = WiiMRoomFitSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Off"
+
+    def test_current_option_is_selected_profile(self, mock_coordinator, mock_config_entry):
+        """The select shows the profile name while RoomFit is on."""
+        mock_coordinator.player.room_correction_profiles = ["Bed", "Desk"]
+        mock_coordinator.player.room_correction = "Desk"
+        entity = WiiMRoomFitSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Desk"
+
+    def test_current_option_unknown_is_none(self, mock_coordinator, mock_config_entry):
+        """A value that is not one of the options stays unknown."""
+        mock_coordinator.player.room_correction_profiles = ["Bed", "Desk"]
+        mock_coordinator.player.room_correction = None
+        entity = WiiMRoomFitSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option is None
+
+    @pytest.mark.asyncio
+    async def test_select_option_calls_setter(self, mock_coordinator, mock_config_entry):
+        """Selecting a profile or Off calls set_room_correction."""
+        entity = WiiMRoomFitSelect(mock_coordinator, mock_config_entry)
+        await entity.async_select_option("Desk")
+        mock_coordinator.player.set_room_correction.assert_awaited_once_with("Desk")
+
+    @pytest.mark.asyncio
+    async def test_select_option_wraps_wiim_error(self, mock_coordinator, mock_config_entry):
+        """A device error becomes a Home Assistant error."""
+        mock_coordinator.player.set_room_correction.side_effect = WiiMError("nope")
+        entity = WiiMRoomFitSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="Failed to select RoomFit"):
+            await entity.async_select_option("Desk")
+
+    @pytest.mark.asyncio
+    async def test_setup_creates_entity_when_profiles_exist(self, hass, mock_coordinator, mock_config_entry):
+        """A saved profile list creates the RoomFit select."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = False
+        mock_coordinator.player.supports_eq = False
+        mock_coordinator.player.supports_digital_filter = False
+        mock_coordinator.player.room_correction_profiles = ["Bed", "Desk"]
+        mock_config_entry.entry_id = "test-entry"
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 1
+        assert isinstance(entities[0], WiiMRoomFitSelect)
+
+    @pytest.mark.asyncio
+    async def test_setup_skips_entity_when_no_profiles(self, hass, mock_coordinator, mock_config_entry):
+        """An empty profile list does not create the select."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = True
+        mock_coordinator.player.supports_eq = False
+        mock_coordinator.player.supports_digital_filter = False
+        mock_coordinator.player.room_correction_profiles = []
+        mock_config_entry.entry_id = "test-entry"
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 1
+        assert not any(isinstance(entity, WiiMRoomFitSelect) for entity in entities)

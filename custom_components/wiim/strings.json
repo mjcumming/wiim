@@ -83,6 +83,9 @@
     "select": {
       "dac_filter": {
         "name": "DAC Filter"
+      },
+      "room_fit": {
+        "name": "RoomFit"
       }
     },
     "switch": {
