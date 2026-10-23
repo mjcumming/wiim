@@ -86,6 +86,9 @@
       },
       "room_fit": {
         "name": "RoomFit"
+      },
+      "output_channel": {
+        "name": "Channel"
       }
     },
     "switch": {

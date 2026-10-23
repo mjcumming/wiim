@@ -54,7 +54,11 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-10-18 (pywiim 2.3.15: RoomFit profiles
+_Last reviewed against upstream on 2026-10-23 (pywiim 2.3.16: Ethernet MAC via
+`Player.eth_mac_address`; channel selection via `Player.output_channel`,
+`Player.set_output_channel`, and `Player.supports_output_channel`.
+Group members poll their own channel, and rejected writes do not update the cache.
+RoomFit profiles
 and the Off/on value are `Player.room_correction_profiles` /
 `Player.room_correction`, refreshed about every 60 seconds when
 `supports_peq` is true). Keep using `Player.supports_*` only — do not add HA

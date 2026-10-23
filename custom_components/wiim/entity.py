@@ -34,6 +34,8 @@ def build_device_info(player: Any, config_entry: ConfigEntry) -> DeviceInfo:
     mac_address = getattr(device_info, "mac", None) if device_info else None
     if mac_address:
         connections.add((CONNECTION_NETWORK_MAC, mac_address))
+    if player.eth_mac_address:
+        connections.add((CONNECTION_NETWORK_MAC, player.eth_mac_address))
 
     # Endpoint pywiim connected with (protocol://host:port); not known before the first probe
     endpoint = player.client.discovered_endpoint if player.client else None

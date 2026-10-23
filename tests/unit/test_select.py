@@ -7,7 +7,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import HomeAssistantError
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
-from custom_components.wiim.select import WiiMEQPresetSelect, WiiMOutputModeSelect, WiiMRoomFitSelect
+from custom_components.wiim.select import (
+    WiiMChannelSelect,
+    WiiMEQPresetSelect,
+    WiiMOutputModeSelect,
+    WiiMRoomFitSelect,
+)
 
 
 @pytest.fixture
@@ -44,6 +49,9 @@ def mock_coordinator():
     coordinator.player.room_correction_profiles = []
     coordinator.player.room_correction = None
     coordinator.player.set_room_correction = AsyncMock()
+    coordinator.player.supports_output_channel = False
+    coordinator.player.output_channel = None
+    coordinator.player.set_output_channel = AsyncMock()
     coordinator.player.eq_preset = "Flat"
     coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
     coordinator.player.set_eq_preset = AsyncMock()
@@ -685,3 +693,71 @@ class TestWiiMRoomFitSelect:
 
         assert len(entities) == 1
         assert not any(isinstance(entity, WiiMRoomFitSelect) for entity in entities)
+
+
+class TestWiiMChannelSelect:
+    """Channel select maps Stereo / Left / Right to pywiim's output channel."""
+
+    def test_initialization(self, mock_coordinator, mock_config_entry):
+        """Unique id, name, options and configuration category."""
+        from homeassistant.const import EntityCategory
+
+        entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_output_channel"
+        assert entity.name == "Channel"
+        assert entity.options == ["Stereo", "Left", "Right"]
+        assert entity.entity_category is EntityCategory.CONFIG
+        assert entity.icon == "mdi:surround-sound-2-0"
+
+    @pytest.mark.parametrize(
+        ("channel", "expected"),
+        [("stereo", "Stereo"), ("left", "Left"), ("right", "Right"), (None, None), ("mono", None)],
+    )
+    def test_current_option(self, mock_coordinator, mock_config_entry, channel, expected):
+        """The current option follows player.output_channel; unknown values stay None."""
+        mock_coordinator.player.output_channel = channel
+        entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == expected
+
+    @pytest.mark.parametrize(("option", "expected"), [("Stereo", "stereo"), ("Left", "left"), ("Right", "right")])
+    @pytest.mark.asyncio
+    async def test_select_option_calls_setter(self, mock_coordinator, mock_config_entry, option, expected):
+        """Selecting an option calls set_output_channel with the pywiim name."""
+        entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
+        await entity.async_select_option(option)
+        mock_coordinator.player.set_output_channel.assert_awaited_once_with(expected)
+
+    @pytest.mark.asyncio
+    async def test_select_option_wraps_wiim_error(self, mock_coordinator, mock_config_entry):
+        """A device error becomes a Home Assistant error."""
+        mock_coordinator.player.set_output_channel.side_effect = WiiMError("nope")
+        entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="Failed to select channel"):
+            await entity.async_select_option("Left")
+
+    @pytest.mark.parametrize(("supported", "created"), [(True, True), (False, False)])
+    @pytest.mark.asyncio
+    async def test_setup_follows_capability(self, hass, mock_coordinator, mock_config_entry, supported, created):
+        """The channel select exists only when pywiim reports supports_output_channel."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = False
+        mock_coordinator.player.supports_eq = False
+        mock_coordinator.player.supports_digital_filter = False
+        mock_coordinator.player.room_correction_profiles = []
+        mock_coordinator.player.supports_output_channel = supported
+        mock_config_entry.entry_id = "test-entry"
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert any(isinstance(entity, WiiMChannelSelect) for entity in entities) is created
+        assert len(entities) == (1 if created else 0)

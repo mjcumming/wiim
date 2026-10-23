@@ -313,6 +313,25 @@ class TestDeviceDiagnosticsContent:
     """Test device diagnostics content structure."""
 
     @pytest.mark.asyncio
+    async def test_device_diagnostics_redacts_ethernet_mac(
+        self, hass, mock_config_entry, mock_device_entry, mock_coordinator
+    ):
+        """The Ethernet MAC is redacted in the same raw payload as the Wi-Fi MAC."""
+        from pywiim.models import DeviceInfo
+
+        from custom_components.wiim.const import DOMAIN
+
+        mock_coordinator.player.device_info = DeviceInfo.model_validate(
+            {"MAC": "AA:BB:CC:DD:EE:FF", "ETH_MAC": "00:22:6C:30:45:66"}
+        )
+        hass.data = {
+            DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator, "entry": mock_config_entry}}
+        }
+        result = await async_get_device_diagnostics(hass, mock_config_entry, mock_device_entry)
+        assert result["raw_device_info"]["MAC"] == "**REDACTED**"
+        assert result["raw_device_info"]["ETH_MAC"] == "**REDACTED**"
+
+    @pytest.mark.asyncio
     async def test_device_diagnostics_has_all_sections(
         self, hass, mock_config_entry, mock_device_entry, mock_coordinator
     ):

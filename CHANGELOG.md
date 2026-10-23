@@ -2,9 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.112] - 2026-10-23
+
 ### Changed
 
+- **Dependency**: `pywiim` **2.3.16**, including output-channel controls and the Ethernet MAC.
+- **Wired device matching** ([Issue #285](https://github.com/mjcumming/wiim/issues/285)): register both Wi-Fi and Ethernet MAC connections so router device trackers can share the speaker's HA device. Device and entity identifiers stay the same.
 - **Device page fields** ([Issue #285](https://github.com/mjcumming/wiim/issues/285)) — Model is the friendly name from pywiim (for example WiiM Pro Plus). Model ID is the project code (for example `WiiM_Pro_Plus`), shown only when it differs from the model. Firmware is the device firmware (for example `Linkplay.4.8.827634`), not the pywiim version. Hardware is the device hardware (for example `AmlogicA113`) and is empty when the device does not report it. **Visit device** opens the address pywiim connected with, including HTTP and non-default ports. The IP address is no longer shown as the serial number and is cleared on existing installs. The pywiim version is still in diagnostics and system health.
+
+### Added
+
+- **Channel select** ([Issue #284](https://github.com/mjcumming/wiim/issues/284)): `select.*_channel` with options Stereo, Left and Right, created when pywiim reports `supports_output_channel`. Standalone players and group members reflect channel changes on the next status poll. Device errors become Home Assistant errors. The library calls were tested on four WiiM Pros (`Linkplay.4.8.827634`) and an Arylic Up2Stream AMP V4 (`4.6.415145`), including a two-WiiM group and restoration of the original settings.
+
+### Fixed
+
+- Redact Ethernet MAC addresses from downloaded diagnostics, alongside the Wi-Fi MAC.
 
 ## [1.0.111] - 2026-10-18
 
