@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Device page fields** ([Issue #285](https://github.com/mjcumming/wiim/issues/285)) — Model is the friendly name from pywiim (for example WiiM Pro Plus). Model ID is the project code (for example `WiiM_Pro_Plus`), shown only when it differs from the model. Firmware is the device firmware (for example `Linkplay.4.8.827634`), not the pywiim version. Hardware is the device hardware (for example `AmlogicA113`) and is empty when the device does not report it. **Visit device** opens the address pywiim connected with, including HTTP and non-default ports. The IP address is no longer shown as the serial number and is cleared on existing installs. The pywiim version is still in diagnostics and system health.
+
 ## [1.0.111] - 2026-10-18
 
 ### Added

@@ -20,9 +20,15 @@ class TestWiimEntity:
         coordinator.async_request_refresh = AsyncMock()
         coordinator.player = MagicMock()
         coordinator.player.name = "Test WiiM"
-        coordinator.player.model = "WiiM Mini"
-        coordinator.player.firmware = "1.0.0"
+        coordinator.player.model_name = "WiiM Pro Plus"
+        coordinator.player.model = "WiiM_Pro_Plus"
+        coordinator.player.firmware = "Linkplay.4.8.827634"
         coordinator.player.host = "192.168.1.100"
+        coordinator.player.device_info = MagicMock()
+        coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
+        coordinator.player.device_info.hardware = "AmlogicA113"
+        coordinator.player.client = MagicMock()
+        coordinator.player.client.discovered_endpoint = "https://192.168.1.100:443"
         coordinator.device_info = DeviceInfo(
             identifiers={("wiim", "test-uuid")},
             manufacturer="WiiM",
@@ -58,7 +64,72 @@ class TestWiimEntity:
         assert ("wiim", "test-uuid") in device_info["identifiers"]
         assert device_info["manufacturer"] == "WiiM"
         assert device_info["name"] == "Test WiiM"
-        assert device_info["model"] == "WiiM Mini"
+        assert device_info["model"] == "WiiM Pro Plus"
+
+    def test_entity_device_info_fields(self, entity):
+        """Test device_info fields shown on the HA device page."""
+        device_info = entity.device_info
+
+        assert device_info["model"] == "WiiM Pro Plus"
+        assert device_info["model_id"] == "WiiM_Pro_Plus"
+        assert device_info["sw_version"] == "Linkplay.4.8.827634"
+        assert device_info["hw_version"] == "AmlogicA113"
+        assert device_info["configuration_url"] == "https://192.168.1.100:443"
+        # Explicit None so the registry clears the IP older versions stored here
+        assert "serial_number" in device_info
+        assert device_info["serial_number"] is None
+
+    def test_entity_device_info_no_model_name(self, mock_coordinator, mock_config_entry):
+        """Test model falls back to the project code, with no model_id."""
+        mock_coordinator.player.model_name = None
+
+        device_info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+
+        assert device_info["model"] == "WiiM_Pro_Plus"
+        assert device_info["model_id"] is None
+
+    def test_entity_device_info_model_name_equals_model(self, mock_coordinator, mock_config_entry):
+        """Test model_id is not set when it would repeat the model."""
+        mock_coordinator.player.model_name = "Up2Stream Amp"
+        mock_coordinator.player.model = "Up2Stream Amp"
+
+        device_info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+
+        assert device_info["model"] == "Up2Stream Amp"
+        assert device_info["model_id"] is None
+
+    def test_entity_device_info_no_hardware(self, mock_coordinator, mock_config_entry):
+        """Test hw_version is None when the device reports no hardware."""
+        mock_coordinator.player.device_info.hardware = None
+
+        device_info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+
+        assert device_info["hw_version"] is None
+
+    def test_entity_device_info_no_device_info(self, mock_coordinator, mock_config_entry):
+        """Test hw_version and connections are None when device_info is missing."""
+        mock_coordinator.player.device_info = None
+
+        device_info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+
+        assert device_info["hw_version"] is None
+        assert device_info["connections"] is None
+
+    def test_entity_device_info_configuration_url_http_endpoint(self, mock_coordinator, mock_config_entry):
+        """Test configuration_url uses the endpoint pywiim connected with (HTTP, custom port)."""
+        mock_coordinator.player.client.discovered_endpoint = "http://192.168.1.100:8080"
+
+        device_info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+
+        assert device_info["configuration_url"] == "http://192.168.1.100:8080"
+
+    def test_entity_device_info_configuration_url_fallback(self, mock_coordinator, mock_config_entry):
+        """Test configuration_url falls back to https://host before an endpoint is known."""
+        mock_coordinator.player.client.discovered_endpoint = None
+
+        device_info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+
+        assert device_info["configuration_url"] == "https://192.168.1.100"
 
     def test_entity_available(self, entity, mock_coordinator):
         """Test entity available property."""
@@ -87,7 +158,8 @@ class TestWiimEntity:
         assert device_info["connections"] is None  # No MAC, so no connections
 
     def test_entity_device_info_missing_model(self, mock_coordinator, mock_config_entry):
-        """Test device info when model is missing."""
+        """Test device info when model name and model are missing."""
+        mock_coordinator.player.model_name = None
         mock_coordinator.player.model = None
 
         entity = WiimEntity(mock_coordinator, mock_config_entry)
@@ -95,6 +167,7 @@ class TestWiimEntity:
 
         # Should use fallback model
         assert device_info["model"] == "WiiM Speaker"
+        assert device_info["model_id"] is None
 
     def test_entity_device_info_none_player(self, mock_coordinator, mock_config_entry):
         """Test device info when player is None."""

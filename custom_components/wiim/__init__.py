@@ -48,7 +48,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from pywiim import WiiMClient
 from pywiim.discovery import discover_devices
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMRequestError, WiiMTimeoutError
@@ -60,10 +59,10 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import WiiMCoordinator
+from .entity import build_device_info
 from .version import (
     REQUIRED_PYWIIM_VERSION,
     async_ensure_pywiim_version,
-    get_pywiim_version_label,
     is_pywiim_version_compatible,
 )
 
@@ -259,46 +258,20 @@ async def _update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def _register_ha_device(hass: HomeAssistant, coordinator: WiiMCoordinator, entry: ConfigEntry) -> None:
     """Register device in HA registry.
 
-    Device Info display:
-    - Hardware: Device firmware version (e.g., "Linkplay 4.8.731953")
-    - Software: PyWiiM library version (e.g., "pywiim 2.0.17")
-    - Serial Number: Device IP address
+    Values come from ``build_device_info()``, the same helper ``WiimEntity.device_info``
+    uses (Issue #285). Device Info display:
+    - Model: Friendly model name (e.g., "WiiM Pro Plus"), else project code, else "WiiM Speaker"
+    - Model ID: Project code (e.g., "WiiM_Pro_Plus"), only when it differs from Model
+    - Firmware: Device firmware version (e.g., "Linkplay.4.8.827634")
+    - Hardware: Device hardware (e.g., "AmlogicA113"), empty when not reported
+    - Visit device: Endpoint pywiim connected with, else https://<host>
+    - Serial Number: None (explicitly clears the IP address stored by older versions)
     - Connections: Device MAC address
     """
     dev_reg = dr.async_get(hass)
-    uuid = entry.unique_id or coordinator.player.host
-    identifiers = {(DOMAIN, uuid)}
-
-    # Get pywiim library version
-    await async_ensure_pywiim_version(hass)
-    pywiim_version = get_pywiim_version_label()
-
-    # Get device info from player
-    player = coordinator.player
-    device_name = player.name or entry.title or "WiiM Speaker"
-    device_model = player.model or "WiiM Speaker"
-    firmware = player.firmware
-
-    # Get MAC address from device_info if available
-    mac_address = None
-    if player.device_info and hasattr(player.device_info, "mac"):
-        mac_address = player.device_info.mac
-
-    # Build connections set with MAC address if available
-    connections: set[tuple[str, str]] = set()
-    if mac_address:
-        connections.add((CONNECTION_NETWORK_MAC, mac_address))
-
     dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers=identifiers,
-        manufacturer="WiiM",
-        name=device_name,
-        model=device_model,
-        hw_version=firmware,  # Device firmware (LinkPlay)
-        sw_version=pywiim_version,  # Integration library version
-        serial_number=player.host,  # IP address as serial number
-        connections=connections if connections else None,  # MAC address as connection
+        **build_device_info(coordinator.player, entry),
     )
 
 
