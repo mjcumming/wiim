@@ -1238,3 +1238,130 @@ def test_https_endpoint_confirmed(entry_data, pywiim_version, expected) -> None:
     from custom_components.wiim import _https_endpoint_confirmed
 
     assert _https_endpoint_confirmed(entry_data, pywiim_version) is expected
+
+
+def _device_info_player(**overrides) -> MagicMock:
+    """Return a player mock with the fields used for HA device info."""
+    player = MagicMock()
+    player.name = "Living Room"
+    player.model_name = "WiiM Pro Plus"
+    player.model = "WiiM_Pro_Plus"
+    player.firmware = "Linkplay.4.8.827634"
+    player.host = "192.168.1.100"
+    player.device_info = MagicMock()
+    player.device_info.mac = "AA:BB:CC:DD:EE:FF"
+    player.device_info.hardware = "AmlogicA113"
+    player.client = MagicMock()
+    player.client.discovered_endpoint = "http://192.168.1.100:80"
+    for key, value in overrides.items():
+        setattr(player, key, value)
+    return player
+
+
+class TestRegisterHaDevice:
+    """Device registry fields written by _register_ha_device (Issue #285)."""
+
+    @staticmethod
+    def _entry(hass: HomeAssistant) -> MockConfigEntry:
+        entry = MockConfigEntry(domain=DOMAIN, title="Living Room", data=MOCK_CONFIG, unique_id="test-uuid")
+        entry.add_to_hass(hass)
+        return entry
+
+    @pytest.mark.asyncio
+    async def test_registers_device_page_fields(self, hass: HomeAssistant) -> None:
+        """Model, model ID, firmware, hardware and device URL come from the player."""
+        from custom_components.wiim import _register_ha_device
+
+        entry = self._entry(hass)
+        coordinator = MagicMock(player=_device_info_player())
+
+        await _register_ha_device(hass, coordinator, entry)
+
+        device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "test-uuid")})
+        assert device is not None
+        assert device.manufacturer == "WiiM"
+        assert device.name == "Living Room"
+        assert device.model == "WiiM Pro Plus"
+        assert device.model_id == "WiiM_Pro_Plus"
+        assert device.sw_version == "Linkplay.4.8.827634"
+        assert device.hw_version == "AmlogicA113"
+        assert device.configuration_url == "http://192.168.1.100:80"
+        assert device.serial_number is None
+        assert device.connections == {(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff")}
+
+    @pytest.mark.asyncio
+    async def test_fallbacks(self, hass: HomeAssistant) -> None:
+        """No model name, hardware or endpoint: project code, None and https://host."""
+        from custom_components.wiim import _register_ha_device
+
+        entry = self._entry(hass)
+        player = _device_info_player(model_name=None)
+        player.device_info.hardware = None
+        player.client.discovered_endpoint = None
+
+        await _register_ha_device(hass, MagicMock(player=player), entry)
+
+        device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "test-uuid")})
+        assert device is not None
+        assert device.model == "WiiM_Pro_Plus"
+        assert device.model_id is None
+        assert device.hw_version is None
+        assert device.configuration_url == "https://192.168.1.100"
+
+    @pytest.mark.asyncio
+    async def test_clears_ip_serial_and_old_versions_on_existing_device(self, hass: HomeAssistant) -> None:
+        """An install that stored the IP as serial number gets it cleared."""
+        from custom_components.wiim import _register_ha_device
+
+        entry = self._entry(hass)
+        dev_reg = dr.async_get(hass)
+        dev_reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, "test-uuid")},
+            manufacturer="WiiM",
+            name="Living Room",
+            model="WiiM_Pro_Plus",
+            hw_version="Linkplay.4.8.827634",
+            sw_version="pywiim 2.3.9",
+            serial_number="192.168.1.100",
+        )
+
+        player = _device_info_player()
+        player.device_info.hardware = None
+        await _register_ha_device(hass, MagicMock(player=player), entry)
+
+        device = dev_reg.async_get_device(identifiers={(DOMAIN, "test-uuid")})
+        assert device is not None
+        assert device.serial_number is None
+        assert device.hw_version is None
+        assert device.sw_version == "Linkplay.4.8.827634"
+        assert device.model == "WiiM Pro Plus"
+
+    @pytest.mark.asyncio
+    async def test_matches_entity_device_info(self, hass: HomeAssistant) -> None:
+        """The registry entry and the entity device_info carry the same values."""
+        from custom_components.wiim import _register_ha_device
+        from custom_components.wiim.entity import WiimEntity
+
+        entry = self._entry(hass)
+        coordinator = MagicMock(player=_device_info_player())
+
+        await _register_ha_device(hass, coordinator, entry)
+        device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "test-uuid")})
+        device_info = WiimEntity(coordinator, entry).device_info
+
+        assert device is not None
+        for key in ("model", "model_id", "sw_version", "hw_version", "configuration_url", "serial_number"):
+            assert getattr(device, key) == device_info[key], key
+
+
+def test_build_device_info_keys_are_async_get_or_create_parameters() -> None:
+    """build_device_info is passed as **kwargs to async_get_or_create; every key must be a parameter."""
+    import inspect
+
+    from custom_components.wiim.entity import build_device_info
+
+    device_info = build_device_info(_device_info_player(), MagicMock(unique_id="test-uuid", title="Living Room"))
+    parameters = inspect.signature(dr.DeviceRegistry.async_get_or_create).parameters
+
+    assert set(device_info) <= set(parameters)
