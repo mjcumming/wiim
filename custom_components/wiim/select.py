@@ -62,6 +62,13 @@ async def async_setup_entry(
     else:
         _LOGGER.debug("Skipping RoomFit select entity - no saved profiles")
 
+    # Output channel: pywiim sets supports_output_channel when the player status has "ch".
+    if coordinator.player.supports_output_channel:
+        entities.append(WiiMChannelSelect(coordinator, config_entry))
+        _LOGGER.debug("Creating channel select entity - device supports output channel")
+    else:
+        _LOGGER.debug("Skipping channel select entity - device does not support output channel")
+
     async_add_entities(entities)
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
     _LOGGER.debug(
@@ -270,3 +277,42 @@ class WiiMRoomFitSelect(WiimEntity, SelectEntity):
         """Load the selected RoomFit profile, or turn RoomFit off."""
         async with self.wiim_command(f"select RoomFit '{option}'"):
             await self.coordinator.player.set_room_correction(option)
+
+
+# Option label -> pywiim output channel name
+CHANNEL_OPTIONS: dict[str, str] = {"Stereo": "stereo", "Left": "left", "Right": "right"}
+
+
+class WiiMChannelSelect(WiimEntity, SelectEntity):
+    """Select entity for the output channel: Stereo, Left or Right.
+
+    Created only when ``player.supports_output_channel`` is true. The current value
+    is ``player.output_channel``, read by pywiim from each status poll. Works on a
+    group member too, so two speakers can play left and right of the same stream.
+    """
+
+    _attr_icon = "mdi:surround-sound-2-0"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "output_channel"
+    _attr_options = list(CHANNEL_OPTIONS)
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_output_channel"
+        self._attr_name = "Channel"
+
+    @property
+    def current_option(self) -> str | None:
+        """Return Stereo, Left or Right, or None while the channel is unknown."""
+        current = self.coordinator.player.output_channel
+        for option, name in CHANNEL_OPTIONS.items():
+            if name == current:
+                return option
+        return None
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the output channel."""
+        async with self.wiim_command(f"select channel '{option}'"):
+            await self.coordinator.player.set_output_channel(CHANNEL_OPTIONS[option])
