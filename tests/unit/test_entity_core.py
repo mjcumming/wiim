@@ -24,6 +24,7 @@ class TestWiimEntity:
         coordinator.player.model = "WiiM_Pro_Plus"
         coordinator.player.firmware = "Linkplay.4.8.827634"
         coordinator.player.host = "192.168.1.100"
+        coordinator.player.eth_mac_address = None
         coordinator.player.device_info = MagicMock()
         coordinator.player.device_info.mac = "AA:BB:CC:DD:EE:FF"
         coordinator.player.device_info.hardware = "AmlogicA113"
@@ -78,6 +79,22 @@ class TestWiimEntity:
         # Explicit None so the registry clears the IP older versions stored here
         assert "serial_number" in device_info
         assert device_info["serial_number"] is None
+
+    def test_entity_device_info_both_network_interfaces(self, mock_coordinator, mock_config_entry):
+        """Wi-Fi and Ethernet both identify the existing speaker."""
+        mock_coordinator.player.eth_mac_address = "00:22:6C:30:45:66"
+        info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+        assert info["connections"] == {
+            ("mac", "AA:BB:CC:DD:EE:FF"),
+            ("mac", "00:22:6C:30:45:66"),
+        }
+
+    def test_entity_device_info_ethernet_only(self, mock_coordinator, mock_config_entry):
+        """A speaker without a Wi-Fi MAC still has its Ethernet connection."""
+        mock_coordinator.player.device_info.mac = None
+        mock_coordinator.player.eth_mac_address = "00:22:6C:30:45:66"
+        info = WiimEntity(mock_coordinator, mock_config_entry).device_info
+        assert info["connections"] == {("mac", "00:22:6C:30:45:66")}
 
     def test_entity_device_info_no_model_name(self, mock_coordinator, mock_config_entry):
         """Test model falls back to the project code, with no model_id."""

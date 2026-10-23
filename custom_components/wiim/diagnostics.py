@@ -34,6 +34,9 @@ async def _get_pywiim_version(hass: HomeAssistant) -> str:
 # Sensitive data to redact from diagnostics
 TO_REDACT = [
     "MAC",
+    "ETH_MAC",
+    "eth_mac",
+    "eth_mac_address",
     "mac_address",
     "macaddress",
     "ip_address",

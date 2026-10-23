@@ -267,6 +267,7 @@ def bypass_get_data_fixture(hass):
         mock_player.firmware = MOCK_DEVICE_DATA.get("firmware", "4.6.328252")
         mock_player.uuid = MOCK_DEVICE_DATA.get("uuid", "FF31F09E1A5020113B0A3918")
         mock_player.mac_address = MOCK_DEVICE_DATA.get("MAC", "00:22:6C:33:D4:AD")
+        mock_player.eth_mac_address = None
         mock_player.discovered_endpoint = None
         mock_player.input_list = ["bluetooth", "line_in", "optical"]
 

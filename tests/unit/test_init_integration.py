@@ -1248,6 +1248,7 @@ def _device_info_player(**overrides) -> MagicMock:
     player.model = "WiiM_Pro_Plus"
     player.firmware = "Linkplay.4.8.827634"
     player.host = "192.168.1.100"
+    player.eth_mac_address = None
     player.device_info = MagicMock()
     player.device_info.mac = "AA:BB:CC:DD:EE:FF"
     player.device_info.hardware = "AmlogicA113"
@@ -1266,6 +1267,30 @@ class TestRegisterHaDevice:
         entry = MockConfigEntry(domain=DOMAIN, title="Living Room", data=MOCK_CONFIG, unique_id="test-uuid")
         entry.add_to_hass(hass)
         return entry
+
+    @pytest.mark.asyncio
+    async def test_matches_existing_ethernet_device(self, hass: HomeAssistant) -> None:
+        """The wired MAC connects the speaker to its router-created HA device."""
+        from custom_components.wiim import _register_ha_device
+
+        entry = self._entry(hass)
+        router_entry = MockConfigEntry(domain="router", title="Router", data={})
+        router_entry.add_to_hass(hass)
+        registry = dr.async_get(hass)
+        router_device = registry.async_get_or_create(
+            config_entry_id=router_entry.entry_id,
+            connections={(dr.CONNECTION_NETWORK_MAC, "00:22:6C:30:45:66")},
+        )
+        player = _device_info_player(eth_mac_address="00:22:6C:30:45:66")
+
+        await _register_ha_device(hass, MagicMock(player=player), entry)
+
+        device = registry.async_get_device(identifiers={(DOMAIN, "test-uuid")})
+        assert device is not None and device.id == router_device.id
+        assert device.connections == {
+            (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff"),
+            (dr.CONNECTION_NETWORK_MAC, "00:22:6c:30:45:66"),
+        }
 
     @pytest.mark.asyncio
     async def test_registers_device_page_fields(self, hass: HomeAssistant) -> None:
