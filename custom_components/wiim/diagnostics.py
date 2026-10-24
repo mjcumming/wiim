@@ -54,6 +54,25 @@ TO_REDACT = [
     "uuid",
     "deviceid",
     "device_id",
+    # getStatusEx keys kept as DeviceInfo extras under the device's own names
+    "BTMAC",
+    "AP_MAC",
+    "eth0",
+    "eth2",
+    "apcli0",
+    "ra0",
+    "essid",  # Wi-Fi network name (hex)
+    "upnp_uuid",
+    "temp_uuid",
+    # DeviceInfo fields
+    "ip",
+    "master_ip",
+    "master_uuid",
+    # Config entry data: cached endpoint and SSDP location both contain the device IP;
+    # the capabilities cache holds the UPnP UDN (a device uuid)
+    "endpoint",
+    "location",
+    "upnp_udn",
 ]
 
 

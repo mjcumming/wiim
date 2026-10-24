@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Network addresses and IDs in diagnostics** — The device diagnostics download no longer shows the Bluetooth and access-point MACs (`BTMAC`, `AP_MAC`), the interface IPs (`eth0`, `eth2`, `apcli0`, `ra0`), the Wi-Fi network name (`essid`), the device IDs `upnp_uuid` and `temp_uuid`, the device IP (`ip`), or a group master's IP and ID (`master_ip`, `master_uuid`). The config entry diagnostics no longer show the device IP inside the saved connection address (`endpoint`) or the SSDP discovery address (`ssdp_info.location`), or the device's UPnP UDN (`capabilities.upnp_udn`). All of these are now redacted, like the MAC and `uuid` already were.
+
 ## [1.0.112] - 2026-10-23
 
 ### Changed
