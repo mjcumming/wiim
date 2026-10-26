@@ -113,7 +113,7 @@ def mock_player():
     player.device_info = MagicMock()
     player.device_info.mac = "AA:BB:CC:DD:EE:FF"
     player.device_info.firmware = "1.0.0"
-    player.device_info.model_dump = MagicMock(return_value={"model": "WiiM Mini", "firmware": "1.0.0"})
+    player.device_info.diagnostics_dict = MagicMock(return_value={"project": "WiiM Mini", "firmware": "1.0.0"})
 
     # UPnP
     player._upnp_client = None
@@ -343,29 +343,10 @@ class TestDeviceDiagnosticsContent:
     """Test device diagnostics content structure."""
 
     @pytest.mark.asyncio
-    async def test_device_diagnostics_redacts_ethernet_mac(
-        self, hass, mock_config_entry, mock_device_entry, mock_coordinator
-    ):
-        """The Ethernet MAC is redacted in the same raw payload as the Wi-Fi MAC."""
-        from pywiim.models import DeviceInfo
-
-        from custom_components.wiim.const import DOMAIN
-
-        mock_coordinator.player.device_info = DeviceInfo.model_validate(
-            {"MAC": "AA:BB:CC:DD:EE:FF", "ETH_MAC": "00:22:6C:30:45:66"}
-        )
-        hass.data = {
-            DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator, "entry": mock_config_entry}}
-        }
-        result = await async_get_device_diagnostics(hass, mock_config_entry, mock_device_entry)
-        assert result["raw_device_info"]["MAC"] == "**REDACTED**"
-        assert result["raw_device_info"]["ETH_MAC"] == "**REDACTED**"
-
-    @pytest.mark.asyncio
     async def test_device_diagnostics_redacts_network_ids(
         self, hass, mock_config_entry, mock_device_entry, mock_coordinator
     ):
-        """getStatusEx MACs, interface IPs, Wi-Fi name and device IDs are redacted in raw_device_info."""
+        """getStatusEx MACs, interface IPs, Wi-Fi name and device IDs stay out of raw_device_info."""
         from pywiim.models import DeviceInfo
 
         from custom_components.wiim.const import DOMAIN
@@ -395,9 +376,10 @@ class TestDeviceDiagnosticsContent:
 
         raw = (await async_get_device_diagnostics(hass, mock_config_entry, mock_device_entry))["raw_device_info"]
 
-        leaked = {key: raw.get(key) for key in sensitive if raw.get(key) != "**REDACTED**"}
-        assert leaked == {}
+        leaked = [value for value in sensitive.values() if value in str(raw)]
+        assert leaked == []
         assert raw["firmware"] == "Linkplay.4.8.000000"
+        assert "BTMAC" in raw["extra_keys"]
 
     @pytest.mark.asyncio
     async def test_device_diagnostics_has_all_sections(
@@ -670,8 +652,8 @@ class TestDeviceDiagnosticsErrorHandling:
         """Test that device_info serialization errors are handled gracefully."""
         from custom_components.wiim.const import DOMAIN
 
-        # Make model_dump raise an exception
-        mock_coordinator.player.device_info.model_dump.side_effect = Exception("Serialization failed")
+        # Make diagnostics_dict raise an exception
+        mock_coordinator.player.device_info.diagnostics_dict.side_effect = Exception("Serialization failed")
 
         hass.data = {
             DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator, "entry": mock_config_entry}}
