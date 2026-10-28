@@ -2,9 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.113] - 2026-10-26
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.17**.
+- **Device diagnostics** ([pywiim #29](https://github.com/mjcumming/pywiim/issues/29)): `raw_device_info` now comes from pywiim's `DeviceInfo.diagnostics_dict()`. It leaves out the device's IDs, MACs, IPs and Wi-Fi name, and lists any other device keys by name only, without their values. New firmware fields no longer need adding to the redaction list.
+
 ### Fixed
 
-- **Network addresses and IDs in diagnostics** — The device diagnostics download no longer shows the Bluetooth and access-point MACs (`BTMAC`, `AP_MAC`), the interface IPs (`eth0`, `eth2`, `apcli0`, `ra0`), the Wi-Fi network name (`essid`), the device IDs `upnp_uuid` and `temp_uuid`, the device IP (`ip`), or a group master's IP and ID (`master_ip`, `master_uuid`). The config entry diagnostics no longer show the device IP inside the saved connection address (`endpoint`) or the SSDP discovery address (`ssdp_info.location`), or the device's UPnP UDN (`capabilities.upnp_udn`). All of these are now redacted, like the MAC and `uuid` already were.
+- **Network addresses and IDs in diagnostics** ([Issue #289](https://github.com/mjcumming/wiim/issues/289)) — The device diagnostics download no longer shows the Bluetooth and access-point MACs (`BTMAC`, `AP_MAC`), the interface IPs (`eth0`, `eth2`, `apcli0`, `ra0`), the Wi-Fi network name (`essid`), the device IDs `upnp_uuid` and `temp_uuid`, the device IP (`ip`), or a group master's IP and ID (`master_ip`, `master_uuid`). The config entry diagnostics no longer show the device IP inside the saved connection address (`endpoint`) or the SSDP discovery address (`ssdp_info.location`), or the device's UPnP UDN (`capabilities.upnp_udn`). All of these are now redacted, like the MAC and `uuid` already were.
 
 ## [1.0.112] - 2026-10-23
 
