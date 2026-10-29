@@ -6,6 +6,7 @@ import pytest
 from homeassistant.components.media_player import MediaPlayerEntityFeature, MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from custom_components.wiim.const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP
@@ -149,23 +150,32 @@ class TestWiiMGroupMediaPlayerBasic:
         entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
         assert entity.available is True
 
-    def test_not_available_when_solo(self, mock_group_master_setup, mock_master_player):
-        """Test not available when solo."""
+    def test_available_when_solo(self, mock_group_master_setup, mock_master_player):
+        """Solo is reachable. The coordinator stays available and is not a group."""
         mock_master_player.is_master = False
         mock_master_player.is_solo = True
-        mock_master_player.group.all_players = [mock_master_player]  # Only 1 player = solo
+        mock_master_player.play_state = "play"
+        mock_master_player.group.all_players = [mock_master_player]
 
         entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
-        assert entity.available is False
+        assert entity.available is True
+        assert entity._coordinating() is False
+        assert entity.state == MediaPlayerState.IDLE
+        assert entity.volume_level is None
+        assert entity.media_title is None
+        assert entity.extra_state_attributes["group_status"] == "inactive"
+        assert MediaPlayerEntityFeature.PLAY not in entity.supported_features
 
-    def test_not_available_when_slave(self, mock_group_master_setup, mock_master_player):
-        """Test not available when slave."""
+    def test_available_when_slave(self, mock_group_master_setup, mock_master_player):
+        """A slave stays available. The coordinator does not mirror that speaker."""
         mock_master_player.is_master = False
         mock_master_player.is_slave = True
+        mock_master_player.play_state = "play"
         mock_master_player.group = None
 
         entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
-        assert entity.available is False
+        assert entity.available is True
+        assert entity.state == MediaPlayerState.IDLE
 
 
 class TestWiiMGroupMediaPlayerVolume:
@@ -1019,8 +1029,8 @@ class TestWiiMGroupMediaPlayerRoleTransitions:
         mock_master_player.is_master = False
         mock_master_player.group = None
 
-        # Entity should not be available when solo
-        assert entity.available is False
+        assert entity.available is True
+        assert entity._coordinating() is False
 
         # Transition to master with slaves
         mock_master_player.role = "master"
@@ -1028,11 +1038,14 @@ class TestWiiMGroupMediaPlayerRoleTransitions:
         mock_master_player.is_master = True
         mock_master_player.group = MagicMock()
         mock_master_player.group.slaves = [MagicMock()]
+        mock_master_player.group.play_state = "play"
+        mock_master_player.group.media_duration = 180
+        mock_master_player.group.media_position = 60
 
-        # Entity should become available
         with patch.object(entity, "async_write_ha_state"):
             entity._handle_coordinator_update()
         assert entity.available is True
+        assert entity._coordinating() is True
 
     def test_role_transition_master_to_solo(self, mock_group_master_setup, mock_master_player):
         """Test entity handles transition from master to solo."""
@@ -1057,10 +1070,11 @@ class TestWiiMGroupMediaPlayerRoleTransitions:
         mock_master_player.is_master = False
         mock_master_player.group = None
 
-        # Entity should become unavailable
         with patch.object(entity, "async_write_ha_state"):
             entity._handle_coordinator_update()
-        assert entity.available is False
+        assert entity.available is True
+        assert entity._coordinating() is False
+        assert entity.state == MediaPlayerState.IDLE
 
     def test_role_transition_master_to_slave(self, mock_group_master_setup, mock_master_player):
         """Test entity handles transition from master to slave (unusual but possible)."""
@@ -1086,10 +1100,11 @@ class TestWiiMGroupMediaPlayerRoleTransitions:
         mock_master_player.group = MagicMock()
         mock_master_player.group.master = MagicMock()
 
-        # Entity should become unavailable (slaves don't have virtual entities)
         with patch.object(entity, "async_write_ha_state"):
             entity._handle_coordinator_update()
-        assert entity.available is False
+        assert entity.available is True
+        assert entity._coordinating() is False
+        assert entity.state == MediaPlayerState.IDLE
 
     def test_group_slaves_empty_to_populated(self, mock_group_master_setup, mock_master_player):
         """Test entity handles group going from empty to having slaves."""
@@ -1139,3 +1154,167 @@ class TestWiiMGroupMediaPlayerRoleTransitions:
         with patch.object(entity, "async_write_ha_state"):
             entity._handle_coordinator_update()
         assert entity.available is True
+
+
+def _registry(entity: WiiMGroupMediaPlayer, hidden_by: object) -> MagicMock:
+    """Attach a fake entity-registry entry so visibility updates can be asserted."""
+    entity.hass = MagicMock()
+    entity.entity_id = "media_player.test_wiim_group_master"
+    entry = MagicMock()
+    entry.hidden_by = hidden_by
+    entity.registry_entry = entry
+    return entry
+
+
+class TestWiiMGroupMediaPlayerVisibility:
+    """Group membership is hide/show. Unavailable stays a failed update."""
+
+    def test_starts_hidden(self, mock_group_master_setup):
+        """New coordinators are hidden until a group exists."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        assert entity.entity_registry_visible_default is False
+
+    def test_hides_when_not_master(self, mock_group_master_setup, mock_master_player):
+        """A visible solo coordinator is hidden by the integration."""
+        mock_master_player.is_master = False
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        _registry(entity, None)
+        updated = MagicMock()
+        registry = MagicMock()
+        registry.async_update_entity.return_value = updated
+
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        registry.async_update_entity.assert_called_once_with(
+            entity.entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION
+        )
+        assert entity.registry_entry is updated
+
+    def test_unhides_when_master(self, mock_group_master_setup, mock_master_player):
+        """An integration-hidden coordinator is shown when the speaker is master."""
+        mock_master_player.is_master = True
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        _registry(entity, er.RegistryEntryHider.INTEGRATION)
+        updated = MagicMock()
+        registry = MagicMock()
+        registry.async_update_entity.return_value = updated
+
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        registry.async_update_entity.assert_called_once_with(entity.entity_id, hidden_by=None)
+        assert entity.registry_entry is updated
+
+    def test_leaves_user_hide_alone(self, mock_group_master_setup, mock_master_player):
+        """A user hide is not cleared when a group forms, and not replaced when it ends."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        registry = MagicMock()
+
+        mock_master_player.is_master = True
+        _registry(entity, er.RegistryEntryHider.USER)
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        mock_master_player.is_master = False
+        _registry(entity, er.RegistryEntryHider.USER)
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        registry.async_update_entity.assert_not_called()
+
+    def test_already_hidden_or_shown_is_a_noop(self, mock_group_master_setup, mock_master_player):
+        """Do not write the registry when visibility is already correct."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        registry = MagicMock()
+
+        mock_master_player.is_master = False
+        _registry(entity, er.RegistryEntryHider.INTEGRATION)
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        mock_master_player.is_master = True
+        _registry(entity, None)
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        registry.async_update_entity.assert_not_called()
+
+    def test_failed_update_does_not_change_visibility(self, mock_group_master_setup, mock_master_player):
+        """Offline keeps the current hide flag. Unavailable is the outage signal."""
+        mock_group_master_setup.coordinator.last_update_success = False
+        mock_master_player.is_master = False
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        _registry(entity, None)
+        registry = MagicMock()
+
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        registry.async_update_entity.assert_not_called()
+        assert entity.available is False
+
+    def test_skips_without_registry_or_player(self, mock_group_master_setup, mock_master_player):
+        """Nothing to update before registration, or when the player object is missing."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        registry = MagicMock()
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        _registry(entity, None)
+        mock_group_master_setup.coordinator.player = None
+        with patch("custom_components.wiim.group_media_player.er.async_get", return_value=registry):
+            entity._sync_hidden()
+
+        registry.async_update_entity.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_added_to_hass_syncs_visibility(self, mock_group_master_setup):
+        """Registration applies the current hide state."""
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        with (
+            patch(
+                "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
+                new_callable=AsyncMock,
+            ) as added,
+            patch.object(entity, "_sync_hidden") as sync,
+        ):
+            await entity.async_added_to_hass()
+        added.assert_awaited_once()
+        sync.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_command_rejected_when_not_master(self, mock_group_master_setup, mock_master_player):
+        """A hidden coordinator must not drive the physical speaker."""
+        mock_master_player.is_master = False
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+
+        with pytest.raises(HomeAssistantError, match="not coordinating a group"):
+            await entity.async_media_play()
+
+        mock_master_player.play.assert_not_called()
+
+    def test_position_clears_when_group_ends(self, mock_group_master_setup, mock_master_player):
+        """Leaving the master role drops group playback instead of mirroring the speaker."""
+        mock_master_player.is_master = False
+        mock_master_player.play_state = "play"
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        entity._media_cleared_by_turn_off = True
+        entity._attr_media_position = 12
+
+        entity._update_position_from_coordinator()
+
+        assert entity._attr_state == MediaPlayerState.IDLE
+        assert entity._attr_media_position is None
+        assert entity._media_cleared_by_turn_off is False
+        assert entity.media_image_hash is None
+        assert entity.shuffle is None
+        assert entity.repeat is None
+
+    def test_media_image_hash_while_master(self, mock_group_master_setup, mock_master_player):
+        """Cover art hash follows the group while coordinating."""
+        mock_master_player.media_image_url = "http://example.com/cover.jpg"
+        mock_master_player.shuffle = False
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        assert isinstance(entity.media_image_hash, str)
+        assert entity.shuffle is False

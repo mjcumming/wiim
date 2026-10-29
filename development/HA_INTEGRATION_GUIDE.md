@@ -54,10 +54,27 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-08-20 (pywiim 2.3.6: documentation
-clarifies Sound / Sound Lite Speaker Out, PlayQueue enqueue, and that
-`getSoundCardModeSupportList` does not drive the output dropdown). Keep using
-`Player.supports_*` only — do not add HA fallbacks._
+_Last reviewed against upstream on 2026-10-29 (pywiim 2.3.19: solo output mode and
+group channel use separate device controls where supported. pywiim 2.3.17: device diagnostics via
+`DeviceInfo.diagnostics_dict()`. pywiim 2.3.16: Ethernet MAC via
+`Player.eth_mac_address`; channel selection via `Player.output_channel`,
+`Player.set_output_channel`, and `Player.supports_output_channel`.
+Group members poll their own channel, and rejected writes do not update the cache.
+RoomFit profiles
+and the Off/on value are `Player.room_correction_profiles` /
+`Player.room_correction`, refreshed about every 60 seconds when
+`supports_peq` is true). Keep using `Player.supports_*` only — do not add HA
+fallbacks._
+
+**Notable upstream changes (2.3.15):** `room_correction` is `Off` while RoomFit is disabled, even though the device still reports the selected profile name. `set_room_correction(name)` loads a saved profile or turns RoomFit off. The select is created when the cached profile list is non-empty ([Issue #283](https://github.com/mjcumming/wiim/issues/283)).
+
+**Notable upstream changes (2.3.13):** `supports_digital_filter` is true only when `getDigitalFilterTypeSupportList` returns filter names. `set_digital_filter(name)` sends that list's 1-based index. The select reads the cached names ([Issue #282](https://github.com/mjcumming/wiim/issues/282)).
+
+**Notable upstream changes (2.3.12):** `get_display_config()` reads `getLightOperationBrightConfig` for WiiM Ultra and WiiM Sound. `display_on` and `display_brightness` (1–100) update on startup and about every 60 seconds. A failed read leaves the cache unchanged ([Issue #281](https://github.com/mjcumming/wiim/issues/281)).
+
+**Notable upstream changes (2.3.11):** `supports_display_config` includes WiiM Sound. Sound Lite stays false. Display on/off and brightness still go through `Player.set_display_enabled` / `set_display_config`. No integration code changes ([Issue #281](https://github.com/mjcumming/wiim/issues/281)).
+
+**Notable upstream changes (2.3.10):** `Player.media_codec` reads LinkPlay `song:coding_f` for fixed inputs and still uses the HTTP status codec for network streams when that value is present. No integration code changes; the Audio Quality `codec` attribute already copies `media_codec`.
 
 **Notable upstream changes (2.2.16):** `set_display_enabled(True)` now enables adaptive brightness (`auto_sense_enable=1`) by default so the LCD actually relights; optional `auto_sense_enable` keyword on client and player (pass `0` for fixed brightness). See [API_REFERENCE.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/API_REFERENCE.md) (Display section).
 

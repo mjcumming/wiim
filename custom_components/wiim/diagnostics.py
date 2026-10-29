@@ -34,6 +34,9 @@ async def _get_pywiim_version(hass: HomeAssistant) -> str:
 # Sensitive data to redact from diagnostics
 TO_REDACT = [
     "MAC",
+    "ETH_MAC",
+    "eth_mac",
+    "eth_mac_address",
     "mac_address",
     "macaddress",
     "ip_address",
@@ -51,6 +54,25 @@ TO_REDACT = [
     "uuid",
     "deviceid",
     "device_id",
+    # getStatusEx keys kept as DeviceInfo extras under the device's own names
+    "BTMAC",
+    "AP_MAC",
+    "eth0",
+    "eth2",
+    "apcli0",
+    "ra0",
+    "essid",  # Wi-Fi network name (hex)
+    "upnp_uuid",
+    "temp_uuid",
+    # DeviceInfo fields
+    "ip",
+    "master_ip",
+    "master_uuid",
+    # Config entry data: cached endpoint and SSDP location both contain the device IP;
+    # the capabilities cache holds the UPnP UDN (a device uuid)
+    "endpoint",
+    "location",
+    "upnp_udn",
 ]
 
 
@@ -328,9 +350,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         raw_device_info = None
         if player.device_info:
             try:
-                raw_device_info = async_redact_data(
-                    player.device_info.model_dump(by_alias=True, exclude_none=True), TO_REDACT
-                )
+                raw_device_info = async_redact_data(player.device_info.diagnostics_dict(), TO_REDACT)
             except Exception:
                 raw_device_info = "Failed to serialize device_info"
 

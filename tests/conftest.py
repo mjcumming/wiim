@@ -263,9 +263,11 @@ def bypass_get_data_fixture(hass):
         mock_player.host = MOCK_DEVICE_DATA.get("ip", "192.168.1.100")
         mock_player.port = 80
         mock_player.model = "WiiM Speaker"
+        mock_player.model_name = None
         mock_player.firmware = MOCK_DEVICE_DATA.get("firmware", "4.6.328252")
         mock_player.uuid = MOCK_DEVICE_DATA.get("uuid", "FF31F09E1A5020113B0A3918")
         mock_player.mac_address = MOCK_DEVICE_DATA.get("MAC", "00:22:6C:33:D4:AD")
+        mock_player.eth_mac_address = None
         mock_player.discovered_endpoint = None
         mock_player.input_list = ["bluetooth", "line_in", "optical"]
 
@@ -274,6 +276,7 @@ def bypass_get_data_fixture(hass):
         mock_player.device_info.mac = MOCK_DEVICE_DATA.get("MAC", "00:22:6C:33:D4:AD")
         mock_player.device_info.uuid = MOCK_DEVICE_DATA.get("uuid", "FF31F09E1A5020113B0A3918")
         mock_player.device_info.firmware = MOCK_DEVICE_DATA.get("firmware", "4.6.328252")
+        mock_player.device_info.hardware = MOCK_DEVICE_DATA.get("hardware", "A31")
         mock_player.device_info.mcu_ver = "1.0.0"
         mock_player.device_info.dsp_ver = "1.0.0"
         mock_player.device_info.release_date = "2024-01-01"
