@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.114] - 2026-10-29
+
+### Fixed
+
+- **Standalone channel selection** ([Issue #291](https://github.com/mjcumming/wiim/issues/291)): on devices with a separate solo channel mode, the Channel select now changes that setting instead of the group channel. Group leaders and members keep their own channel settings. Command and status behavior was verified on WiiM Pros at zero volume; audible verification on the reporter's Pro Plus is still needed.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.19**.
+
 ## [1.0.113] - 2026-10-26
 
 ### Changed
