@@ -113,7 +113,7 @@ def mock_player():
     player.device_info = MagicMock()
     player.device_info.mac = "AA:BB:CC:DD:EE:FF"
     player.device_info.firmware = "1.0.0"
-    player.device_info.model_dump = MagicMock(return_value={"model": "WiiM Mini", "firmware": "1.0.0"})
+    player.device_info.diagnostics_dict = MagicMock(return_value={"project": "WiiM Mini", "firmware": "1.0.0"})
 
     # UPnP
     player._upnp_client = None
@@ -245,6 +245,36 @@ class TestConfigEntryDiagnostics:
             assert result["integration_overview"]["total_devices"] >= 1
 
     @pytest.mark.asyncio
+    async def test_config_entry_diagnostics_redacts_endpoint_and_ssdp_location(
+        self, hass, mock_config_entry, mock_coordinator
+    ):
+        """The cached endpoint, SSDP location and UPnP UDN identify the device, like host."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.diagnostics import async_get_config_entry_diagnostics
+
+        mock_config_entry.data = {
+            "host": "10.0.0.2",
+            "endpoint": "https://10.0.0.2:443",
+            "ssdp_info": {"location": "http://10.0.0.2:49152/description.xml"},
+            "capabilities": {
+                "firmware_version": "Linkplay.4.8.000000",
+                "upnp_udn": "uuid:00000000-0000-0000-0000-000000000005",
+            },
+        }
+        hass.data = {
+            DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator, "entry": mock_config_entry}}
+        }
+
+        with patch.object(hass.config_entries, "async_entries", return_value=[mock_config_entry]):
+            entry_data = (await async_get_config_entry_diagnostics(hass, mock_config_entry))["entry_data"]
+
+        assert entry_data["host"] == "**REDACTED**"
+        assert entry_data["endpoint"] == "**REDACTED**"
+        assert entry_data["ssdp_info"]["location"] == "**REDACTED**"
+        assert entry_data["capabilities"]["upnp_udn"] == "**REDACTED**"
+        assert entry_data["capabilities"]["firmware_version"] == "Linkplay.4.8.000000"
+
+    @pytest.mark.asyncio
     async def test_config_entry_diagnostics_speaker_not_found(self, hass, mock_config_entry):
         """Test config entry diagnostics when coordinator not found."""
         from custom_components.wiim.const import DOMAIN
@@ -311,6 +341,45 @@ class TestConfigEntryDiagnostics:
 
 class TestDeviceDiagnosticsContent:
     """Test device diagnostics content structure."""
+
+    @pytest.mark.asyncio
+    async def test_device_diagnostics_redacts_network_ids(
+        self, hass, mock_config_entry, mock_device_entry, mock_coordinator
+    ):
+        """getStatusEx MACs, interface IPs, Wi-Fi name and device IDs stay out of raw_device_info."""
+        from pywiim.models import DeviceInfo
+
+        from custom_components.wiim.const import DOMAIN
+
+        # getStatusEx-style payload with fake values; unknown keys land in DeviceInfo extras
+        sensitive = {
+            "MAC": "AA:BB:CC:DD:EE:00",
+            "ETH_MAC": "AA:BB:CC:DD:EE:03",
+            "BTMAC": "AA:BB:CC:DD:EE:01",
+            "AP_MAC": "AA:BB:CC:DD:EE:02",
+            "eth0": "10.0.0.2",
+            "eth2": "10.0.0.3",
+            "apcli0": "10.0.0.4",
+            "ra0": "10.0.0.5",
+            "essid": "46616B654E6574",
+            "uuid": "00000000-0000-0000-0000-000000000001",
+            "upnp_uuid": "uuid:00000000-0000-0000-0000-000000000002",
+            "temp_uuid": "00000000000000000000000000000003",
+            "ip": "10.0.0.6",
+            "master_ip": "10.0.0.7",
+            "master_uuid": "00000000-0000-0000-0000-000000000004",
+        }
+        mock_coordinator.player.device_info = DeviceInfo.model_validate({**sensitive, "firmware": "Linkplay.4.8.000000"})
+        hass.data = {
+            DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator, "entry": mock_config_entry}}
+        }
+
+        raw = (await async_get_device_diagnostics(hass, mock_config_entry, mock_device_entry))["raw_device_info"]
+
+        leaked = [value for value in sensitive.values() if value in str(raw)]
+        assert leaked == []
+        assert raw["firmware"] == "Linkplay.4.8.000000"
+        assert "BTMAC" in raw["extra_keys"]
 
     @pytest.mark.asyncio
     async def test_device_diagnostics_has_all_sections(
@@ -583,8 +652,8 @@ class TestDeviceDiagnosticsErrorHandling:
         """Test that device_info serialization errors are handled gracefully."""
         from custom_components.wiim.const import DOMAIN
 
-        # Make model_dump raise an exception
-        mock_coordinator.player.device_info.model_dump.side_effect = Exception("Serialization failed")
+        # Make diagnostics_dict raise an exception
+        mock_coordinator.player.device_info.diagnostics_dict.side_effect = Exception("Serialization failed")
 
         hass.data = {
             DOMAIN: {mock_config_entry.entry_id: {"coordinator": mock_coordinator, "entry": mock_config_entry}}

@@ -42,7 +42,12 @@ async def async_setup_entry(
 
 
 class WiiMLEDLight(WiimEntity, LightEntity):
-    """Light entity for the speaker front-panel LED (on/off only)."""
+    """Light entity for the speaker status LED (on/off only).
+
+    Reads ``player.led_indicator_on`` (LED_SWITCH_GET) and writes via
+    ``player.set_led_indicator()`` (LED_SWITCH_SET), so read and write use the
+    same API. The legacy ``setLED:`` command is ignored by WiiM firmware.
+    """
 
     _attr_supported_color_modes = {ColorMode.ONOFF}
     _attr_color_mode = ColorMode.ONOFF
@@ -92,35 +97,39 @@ class WiiMLEDLight(WiimEntity, LightEntity):
         return ColorMode.ONOFF
 
     async def async_turn_on(self, **kwargs: Any) -> None:  # type: ignore[override]
-        """Turn LED on. Brightness is ignored (legacy LED is on/off only)."""
+        """Turn LED on via LED_SWITCH_SET. Brightness is ignored (status LED is on/off only)."""
         _ = kwargs.get(ATTR_BRIGHTNESS)  # ignored
         async with self.wiim_command("turn on LED"):
-            await self.coordinator.player.set_led(True)
+            await self.coordinator.player.set_led_indicator(True)
         self._is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:  # type: ignore[override]
-        """Turn LED off."""
+        """Turn LED off via LED_SWITCH_SET."""
         async with self.wiim_command("turn off LED"):
-            await self.coordinator.player.set_led(False)
+            await self.coordinator.player.set_led_indicator(False)
         self._is_on = False
         self.async_write_ha_state()
 
 
 class WiiMDisplayLight(WiimEntity, LightEntity):
-    """Light entity for WiiM Ultra LCD display (on/off + brightness).
+    """Light entity for a WiiM LCD display (on/off + brightness).
 
     Brightness uses the device's 1–100 scale (pywiim ``DISPLAY_BRIGHTNESS_*``);
     Home Assistant's 0–255 value is mapped into that range. Turning on always
     passes an explicit level via ``set_display_enabled(..., default_bright=…)``
     (pywiim 2.1.98+) so the screen is not left at minimum brightness.
+
+    Power and configured brightness come from ``player.display_on`` and
+    ``player.display_brightness`` (``getLightOperationBrightConfig``), refreshed
+    with the rest of device state. Until that read succeeds the state stays
+    unknown.
     """
 
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_has_entity_name = True
     _attr_entity_registry_enabled_default = True
-    _attr_assumed_state = True  # No read API for display state
 
     def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         """Initialise the Display light entity."""
@@ -130,6 +139,26 @@ class WiiMDisplayLight(WiimEntity, LightEntity):
         self._attr_name = "Display"
         self._is_on: bool | None = None
         self._brightness: int | None = None  # 0-255
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to Home Assistant."""
+        await super().async_added_to_hass()
+        self._update_state_from_cache()
+
+    def _update_state_from_cache(self) -> None:
+        """Copy pywiim's cached LCD power and configured brightness."""
+        player = self.coordinator.player
+        is_on = getattr(player, "display_on", None)
+        if isinstance(is_on, bool):
+            self._is_on = is_on
+        brightness = getattr(player, "display_brightness", None)
+        if isinstance(brightness, int):
+            self._brightness = max(1, min(255, round(brightness * 255 / 100)))
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from coordinator."""
+        self._update_state_from_cache()
+        super()._handle_coordinator_update()
 
     @property
     def available(self) -> bool:
@@ -141,12 +170,12 @@ class WiiMDisplayLight(WiimEntity, LightEntity):
 
     @property
     def is_on(self) -> bool | None:  # type: ignore[override]
-        """Return display power state (assumed)."""
+        """Return display power from the device cache, or None if not read yet."""
         return self._is_on
 
     @property
     def brightness(self) -> int | None:  # type: ignore[override]
-        """Return display brightness (0-255, assumed)."""
+        """Return configured display brightness (0-255), or None if not read yet."""
         return self._brightness
 
     @property
@@ -168,6 +197,7 @@ class WiiMDisplayLight(WiimEntity, LightEntity):
 
         self._is_on = True
         self._brightness = brightness_255
+        self._update_state_from_cache()
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:  # type: ignore[override]
@@ -175,4 +205,5 @@ class WiiMDisplayLight(WiimEntity, LightEntity):
         async with self.wiim_command("turn off display"):
             await self.coordinator.player.set_display_enabled(False)
         self._is_on = False
+        self._update_state_from_cache()
         self.async_write_ha_state()

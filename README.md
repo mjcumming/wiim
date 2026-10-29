@@ -38,7 +38,7 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 ## Supported Devices
 
 - **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
-- **LinkPlay Compatible**: Arylic, Audio Pro (including Gen1: A26, C10, C5a and MkII models), Dayton Audio, DOSS, and many more
+- **LinkPlay Compatible**: Arylic, Audio Pro (including Gen1: A26, C10, C5a and MkII models), Dayton Audio, DOSS, Edifier (MS50A), and many more
 - **Enhanced Compatibility**: Automatic protocol fallback for devices with non-standard configurations
 - **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
 
@@ -369,8 +369,7 @@ The integration creates multiple entity types for comprehensive control:
 ### Select Entities
 
 - **Audio Output Mode** - Model-specific hardware modes (Line Out, Optical, Coax, Speaker Out, HDMI, USB, headphone) plus paired `BT: …` devices
-- **EQ Preset** - 24 equalizer presets
-- **Sound Mode** - Audio processing modes
+- **EQ Preset** - Device equalizer presets (created when the device supports EQ). The same list is also the media player's **sound mode**.
 
 ### Buttons
 

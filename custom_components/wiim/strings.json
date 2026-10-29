@@ -80,6 +80,17 @@
     }
   },
   "entity": {
+    "select": {
+      "dac_filter": {
+        "name": "DAC Filter"
+      },
+      "room_fit": {
+        "name": "RoomFit"
+      },
+      "output_channel": {
+        "name": "Channel"
+      }
+    },
     "switch": {
       "subwoofer": {
         "name": "Subwoofer",

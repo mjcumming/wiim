@@ -789,3 +789,36 @@ class TestBluetoothOutputSensor:
         assert "audio_cast_active" in attrs
         assert attrs["hardware_output_mode"] == "Bluetooth"
         assert attrs["audio_cast_active"] is True
+
+
+class TestAudioQualitySensorCodec:
+    """Test the codec attribute on WiiMAudioQualitySensor."""
+
+    @staticmethod
+    def _sensor(media_codec):
+        coordinator = MagicMock()
+        coordinator.player = MagicMock()
+        coordinator.player.host = "192.168.1.100"
+        coordinator.player.media_sample_rate = 48000
+        coordinator.player.media_bit_depth = 16
+        coordinator.player.media_bit_rate = 1536
+        coordinator.player.media_codec = media_codec
+
+        config_entry = MagicMock(spec=ConfigEntry)
+        config_entry.unique_id = "test-uuid"
+        config_entry.entry_id = "test-entry"
+
+        return WiiMAudioQualitySensor(coordinator, config_entry)
+
+    def test_codec_attribute_reports_fixed_input_codec(self):
+        """HDMI AC3 decodes to 48k/16/1536 PCM; only the codec attribute tells it apart."""
+        sensor = self._sensor("ac3")
+
+        assert sensor.native_value == "48000Hz / 16bit / 1536kbps"
+        assert sensor.extra_state_attributes["codec"] == "ac3"
+
+    def test_codec_attribute_omitted_without_codec(self):
+        """No codec from pywiim means no codec attribute."""
+        sensor = self._sensor(None)
+
+        assert "codec" not in sensor.extra_state_attributes

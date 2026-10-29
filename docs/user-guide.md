@@ -182,7 +182,7 @@ target:
 
 ### 👥 Group Coordinator (Virtual Group Master)
 
-When a speaker becomes a master controlling other speakers, a special **group coordinator** entity automatically appears:
+When a speaker becomes a master controlling other speakers, Home Assistant shows the **group coordinator** entity:
 
 ```yaml
 media_player.living_room_group_coordinator
@@ -191,9 +191,9 @@ media_player.living_room_group_coordinator
 **What It Does:**
 
 - Controls the entire group with one entity
-- Automatically appears when a speaker has slaves
-- Automatically disappears when the group is disbanded
-- Shows group status and all member speakers
+- Hidden until this speaker is a group master, then shown again
+- Stays available while hidden. `unavailable` means the speaker cannot be reached
+- `group_status` is `active` while coordinating and `inactive` otherwise
 
 **Using the Group Coordinator:**
 
@@ -314,9 +314,17 @@ data:
 
 **Select EQ Preset**
 
-Available presets: Flat, Rock, Jazz, Classical, Pop, Bass, Treble, Vocal
+Devices that support EQ get a dedicated **EQ Preset** select (`select.{device}_eq_preset`). The same list is also the media player's sound mode. Available names come from the device (typically including Off, Flat, Rock, Jazz, and others).
 
 ```yaml
+# Recommended: dedicated select entity
+service: select.select_option
+target:
+  entity_id: select.living_room_eq_preset
+data:
+  option: "Rock"
+
+# Same control via the media player
 service: media_player.select_sound_mode
 target:
   entity_id: media_player.living_room
@@ -553,7 +561,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Media Players**
 
 - `media_player.{device_name}` - Main device control
-- `media_player.{device_name}_group_coordinator` - Virtual group master (appears when master has slaves)
+- `media_player.{device_name}_group_coordinator` - Virtual group master (hidden unless this speaker is master)
 
 **Sensors** (always created)
 
@@ -565,6 +573,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Audio Quality Sensors** (when supported)
 
 - `sensor.{device_name}_audio_quality` - Overall quality indicator
+  - **`codec` attribute**: the current codec in lowercase, for example `flac` or `mp3` for streams. On HDMI, optical, and line inputs it reports the device input codec when firmware sends one, for example `ac3` for Dolby Digital. Decoded surround and stereo PCM share the same sample rate, bit depth, and bit rate. The last codec remains until the source changes or a new value arrives.
 - `sensor.{device_name}_sample_rate` - Sample rate (Hz)
 - `sensor.{device_name}_bit_depth` - Bit depth
 - `sensor.{device_name}_bit_rate` - Bit rate (kbps)
@@ -577,6 +586,9 @@ Complete reference for all entities, configuration options, and technical detail
 **Selects**
 
 - `select.{device_name}_audio_output_mode` - Output mode (model-specific: Line Out, Speaker Out, Optical, `BT: …`, and so on)
+- `select.{device_name}_dac_filter` - DAC digital filter, when the device returns a filter list (WiiM Pro Plus). Applies to analog Line Out only.
+- `select.{device_name}_room_fit` - Saved RoomFit profile, when the device has at least one. `Off` turns RoomFit off. Choosing a name loads that profile. A device with no saved profiles does not get this select until the integration is reloaded after the first profile is saved.
+- `select.{device_name}_channel` - Output channel: Stereo, Left or Right, when the device supports channel selection. Solo and grouped playback can have separate settings. Set one grouped speaker to Left and another to Right for a stereo pair. This is not the balance control. If a solo device reports Mono, the select is unknown until you choose one of its supported options.
 
 **Switches**
 
@@ -590,7 +602,7 @@ Complete reference for all entities, configuration options, and technical detail
 **Lights** (device dependent)
 
 - `light.{device_name}_led` - Front panel LED (on/off only)
-- `light.{device_name}_display` - WiiM Ultra LCD screen (on/off and brightness; Ultra only). Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale (pywiim `set_display_enabled` / `setLightOperationBrightConfig`). Turning the display on sends an explicit level so the screen does not stay at minimum brightness (requires **pywiim 2.1.98+**). For adaptive brightness, use the WiiM app; the integration uses manual levels when you set brightness here.
+- `light.{device_name}_display` - LCD screen on WiiM Ultra and WiiM Sound (on/off and brightness). Sound Lite has no screen. Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale (pywiim `set_display_enabled` / `setLightOperationBrightConfig`). Turning the display on sends an explicit level so the screen does not stay at minimum brightness (Ultra since **pywiim 2.1.98+**; Sound since **pywiim 2.3.11+**). From **pywiim 2.3.12+** the light reads the screen's power and configured brightness at startup and about once a minute, so it catches changes made in the WiiM app. Until that read succeeds the light is unknown. The brightness shown is the configured level, including while adaptive brightness is on in the app.
 
 **Updates** (WiiM devices that support API firmware install)
 

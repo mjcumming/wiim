@@ -2,6 +2,145 @@
 
 ## [Unreleased]
 
+## [1.0.114] - 2026-10-29
+
+### Fixed
+
+- **Standalone channel selection** ([Issue #291](https://github.com/mjcumming/wiim/issues/291)): on devices with a separate solo channel mode, the Channel select now changes that setting instead of the group channel. Group leaders and members keep their own channel settings. Command and status behavior was verified on WiiM Pros at zero volume; audible verification on the reporter's Pro Plus is still needed.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.19**.
+
+## [1.0.113] - 2026-10-26
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.17**.
+- **Device diagnostics** ([pywiim #29](https://github.com/mjcumming/pywiim/issues/29)): `raw_device_info` now comes from pywiim's `DeviceInfo.diagnostics_dict()`. It leaves out the device's IDs, MACs, IPs and Wi-Fi name, and lists any other device keys by name only, without their values. New firmware fields no longer need adding to the redaction list.
+
+### Fixed
+
+- **Network addresses and IDs in diagnostics** ([Issue #289](https://github.com/mjcumming/wiim/issues/289)) — The device diagnostics download no longer shows the Bluetooth and access-point MACs (`BTMAC`, `AP_MAC`), the interface IPs (`eth0`, `eth2`, `apcli0`, `ra0`), the Wi-Fi network name (`essid`), the device IDs `upnp_uuid` and `temp_uuid`, the device IP (`ip`), or a group master's IP and ID (`master_ip`, `master_uuid`). The config entry diagnostics no longer show the device IP inside the saved connection address (`endpoint`) or the SSDP discovery address (`ssdp_info.location`), or the device's UPnP UDN (`capabilities.upnp_udn`). All of these are now redacted, like the MAC and `uuid` already were.
+
+## [1.0.112] - 2026-10-23
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.16**, including output-channel controls and the Ethernet MAC.
+- **Wired device matching** ([Issue #285](https://github.com/mjcumming/wiim/issues/285)): register both Wi-Fi and Ethernet MAC connections so router device trackers can share the speaker's HA device. Device and entity identifiers stay the same.
+- **Device page fields** ([Issue #285](https://github.com/mjcumming/wiim/issues/285)) — Model is the friendly name from pywiim (for example WiiM Pro Plus). Model ID is the project code (for example `WiiM_Pro_Plus`), shown only when it differs from the model. Firmware is the device firmware (for example `Linkplay.4.8.827634`), not the pywiim version. Hardware is the device hardware (for example `AmlogicA113`) and is empty when the device does not report it. **Visit device** opens the address pywiim connected with, including HTTP and non-default ports. The IP address is no longer shown as the serial number and is cleared on existing installs. The pywiim version is still in diagnostics and system health.
+
+### Added
+
+- **Channel select** ([Issue #284](https://github.com/mjcumming/wiim/issues/284)): `select.*_channel` with options Stereo, Left and Right, created when pywiim reports `supports_output_channel`. Standalone players and group members reflect channel changes on the next status poll. Device errors become Home Assistant errors. The library calls were tested on four WiiM Pros (`Linkplay.4.8.827634`) and an Arylic Up2Stream AMP V4 (`4.6.415145`), including a two-WiiM group and restoration of the original settings.
+
+### Fixed
+
+- Redact Ethernet MAC addresses from downloaded diagnostics, alongside the Wi-Fi MAC.
+
+## [1.0.111] - 2026-10-18
+
+### Added
+
+- **RoomFit select** ([Issue #283](https://github.com/mjcumming/wiim/issues/283)) — `select.*_room_fit` is created when the device has at least one saved RoomFit profile. Options are Off plus those names. Off turns RoomFit off. Choosing a name loads that profile. The current value is Off while RoomFit is disabled, even if the app still shows the last profile as selected. A device with no saved profiles does not get the entity until the integration is reloaded after the first profile is saved.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.15** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.13.
+
+## [1.0.110] - 2026-10-17
+
+### Added
+
+- **DAC filter select** ([Issue #282](https://github.com/mjcumming/wiim/issues/282)) — `select.*_dac_filter` is created when the device returns a DAC filter list. The options are the device's names. Choosing one calls `set_digital_filter`. It applies to analog Line Out. Confirmed on a WiiM Pro Plus (`Linkplay.4.8.827634`): six filters, current value Sharp Roll-Off Filter. WiiM Pro and Arylic Up2Stream AMP V4 do not return a list, so they do not get the entity. Thanks to @dariusz-rudzinski.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.13** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.12.
+
+## [1.0.109] - 2026-10-16
+
+### Fixed
+
+- **Display light state** ([Issue #281](https://github.com/mjcumming/wiim/issues/281)) — `light.*_display` follows the WiiM Sound and WiiM Ultra screen after Home Assistant starts and after the screen is changed in the WiiM app. pywiim reads `getLightOperationBrightConfig` on startup and about every 60 seconds. Until that read succeeds, the light stays unknown. Brightness is the configured level (1–100), including while adaptive brightness is on.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.12** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.11.
+
+## [1.0.108] - 2026-10-15
+
+### Added
+
+- **WiiM Sound display** ([Issue #281](https://github.com/mjcumming/wiim/issues/281)) — `light.*_display` is created for WiiM Sound as well as the Ultra family. On/off and brightness use the same control as Ultra. Sound Lite has no screen.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.11** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.10. `supports_display_config` is now true for WiiM Sound.
+
+## [1.0.107] - 2026-10-13
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.10** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.9. `Player.media_codec` now includes the fixed-input codec from UPnP `song:coding_f` when HTTP status has no codec.
+
+### Documentation
+
+- **Audio Quality `codec` attribute** ([PR #280](https://github.com/mjcumming/wiim/pull/280)) — the user guide describes the existing `codec` attribute on `sensor.*_audio_quality`. On HDMI, optical, and line inputs it can show the device codec, for example `ac3`. The last value remains until the source changes or a new codec arrives. Thanks to @Frosbe.
+
+## [1.0.106] - 2026-10-04
+
+### Fixed
+
+- **LED light switches back after turning it on or off** ([Issue #277](https://github.com/mjcumming/wiim/issues/277), [PR #278](https://github.com/mjcumming/wiim/pull/278)) — The LED light read its state with `LED_SWITCH_GET` but wrote with the legacy `setLED:` command, which WiiM firmware ignores. The toggle went back to the device state on the next poll. It now writes with `LED_SWITCH_SET` through pywiim's `set_led_indicator()`, so read and write use the same command. Tested on a WiiM Pro Plus. If the LED command cannot reach the speaker (timeout, no connection, HTTP error), Home Assistant now shows an error instead of reporting success. Thanks to @dariusz-rudzinski.
+
+## [1.0.105] - 2026-10-03
+
+### Breaking
+
+- **Group coordinator is hidden when it is not a group master, instead of `unavailable`.** `media_player.*_group_coordinator` stays available while the speaker is solo or a slave, and Home Assistant hides it. It is shown again when that speaker is the master. `unavailable` now means the speaker cannot be reached. Automations that treated `unavailable` on the coordinator as "not in a group" should use `sensor.*_multiroom_role` or the coordinator attribute `group_status` (`active` / `inactive`). Forming a group while idle does not change the coordinator state. A service call to the coordinator while it is not master fails with an error. A hide you set yourself is left in place.
+
+## [1.0.104] - 2026-10-02
+
+### Fixed
+
+- **Edifier MS50A stuck on Initializing** ([Issue #275](https://github.com/mjcumming/wiim/issues/275)) — Generic LinkPlay speakers whose profile prefers HTTP can still only answer on HTTPS. Setup was deleting that working `https://…:443` endpoint, pywiim probed back to the same address, and saving it reloaded the entry. That loop never left Initializing. A probe that keeps HTTPS is now remembered for the current pywiim version, and setup no longer reloads itself when it saves the endpoint.
+
+### Documentation
+
+- **Edifier MS50A** is listed with the other supported LinkPlay devices.
+
+## [1.0.103] - 2026-09-27
+
+### Fixed
+
+- **Audio Pro MkII group stays idle while playing** ([Issue #274](https://github.com/mjcumming/wiim/issues/274)) — delivered via pywiim **2.3.9**. MkII masters such as the Audio Pro Drumfire D-2 do not report transport state over HTTP. The library now reads it with the same UPnP poll already used for volume. Group members follow the master, so they leave `idle` once the master is playing.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.9** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.7.
+
+## [1.0.102] - 2026-09-16
+
+### Fixed
+
+- **Offline speaker stalls all coordinator polling** ([Issue #273](https://github.com/mjcumming/wiim/issues/273)) — delivered via pywiim **2.3.7**. One unreachable device no longer makes every other speaker's poll take 10–15s (WiFi Direct role inference no longer live-queries other hosts). Hard connect failures fail fast instead of a 16s retry loop.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.7** (`manifest.json`, `pywiim-version.txt`, `requirements_dev.txt`), up from 2.3.6.
+
+## [1.0.101] - 2026-09-12
+
+### Added
+
+- **EQ Preset select entity** ([Issue #272](https://github.com/mjcumming/wiim/issues/272)) — when `player.supports_eq` is true, create `select.{device}_eq_preset` from `player.eq_presets` / `player.set_eq_preset()`. Same control as media player sound mode (including **Off**).
+
+### Documentation
+
+- README: document the EQ Preset select and remove the phantom **Sound Mode** select (EQ is media player sound mode, not a second select).
+
 ## [1.0.100] - 2026-08-20
 
 ### Fixed
