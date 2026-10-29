@@ -62,7 +62,7 @@ async def async_setup_entry(
     else:
         _LOGGER.debug("Skipping RoomFit select entity - no saved profiles")
 
-    # Output channel: pywiim sets supports_output_channel when the player status has "ch".
+    # Output channel: pywiim determines whether the device supports the control.
     if coordinator.player.supports_output_channel:
         entities.append(WiiMChannelSelect(coordinator, config_entry))
         _LOGGER.debug("Creating channel select entity - device supports output channel")
@@ -287,8 +287,8 @@ class WiiMChannelSelect(WiimEntity, SelectEntity):
     """Select entity for the output channel: Stereo, Left or Right.
 
     Created only when ``player.supports_output_channel`` is true. The current value
-    is ``player.output_channel``, read by pywiim from each status poll. Works on a
-    group member too, so two speakers can play left and right of the same stream.
+    is ``player.output_channel``, refreshed by pywiim for the player's current role.
+    Works on a group member too, so two speakers can play left and right of the same stream.
     """
 
     _attr_icon = "mdi:surround-sound-2-0"
