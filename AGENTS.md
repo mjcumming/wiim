@@ -14,22 +14,9 @@ We maintain **both** repositories ([wiim](https://github.com/mjcumming/wiim), [p
 
 pywiim documents Home Assistant usage under **`docs/integration/`** in that repo (e.g. [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md)). Use **`wiim-pywiim.code-workspace`** here for the combined workspace, or **`../pywiim/pywiim.code-workspace`** for pywiim-only work.
 
-## Cursor Cloud specific instructions
+## Cloud development environments
 
-- Use Python 3.13 for this repository. CI, mypy, and `make check-python` all require it.
-- On Ubuntu Cloud Agent VMs, install Python 3.13 from the deadsnakes PPA and install `libturbojpeg` before creating the venv.
-- Recommended local venv: `/workspace/.venv`.
-- Install dependencies with:
-
-  ```bash
-  python3.13 -m venv /workspace/.venv
-  . /workspace/.venv/bin/activate
-  pip install --upgrade pip setuptools wheel
-  pip install --constraint=.github/workflows/constraints.txt -r requirements_test.txt
-  pip install pycares==4.4.0 aiodns==3.4.0
-  mkdir -p build
-  ```
-
-- Keep the explicit `pycares==4.4.0` repair step. A later dependency pass can otherwise leave `pycares` at 5.x, which breaks `aiodns` during pytest startup with `AttributeError: module 'pycares' has no attribute 'ares_query_a_result'`.
-- Standard verification command: `bash scripts/check-before-push.sh`.
-- To smoke-test the host app, run Home Assistant from the venv with a config directory that symlinks `custom_components/wiim`, then check `http://127.0.0.1:8123/api/` returns `401` for unauthenticated access.
+- CI uses Python 3.13; `make check-python` requires 3.13 or newer. Check the interpreter and existing virtualenv in the current environment before creating one. Cloud setups have used both `/workspace/.venv` and `~/.local/wiim-venv`; neither path is universal.
+- Install the test dependencies with `pip install --constraint=.github/workflows/constraints.txt -r requirements_test.txt`. The constraints include `pycares==4.4.0` and `aiodns==3.4.0`; an unconstrained upgrade can break `aiodns`. Ubuntu environments may also need `libturbojpeg` for the Home Assistant tests.
+- Run the CI-equivalent checks with `bash scripts/check-before-push.sh`. In environments that set `core.hooksPath`, `scripts/setup.sh` can stop at `pre-commit install` before creating `config`; preserve the existing Git hook configuration and set up the test config separately if needed.
+- For a Home Assistant smoke test, use a throwaway config directory with `custom_components/wiim` linked in and run `hass --config config --debug --skip-pip` from the environment's virtualenv. The `--skip-pip` option avoids dependency changes during onboarding; `scripts/develop` does not pass it through. An unauthenticated `http://127.0.0.1:8123/api/` response of `401` confirms the server is responding, not that the integration has loaded. If no devices are reachable, use the tests and config-flow UI for local verification.
