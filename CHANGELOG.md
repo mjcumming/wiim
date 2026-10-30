@@ -8,7 +8,7 @@
 
 ### Changed
 
-- **Dependency**: prepare the `pywiim` **2.3.20** pin. Do not merge or release until that library version is published and the pinned installation has passed checks.
+- **Dependency**: `pywiim` **2.3.20**.
 
 ## [1.0.114] - 2026-10-29
 
