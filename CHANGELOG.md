@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Audio Pro A10 MkII AUX selection** ([Issue #187](https://github.com/mjcumming/wiim/issues/187#issuecomment-6270088302)): consume pywiim's capability-based `auxIn` correction and reported source list. Existing source labels and mode-60 identity are retained. Devices without supporting capability evidence retain their previous behavior. Per-input EQ is tracked separately.
+
+### Changed
+
+- **Dependency**: prepare the `pywiim` **2.3.20** pin. Do not merge or release until that library version is published and the pinned installation has passed checks.
+
 ## [1.0.114] - 2026-10-29
 
 ### Fixed
