@@ -46,7 +46,11 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 
 ### 1. Install via HACS (Recommended)
 
-1. **Find in HACS**: HACS → Integrations → Search "WiiM Audio"
+With [HACS](https://hacs.xyz/) installed, use this button to open WiiM Audio in HACS:
+
+[![Open WiiM Audio in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mjcumming&repository=wiim&category=integration)
+
+1. **Find in HACS**: Use the button above, or go to HACS → Integrations → Search "WiiM Audio"
 2. **Install**: Download → Restart Home Assistant
 3. **Configure**: Settings → Devices & Services → Add Integration → "WiiM Audio"
 
