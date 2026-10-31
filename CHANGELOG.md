@@ -2,9 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.116] - 2026-10-31
+
 ### Added
 
 - **Parametric EQ presets** ([Issue #204](https://github.com/mjcumming/wiim/issues/204)): select saved PEQ presets for the current input in Home Assistant. Reload the device integration after changing saved preset names in WiiM Home.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.21**.
 
 ## [1.0.115] - 2026-10-30
 
