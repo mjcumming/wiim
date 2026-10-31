@@ -1,0 +1,43 @@
+name: Triage closed issue follow-ups
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  reopen:
+    if: >-
+      github.event.issue.state == 'closed' &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.type == 'User' &&
+      github.event.comment.user.login != github.repository_owner
+    runs-on: ubuntu-latest
+    concurrency:
+      group: closed-issue-followup-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Reopen and label for triage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_CREATED_AT: ${{ github.event.comment.created_at }}
+        run: |
+          # Ignore events delayed until after a later, intentional closure.
+          issue=$(gh api "repos/$GH_REPO/issues/$ISSUE_NUMBER")
+          if ! jq -e --arg comment_time "$COMMENT_CREATED_AT" \
+              '.state == "closed" and .closed_at != null and .closed_at <= $comment_time' <<< "$issue" > /dev/null; then
+            exit 0
+          fi
+
+          gh issue reopen "$ISSUE_NUMBER" --repo "$GH_REPO"
+          # Create the label on first use; tolerate another run creating it first.
+          if ! gh api "repos/$GH_REPO/labels/needs-triage" > /dev/null 2>&1; then
+            gh label create needs-triage --repo "$GH_REPO" --color FBCA04 \
+              --description "A closed issue received a new comment" \
+              || gh api "repos/$GH_REPO/labels/needs-triage" > /dev/null
+          fi
+          gh issue edit "$ISSUE_NUMBER" --repo "$GH_REPO" --add-label needs-triage
