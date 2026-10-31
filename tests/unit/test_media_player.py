@@ -2118,3 +2118,46 @@ class TestWiiMMediaPlayerEdgeCases:
         mock_coordinator.player.group.all_players = []
         # Returns None when no members can be resolved
         assert media_player.group_members is None
+
+
+@pytest.mark.asyncio
+async def test_a10_aux_source_round_trip_through_pywiim(media_player, mock_coordinator):
+    """Issue #187: the HA dropdown and selector consume real pywiim capability evidence."""
+    from pywiim.api.base import ApiResponse
+    from pywiim.capabilities import WiiMCapabilities
+    from pywiim.client import WiiMClient
+    from pywiim.models import AudioInputCapability, DeviceInfo, PlayerStatus
+    from pywiim.player import Player
+
+    info = DeviceInfo(
+        uuid="a10",
+        name="A10",
+        model="AudioPro_A10MKII_WiiM",
+        firmware="Linkplay.5.2.825329",
+        input_list=["wifi", "bluetooth", "line-in", "optical", "aux"],
+    )
+    client = WiiMClient("192.0.2.1", session=MagicMock())
+    client._request = AsyncMock(return_value=ApiResponse(parsed={}, raw=None))
+    client.get_audio_input_capability = AsyncMock(
+        return_value=AudioInputCapability.model_validate(
+            {"audioInput": [{"mode": mode} for mode in ["wifi", "auxIn", "bluetooth"]]}
+        )
+    )
+    client.get_audio_input_enable = AsyncMock(return_value=None)
+    client.get_mode_rename = AsyncMock(return_value={})
+    client._capabilities = await WiiMCapabilities().detect_capabilities(client, info)
+    client._request.reset_mock()
+    client.get_player_status_model = AsyncMock(return_value=PlayerStatus.model_validate({"mode": "60"}))
+    player = Player(client)
+    player._device_info = info
+    player._status_model = PlayerStatus(source="wifi")
+    mock_coordinator.player = player
+
+    assert set(media_player.source_list) == {"Network", "Bluetooth", "Line In"}
+    await media_player.async_select_source("Line In")
+    client._request.assert_awaited_once_with("/httpapi.asp?command=setPlayerCmd:switchmode:auxIn")
+    assert media_player.source == "Line In"
+
+    client._request.reset_mock()
+    await media_player.async_select_source("Optical In")
+    client._request.assert_not_called()
