@@ -47,6 +47,14 @@ async def async_setup_entry(
     else:
         _LOGGER.debug("Skipping EQ preset select entity - device does not support EQ")
 
+    if coordinator.player.client.capabilities.get("supports_peq", False):
+        try:
+            await coordinator.player.initialize_peq_presets()
+        except WiiMError as err:
+            _LOGGER.warning("Could not read parametric EQ presets for %s: %s", config_entry.title, err)
+        if coordinator.player.peq_presets:
+            entities.append(WiiMPEQPresetSelect(coordinator, config_entry))
+
     # DAC filter: pywiim sets supports_digital_filter only when the device returns a list.
     if coordinator.player.supports_digital_filter:
         entities.append(WiiMDACFilterSelect(coordinator, config_entry))
@@ -203,6 +211,35 @@ class WiiMEQPresetSelect(WiimEntity, SelectEntity):
         """Apply the selected EQ preset (Off disables EQ)."""
         async with self.wiim_command(f"select EQ preset '{option}'"):
             await self.coordinator.player.set_eq_preset(option)
+
+
+class WiiMPEQPresetSelect(WiimEntity, SelectEntity):
+    """Select a saved parametric EQ preset for the current source."""
+
+    _attr_icon = "mdi:equalizer"
+    _attr_has_entity_name = True
+    _attr_translation_key = "peq_preset"
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_peq_preset"
+        self._attr_name = "Parametric EQ Preset"
+
+    @property
+    def options(self) -> list[str]:
+        """Return the preset names loaded at startup."""
+        return self.coordinator.player.peq_presets
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the active preset when PEQ is enabled."""
+        return self.coordinator.player.peq_preset
+
+    async def async_select_option(self, option: str) -> None:
+        """Load a saved preset for this device's current source."""
+        async with self.wiim_command(f"select parametric EQ preset '{option}'"):
+            await self.coordinator.player.set_peq_preset(option)
 
 
 class WiiMDACFilterSelect(WiimEntity, SelectEntity):

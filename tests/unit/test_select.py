@@ -11,6 +11,7 @@ from custom_components.wiim.select import (
     WiiMChannelSelect,
     WiiMEQPresetSelect,
     WiiMOutputModeSelect,
+    WiiMPEQPresetSelect,
     WiiMRoomFitSelect,
 )
 
@@ -21,6 +22,7 @@ def mock_config_entry():
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test_entry_id"
     entry.unique_id = "test-uuid"
+    entry.title = "Test WiiM"
     entry.data = {"host": "192.168.1.100"}
     entry.options = {}
     return entry
@@ -42,6 +44,11 @@ def mock_coordinator():
     coordinator.player.audio.select_output = AsyncMock(return_value=True)
     coordinator.player.name = "Test WiiM"
     coordinator.player.supports_eq = False
+    coordinator.player.client.capabilities = {"supports_peq": False}
+    coordinator.player.peq_presets = []
+    coordinator.player.peq_preset = None
+    coordinator.player.initialize_peq_presets = AsyncMock()
+    coordinator.player.set_peq_preset = AsyncMock()
     coordinator.player.supports_digital_filter = False
     coordinator.player.digital_filter_types = []
     coordinator.player.digital_filter = None
@@ -56,6 +63,62 @@ def mock_coordinator():
     coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
     coordinator.player.set_eq_preset = AsyncMock()
     return coordinator
+
+
+class TestPEQPresetSelect:
+    """Saved PEQ presets in Home Assistant."""
+
+    @pytest.mark.asyncio
+    async def test_options_state_and_selection(self, mock_coordinator, mock_config_entry):
+        mock_coordinator.player.peq_presets = ["Low", "High"]
+        mock_coordinator.player.peq_preset = "Low"
+        entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_peq_preset"
+        assert entity.options == ["Low", "High"]
+        assert entity.current_option == "Low"
+        await entity.async_select_option("High")
+        mock_coordinator.player.set_peq_preset.assert_awaited_once_with("High")
+        mock_coordinator.player.peq_preset = None
+        assert entity.current_option is None
+
+    @pytest.mark.asyncio
+    async def test_selection_failure_is_reported(self, mock_coordinator, mock_config_entry):
+        mock_coordinator.player.set_peq_preset.side_effect = WiiMError("failed")
+        entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError):
+            await entity.async_select_option("Low")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "supported,presets,created", [(True, ["Low"], True), (True, [], False), (False, [], False)]
+    )
+    async def test_setup_gates_entity(self, mock_coordinator, mock_config_entry, supported, presets, created):
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.client.capabilities = {"supports_peq": supported}
+        mock_coordinator.player.peq_presets = presets
+        hass = MagicMock()
+        hass.data = {"wiim": {mock_config_entry.entry_id: {"coordinator": mock_coordinator}}}
+        add_entities = MagicMock()
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+        entities = add_entities.call_args.args[0]
+        assert any(isinstance(entity, WiiMPEQPresetSelect) for entity in entities) is created
+        assert mock_coordinator.player.initialize_peq_presets.await_count == int(supported)
+
+    @pytest.mark.asyncio
+    async def test_setup_logs_list_error_without_blocking_other_entities(
+        self, mock_coordinator, mock_config_entry, caplog
+    ):
+        from custom_components.wiim.select import async_setup_entry
+
+        mock_coordinator.player.client.capabilities = {"supports_peq": True}
+        mock_coordinator.player.initialize_peq_presets.side_effect = WiiMError("device unavailable")
+        hass = MagicMock()
+        hass.data = {"wiim": {mock_config_entry.entry_id: {"coordinator": mock_coordinator}}}
+        add_entities = MagicMock()
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+        assert "Could not read parametric EQ presets" in caplog.text
+        assert not any(isinstance(entity, WiiMPEQPresetSelect) for entity in add_entities.call_args.args[0])
 
 
 class TestWiiMOutputModeSelectBasic:

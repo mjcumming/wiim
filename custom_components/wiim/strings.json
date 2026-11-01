@@ -81,6 +81,9 @@
   },
   "entity": {
     "select": {
+      "peq_preset": {
+        "name": "Parametric EQ Preset"
+      },
       "dac_filter": {
         "name": "DAC Filter"
       },

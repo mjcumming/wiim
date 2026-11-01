@@ -1,4 +1,11 @@
 {
+  "entity": {
+    "select": {
+      "peq_preset": {
+        "name": "Parametric EQ Preset"
+      }
+    }
+  },
   "config": {
     "flow_title": "{name}",
     "step": {

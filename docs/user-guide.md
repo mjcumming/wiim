@@ -343,6 +343,10 @@ data:
   custom_values: [-2, 0, 2, 3, 1, 0, 0, -1, 2, 4] # -12dB to +12dB per band
 ```
 
+**Parametric EQ presets**
+
+When a compatible player has saved parametric EQ presets, its **Parametric EQ Preset** select can load one for the current input. Create and edit presets in WiiM Home. Reload that player's WiiM integration after adding, renaming, or deleting a preset to refresh the available options. The select has no current option when parametric EQ is not active. It can also be used in an automation with `select.select_option`.
+
 ### 🔊 Audio Output Modes
 
 **Select Output Mode**
