@@ -17,6 +17,6 @@ freezegun>=1.2.2
 zeroconf
 
 # Code quality
-flake8>=7.3.0
-ruff>=0.16.3
-diff-cover>=10.5.1
+flake8>=7.5.0
+ruff>=0.17.3
+diff-cover>=11.0.0
