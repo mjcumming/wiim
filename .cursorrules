@@ -18,6 +18,7 @@ When working on **this** WiiM **Home Assistant integration** repository only:
 - **Never** modify files under a **separate pywiim checkout** (e.g. `../pywiim`, `core/pywiim`, or any path outside `custom_components/wiim` / this repo’s integration code).
 - **Use released pywiim**: `pip install pywiim==<version>`, keep `manifest.json` and `custom_components/wiim/pywiim-version.txt` in sync.
 - **Library bugs / new APIs** → fix in **[mjcumming/pywiim](https://github.com/mjcumming/pywiim)** in that repo, release, then bump the pin here.
+- **A requested WiiM release is not held for that library publish.** If this environment cannot push pywiim, still release the integration when the user asks and there is an integration change to ship. Do not bump the version when `main` has no integration change since the last release. See **docs/DEVELOPMENT-RULES.md — Rule 2c**.
 
 Human-readable policy: **docs/DEVELOPMENT-RULES.md — Rule 2c**.
 
