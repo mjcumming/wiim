@@ -12,6 +12,8 @@ We maintain **both** repositories ([wiim](https://github.com/mjcumming/wiim), [p
 
 **Agent/workspace boundary:** This workspace may include a sibling **pywiim** checkout at `../pywiim`. You may edit that checkout when the fix belongs in the library, but keep **wiim** and **pywiim** as separate git repos with separate commits/PRs/releases. Do not vendor or copy pywiim into this repo. See **[Rule 2c](docs/DEVELOPMENT-RULES.md#rule-2c-cross-repository-pywiim-work-agents--automation)**.
 
+**Releases:** When the user asks for a WiiM release, publish this integration. Do not hold it because pywiim cannot be pushed or because GitHub issues cannot be closed from this environment. Do not bump the version when there is no integration change since the last release. Rule 2c has the steps.
+
 pywiim documents Home Assistant usage under **`docs/integration/`** in that repo (e.g. [HA_INTEGRATION.md](https://github.com/mjcumming/pywiim/blob/main/docs/integration/HA_INTEGRATION.md)). Use **`wiim-pywiim.code-workspace`** here for the combined workspace, or **`../pywiim/pywiim.code-workspace`** for pywiim-only work.
 
 ## Cloud development environments
