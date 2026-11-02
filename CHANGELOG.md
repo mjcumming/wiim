@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.117] - 2026-11-03
+
+### Fixed
+
+- **EQ preset stays selected** ([Issue #165](https://github.com/mjcumming/wiim/issues/165)): a chosen graphic EQ preset no longer snaps back to Flat after one minute. Home Assistant keeps the name reported by the device. Off still means EQ is bypassed.
+
+### Changed
+
+- **Dependency**: `pywiim` **2.3.22**.
+
 ## [1.0.116] - 2026-10-31
 
 ### Added

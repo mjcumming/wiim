@@ -101,3 +101,5 @@ the custom label plus the previous/canonical names, so the integration consumes 
 **Review 2026-10-30 (prepared for pywiim 2.3.20):** reviewed upstream HA_INTEGRATION.md, HA_CAPABILITIES.md, and API_REFERENCE.md. A10 MkII source selection remains behind the existing Player API; no integration API changes. Merge/release requires the published dependency and pinned-package validation.
 
 **Review 2026-10-31 (prepared for pywiim 2.3.21):** saved parametric EQ preset names are initialized once per player session; active state refreshes independently. The integration uses `Player.initialize_peq_presets`, `Player.peq_presets`, `Player.peq_preset`, and `Player.set_peq_preset`. Merge and release require the published dependency and pinned-package validation.
+
+**Review 2026-11-03 (prepared for pywiim 2.3.22):** `Player.eq_preset` keeps the `EQGetBand` name when `getPlayerStatus` `eq` stays flat. The integration still reads `eq_preset` / `eq_presets` and calls `set_eq_preset`. No Home Assistant API change.
