@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Correct per-input EQ preset state and discovery, including Audio Pro A10 MkII preset lists ([#187](https://github.com/mjcumming/wiim/issues/187)).
+- Show unsaved graphic EQ bands as `Custom`, preserve unknown state, and add `Off` to the parametric preset select, including when no presets are saved. Both EQ controls reconcile after a change ([#301](https://github.com/mjcumming/wiim/issues/301), [#302](https://github.com/mjcumming/wiim/issues/302)).
+
 ## [1.0.117] - 2026-11-03
 
 ### Fixed

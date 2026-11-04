@@ -16,6 +16,7 @@ Formal decisions for the WiiM Home Assistant integration live here as short, dur
 | [0006-pywiim-capabilities-only.md](0006-pywiim-capabilities-only.md) | Use pywiim `supports_*` / capabilities only — no parallel detection in the integration |
 | [0007-capability-gating-strict-contract.md](0007-capability-gating-strict-contract.md) | Strict capability gating: no integration-side feature inference; merged `client.capabilities` |
 | [0008-group-coordinator-visibility.md](0008-group-coordinator-visibility.md) | Group coordinator uses hide/show; `unavailable` means the speaker cannot be reached |
+| [0009-eq-selectors-and-state.md](0009-eq-selectors-and-state.md) | Preserve EQ selectors and distinguish active state from loadable presets |
 
 ## How to add an ADR
 

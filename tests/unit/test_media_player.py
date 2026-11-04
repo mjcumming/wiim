@@ -1,7 +1,7 @@
 """Unit tests for WiiM Media Player - testing volume and core functionality."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
@@ -646,6 +646,24 @@ class TestWiiMMediaPlayerSoundMode:
         mock_coordinator.player.supports_eq = True
         mock_coordinator.player.eq_preset = "Off"
         assert media_player.sound_mode == "Off"
+
+    def test_sound_mode_returns_unknown_when_eq_state_unavailable(self, media_player, mock_coordinator):
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.eq_preset = None
+        assert media_player.sound_mode is None
+
+    @pytest.mark.asyncio
+    async def test_custom_sound_mode_is_visible_but_not_loadable(self, media_player, mock_coordinator):
+        player = mock_coordinator.player
+        player.supports_eq = True
+        player.eq_presets = ["Flat"]
+        player.eq_preset = "Custom"
+        player.eq_is_custom = True
+        player.set_eq_preset = AsyncMock()
+        assert media_player.sound_mode == "Custom"
+        assert "Custom" in media_player.sound_mode_list
+        await media_player.async_select_sound_mode("Custom")
+        player.set_eq_preset.assert_not_awaited()
 
     def test_sound_mode_list_includes_off(self, media_player, mock_coordinator):
         """Test sound_mode_list always includes 'Off'."""
@@ -2100,11 +2118,10 @@ class TestWiiMMediaPlayerEdgeCases:
         assert sources is not None  # Should not raise, may be empty list
 
     def test_eq_preset_handles_none(self, media_player, mock_coordinator):
-        """Test sound_mode returns 'Off' when EQ preset is None (pywiim 2.1.60+)."""
+        """An unavailable EQ state remains unknown."""
         mock_coordinator.player.supports_eq = True
         mock_coordinator.player.eq_preset = None
-        # With pywiim 2.1.60+, None preset means EQ is disabled, shown as "Off"
-        assert media_player.sound_mode == "Off"
+        assert media_player.sound_mode is None
 
     def test_group_members_handles_none_group(self, media_player, mock_coordinator):
         """Test group_members handles None group."""
@@ -2137,7 +2154,13 @@ async def test_a10_aux_source_round_trip_through_pywiim(media_player, mock_coord
         input_list=["wifi", "bluetooth", "line-in", "optical", "aux"],
     )
     client = WiiMClient("192.0.2.1", session=MagicMock())
-    client._request = AsyncMock(return_value=ApiResponse(parsed={}, raw=None))
+
+    async def response(endpoint, **_kwargs):
+        if "EQGetBand" in endpoint:
+            return ApiResponse(parsed={"source_name": "wifi", "EQStat": "On", "Name": "Bass Booster"}, raw=None)
+        return ApiResponse(parsed={}, raw=None)
+
+    client._request = AsyncMock(side_effect=response)
     client.get_audio_input_capability = AsyncMock(
         return_value=AudioInputCapability.model_validate(
             {"audioInput": [{"mode": mode} for mode in ["wifi", "auxIn", "bluetooth"]]}
@@ -2147,6 +2170,11 @@ async def test_a10_aux_source_round_trip_through_pywiim(media_player, mock_coord
     client.get_mode_rename = AsyncMock(return_value={})
     client._capabilities = await WiiMCapabilities().detect_capabilities(client, info)
     client._request.reset_mock()
+    client._request.side_effect = [
+        ApiResponse(parsed={}, raw="OK"),
+        ApiResponse(parsed=["Spoken Word", "Bass Booster"], raw=None),
+        ApiResponse(parsed={"source_name": "auxIn", "EQStat": "On", "Name": "Spoken Word"}, raw=None),
+    ]
     client.get_player_status_model = AsyncMock(return_value=PlayerStatus.model_validate({"mode": "60"}))
     player = Player(client)
     player._device_info = info
@@ -2155,8 +2183,15 @@ async def test_a10_aux_source_round_trip_through_pywiim(media_player, mock_coord
 
     assert set(media_player.source_list) == {"Network", "Bluetooth", "Line In"}
     await media_player.async_select_source("Line In")
-    client._request.assert_awaited_once_with("/httpapi.asp?command=setPlayerCmd:switchmode:auxIn")
+    client._request.assert_has_awaits(
+        [
+            call("/httpapi.asp?command=setPlayerCmd:switchmode:auxIn"),
+            call("/httpapi.asp?command=EQGetList"),
+            call("/httpapi.asp?command=EQGetBand"),
+        ]
+    )
     assert media_player.source == "Line In"
+    assert media_player.sound_mode == "Spoken Word"
 
     client._request.reset_mock()
     await media_player.async_select_source("Optical In")

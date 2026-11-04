@@ -47,8 +47,10 @@ def mock_coordinator():
     coordinator.player.client.capabilities = {"supports_peq": False}
     coordinator.player.peq_presets = []
     coordinator.player.peq_preset = None
+    coordinator.player.peq_enabled = None
     coordinator.player.initialize_peq_presets = AsyncMock()
     coordinator.player.set_peq_preset = AsyncMock()
+    coordinator.player.disable_peq = AsyncMock()
     coordinator.player.supports_digital_filter = False
     coordinator.player.digital_filter_types = []
     coordinator.player.digital_filter = None
@@ -60,9 +62,230 @@ def mock_coordinator():
     coordinator.player.output_channel = None
     coordinator.player.set_output_channel = AsyncMock()
     coordinator.player.eq_preset = "Flat"
+    coordinator.player.eq_is_custom = False
     coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
     coordinator.player.set_eq_preset = AsyncMock()
     return coordinator
+
+
+@pytest.mark.asyncio
+async def test_peq_off_and_unknown_states(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.peq_presets = ["Night"]
+    entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off", "Night"]
+    assert entity.current_option is None
+    player.peq_enabled = False
+    assert entity.current_option == "Off"
+    player.peq_enabled = True
+    player.peq_preset = "Night"
+    assert entity.current_option == "Night"
+    await entity.async_select_option("Off")
+    player.disable_peq.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_saved_peq_named_off_keeps_its_existing_option(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.peq_presets = ["Off", "Night"]
+    player.peq_enabled = False
+    entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off (disable)", "Off", "Night"]
+    assert entity.current_option == "Off (disable)"
+    await entity.async_select_option("Off")
+    player.set_peq_preset.assert_awaited_once_with("Off")
+    await entity.async_select_option("Off (disable)")
+    player.disable_peq.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_peq_disable_label_does_not_hide_saved_presets(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.peq_presets = ["Off", "Off (disable)", "off (disable 2)"]
+    player.peq_enabled = False
+    entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off (disable 3)", *player.peq_presets]
+    assert entity.current_option == "Off (disable 3)"
+    await entity.async_select_option("Off (disable)")
+    player.set_peq_preset.assert_awaited_once_with("Off (disable)")
+    await entity.async_select_option("Off (disable 3)")
+    player.disable_peq.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_active_unlisted_peq_named_off_is_distinct_from_disable(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.peq_enabled = True
+    player.peq_preset = "Off"
+    entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off (disable)", "Off"]
+    assert entity.current_option == "Off"
+    await entity.async_select_option("Off")
+    player.set_peq_preset.assert_not_awaited()
+    await entity.async_select_option("Off (disable)")
+    player.disable_peq.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unsaved_custom_graphic_state_is_visible_but_not_loadable(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.eq_presets = ["Off", "Flat", "Custom"]
+    player.eq_preset = "Custom"
+    player.eq_is_custom = True
+    entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.current_option == "Custom"
+    await entity.async_select_option("Custom")
+    player.set_eq_preset.assert_not_awaited()
+    player.eq_preset = None
+    assert entity.current_option is None
+
+
+@pytest.mark.asyncio
+async def test_observed_graphic_name_is_visible_without_claiming_it_is_loadable(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.eq_presets = []
+    player.eq_preset = "Spoken Word"
+    entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off", "Spoken Word"]
+    assert entity.current_option == "Spoken Word"
+    await entity.async_select_option("Spoken Word")
+    player.set_eq_preset.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a10_reported_list_reaches_home_assistant_selector(mock_coordinator, mock_config_entry):
+    """The #187 array travels through legacy validation, Player cache and HA."""
+    from pywiim.api.base import ApiResponse
+    from pywiim.client import WiiMClient
+    from pywiim.models import PlayerStatus
+    from pywiim.player import Player
+
+    names = [
+        "Flat",
+        "Acoustic",
+        "Bass Booster",
+        "Bass Reducer",
+        "Classical",
+        "Dance",
+        "Deep",
+        "Electronic",
+        "Game",
+        "Hip-Hop",
+        "Jazz",
+        "Latin",
+        "Loudness",
+        "Lounge",
+        "Movie",
+        "Piano",
+        "Pop",
+        "R&B",
+        "Rock",
+        "Small Speakers",
+        "Spoken Word",
+        "Treble Booster",
+        "Treble Reducer",
+        "Vocal Booster",
+    ]
+    client = WiiMClient(
+        "192.0.2.1", capabilities={"is_legacy_device": True, "supports_eq": True, "supports_subwoofer": False}
+    )
+    client._ensure_session = AsyncMock()
+
+    async def response(endpoint, *_args, **_kwargs):
+        if "EQGetList" in endpoint:
+            return ApiResponse(parsed=names, raw=None)
+        if "EQGetBand" in endpoint:
+            return ApiResponse(parsed={"source_name": "wifi", "EQStat": "On", "Name": "Bass Booster"}, raw=None)
+        return ApiResponse(parsed={}, raw=None)
+
+    client._request_with_protocol_fallback = AsyncMock(side_effect=response)
+    player = Player(client)
+    player._status_model = PlayerStatus(source="wifi", eq_preset="0")
+    await player._state_mgr._refresh_periodic_data(True, player._status_model, False)
+    mock_coordinator.player = player
+    entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off", *names]
+    assert entity.current_option == "Bass Booster"
+
+
+@pytest.mark.asyncio
+async def test_saved_peq_profiles_reconcile_both_selectors(mock_coordinator, mock_config_entry):
+    """Exercise the observed WiiM PEQ and stale graphic readbacks end to end."""
+    import json
+    from urllib.parse import unquote
+
+    from pywiim.api.base import ApiResponse
+    from pywiim.api.peq import PEQBand
+    from pywiim.client import WiiMClient
+    from pywiim.models import PlayerStatus
+    from pywiim.player import Player
+
+    names = ["Test PEQ A", "Test-PEQ-B", "Test_PEQ_C"]
+    state = {"peq": None, "graphic": True}
+    client = WiiMClient("192.0.2.1", capabilities={"supports_eq": True, "supports_peq": True})
+
+    async def response(endpoint, *_args, **_kwargs):
+        if "EQv2GetList:" in endpoint:
+            return ApiResponse(parsed={"status": "OK", "custom": names, "preset": []}, raw=None)
+        if "EQv2SourceLoad:" in endpoint:
+            payload = json.loads(unquote(endpoint.split("EQv2SourceLoad:", 1)[1]))
+            state.update(peq=payload["Name"], graphic=False)
+            return ApiResponse(parsed={"status": "OK", "EQStat": "On", "Name": state["peq"]}, raw=None)
+        if "EQGetLV2Band" in endpoint or "EQGetLV2SourceBand" in endpoint:
+            return ApiResponse(
+                parsed={
+                    "status": "OK",
+                    "source_name": "wifi",
+                    "EQStat": "On" if state["peq"] else "Off",
+                    "Name": state["peq"] or "",
+                    "pluginURI": "http://moddevices.com/plugins/caps/EqNp",
+                    "channelMode": "Stereo",
+                    "EQBand": [param for letter in "abcdefghij" for param in PEQBand(letter).to_api_params()],
+                },
+                raw=None,
+            )
+        if "EQGetBand" in endpoint:
+            return ApiResponse(
+                parsed={
+                    "status": "OK",
+                    "source_name": "wifi",
+                    "EQStat": "On" if state["graphic"] else "Off",
+                    "Name": "Acoustic",
+                    "pluginURI": "http://moddevices.com/plugins/caps/Eq10HP",
+                },
+                raw=None,
+            )
+        if "EQOff" in endpoint:
+            state.update(peq=None, graphic=False)
+        elif "EQOn" in endpoint or "EQLoad:" in endpoint:
+            state.update(peq=None, graphic=True)
+        return ApiResponse(parsed={"status": "OK"}, raw=None)
+
+    client._request = AsyncMock(side_effect=response)
+    callback = MagicMock()
+    player = Player(client, on_state_changed=callback)
+    player._status_model = PlayerStatus(source="wifi", eq_preset="0")
+    player._state_mgr._set_eq_source("wifi")
+    player._eq_presets = ["Acoustic"]
+    await player.initialize_peq_presets()
+    await player.refresh_eq_state()
+    mock_coordinator.player = player
+    graphic = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    parametric = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+
+    assert parametric.options == ["Off", *names]
+    for name in names:
+        await parametric.async_select_option(name)
+        assert parametric.current_option == name
+        assert graphic.current_option == "Off"
+
+    await parametric.async_select_option("Off")
+    assert parametric.current_option == "Off"
+    assert graphic.current_option == "Off"
+    await graphic.async_select_option("Acoustic")
+    assert graphic.current_option == "Acoustic"
+    assert parametric.current_option == "Off"
+    assert callback.call_count == 5
 
 
 class TestPEQPresetSelect:
@@ -72,14 +295,17 @@ class TestPEQPresetSelect:
     async def test_options_state_and_selection(self, mock_coordinator, mock_config_entry):
         mock_coordinator.player.peq_presets = ["Low", "High"]
         mock_coordinator.player.peq_preset = "Low"
+        mock_coordinator.player.peq_enabled = True
         entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
         assert entity.unique_id == "test-uuid_peq_preset"
-        assert entity.options == ["Low", "High"]
+        assert entity.options == ["Off", "Low", "High"]
         assert entity.current_option == "Low"
         await entity.async_select_option("High")
         mock_coordinator.player.set_peq_preset.assert_awaited_once_with("High")
         mock_coordinator.player.peq_preset = None
         assert entity.current_option is None
+        mock_coordinator.player.peq_enabled = False
+        assert entity.current_option == "Off"
 
     @pytest.mark.asyncio
     async def test_selection_failure_is_reported(self, mock_coordinator, mock_config_entry):
@@ -90,7 +316,7 @@ class TestPEQPresetSelect:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "supported,presets,created", [(True, ["Low"], True), (True, [], False), (False, [], False)]
+        "supported,presets,created", [(True, ["Low"], True), (True, [], True), (False, [], False)]
     )
     async def test_setup_gates_entity(self, mock_coordinator, mock_config_entry, supported, presets, created):
         from custom_components.wiim.select import async_setup_entry
@@ -118,7 +344,7 @@ class TestPEQPresetSelect:
         add_entities = MagicMock()
         await async_setup_entry(hass, mock_config_entry, add_entities)
         assert "Could not read parametric EQ presets" in caplog.text
-        assert not any(isinstance(entity, WiiMPEQPresetSelect) for entity in add_entities.call_args.args[0])
+        assert any(isinstance(entity, WiiMPEQPresetSelect) for entity in add_entities.call_args.args[0])
 
 
 class TestWiiMOutputModeSelectBasic:
@@ -380,12 +606,14 @@ class TestWiiMEQPresetSelectOptions:
     def test_options_returns_off_when_empty(self, mock_coordinator, mock_config_entry):
         """Test options returns Off when no presets are available."""
         mock_coordinator.player.eq_presets = []
+        mock_coordinator.player.eq_preset = None
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
         assert entity.options == ["Off"]
 
     def test_options_returns_off_when_none(self, mock_coordinator, mock_config_entry):
         """Test options returns Off when eq_presets is None."""
         mock_coordinator.player.eq_presets = None
+        mock_coordinator.player.eq_preset = None
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
         assert entity.options == ["Off"]
 
@@ -399,17 +627,17 @@ class TestWiiMEQPresetSelectCurrentOption:
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
         assert entity.current_option == "Rock"
 
-    def test_current_option_returns_off_when_none(self, mock_coordinator, mock_config_entry):
-        """Test current option returns Off when eq_preset is None."""
+    def test_current_option_returns_unknown_when_none(self, mock_coordinator, mock_config_entry):
+        """An unavailable EQ state is unknown, not Off."""
         mock_coordinator.player.eq_preset = None
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
-        assert entity.current_option == "Off"
+        assert entity.current_option is None
 
-    def test_current_option_returns_off_when_empty(self, mock_coordinator, mock_config_entry):
-        """Test current option returns Off when eq_preset is empty."""
+    def test_current_option_returns_unknown_when_empty(self, mock_coordinator, mock_config_entry):
+        """An empty state does not prove that EQ is Off."""
         mock_coordinator.player.eq_preset = ""
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
-        assert entity.current_option == "Off"
+        assert entity.current_option is None
 
     def test_current_option_case_insensitive_match(self, mock_coordinator, mock_config_entry):
         """Test current option matches preset labels case-insensitively."""
@@ -423,11 +651,11 @@ class TestWiiMEQPresetSelectCurrentOption:
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
         assert entity.current_option == "Off"
 
-    def test_current_option_unmatched_falls_back_to_off(self, mock_coordinator, mock_config_entry):
-        """Test unmatched preset labels fall back to Off."""
+    def test_current_option_includes_unlisted_observed_name(self, mock_coordinator, mock_config_entry):
+        """A device-reported name remains visible without a matching list entry."""
         mock_coordinator.player.eq_preset = "Unknown"
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
-        assert entity.current_option == "Off"
+        assert entity.current_option == "Unknown"
 
 
 class TestWiiMEQPresetSelectSelectOption:

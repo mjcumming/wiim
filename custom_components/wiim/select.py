@@ -52,8 +52,8 @@ async def async_setup_entry(
             await coordinator.player.initialize_peq_presets()
         except WiiMError as err:
             _LOGGER.warning("Could not read parametric EQ presets for %s: %s", config_entry.title, err)
-        if coordinator.player.peq_presets:
-            entities.append(WiiMPEQPresetSelect(coordinator, config_entry))
+        # PEQ can be active even when there are no saved presets to load.
+        entities.append(WiiMPEQPresetSelect(coordinator, config_entry))
 
     # DAC filter: pywiim sets supports_digital_filter only when the device returns a list.
     if coordinator.player.supports_digital_filter:
@@ -186,12 +186,13 @@ class WiiMEQPresetSelect(WiimEntity, SelectEntity):
     @property
     def options(self) -> list[str]:
         """Return available EQ presets, always including Off."""
-        eq_presets = self.coordinator.player.eq_presets
-        if not eq_presets:
-            return ["Off"]
-        presets = [str(preset) for preset in eq_presets]
+        player = self.coordinator.player
+        presets = [str(preset) for preset in (player.eq_presets or [])]
         if "Off" not in presets:
             presets.insert(0, "Off")
+        current = player.eq_preset
+        if current and all(option.casefold() != current.casefold() for option in presets):
+            presets.append(current)
         return presets
 
     @property
@@ -199,18 +200,23 @@ class WiiMEQPresetSelect(WiimEntity, SelectEntity):
         """Return the current EQ preset, or Off when EQ is disabled."""
         options = self.options
         eq_preset = self.coordinator.player.eq_preset
-        current = str(eq_preset) if eq_preset else "Off"
+        if not eq_preset:
+            return None
+        current = str(eq_preset)
         if current in options:
             return current
         for option in options:
             if option.lower() == current.lower():
                 return option
-        return "Off"
+        return None
 
     async def async_select_option(self, option: str) -> None:
         """Apply the selected EQ preset (Off disables EQ)."""
+        player = self.coordinator.player
+        if option == player.eq_preset and (player.eq_is_custom or option not in (player.eq_presets or [])):
+            return
         async with self.wiim_command(f"select EQ preset '{option}'"):
-            await self.coordinator.player.set_eq_preset(option)
+            await player.set_eq_preset(option)
 
 
 class WiiMPEQPresetSelect(WiimEntity, SelectEntity):
@@ -227,19 +233,50 @@ class WiiMPEQPresetSelect(WiimEntity, SelectEntity):
         self._attr_name = "Parametric EQ Preset"
 
     @property
+    def _off_option(self) -> str:
+        """Choose a disable label that does not shadow an existing preset."""
+        names = {name.casefold() for name in self.player.peq_presets}
+        if self.player.peq_enabled is True and self.player.peq_preset:
+            names.add(self.player.peq_preset.casefold())
+        if "off" not in names:
+            return "Off"
+        option = "Off (disable)"
+        suffix = 2
+        while option.casefold() in names:
+            option = f"Off (disable {suffix})"
+            suffix += 1
+        return option
+
+    @property
     def options(self) -> list[str]:
         """Return the preset names loaded at startup."""
-        return self.coordinator.player.peq_presets
+        player = self.coordinator.player
+        presets = [self._off_option, *player.peq_presets]
+        current = player.peq_preset
+        if player.peq_enabled is True and current and current not in presets:
+            presets.append(current)
+        return presets
 
     @property
     def current_option(self) -> str | None:
         """Return the active preset when PEQ is enabled."""
-        return self.coordinator.player.peq_preset
+        player = self.coordinator.player
+        if player.peq_enabled is False:
+            return self._off_option
+        if player.peq_enabled is True:
+            return player.peq_preset or None
+        return None
 
     async def async_select_option(self, option: str) -> None:
         """Load a saved preset for this device's current source."""
+        player = self.coordinator.player
+        if option == player.peq_preset and option not in player.peq_presets:
+            return
         async with self.wiim_command(f"select parametric EQ preset '{option}'"):
-            await self.coordinator.player.set_peq_preset(option)
+            if option == self._off_option:
+                await player.disable_peq()
+            else:
+                await player.set_peq_preset(option)
 
 
 class WiiMDACFilterSelect(WiimEntity, SelectEntity):
