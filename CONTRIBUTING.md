@@ -13,9 +13,9 @@ and how this integration works with pywiim. The
    changes and stage only intended files.
 3. Add meaningful regression or behavior tests and run the relevant checks.
    After pushing a release candidate PR and before merging it, run
-   `python scripts/prepare_release.py` with Docker running. It checks the
-   clean, committed tree and reuses a previous local success for that tree;
-   use `--force` to rerun. GitHub CI and Codecov run independently; local
+   `python scripts/prepare_release.py` with Docker running and BuildKit enabled.
+   It checks the clean, committed tree and reuses a previous local success for
+   that tree; use `--force` to rerun. GitHub CI and Codecov run independently; local
    pre-commit hooks are optional.
 4. Review the change in proportion to its risk and address actionable
    feedback. Request independent review when it would help or when requested.

@@ -61,9 +61,9 @@ rules-only or documentation-only change.
   merely restate the implementation.
 - Run relevant tests during development. After pushing a release candidate PR
   and before merging it, run `python scripts/prepare_release.py` with Docker
-  running. It runs the Python 3.13 CI checks and hassfest in Linux containers,
-  caching dependencies and successful results by clean Git tree. Use `--force`
-  to rerun an unchanged tree. GitHub CI, HACS validation, and Codecov remain
+  running and BuildKit enabled. It runs the Python 3.13 CI checks and hassfest
+  in Linux containers, caching dependencies and successful results by clean
+  Git tree. Use `--force` to rerun an unchanged tree. GitHub CI, HACS validation, and Codecov remain
   independent; the optional `bash scripts/check-before-push.sh` also offers a
   local patch-coverage check. Coverage settings are in
   [codecov.yml](../codecov.yml).
