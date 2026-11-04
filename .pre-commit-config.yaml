@@ -1,9 +1,4 @@
-# Pre-commit hooks configuration - runs SAME checks as CI
-# Install with: pre-commit install
-# Run manually with: pre-commit run --all-files
-#
-# These hooks ensure CI will pass before you even commit.
-
+# Optional, fast checks for staged files. CI runs lint, types, tests, and pin checks.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
@@ -15,63 +10,6 @@ repos:
       - id: check-merge-conflict
       - id: debug-statements
 
-  - repo: https://github.com/psf/black
-    rev: 24.3.0
-    hooks:
-      - id: black
-        language_version: python3
-        args: [--line-length=120]
-
-  # Local hooks that match CI exactly
-  - repo: local
-    hooks:
-      # Ruff - matches CI: ruff check custom_components/wiim --line-length 120
-      - id: ruff-ci
-        name: Ruff lint (CI match)
-        entry: ruff check custom_components/wiim --line-length 120
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      # Flake8 - matches CI: flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
-      - id: flake8-ci
-        name: Flake8 lint (CI match)
-        entry: flake8 custom_components/wiim --max-line-length=120 --extend-ignore=E203,W503
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      # MyPy - matches CI: mypy --strict custom_components/wiim
-      - id: mypy-ci
-        name: MyPy strict (CI match)
-        entry: mypy --strict custom_components/wiim
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      # Quick import test
-      - id: test-imports
-        name: Test critical imports
-        entry: python3
-        language: system
-        args:
-          [
-            "-c",
-            "from custom_components.wiim import DOMAIN; print('✅ Imports OK')",
-          ]
-        pass_filenames: false
-        always_run: true
-
-      # Dependency pins: keep pywiim versions in lockstep
-      - id: pywiim-version-pin
-        name: pywiim version pin sync check
-        entry: python3 scripts/sync-pywiim-version.py
-        language: system
-        args: ["--write"] # auto-fix drift before commit
-        pass_filenames: false
-        always_run: true
-
-# Global settings
 default_stages: [pre-commit]
-fail_fast: true # Stop on first failure - faster feedback
+fail_fast: true
 minimum_pre_commit_version: "2.15.0"

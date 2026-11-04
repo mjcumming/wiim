@@ -2,54 +2,12 @@
 
 This directory contains utility scripts for development, testing, and releasing the WiiM integration.
 
-## Release Script
+## Releases
 
-### `release.sh` - Automated Release Process
-
-Comprehensive release script that handles the entire release workflow:
-
-**Features:**
-
-- ✅ Runs linting checks (ruff + flake8)
-- ✅ Runs test suite
-- ✅ Updates version in `manifest.json`
-- ✅ Updates `CHANGELOG.md`
-- ✅ Creates git commit and tag
-- ✅ Pushes to GitHub with tags
-
-**Usage:**
-
-```bash
-# Interactive mode (will prompt for version)
-./scripts/release.sh
-
-# Specify version directly
-./scripts/release.sh 0.3.1
-
-# Run from repository root
-./scripts/release.sh 1.0.0
-```
-
-**Process Flow:**
-
-1. **Linting** - Runs ruff and flake8 checks
-   - Offers auto-fix if errors found
-2. **Testing** - Runs full test suite
-   - Must pass before continuing
-3. **Versioning** - Updates manifest.json
-   - Validates semantic versioning format
-4. **Changelog** - Prompts to update CHANGELOG.md
-   - Adds version header with date
-5. **Git Operations** - Commits, tags, and pushes
-   - Interactive confirmation for each step
-
-**Requirements:**
-
-- Python 3.13+
-- ruff, flake8, pytest installed
-- Git configured and authenticated
-
----
+Prepare the version and changelog in a PR. GitHub Actions creates the release
+after the reviewed change reaches main and CI passes; see the
+[release checklist](#release-checklist). The old local release script is
+retired and does not stage, commit, tag, or push files.
 
 ---
 
@@ -175,8 +133,8 @@ Run `./scripts/setup.sh` first if dependencies or `config/` are missing. The dev
 Convenience targets for common operations:
 
 ```bash
-# Release workflow
-bash scripts/release.sh [version]  # Full release process (use this, not make release)
+# Releases
+# Merge a reviewed manifest version and changelog to main; Actions publishes it.
 
 # Development
 make pre-run          # Quick checks before running HA
@@ -201,38 +159,14 @@ make build            # Build integration package
 
 ## Release Checklist
 
-1. **Update code**
+1. Prepare a manifest version and changelog entry in the change's PR.
+2. Review the PR, pass CI, and merge it to main. The auto-release workflow
+   validates HACS, waits for main-commit CI, and creates the tag and release.
+3. Verify the workflow and release. Test installation or device behavior when
+   relevant and available, and report what was actually tested.
 
-   ```bash
-   # Make your changes
-   git add .
-   git commit -m "Your changes"
-   ```
-
-2. **Run release script**
-
-   ```bash
-   ./scripts/release.sh 0.3.1
-   ```
-
-   The release script automatically:
-
-   - Runs linting checks
-   - Runs all tests
-   - Updates version in manifest.json
-   - Commits changes
-   - Creates git tag
-   - **Pushes to GitHub** (commit + tag)
-
-3. **Verify release**
-
-   - Check GitHub for tag (should already be pushed)
-   - Create GitHub release from the tag
-   - Verify HACS can see new version
-
-4. **Test with HACS**
-   - Install in test HA instance
-   - Verify functionality
+See [CONTRIBUTING.md](../CONTRIBUTING.md) and the
+[cross-repository release rules](../docs/DEVELOPMENT-RULES.md#rule-2c-cross-repository-pywiim-work-agents--automation).
 
 ---
 
@@ -286,12 +220,5 @@ make dev-check  # Quick validation
 ./scripts/pre_commit_check.sh
 ```
 
-**Preparing release:**
-
-```bash
-# Full validation
-make check-all
-
-# Create release
-./scripts/release.sh X.Y.Z
-```
+**Preparing a release:** Update the manifest version and changelog in the PR,
+then review the Actions result and published release after merge.

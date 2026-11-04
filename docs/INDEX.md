@@ -7,7 +7,7 @@
 1. **[DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md)** ⭐ **Rules map first**
 
    - **[Rules map (read this first)](DEVELOPMENT-RULES.md#rules-map-read-this-first)** — what the integration does, how it works, pywiim, collaboration, contracts, ADRs
-   - Non-negotiables, golden rules, Rule 8 (ADRs), PR checklist, doc standards
+   - Repository ownership, tests, review, releases, and ADRs
    - **AI / Cursor seed:** [`.cursor/rules/wiim-project.mdc`](../.cursor/rules/wiim-project.mdc) (always on) and root [`AGENTS.md`](../AGENTS.md)
 
 2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — Structure and patterns
