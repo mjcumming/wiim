@@ -999,9 +999,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             return None
         player = self._get_player()
         eq_preset = player.eq_preset
-        # pywiim 2.1.43+ returns "Off" if EQ is disabled.
-        # Fallback to "Off" if eq_preset is None or empty.
-        return str(eq_preset) if eq_preset else "Off"
+        return str(eq_preset) if eq_preset else None
 
     @property
     def sound_mode_list(self) -> list[str] | None:
@@ -1010,12 +1008,12 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             return None
         player = self._get_player()
         eq_presets = player.eq_presets
-        if not eq_presets:
-            return ["Off"]
-        # Ensure "Off" is always available even if pywiim doesn't include it
-        presets = [str(preset) for preset in eq_presets]
+        presets = [str(preset) for preset in (eq_presets or [])]
         if "Off" not in presets:
             presets.insert(0, "Off")
+        current = player.eq_preset
+        if isinstance(current, str) and current and all(item.casefold() != current.casefold() for item in presets):
+            presets.append(current)
         return presets
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
@@ -1023,6 +1021,9 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if not self._is_eq_supported():
             raise HomeAssistantError("EQ is not supported on this device")
 
+        player = self.coordinator.player
+        if sound_mode == player.eq_preset and (player.eq_is_custom or sound_mode not in (player.eq_presets or [])):
+            return
         async with self.wiim_command(f"select sound mode '{sound_mode}'"):
             # Pass the exact device-reported label through to pywiim so dynamic
             # and custom presets can be resolved against the player's preset list.

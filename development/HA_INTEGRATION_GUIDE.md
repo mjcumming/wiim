@@ -54,7 +54,11 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-10-29 (pywiim 2.3.19: solo output mode and
+_Last reviewed against upstream on 2026-11-03 (pywiim 3.0.0: graphic and parametric EQ
+state is source-aware, an unsaved graphic curve is `Custom`, and an unreadable EQ state
+is unknown. `get_eq_status()` can return `None`; malformed preset lists raise an error.
+See the upstream API reference for verified band writes and PEQ profile operations.
+pywiim 2.3.19: solo output mode and
 group channel use separate device controls where supported. pywiim 2.3.17: device diagnostics via
 `DeviceInfo.diagnostics_dict()`. pywiim 2.3.16: Ethernet MAC via
 `Player.eth_mac_address`; channel selection via `Player.output_channel`,
@@ -103,3 +107,5 @@ the custom label plus the previous/canonical names, so the integration consumes 
 **Review 2026-10-31 (prepared for pywiim 2.3.21):** saved parametric EQ preset names are initialized once per player session; active state refreshes independently. The integration uses `Player.initialize_peq_presets`, `Player.peq_presets`, `Player.peq_preset`, and `Player.set_peq_preset`. Merge and release require the published dependency and pinned-package validation.
 
 **Review 2026-11-03 (prepared for pywiim 2.3.22):** `Player.eq_preset` keeps the `EQGetBand` name when `getPlayerStatus` `eq` stays flat. The integration still reads `eq_preset` / `eq_presets` and calls `set_eq_preset`. No Home Assistant API change.
+
+**Review 2026-11-03 (prepared for pywiim 3.0.0, PR #37):** `Player.eq_preset` can be `None` when state is unknown, and unsaved bands appear as `Custom` with `eq_is_custom` true. `Player.peq_enabled` distinguishes active, inactive, and unknown; `disable_peq()` turns PEQ off without shadowing a saved preset named Off. The player verifies graphic preset/enable, custom bands, and PEQ preset/disable commands and reconciles both states. PEQ profile creation and editing remain library APIs. Merge and release require the published dependency and pinned-package validation.

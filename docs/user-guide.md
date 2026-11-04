@@ -316,6 +316,8 @@ data:
 
 Devices that support EQ get a dedicated **EQ Preset** select (`select.{device}_eq_preset`). The same list is also the media player's sound mode. Available names come from the device (typically including Off, Flat, Rock, Jazz, and others).
 
+The current input's unsaved graphic bands appear as **Custom**. This is a state label; save the bands in WiiM Home before loading them as a preset. An unknown state means the device has not supplied a usable EQ reading yet.
+
 ```yaml
 # Recommended: dedicated select entity
 service: select.select_option
@@ -334,6 +336,8 @@ data:
 
 **Custom EQ** (10-band control: 31.5Hz to 16kHz)
 
+Custom-band writes use pywiim's verified graphic EQ path. This was tested on a WiiM Pro running firmware `Linkplay.4.8.833748`; other models, firmware and inputs remain unconfirmed. A device that cannot confirm the requested bands reports an error.
+
 ```yaml
 service: wiim.set_eq
 target:
@@ -345,7 +349,9 @@ data:
 
 **Parametric EQ presets**
 
-When a compatible player has saved parametric EQ presets, its **Parametric EQ Preset** select can load one for the current input. Create and edit presets in WiiM Home. Reload that player's WiiM integration after adding, renaming, or deleting a preset to refresh the available options. The select has no current option when parametric EQ is not active. It can also be used in an automation with `select.select_option`.
+On a compatible player, the **Parametric EQ Preset** select can turn active PEQ **Off**, including when there are no saved presets. It can also load a saved preset for the current input. It shows Off when PEQ is inactive and unknown when its state cannot be read. Create and edit presets in WiiM Home. Reload that player's WiiM integration after adding, renaming, or deleting a preset to refresh the available options. It can also be used in an automation with `select.select_option`.
+
+If a saved PEQ preset is itself named **Off**, it retains that name and the separate disable option is **Off (disable)**. If that name is also taken, the disable option uses an available numbered variant.
 
 ### 🔊 Audio Output Modes
 
