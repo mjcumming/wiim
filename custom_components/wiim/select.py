@@ -253,7 +253,7 @@ class WiiMPEQPresetSelect(WiimEntity, SelectEntity):
         player = self.coordinator.player
         presets = [self._off_option, *player.peq_presets]
         current = player.peq_preset
-        if player.peq_enabled is True and current and current not in presets:
+        if player.peq_enabled is True and current and all(option.casefold() != current.casefold() for option in presets):
             presets.append(current)
         return presets
 
@@ -263,8 +263,8 @@ class WiiMPEQPresetSelect(WiimEntity, SelectEntity):
         player = self.coordinator.player
         if player.peq_enabled is False:
             return self._off_option
-        if player.peq_enabled is True:
-            return player.peq_preset or None
+        if player.peq_enabled is True and player.peq_preset:
+            return next((option for option in self.options if option.casefold() == player.peq_preset.casefold()), None)
         return None
 
     async def async_select_option(self, option: str) -> None:

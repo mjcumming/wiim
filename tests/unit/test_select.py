@@ -85,6 +85,21 @@ async def test_peq_off_and_unknown_states(mock_coordinator, mock_config_entry):
 
 
 @pytest.mark.asyncio
+async def test_active_peq_uses_saved_preset_spelling(mock_coordinator, mock_config_entry):
+    """A case variant stays selectable using the saved device name."""
+    player = mock_coordinator.player
+    player.peq_presets = ["Night"]
+    player.peq_enabled = True
+    player.peq_preset = "night"
+    entity = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+
+    assert entity.options == ["Off", "Night"]
+    assert entity.current_option == "Night"
+    await entity.async_select_option("Night")
+    player.set_peq_preset.assert_awaited_once_with("Night")
+
+
+@pytest.mark.asyncio
 async def test_saved_peq_named_off_keeps_its_existing_option(mock_coordinator, mock_config_entry):
     player = mock_coordinator.player
     player.peq_presets = ["Off", "Night"]
@@ -215,13 +230,14 @@ async def test_saved_peq_profiles_reconcile_both_selectors(mock_coordinator, moc
     from urllib.parse import unquote
 
     from pywiim.api.base import ApiResponse
-    from pywiim.api.peq import PEQBand
+    from pywiim.api.constants import GEQ_PLUGIN_URI
+    from pywiim.api.peq import GEQ_BAND_NAMES, PEQBand
     from pywiim.client import WiiMClient
     from pywiim.models import PlayerStatus
     from pywiim.player import Player
 
     names = ["Test PEQ A", "Test-PEQ-B", "Test_PEQ_C"]
-    state = {"peq": None, "graphic": True}
+    state = {"peq": None, "graphic": True, "graphic_custom": False, "bands": []}
     client = WiiMClient("192.0.2.1", capabilities={"supports_eq": True, "supports_peq": True})
 
     async def response(endpoint, *_args, **_kwargs):
@@ -231,7 +247,25 @@ async def test_saved_peq_profiles_reconcile_both_selectors(mock_coordinator, moc
             payload = json.loads(unquote(endpoint.split("EQv2SourceLoad:", 1)[1]))
             state.update(peq=payload["Name"], graphic=False)
             return ApiResponse(parsed={"status": "OK", "EQStat": "On", "Name": state["peq"]}, raw=None)
+        if "EQSetLV2SourceBand:" in endpoint:
+            payload = json.loads(unquote(endpoint.split("EQSetLV2SourceBand:", 1)[1]))
+            assert payload["pluginURI"] == GEQ_PLUGIN_URI
+            state.update(peq=None, graphic=True, graphic_custom=True, bands=payload["EQBand"])
+            return ApiResponse(parsed={"status": "OK"}, raw=None)
         if "EQGetLV2Band" in endpoint or "EQGetLV2SourceBand" in endpoint:
+            if GEQ_PLUGIN_URI in unquote(endpoint):
+                return ApiResponse(
+                    parsed={
+                        "status": "OK",
+                        "source_name": "wifi",
+                        "EQStat": "On" if state["graphic"] else "Off",
+                        "Name": "" if state["graphic_custom"] else "Acoustic",
+                        "pluginURI": GEQ_PLUGIN_URI,
+                        "channelMode": "Stereo",
+                        "EQBand": state["bands"],
+                    },
+                    raw=None,
+                )
             return ApiResponse(
                 parsed={
                     "status": "OK",
@@ -250,7 +284,7 @@ async def test_saved_peq_profiles_reconcile_both_selectors(mock_coordinator, moc
                     "status": "OK",
                     "source_name": "wifi",
                     "EQStat": "On" if state["graphic"] else "Off",
-                    "Name": "Acoustic",
+                    "Name": "" if state["graphic_custom"] else "Acoustic",
                     "pluginURI": "http://moddevices.com/plugins/caps/Eq10HP",
                 },
                 raw=None,
@@ -286,6 +320,19 @@ async def test_saved_peq_profiles_reconcile_both_selectors(mock_coordinator, moc
     assert graphic.current_option == "Acoustic"
     assert parametric.current_option == "Off"
     assert callback.call_count == 5
+
+    # The existing custom-band service must also reconcile both selectors.
+    from custom_components.wiim.media_player import WiiMMediaPlayer
+
+    await parametric.async_select_option(names[0])
+    assert parametric.current_option == names[0]
+    media_player = WiiMMediaPlayer(mock_coordinator, mock_config_entry)
+    gains = list(range(-5, 5))
+    await media_player.async_set_eq("custom", gains)
+    assert [entry["param_name"] for entry in state["bands"]] == list(GEQ_BAND_NAMES)
+    assert graphic.current_option == "Custom"
+    assert parametric.current_option == "Off"
+    assert callback.call_count == 7
 
 
 class TestPEQPresetSelect:

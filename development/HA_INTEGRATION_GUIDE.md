@@ -54,7 +54,11 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-10-29 (pywiim 2.3.19: solo output mode and
+_Last reviewed against upstream on 2026-11-03 (pywiim 3.0.0: graphic and parametric EQ
+state is source-aware, an unsaved graphic curve is `Custom`, and an unreadable EQ state
+is unknown. `get_eq_status()` can return `None`; malformed preset lists raise an error.
+See the upstream API reference for verified band writes and PEQ profile operations.
+pywiim 2.3.19: solo output mode and
 group channel use separate device controls where supported. pywiim 2.3.17: device diagnostics via
 `DeviceInfo.diagnostics_dict()`. pywiim 2.3.16: Ethernet MAC via
 `Player.eth_mac_address`; channel selection via `Player.output_channel`,
