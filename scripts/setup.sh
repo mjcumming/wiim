@@ -40,10 +40,7 @@ logger:
   logs:
     custom_components.wiim: debug
 
-# If you want to add test devices, uncomment and configure:
-# wiim:
-#   - host: 192.168.1.100
-#     name: "Living Room WiiM"
+# Add speakers through the Home Assistant integrations UI.
 EOYAML
 fi
 

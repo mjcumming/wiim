@@ -632,14 +632,10 @@ class TestWiiMOutputModeSelectPlatformSetup:
             "entry": mock_config_entry,
         }
 
-        entities = []
-
-        async def add_entities(new_entities):
-            entities.extend(new_entities)
-
+        add_entities = MagicMock()
         await async_setup_entry(hass, mock_config_entry, add_entities)
 
-        assert len(entities) == 0
+        add_entities.assert_called_once_with([])
 
 
 class TestWiiMEQPresetSelectBasic:
