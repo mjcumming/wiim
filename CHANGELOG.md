@@ -7,6 +7,7 @@
 ### Changed
 
 - Report unsupported WiiM YAML configuration through Home Assistant's repair system.
+- **Dependency**: `pywiim` **3.0.2**, which cleans up a failed play-state task when its event loop is already closed.
 
 ## [1.1.1] - 2026-11-03
 
