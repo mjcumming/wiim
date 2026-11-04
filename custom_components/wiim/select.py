@@ -249,7 +249,7 @@ class WiiMPEQPresetSelect(WiimEntity, SelectEntity):
 
     @property
     def options(self) -> list[str]:
-        """Return the preset names loaded at startup."""
+        """Return the cached preset names supplied by pywiim."""
         player = self.coordinator.player
         presets = [self._off_option, *player.peq_presets]
         current = player.peq_preset

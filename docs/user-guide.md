@@ -336,7 +336,7 @@ data:
 
 **Custom EQ** (10-band control: 31.5Hz to 16kHz)
 
-Custom-band writes use pywiim's verified graphic EQ path. This was tested on a WiiM Pro running firmware `Linkplay.4.8.833748`; other models, firmware and inputs remain unconfirmed. A device that cannot confirm the requested bands reports an error.
+Custom-band writes use pywiim's verified graphic EQ path. This was tested on a WiiM Pro running firmware `Linkplay.4.8.833748`; other models, firmware and inputs remain unconfirmed. A device that cannot confirm the requested bands reports an error. Supply all ten gains; index-keyed maps must contain each band from 0 through 9 exactly once.
 
 ```yaml
 service: wiim.set_eq
@@ -349,7 +349,7 @@ data:
 
 **Parametric EQ presets**
 
-On a compatible player, the **Parametric EQ Preset** select can turn active PEQ **Off**, including when there are no saved presets. It can also load a saved preset for the current input. It shows Off when PEQ is inactive and unknown when its state cannot be read. Create and edit presets in WiiM Home. Reload that player's WiiM integration after adding, renaming, or deleting a preset to refresh the available options. It can also be used in an automation with `select.select_option`.
+On a compatible player, the **Parametric EQ Preset** select can turn active PEQ **Off**, including when there are no saved presets. It can also load a saved preset for the current input. It shows Off when PEQ is inactive and unknown when its state cannot be read. Create and edit presets in WiiM Home. Saved graphic and parametric preset lists normally refresh within about 15 minutes while the player is reachable; reload that player's WiiM integration to refresh them sooner. The select can also be used in an automation with `select.select_option`.
 
 If a saved PEQ preset is itself named **Off**, it retains that name and the separate disable option is **Off (disable)**. If that name is also taken, the disable option uses an available numbered variant.
 

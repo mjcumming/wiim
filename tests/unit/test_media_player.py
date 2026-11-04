@@ -1931,6 +1931,48 @@ class TestWiiMMediaPlayerServiceHandlers:
         # State updates automatically via callback - no manual refresh needed
 
     @pytest.mark.asyncio
+    async def test_async_set_eq_custom_dict_with_integer_keys(self, media_player, mock_coordinator):
+        """YAML integer band indices must preserve every supplied gain."""
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.set_eq_custom = AsyncMock()
+        custom_values = {i: i - 5 for i in range(10)}
+
+        await media_player.async_set_eq("custom", custom_values)
+
+        mock_coordinator.player.set_eq_custom.assert_awaited_once_with(list(range(-5, 5)))
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "custom_values",
+        [
+            {str(i): i for i in range(9)},
+            {**{str(i): i for i in range(10)}, 0: 4},
+            {**{str(i): i for i in range(9)}, "other": 4},
+        ],
+    )
+    async def test_async_set_eq_rejects_incomplete_or_ambiguous_dict(
+        self, media_player, mock_coordinator, custom_values
+    ):
+        """Missing or duplicate bands must never be replaced with zero gains."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.set_eq_custom = AsyncMock()
+        with pytest.raises(HomeAssistantError, match="10 bands"):
+            await media_player.async_set_eq("custom", custom_values)
+        mock_coordinator.player.set_eq_custom.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_async_set_eq_reports_invalid_library_values(self, media_player, mock_coordinator):
+        """Translate library validation failures into a Home Assistant error."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        mock_coordinator.player.supports_eq = True
+        mock_coordinator.player.set_eq_custom = AsyncMock(side_effect=ValueError("invalid gain"))
+        with pytest.raises(HomeAssistantError, match="invalid gain"):
+            await media_player.async_set_eq("custom", [0] * 10)
+
+    @pytest.mark.asyncio
     async def test_async_set_eq_requires_custom_values(self, media_player, mock_coordinator):
         """Test async_set_eq requires custom_values when preset is custom."""
         from homeassistant.exceptions import HomeAssistantError

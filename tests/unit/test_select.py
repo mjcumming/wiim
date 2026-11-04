@@ -224,6 +224,39 @@ async def test_a10_reported_list_reaches_home_assistant_selector(mock_coordinato
 
 
 @pytest.mark.asyncio
+async def test_periodic_eq_preset_refresh_updates_both_selectors(mock_coordinator, mock_config_entry):
+    """New names from the library's scheduled refresh appear in HA options."""
+    from pywiim.api.peq import PEQSettings
+    from pywiim.client import WiiMClient
+    from pywiim.models import PlayerStatus
+    from pywiim.player import Player
+
+    client = WiiMClient("192.0.2.1", capabilities={"supports_eq": True, "supports_peq": True})
+    client.get_eq_presets = AsyncMock(side_effect=[["Flat"], ["Flat", "Movie"]])
+    client.get_peq_preset_list = AsyncMock(
+        side_effect=[{"custom": ["Night"], "preset": []}, {"custom": ["Desk"], "preset": []}]
+    )
+    client.get_eq = AsyncMock(return_value={"EQStat": "Off", "Name": "Flat"})
+    client.get_peq_bands = AsyncMock(return_value=PEQSettings(enabled=False))
+    client.get_room_correction = AsyncMock(side_effect=WiiMError("not available"))
+    player = Player(client)
+    player._status_model = PlayerStatus(source="wifi")
+    await player._state_mgr._refresh_periodic_data(True, player._status_model, False)
+    mock_coordinator.player = player
+    graphic = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    parametric = WiiMPEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert graphic.options == ["Off", "Flat"]
+    assert parametric.options == ["Off", "Night"]
+
+    player._last_eq_presets_check -= 901
+    player._last_peq_presets_check -= 901
+    await player._state_mgr._refresh_periodic_data(False, player._status_model, False)
+
+    assert graphic.options == ["Off", "Flat", "Movie"]
+    assert parametric.options == ["Off", "Desk"]
+
+
+@pytest.mark.asyncio
 async def test_saved_peq_profiles_reconcile_both_selectors(mock_coordinator, mock_config_entry):
     """Exercise the observed WiiM PEQ and stale graphic readbacks end to end."""
     import json

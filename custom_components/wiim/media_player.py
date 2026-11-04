@@ -1048,7 +1048,7 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         """Handle play_playlist service call."""
         await self.async_play_media(MediaType.PLAYLIST, playlist_url)
 
-    async def async_set_eq(self, preset: str, custom_values: list[float] | dict[str, Any] | None = None) -> None:
+    async def async_set_eq(self, preset: str, custom_values: list[float] | dict[str | int, Any] | None = None) -> None:
         """Handle set_eq service call."""
         if not self._is_eq_supported():
             raise HomeAssistantError("EQ is not supported on this device")
@@ -1061,16 +1061,21 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         if preset.lower() == "custom":
             if not custom_values:
                 raise HomeAssistantError("custom_values is required when preset is 'custom'")
-            # Convert dict to list if needed, or use list directly
+            # YAML may supply band indices as integers or strings. Never invent
+            # missing gains or choose between duplicate representations.
             if isinstance(custom_values, dict):
-                # If dict, extract values in order (assuming keys are band indices)
-                eq_list = [custom_values.get(str(i), 0.0) for i in range(10)]
+                bands = {str(key): value for key, value in custom_values.items()}
+                if len(bands) != len(custom_values) or set(bands) != {str(i) for i in range(10)}:
+                    raise HomeAssistantError("custom_values must contain exactly 10 bands indexed 0 through 9")
+                eq_list = [bands[str(i)] for i in range(10)]
             else:
-                # Already a list
                 eq_list = custom_values
             # Set custom EQ values (10-band: 31.5Hz to 16kHz)
-            async with self.wiim_command("set custom EQ"):
-                await self.coordinator.player.set_eq_custom(eq_list)
+            try:
+                async with self.wiim_command("set custom EQ"):
+                    await self.coordinator.player.set_eq_custom(eq_list)
+            except (TypeError, ValueError) as err:
+                raise HomeAssistantError(f"Invalid custom EQ values: {err}") from err
         else:
             # Set EQ preset
             async with self.wiim_command("set EQ preset"):
