@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-03
+
+### Fixed
+
+- Refresh saved graphic and parametric EQ preset options about every 15 minutes, and retry initially unavailable lists without requiring an integration reload.
+- Preserve integer-keyed custom EQ band values and reject incomplete or ambiguous maps instead of silently replacing gains with zero. Invalid gains are reported as Home Assistant errors.
+
+### Changed
+
+- **Dependency**: `pywiim` **3.0.1**.
+
 ## [1.1.0] - 2026-11-03
 
 ### Fixed

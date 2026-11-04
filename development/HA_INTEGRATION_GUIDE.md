@@ -54,7 +54,9 @@ This guide should be reviewed and updated whenever the `pywiim` library version 
 3. Update this file's review date and note any significant changes
 4. Document the version update in `CHANGELOG.md`
 
-_Last reviewed against upstream on 2026-11-03 (pywiim 3.0.0: graphic and parametric EQ
+_Last reviewed against upstream on 2026-11-03 (pywiim 3.0.1: saved graphic and parametric
+EQ preset lists refresh on startup and about every 15 minutes during normal polling;
+active state and source changes remain separate. pywiim 3.0.0: graphic and parametric EQ
 state is source-aware, an unsaved graphic curve is `Custom`, and an unreadable EQ state
 is unknown. `get_eq_status()` can return `None`; malformed preset lists raise an error.
 See the upstream API reference for verified band writes and PEQ profile operations.
