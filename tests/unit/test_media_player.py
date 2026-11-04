@@ -214,7 +214,7 @@ class TestWiiMMediaPlayerPlayback:
 
         player = mock_coordinator.player
         player.stop = AsyncMock(return_value=True)
-        media_player.async_write_ha_state = AsyncMock()
+        media_player.async_write_ha_state = MagicMock()
 
         await media_player.async_turn_off()
 
