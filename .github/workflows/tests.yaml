@@ -41,6 +41,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libturbojpeg0
 
+      - name: Check pywiim version pins
+        run: python scripts/sync-pywiim-version.py
+
       - name: Lint with ruff
         run: |
           ruff check custom_components/wiim --line-length 120

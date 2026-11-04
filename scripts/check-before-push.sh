@@ -1,15 +1,18 @@
 #!/bin/bash
-# Run EXACT same checks as CI before pushing
+# Optional local preflight: CI checks plus a local patch-coverage check.
 # Usage: ./scripts/check-before-push.sh
 #
-# This matches .github/workflows/tests.yaml exactly
-# PLUS checks patch coverage to catch Codecov failures before push
+# GitHub CI also runs hassfest, which is not included here.
 
 set -e
 cd "$(dirname "$0")/.."
 
-echo "🔍 Running CI checks locally..."
-echo "   (Same checks as .github/workflows/tests.yaml)"
+echo "🔍 Running local preflight checks..."
+echo ""
+
+echo "Checking pywiim version pins..."
+python scripts/sync-pywiim-version.py
+echo "   ✅ pywiim pins match"
 echo ""
 
 echo "1️⃣  Ruff lint..."
@@ -36,10 +39,9 @@ echo ""
 # This catches the "codecov/patch" failure before pushing
 echo "5️⃣  Patch coverage check (Codecov simulation)..."
 
-# Keep local gate aligned with Codecov patch target.
-# Override via env var when Codecov target changes:
-#   CODECOV_PATCH_TARGET=81.0 ./scripts/check-before-push.sh
-PATCH_TARGET="${CODECOV_PATCH_TARGET:-75}"
+# Default to the patch target in codecov.yml. Codecov applies its own policy;
+# this local check is an early signal and may be overridden if needed.
+PATCH_TARGET="${CODECOV_PATCH_TARGET:-70}"
 
 # Get the compare branch (origin/main or HEAD~1 if main)
 COMPARE_BRANCH="origin/main"
@@ -61,7 +63,7 @@ if [ -n "$CHANGED_FILES" ]; then
         echo ""
         echo "   ❌ PATCH COVERAGE FAILED!"
         echo ""
-        echo "   Codecov requires ${PATCH_TARGET}% coverage on new/changed lines."
+        echo "   Local target: ${PATCH_TARGET}% coverage on new/changed lines."
         echo "   Your changes don't have enough test coverage."
         echo ""
         echo "   Run this to see uncovered lines:"

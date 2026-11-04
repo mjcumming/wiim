@@ -109,6 +109,8 @@ jobs:
               --workflow="$WORKFLOW_NAME" \
               --commit="$COMMIT_SHA" \
               --repo="$REPO" \
+              --branch=main \
+              --event=push \
               --json databaseId,conclusion,status \
               --jq '.[0].databaseId' 2>/dev/null || echo "")
 
@@ -149,8 +151,9 @@ jobs:
           done
 
           if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "⚠️  Timeout waiting for CI to complete. Proceeding anyway, but this is unusual."
-            echo "Please verify CI status manually: https://github.com/$REPO/actions"
+            echo "❌ Timeout waiting for CI to pass. Release stopped."
+            echo "Check CI and retry: https://github.com/$REPO/actions"
+            exit 1
           fi
 
       - name: Check if release already exists
@@ -206,7 +209,18 @@ jobs:
             echo "Release v${{ needs.check-version.outputs.version }} already exists, skipping creation"
             exit 0
           fi
+          TAG_REF="refs/tags/v${{ needs.check-version.outputs.version }}"
+          TAG_REFS=$(git ls-remote --tags origin "$TAG_REF" "$TAG_REF^{}")
+          if [ -n "$TAG_REFS" ]; then
+            TAG_COMMIT=$(printf '%s\n' "$TAG_REFS" | awk -v ref="$TAG_REF" \
+              '$2 == ref {raw = $1} $2 == ref "^{}" {peeled = $1} END {print peeled ? peeled : raw}')
+            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+              echo "❌ Existing tag points to a different commit; release stopped."
+              exit 1
+            fi
+          fi
           gh release create "v${{ needs.check-version.outputs.version }}" \
+            --target "$GITHUB_SHA" \
             --title "WiiM Audio v${{ needs.check-version.outputs.version }}" \
             --notes "$RELEASE_NOTES" \
             --latest \

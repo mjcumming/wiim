@@ -10,7 +10,7 @@ help:
 	@echo "WiiM Integration - Available Commands:"
 	@echo ""
 	@echo "Testing:"
-	@echo "  ci             - Run the exact same checks as GitHub CI (recommended before pushing)"
+	@echo "  ci             - Run local preflight checks (GitHub CI also runs hassfest)"
 	@echo "  test           - Run all unit tests"
 	@echo "  test-integration - Run integration tests (if tests/integration exists)"
 	@echo "  test-smoke     - Run smoke tests (requires HA_URL and HA_TOKEN)"
@@ -38,7 +38,7 @@ help:
 	@echo "  install-dev    - Install dev dependencies with HA checks"
 	@echo ""
 	@echo "Release:"
-	@echo "  Use scripts/release.sh for proper release process"
+	@echo "  Merge a reviewed manifest version and changelog to main; Actions publishes it"
 	@echo ""
 
 # Python version validation
@@ -76,7 +76,7 @@ test:
 	python tests/run_tests.py
 
 ci:
-	@echo "🔍 Running exact GitHub CI checks..."
+	@echo "🔍 Running local preflight checks..."
 	@bash scripts/check-before-push.sh
 
 test-integration:
@@ -157,7 +157,7 @@ clean:
 	@echo "🧹 Cleaning build artifacts..."
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	rm -rf build/ dist/ *.egg-info/ archive/ 2>/dev/null || true
+	rm -rf build/ dist/ *.egg-info/ 2>/dev/null || true
 
 install:
 	@echo "📦 Installing for development..."
@@ -170,7 +170,7 @@ build: clean
 	@du -sh custom_components/wiim | cut -f1 | xargs echo "Total size:"
 	@echo "Build completed successfully!"
 	@echo ""
-	@echo "💡 For releases, use: bash scripts/release.sh"
+	@echo "💡 Releases are published by Actions after a reviewed version reaches main"
 
 # Development helpers
 dev-check: lint test
