@@ -59,11 +59,14 @@ rules-only or documentation-only change.
 - Add focused tests for changed behavior and meaningful failure paths. Bug
   fixes should have a regression test when practical. Do not add tests that
   merely restate the implementation.
-- Run relevant tests during development. For a release candidate, run the local
-  `bash scripts/check-before-push.sh` checks unless that candidate was already
-  checked locally. GitHub CI verifies PRs and also runs hassfest; the local
-  script includes a patch-coverage check but does not run every GitHub action.
-  Coverage settings are in [codecov.yml](../codecov.yml).
+- Run relevant tests during development. After pushing a release candidate PR
+  and before merging it, run `python scripts/prepare_release.py` with Docker
+  running. It runs the Python 3.13 CI checks and hassfest in Linux containers,
+  caching dependencies and successful results by clean Git tree. Use `--force`
+  to rerun an unchanged tree. GitHub CI, HACS validation, and Codecov remain
+  independent; the optional `bash scripts/check-before-push.sh` also offers a
+  local patch-coverage check. Coverage settings are in
+  [codecov.yml](../codecov.yml).
 - Test on a real device when the change depends on device or firmware
   behavior and a suitable device is available. Preserve its settings and
   record model and firmware. State clearly when real-device validation was
