@@ -12,8 +12,9 @@ and how this integration works with pywiim. The
    in [pywiim](https://github.com/mjcumming/pywiim). Preserve unrelated local
    changes and stage only intended files.
 3. Add meaningful regression or behavior tests and run the relevant checks.
-   CI runs the full automated integration checks; local pre-commit hooks and
-   `bash scripts/check-before-push.sh` are optional early feedback.
+   For a release candidate, run `bash scripts/check-before-push.sh` locally
+   unless that candidate was already checked. CI verifies PRs and runs
+   additional GitHub actions; local pre-commit hooks are optional.
 4. Review the change in proportion to its risk and address actionable
    feedback. Request independent review when it would help or when requested.
 5. Update user docs and the changelog when behavior changes. Add or update an

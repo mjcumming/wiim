@@ -26,13 +26,8 @@ if [ "$1" = release ]; then
     printf '%s\\n' "$@" > "$FAKE_GH_ARGS"
     exit 0
 fi
-if [ "$2" = list ]; then
-    [ "$FAKE_CI_STATUS" = missing ] || echo 123
-elif [ "$2" = view ]; then
-    case "$*" in
-        *.status*) echo "$FAKE_CI_STATUS" ;;
-        *.conclusion*) echo "${FAKE_CI_CONCLUSION:-}" ;;
-    esac
+if [ "$1" = run ] && [ "$2" = list ]; then
+    [ "$FAKE_CI_STATUS" = missing ] || printf '%s\\t%s\\n' "$FAKE_CI_STATUS" "${FAKE_CI_CONCLUSION:-}"
 fi
 """
     )
@@ -48,7 +43,10 @@ fi
     env.update(
         PATH=f"{bin_dir}{os.pathsep}{env['PATH']}",
         FAKE_GH_ARGS=str(record),
+        GITHUB_REPOSITORY="mjcumming/wiim",
         GITHUB_SHA="reviewed-commit",
+        CI_WAIT_ATTEMPTS="1",
+        CI_WAIT_INTERVAL="0",
         RELEASE_NOTES="Test notes",
     )
     return env, record
@@ -76,7 +74,8 @@ def test_release_requires_ci_to_finish_successfully(
     env, _ = release_env
     env.update(FAKE_CI_STATUS=status, FAKE_CI_CONCLUSION=conclusion)
     run = subprocess.run(
-        ["bash", "-e", "-c", workflow_step("Wait for CI tests to complete")],
+        ["bash", "-e", "-c", workflow_step("Verify CI for release")],
+        cwd=ROOT,
         env=env,
         capture_output=True,
         text=True,
@@ -84,7 +83,7 @@ def test_release_requires_ci_to_finish_successfully(
     )
     assert run.returncode == expected
     if status in {"in_progress", "missing"}:
-        assert "Timeout" in run.stdout
+        assert "Timed out" in run.stdout
 
 
 def test_release_tag_targets_the_validated_commit(release_env: tuple[dict[str, str], Path]) -> None:
