@@ -39,7 +39,7 @@ jobs:
       - name: Install system libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libturbojpeg
+          sudo apt-get install -y libturbojpeg0
 
       - name: Lint with ruff
         run: |
