@@ -239,6 +239,9 @@ async def test_periodic_eq_preset_refresh_updates_both_selectors(mock_coordinato
     client.get_eq = AsyncMock(return_value={"EQStat": "Off", "Name": "Flat"})
     client.get_peq_bands = AsyncMock(return_value=PEQSettings(enabled=False))
     client.get_room_correction = AsyncMock(side_effect=WiiMError("not available"))
+    client.get_bluetooth_history = AsyncMock(return_value=[])
+    client.get_subwoofer_status_raw = AsyncMock(return_value=None)
+    client._request = AsyncMock(side_effect=AssertionError("Unexpected network request"))
     player = Player(client)
     player._status_model = PlayerStatus(source="wifi")
     await player._state_mgr._refresh_periodic_data(True, player._status_model, False)
@@ -254,6 +257,7 @@ async def test_periodic_eq_preset_refresh_updates_both_selectors(mock_coordinato
 
     assert graphic.options == ["Off", "Flat", "Movie"]
     assert parametric.options == ["Off", "Desk"]
+    client._request.assert_not_awaited()
 
 
 @pytest.mark.asyncio
