@@ -3,7 +3,7 @@
 # This Makefile provides commands for testing, linting, and building
 # the WiiM Home Assistant integration.
 
-.PHONY: help ci test test-integration test-smoke test-multiroom test-all test-phase test-quick pre-release pre-release-realworld lint format clean install install-dev build check-all check-python check-ha-compat pre-run sync-pywiim
+.PHONY: help ci prepare-release test test-integration test-smoke test-multiroom test-all test-phase test-quick pre-release pre-release-realworld lint format clean install install-dev build check-all check-python check-ha-compat pre-run sync-pywiim
 
 # Default target
 help:
@@ -11,6 +11,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  ci             - Run local preflight checks (GitHub CI also runs hassfest)"
+	@echo "  prepare-release - Run cached Linux release checks for the committed candidate"
 	@echo "  test           - Run all unit tests"
 	@echo "  test-integration - Run integration tests (if tests/integration exists)"
 	@echo "  test-smoke     - Run smoke tests (requires HA_URL and HA_TOKEN)"
@@ -78,6 +79,9 @@ test:
 ci:
 	@echo "🔍 Running local preflight checks..."
 	@bash scripts/check-before-push.sh
+
+prepare-release:
+	@python scripts/prepare_release.py
 
 test-integration:
 	@echo "🧪 Running Integration Tests..."
