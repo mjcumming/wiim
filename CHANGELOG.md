@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add Serbian translations in Cyrillic and Latin.
+
 ## [1.1.2] - 2026-11-04
 
 ### Changed

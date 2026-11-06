@@ -1,0 +1,70 @@
+{
+  "entity": {
+    "select": {
+      "peq_preset": {
+        "name": "Predefinisano podešavanje parametričkog EQ-a"
+      }
+    }
+  },
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Unesite IP adresu vašeg WiiM uređaja. Ovo možete pronaći u administrativnom panelu rutera ili u aplikaciji WiiM Home pod Podešavanja uređaja → Informacije o mreži.",
+        "data": {
+          "host": "IP adresa uređaja"
+        }
+      },
+      "manual": {
+        "title": "Dodaj WiiM uređaj",
+        "description": "Unesite IP adresu vašeg WiiM uređaja.\n\nOvo možete pronaći u:\n• Administrativnom panelu rutera\n• Aplikaciji WiiM Home → Podešavanja uređaja → Informacije o mreži\n• Aplikacijama za skeniranje mreže\n\nPrimer: {example_ip}",
+        "data": {
+          "host": "IP adresa uređaja"
+        }
+      },
+      "discovery": {
+        "description": "Pronađen(o) je {count} WiiM uređaj(a). Izaberite uređaj za dodavanje:",
+        "data": {
+          "host": "Uređaj"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Dodati {name}?",
+        "description": "Da li želite da dodate ovaj WiiM uređaj u Home Assistant?\n\nUređaj: **{name}**"
+      }
+    },
+    "error": {
+      "cannot_connect": "Povezivanje sa WiiM uređajem nije moguće. Molimo proverite:\n• Da li je IP adresa ispravna\n• Da li je uređaj uključen\n• Da li je uređaj povezan na vašu mrežu\n• Da li zaštitni zid (firewall) blokira vezu",
+      "invalid_host": "Neispravan format IP adrese",
+      "no_host": "Nije prosleđena IP adresa uređaja"
+    },
+    "abort": {
+      "already_configured": "Ovaj WiiM uređaj je već konfigurisan",
+      "cannot_connect": "Povezivanje sa uređajem nije moguće",
+      "no_host": "Nije pronađen nijedan uređaj",
+      "reconfigure_successful": "Rekonfiguracija je uspešna"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "⚙️ Podešavanja WiiM uređaja",
+        "description": "Konfigurišite osnovna podešavanja uređaja:",
+        "data": {
+          "playing_update_rate": "🎵 Učestalost ažuriranja tokom reprodukcije (sekunde)",
+          "idle_update_rate": "💤 Učestalost ažuriranja u stanju mirovanja (sekunde)",
+          "volume_step_percent": "🔊 Korak promene jačine zvuka (%)",
+          "enable_maintenance_buttons": "🔧 Dugmad za održavanje",
+          "enable_diagnostic_entities": "📊 Dijagnostički senzori"
+        },
+        "data_description": {
+          "playing_update_rate": "Brzo prozivanje (polling) kada se muzika reprodukuje radi glatkog ažuriranja pozicije (1-5 sekundi)",
+          "idle_update_rate": "Sporije prozivanje (polling) kada se muzika ne reprodukuje radi efikasnosti (5-60 sekundi)",
+          "volume_step_percent": "Iznos promene jačine zvuka kada koristite dugmad za pojačavanje/utišavanje (1-50%). Manji koraci omogućavaju precizniju kontrolu.",
+          "enable_maintenance_buttons": "Prikaži dugmad za održavanje uređaja (ponovno pokretanje, sinhronizacija vremena) radi rešavanja problema",
+          "enable_diagnostic_entities": "Prikaži napredne dijagnostičke senzore radi otklanjanja grešaka i praćenja performansi"
+        }
+      }
+    }
+  }
+}
