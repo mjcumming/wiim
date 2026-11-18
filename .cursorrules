@@ -3,7 +3,7 @@
 ## Documentation
 
 - **Developer Guide**: See `/development/README.md` for architecture and contribution guidelines
-- **Testing Guide**: See `/development/TESTING.md` for test requirements and examples
+- **Testing Guide**: See `/docs/TESTING-CONSOLIDATED.md` for test requirements and examples
 - **HA Integration Guide**: See `/development/HA_INTEGRATION_GUIDE.md` for Home Assistant specific patterns (references upstream guides)
 - **User Documentation**: See `/docs/` for user-facing guides
 
@@ -322,7 +322,7 @@ When working with pywiim integration patterns or API usage:
 - ❌ Creating `FINAL-SUMMARY.md` for session summary
 - ✅ Using git commits and test results for progress tracking
 
-**See `docs/DOCUMENTATION-GUIDELINES.md` and `docs/DOCUMENTATION-BEST-PRACTICES.md` for detailed guidance.**
+**See `docs/DEVELOPMENT-RULES.md` for detailed guidance.**
 
 ## Dependencies
 

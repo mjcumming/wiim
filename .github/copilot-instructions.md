@@ -122,7 +122,6 @@ has_upnp = coordinator.upnp_client is not None  # AttributeError!
 ### Test Structure
 
 - **`tests/unit/`**: Unit tests (fast, isolated, mocked) - PRIMARY
-- **`tests/integration/`**: Integration tests (realistic scenarios)
 - **`scripts/`**: Manual validation (real devices) - SECONDARY
 
 ### Test Requirements
@@ -185,7 +184,7 @@ make test-quick        # Quick test (no coverage)
 - **`docs/ARCHITECTURE.md`**: Complete architecture guide
 - **`docs/DEVELOPMENT-RULES.md`**: Development rules
 - **`docs/TESTING-CONSOLIDATED.md`**: Testing strategy
-- **`docs/test-directories-explained.md`**: Test directory explanation
+- **`docs/adr/0002-test-directory-split.md`**: Test directory split (tests vs scripts)
 - **`tests/README.md`**: Test quick reference
 - **`development/README.md`**: Quick start guide
 - **`docs/user-guide.md`**: User guide
