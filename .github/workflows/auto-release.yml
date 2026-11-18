@@ -155,12 +155,23 @@ jobs:
               exit 1
             fi
           fi
-          gh release create "v${{ needs.check-version.outputs.version }}" \
-            --target "$GITHUB_SHA" \
-            --title "WiiM Audio v${{ needs.check-version.outputs.version }}" \
-            --notes "$RELEASE_NOTES" \
-            --latest \
-            wiim.zip || {
+          VERSION="${{ needs.check-version.outputs.version }}"
+          # Hyphenated versions (1.0.116-beta.1) are GitHub pre-releases.
+          # HACS shows those only after the user turns on Show beta.
+          # Stable X.Y.Z stays the latest release.
+          RELEASE_ARGS=(
+            --target "$GITHUB_SHA"
+            --title "WiiM Audio v${VERSION}"
+            --notes "$RELEASE_NOTES"
+          )
+          if [[ "$VERSION" == *-* ]]; then
+            RELEASE_ARGS+=(--prerelease)
+            echo "Publishing v${VERSION} as a pre-release"
+          else
+            RELEASE_ARGS+=(--latest)
+            echo "Publishing v${VERSION} as the latest release"
+          fi
+          gh release create "v${VERSION}" "${RELEASE_ARGS[@]}" wiim.zip || {
               if gh release view "v${{ needs.check-version.outputs.version }}" >/dev/null 2>&1; then
                 echo "Release already exists (created by another process), continuing..."
                 exit 0

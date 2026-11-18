@@ -98,5 +98,14 @@ on the merged commit. Verify the workflow and
 published release; do not describe a release as installed or device-tested
 without that evidence.
 
+A stable version is `X.Y.Z`, such as `1.0.116`. The workflow marks that GitHub
+release as the latest release, and HACS offers it to every install. A beta is
+`X.Y.Z-beta.N`, such as `1.0.116-beta.1`, then `1.0.116-beta.2` for the next
+test build of that same stable number. The workflow publishes a hyphenated
+version as a GitHub pre-release and leaves the previous stable release as the
+latest. HACS lists it when the user opens WiiM Audio and turns on **Show beta**.
+Ship the matching stable version when that beta is ready for everyone. Use a
+beta when a change needs testing on hardware the maintainer does not have.
+
 Update existing user and developer documentation when behavior changes. Keep
 temporary progress notes out of the permanent documentation.

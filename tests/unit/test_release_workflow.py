@@ -52,7 +52,7 @@ fi
     return env, record
 
 
-def workflow_step(name: str) -> str:
+def workflow_step(name: str, version: str = "1.2.3") -> str:
     """Return a runnable workflow step with Actions expressions expanded."""
     workflow = yaml.safe_load((ROOT / ".github/workflows/auto-release.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["release"]["steps"]
@@ -60,7 +60,7 @@ def workflow_step(name: str) -> str:
     return (
         script.replace("${{ github.sha }}", "reviewed-commit")
         .replace("${{ github.repository }}", "mjcumming/wiim")
-        .replace("${{ needs.check-version.outputs.version }}", "1.2.3")
+        .replace("${{ needs.check-version.outputs.version }}", version)
     )
 
 
@@ -98,6 +98,24 @@ def test_release_tag_targets_the_validated_commit(release_env: tuple[dict[str, s
     assert run.returncode == 0
     args = record.read_text().splitlines()
     assert args[args.index("--target") + 1] == "reviewed-commit"
+    assert "--latest" in args
+    assert "--prerelease" not in args
+
+
+def test_hyphenated_version_is_a_prerelease(release_env: tuple[dict[str, str], Path]) -> None:
+    env, record = release_env
+    run = subprocess.run(
+        ["bash", "-e", "-c", workflow_step("Create Release with GitHub CLI", "1.2.3-beta.1")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert run.returncode == 0
+    args = record.read_text().splitlines()
+    assert "v1.2.3-beta.1" in args
+    assert "--prerelease" in args
+    assert "--latest" not in args
 
 
 @pytest.mark.parametrize(

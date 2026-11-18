@@ -9,6 +9,11 @@ after the reviewed change reaches main and CI passes; see the
 [release checklist](#release-checklist). The old local release script is
 retired and does not stage, commit, tag, or push files.
 
+A stable manifest version is `X.Y.Z`. A beta is `X.Y.Z-beta.N`. The workflow
+publishes a hyphenated version as a GitHub pre-release and leaves the previous
+stable release as the HACS default. See
+[Release](../docs/DEVELOPMENT-RULES.md#release).
+
 ---
 
 ## Testing Scripts
@@ -159,9 +164,11 @@ make build            # Build integration package
 
 ## Release Checklist
 
-1. Prepare a manifest version and changelog entry in the change's PR.
+1. Prepare a manifest version and changelog entry in the change's PR. Use
+   `X.Y.Z` for a stable release and `X.Y.Z-beta.N` for a beta.
 2. Review the PR, pass CI, and merge it to main. The auto-release workflow
    validates HACS, waits for main-commit CI, and creates the tag and release.
+   A beta is a GitHub pre-release. A stable version becomes the latest release.
 3. Verify the workflow and release. Test installation or device behavior when
    relevant and available, and report what was actually tested.
 

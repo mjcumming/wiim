@@ -56,6 +56,16 @@ Transform your WiiM and LinkPlay speakers into powerful Home Assistant media pla
 2. Extract to `/config/custom_components/wiim/`
 3. Restart Home Assistant and add integration
 
+### Beta versions
+
+A beta is a GitHub pre-release, for example `1.0.116-beta.1`. HACS keeps it off the normal install path until you opt in:
+
+1. Open **HACS → Integrations → WiiM Audio**
+2. Open the three-dot menu and turn on **Show beta**
+3. Download the beta, then restart Home Assistant
+
+Turn **Show beta** off to stay on stable releases. The [releases page](https://github.com/mjcumming/wiim/releases) marks betas as pre-releases.
+
 ## Key Features
 
 ### 🎵 Media Playback & Control
