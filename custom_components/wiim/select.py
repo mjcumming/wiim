@@ -193,6 +193,9 @@ class WiiMEQPresetSelect(WiimEntity, SelectEntity):
         current = player.eq_preset
         if current and all(option.casefold() != current.casefold() for option in presets):
             presets.append(current)
+        # EQ is off but an unsaved custom setting is stored: offer it so it can be switched back on.
+        if player.eq_custom_stored and all(option.casefold() != "custom" for option in presets):
+            presets.append("Custom")
         return presets
 
     @property

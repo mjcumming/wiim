@@ -63,6 +63,7 @@ def mock_coordinator():
     coordinator.player.set_output_channel = AsyncMock()
     coordinator.player.eq_preset = "Flat"
     coordinator.player.eq_is_custom = False
+    coordinator.player.eq_custom_stored = False
     coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
     coordinator.player.set_eq_preset = AsyncMock()
     return coordinator
@@ -153,6 +154,77 @@ async def test_unsaved_custom_graphic_state_is_visible_but_not_loadable(mock_coo
     player.set_eq_preset.assert_not_awaited()
     player.eq_preset = None
     assert entity.current_option is None
+
+
+# EQGetBand responses of a WiiM Pro Plus (Linkplay.4.8.833841).
+def _bands(values: list[int]) -> list[dict[str, int | str]]:
+    names = "31hz 63hz 125hz 250hz 500hz 1khz 2khz 4khz 8khz 16khz".split()
+    return [
+        {"index": i, "param_name": f"band{n}", "value": v} for i, (n, v) in enumerate(zip(names, values, strict=True))
+    ]
+
+
+_CUSTOM_BANDS = _bands([89, 50, 50, 50, 50, 50, 50, 50, 50, 50])
+_CUSTOM_ON = {"EQStat": "On", "Name": "", "EQBand": _CUSTOM_BANDS}
+_CUSTOM_OFF = {"EQStat": "Off", "Name": "", "EQBand": _CUSTOM_BANDS}
+_JAZZ_OFF = {"EQStat": "Off", "Name": "Jazz", "EQBand": _bands([67, 63, 56, 59, 44, 44, 50, 56, 63, 66])}
+
+
+@pytest.mark.asyncio
+async def test_stored_custom_graphic_eq_stays_selectable_while_eq_is_off(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.eq_presets = ["Off", "Flat", "Jazz"]
+    player.eq_preset = "Off"
+    player.eq_custom_stored = True
+    entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off", "Flat", "Jazz", "Custom"]
+    assert entity.current_option == "Off"
+    await entity.async_select_option("Custom")
+    player.set_eq_preset.assert_awaited_once_with("Custom")
+
+
+@pytest.mark.asyncio
+async def test_custom_is_not_offered_while_off_without_a_stored_custom_setting(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.eq_presets = ["Off", "Flat", "Jazz"]
+    player.eq_preset = "Off"
+    entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off", "Flat", "Jazz"]
+
+
+@pytest.mark.asyncio
+async def test_custom_is_offered_once_when_the_device_already_lists_it(mock_coordinator, mock_config_entry):
+    player = mock_coordinator.player
+    player.eq_presets = ["Off", "Flat", "custom"]
+    player.eq_preset = "Off"
+    player.eq_custom_stored = True
+    entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+    assert entity.options == ["Off", "Flat", "custom"]
+
+
+@pytest.mark.asyncio
+async def test_real_player_offers_custom_only_for_an_unsaved_setting_switched_off(mock_coordinator, mock_config_entry):
+    from pywiim.client import WiiMClient
+    from pywiim.models import PlayerStatus
+    from pywiim.player import Player
+
+    client = WiiMClient("192.0.2.1", capabilities={"supports_eq": True, "supports_peq": False})
+    player = Player(client)
+    player._status_model = PlayerStatus(source="wifi")
+    player._eq_presets = ["Flat", "Jazz"]
+    mock_coordinator.player = player
+    entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+
+    player._state_mgr._remember_eq_band(_CUSTOM_ON)
+    assert entity.current_option == "Custom"
+
+    player._state_mgr._remember_eq_band(_CUSTOM_OFF)
+    assert entity.current_option == "Off"
+    assert entity.options == ["Off", "Flat", "Jazz", "Custom"]
+
+    player._state_mgr._remember_eq_band(_JAZZ_OFF)
+    assert entity.current_option == "Off"
+    assert entity.options == ["Off", "Flat", "Jazz"]
 
 
 @pytest.mark.asyncio
