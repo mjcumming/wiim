@@ -1073,6 +1073,7 @@ class TestWiiMChannelSelect:
         """Unique id, name, options and configuration category."""
         from homeassistant.const import EntityCategory
 
+        mock_coordinator.player.available_output_channels = ["stereo", "left", "right"]
         entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
         assert entity.unique_id == "test-uuid_output_channel"
         assert entity.name == "Channel"
@@ -1082,15 +1083,41 @@ class TestWiiMChannelSelect:
 
     @pytest.mark.parametrize(
         ("channel", "expected"),
-        [("stereo", "Stereo"), ("left", "Left"), ("right", "Right"), (None, None), ("mono", None)],
+        [("stereo", "Stereo"), ("left", "Left"), ("right", "Right"), (None, None), ("mono", "Mono"), ("odd", None)],
     )
     def test_current_option(self, mock_coordinator, mock_config_entry, channel, expected):
         """The current option follows player.output_channel; unknown values stay None."""
+        mock_coordinator.player.available_output_channels = ["stereo", "left", "right", "mono"]
         mock_coordinator.player.output_channel = channel
         entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
         assert entity.current_option == expected
 
-    @pytest.mark.parametrize(("option", "expected"), [("Stereo", "stereo"), ("Left", "left"), ("Right", "right")])
+    @pytest.mark.parametrize(
+        ("available", "options"),
+        [
+            (["stereo", "left", "right", "mono"], ["Stereo", "Left", "Right", "Mono"]),
+            (["stereo", "left", "right"], ["Stereo", "Left", "Right"]),
+        ],
+    )
+    def test_options_follow_available_channels(self, mock_coordinator, mock_config_entry, available, options):
+        """Mono is offered only when pywiim lists it (standalone player with channel mode)."""
+        mock_coordinator.player.available_output_channels = available
+        entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == options
+
+    def test_options_update_when_player_is_grouped(self, mock_coordinator, mock_config_entry):
+        """Options are read live, so grouping removes Mono and a stale Mono state shows no option."""
+        mock_coordinator.player.available_output_channels = ["stereo", "left", "right", "mono"]
+        mock_coordinator.player.output_channel = "mono"
+        entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Mono"
+        mock_coordinator.player.available_output_channels = ["stereo", "left", "right"]
+        assert entity.options == ["Stereo", "Left", "Right"]
+        assert entity.current_option is None
+
+    @pytest.mark.parametrize(
+        ("option", "expected"), [("Stereo", "stereo"), ("Left", "left"), ("Right", "right"), ("Mono", "mono")]
+    )
     @pytest.mark.asyncio
     async def test_select_option_calls_setter(self, mock_coordinator, mock_config_entry, option, expected):
         """Selecting an option calls set_output_channel with the pywiim name."""
