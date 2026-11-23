@@ -193,6 +193,8 @@ class WiiMEQPresetSelect(WiimEntity, SelectEntity):
         current = player.eq_preset
         if current and all(option.casefold() != current.casefold() for option in presets):
             presets.append(current)
+        if player.eq_custom_stored is True and all(option.casefold() != "custom" for option in presets):
+            presets.append("Custom")
         return presets
 
     @property
@@ -353,23 +355,22 @@ class WiiMRoomFitSelect(WiimEntity, SelectEntity):
             await self.coordinator.player.set_room_correction(option)
 
 
-# Option label -> pywiim output channel name
-CHANNEL_OPTIONS: dict[str, str] = {"Stereo": "stereo", "Left": "left", "Right": "right"}
+# Option label -> pywiim output channel name. Mono is standalone-only.
+CHANNEL_OPTIONS: dict[str, str] = {"Stereo": "stereo", "Left": "left", "Right": "right", "Mono": "mono"}
 
 
 class WiiMChannelSelect(WiimEntity, SelectEntity):
-    """Select entity for the output channel: Stereo, Left or Right.
+    """Select entity for the output channel.
 
-    Created only when ``player.supports_output_channel`` is true. The current value
-    is ``player.output_channel``, refreshed by pywiim for the player's current role.
-    Works on a group member too, so two speakers can play left and right of the same stream.
+    Created only when ``player.supports_output_channel`` is true. Options come from
+    ``player.available_output_channels``, so Mono appears only for a solo player that
+    supports the standalone channel mode. Works on a group member too.
     """
 
     _attr_icon = "mdi:surround-sound-2-0"
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "output_channel"
-    _attr_options = list(CHANNEL_OPTIONS)
 
     def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
         super().__init__(coordinator, config_entry)
@@ -378,11 +379,18 @@ class WiiMChannelSelect(WiimEntity, SelectEntity):
         self._attr_name = "Channel"
 
     @property
+    def options(self) -> list[str]:
+        """Return the channel labels pywiim accepts for the current role."""
+        available = set(self.coordinator.player.available_output_channels or [])
+        return [label for label, name in CHANNEL_OPTIONS.items() if name in available]
+
+    @property
     def current_option(self) -> str | None:
-        """Return Stereo, Left or Right, or None while the channel is unknown."""
+        """Return the current channel label, or None while it is unknown or unavailable."""
         current = self.coordinator.player.output_channel
+        offered = set(self.options)
         for option, name in CHANNEL_OPTIONS.items():
-            if name == current:
+            if name == current and option in offered:
                 return option
         return None
 

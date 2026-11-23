@@ -1014,6 +1014,8 @@ class WiiMMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
         current = player.eq_preset
         if isinstance(current, str) and current and all(item.casefold() != current.casefold() for item in presets):
             presets.append(current)
+        if player.eq_custom_stored is True and all(item.casefold() != "custom" for item in presets):
+            presets.append("Custom")
         return presets
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:

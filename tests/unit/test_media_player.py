@@ -665,6 +665,16 @@ class TestWiiMMediaPlayerSoundMode:
         await media_player.async_select_sound_mode("Custom")
         player.set_eq_preset.assert_not_awaited()
 
+    def test_stored_custom_stays_in_sound_mode_list_while_off(self, media_player, mock_coordinator):
+        """Custom remains selectable after EQ is switched off with an unsaved curve stored."""
+        player = mock_coordinator.player
+        player.supports_eq = True
+        player.eq_presets = ["Flat", "Jazz"]
+        player.eq_preset = "Off"
+        player.eq_custom_stored = True
+        assert media_player.sound_mode == "Off"
+        assert media_player.sound_mode_list[-1] == "Custom"
+
     def test_sound_mode_list_includes_off(self, media_player, mock_coordinator):
         """Test sound_mode_list always includes 'Off'."""
         mock_coordinator.player.supports_eq = True
