@@ -316,7 +316,7 @@ data:
 
 Devices that support EQ get a dedicated **EQ Preset** select (`select.{device}_eq_preset`). The same list is also the media player's sound mode. Available names come from the device (typically including Off, Flat, Rock, Jazz, and others).
 
-The current input's unsaved graphic bands appear as **Custom**. This is a state label; save the bands in WiiM Home before loading them as a preset. An unknown state means the device has not supplied a usable EQ reading yet.
+The current input's unsaved graphic bands appear as **Custom**. While EQ is off and that unsaved curve is still stored, Custom stays in the list and selecting it turns the curve back on. Save the bands in WiiM Home to keep them as a named preset. An unknown state means the device has not supplied a usable EQ reading yet.
 
 ```yaml
 # Recommended: dedicated select entity
@@ -598,7 +598,7 @@ Complete reference for all entities, configuration options, and technical detail
 - `select.{device_name}_audio_output_mode` - Output mode (model-specific: Line Out, Speaker Out, Optical, `BT: …`, and so on)
 - `select.{device_name}_dac_filter` - DAC digital filter, when the device returns a filter list (WiiM Pro Plus). Applies to analog Line Out only.
 - `select.{device_name}_room_fit` - Saved RoomFit profile, when the device has at least one. `Off` turns RoomFit off. Choosing a name loads that profile. A device with no saved profiles does not get this select until the integration is reloaded after the first profile is saved.
-- `select.{device_name}_channel` - Output channel: Stereo, Left or Right, when the device supports channel selection. Solo and grouped playback can have separate settings. Set one grouped speaker to Left and another to Right for a stereo pair. This is not the balance control. If a solo device reports Mono, the select is unknown until you choose one of its supported options.
+- `select.{device_name}_channel` - Output channel: Stereo, Left, Right, or Mono, when the device supports channel selection. Mono is offered only while the player is solo and supports standalone channel mode. Solo and grouped playback can have separate settings. Set one grouped speaker to Left and another to Right for a stereo pair. This is not the balance control.
 
 **Switches**
 

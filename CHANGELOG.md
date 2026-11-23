@@ -2,9 +2,17 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-23
+
 ### Added
 
 - Add Serbian translations in Cyrillic and Latin.
+- Offer Mono on the Channel select when the player is solo and supports standalone channel mode. Requires pywiim 3.0.3.
+- Keep Custom in the EQ preset list while an unsaved graphic EQ is stored and EQ is off.
+
+### Changed
+
+- **Dependency**: `pywiim` **3.0.3**.
 
 ## [1.1.2] - 2026-11-04
 

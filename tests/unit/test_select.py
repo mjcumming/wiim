@@ -60,9 +60,11 @@ def mock_coordinator():
     coordinator.player.set_room_correction = AsyncMock()
     coordinator.player.supports_output_channel = False
     coordinator.player.output_channel = None
+    coordinator.player.available_output_channels = ["stereo", "left", "right"]
     coordinator.player.set_output_channel = AsyncMock()
     coordinator.player.eq_preset = "Flat"
     coordinator.player.eq_is_custom = False
+    coordinator.player.eq_custom_stored = False
     coordinator.player.eq_presets = ["Off", "Flat", "Rock", "Jazz"]
     coordinator.player.set_eq_preset = AsyncMock()
     return coordinator
@@ -690,6 +692,15 @@ class TestWiiMEQPresetSelectOptions:
         entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
         assert entity.options == ["Off"]
 
+    def test_options_include_stored_custom_while_off(self, mock_coordinator, mock_config_entry):
+        """An unsaved custom curve stays selectable after EQ is switched off."""
+        mock_coordinator.player.eq_preset = "Off"
+        mock_coordinator.player.eq_is_custom = False
+        mock_coordinator.player.eq_custom_stored = True
+        entity = WiiMEQPresetSelect(mock_coordinator, mock_config_entry)
+        assert entity.current_option == "Off"
+        assert entity.options[-1] == "Custom"
+
     def test_options_returns_off_when_none(self, mock_coordinator, mock_config_entry):
         """Test options returns Off when eq_presets is None."""
         mock_coordinator.player.eq_presets = None
@@ -1090,7 +1101,19 @@ class TestWiiMChannelSelect:
         entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
         assert entity.current_option == expected
 
-    @pytest.mark.parametrize(("option", "expected"), [("Stereo", "stereo"), ("Left", "left"), ("Right", "right")])
+    def test_options_follow_available_channels(self, mock_coordinator, mock_config_entry):
+        """Mono is offered only when pywiim lists it for the current role."""
+        entity = WiiMChannelSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == ["Stereo", "Left", "Right"]
+        mock_coordinator.player.available_output_channels = ["stereo", "left", "right", "mono"]
+        mock_coordinator.player.output_channel = "mono"
+        assert entity.options == ["Stereo", "Left", "Right", "Mono"]
+        assert entity.current_option == "Mono"
+
+    @pytest.mark.parametrize(
+        ("option", "expected"),
+        [("Stereo", "stereo"), ("Left", "left"), ("Right", "right"), ("Mono", "mono")],
+    )
     @pytest.mark.asyncio
     async def test_select_option_calls_setter(self, mock_coordinator, mock_config_entry, option, expected):
         """Selecting an option calls set_output_channel with the pywiim name."""
