@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Keep **Custom** in the EQ Preset select while EQ is off and an unsaved custom graphic EQ is stored on the device. The select still shows Off, and choosing Custom turns EQ back on with those bands. Requires a pywiim release with `Player.eq_custom_stored`.
+- Keep **Custom** in the EQ Preset select while EQ is off and an unsaved custom graphic EQ is stored on the device. The select still shows Off, and choosing Custom turns EQ back on with those bands. Requires `pywiim` 3.0.3 or later (`Player.eq_custom_stored`).
 
 ### Added
 
