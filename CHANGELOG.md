@@ -5,7 +5,7 @@
 ### Added
 
 - Add Serbian translations in Cyrillic and Latin.
-- Offer **Mono** in the Channel select for a standalone player that supports the channel mode, and show it when the device is in Mono. Grouped players keep Stereo, Left and Right. Requires a `pywiim` release with `Player.available_output_channels`.
+- Offer **Mono** in the Channel select for a standalone player that supports the channel mode, and show it when the device is in Mono. Grouped players keep Stereo, Left and Right. Requires `pywiim` 3.0.3 or later (`Player.available_output_channels`).
 
 ## [1.1.2] - 2026-11-04
 
