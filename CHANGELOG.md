@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-11-24
+
+### Changed
+
+- Record that new features should prefer daily listening and live readings over set-and-forget app settings. This is guidance, not a ban ([ADR 0010](docs/adr/0010-daily-use-surface.md)).
+
 ## [1.1.3] - 2026-11-23
 
 ### Added

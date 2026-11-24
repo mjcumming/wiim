@@ -6,15 +6,21 @@ Technical documentation for WiiM integration developers and contributors.
 
 ### Standalone (this repo only)
 
-Open the repo in a **Dev Container** (`.devcontainer/devcontainer.json`) or run setup locally:
+Start Docker Desktop, then reopen this repo in the dev container (`.devcontainer/devcontainer.json`). In Cursor that is **Reopen in Container**. The container is Python 3.13 and runs `scripts/setup.sh` on create. The Windows host has no Home Assistant environment; `pytest`, `hass`, and `./scripts/develop` run inside the container.
 
 ```bash
-./scripts/setup.sh          # once: deps, config/, integration symlink
 make pre-run                # optional: syntax, lint, imports
 ./scripts/develop           # HA at http://localhost:8123
+pytest
 ```
 
 `./config/` is gitignored (runtime DB, logs, symlink). Edits under `custom_components/wiim/` apply after HA restart.
+
+Release checks stay on the host. Docker Desktop must already be running:
+
+```bash
+python scripts/prepare_release.py
+```
 
 ### Home Assistant core workspace
 
