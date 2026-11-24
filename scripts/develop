@@ -25,4 +25,4 @@ mkdir -p config/custom_components
 ln -sfn "$(pwd)/custom_components/wiim" config/custom_components/wiim
 
 echo "Starting Home Assistant — open http://localhost:8123 (first start takes a minute)"
-exec hass --config config --debug
+exec hass --config config --debug --skip-pip

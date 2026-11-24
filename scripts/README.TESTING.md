@@ -4,7 +4,7 @@
 
 **Canonical instructions (read these first):**
 
-- **[`development/README.md`](../development/README.md)** — `make pre-run`, then start HA with `hass -c /workspaces/core/config` (symlinked `wiim` integration).
+- **[`development/README.md`](../development/README.md)** — start Docker, reopen this repo in its dev container, then `./scripts/develop`. The Home Assistant core container is a separate workspace.
 - **[`docs/TESTING-CONSOLIDATED.md`](../docs/TESTING-CONSOLIDATED.md)** — full 4-tier strategy; Tier 3 real-device commands (`test-automated.py`, `test-smoke.py`, `test.config`).
 
 This file is a **script-focused companion** (flags, tables, examples). It does not replace those docs.

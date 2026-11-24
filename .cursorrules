@@ -407,9 +407,15 @@ The release workflow is designed to identify and solve issues **locally**, not p
 
 ## Development Environment
 
-### ⚠️ CRITICAL: Starting Home Assistant
+### This machine
 
-**ALWAYS activate the venv first, then start Home Assistant:**
+Start Docker Desktop, then reopen this repo in `.devcontainer/devcontainer.json` (**Reopen in Container**). The container runs `scripts/setup.sh`. Run `pytest` and `./scripts/develop` there. Release preflight stays on the host, with Docker already running: `python scripts/prepare_release.py`.
+
+`/home/vscode` and `/workspaces/core` are not on the Windows host.
+
+### Home Assistant core container
+
+Use this only when the workspace is the core devcontainer. Activate the venv first, then start Home Assistant:
 
 ```bash
 # 1. Activate the Home Assistant virtual environment
@@ -426,7 +432,7 @@ hass -c /workspaces/core/config --open-ui
 cd /workspaces/core && source /home/vscode/.local/ha-venv/bin/activate && nohup hass -c /workspaces/core/config > /tmp/ha_startup.log 2>&1 &
 ```
 
-**Why this is critical:**
+**Why the core container uses that venv:**
 
 - The venv at `/home/vscode/.local/ha-venv` contains all required dependencies with correct versions
 - Without venv activation, HA may fail with dependency errors (e.g., `aiodns`/`pycares` Python 3.13 compatibility issues)
