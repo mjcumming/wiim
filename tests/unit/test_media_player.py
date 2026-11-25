@@ -1849,6 +1849,94 @@ class TestWiiMMediaPlayerUpdatePosition:
         assert media_player._media_cleared_by_turn_off is False
         assert media_player._attr_state == MediaPlayerState.PLAYING
 
+    def test_playing_poll_keeps_timestamp_when_position_matches_clock(self, media_player, mock_coordinator):
+        """A poll while already playing must not restamp media_position_updated_at (issue #324)."""
+        from datetime import UTC, datetime, timedelta
+
+        player = mock_coordinator.player
+        player.is_playing = True
+        player.is_paused = False
+        player.is_buffering = False
+        player.media_position = 34
+        player.media_duration = None
+        started = datetime(2026, 11, 25, 13, 1, 52, tzinfo=UTC)
+
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=started):
+            media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_position == 34
+        assert media_player._attr_media_position_updated_at == started
+
+        player.media_position = 35
+        one_second_later = started + timedelta(seconds=1)
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=one_second_later):
+            media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_position == 34
+        assert media_player._attr_media_position_updated_at == started
+
+        player.media_position = 34
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=one_second_later):
+            media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_position == 34
+        assert media_player._attr_media_position_updated_at == started
+
+    def test_playing_poll_restamps_when_position_jumps(self, media_player, mock_coordinator):
+        """A seek or track change replaces the position sample."""
+        from datetime import UTC, datetime, timedelta
+
+        player = mock_coordinator.player
+        player.is_playing = True
+        player.is_paused = False
+        player.is_buffering = False
+        player.media_position = 34
+        player.media_duration = 180
+        started = datetime(2026, 11, 25, 13, 1, 52, tzinfo=UTC)
+
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=started):
+            media_player._update_position_from_coordinator()
+
+        player.media_position = 120
+        seeked = started + timedelta(seconds=1)
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=seeked):
+            media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_position == 120
+        assert media_player._attr_media_position_updated_at == seeked
+
+    def test_resume_restamps_position_when_device_position_is_unchanged(self, media_player, mock_coordinator):
+        """Leaving pause starts a new sample even if the device position did not move."""
+        from datetime import UTC, datetime, timedelta
+
+        player = mock_coordinator.player
+        player.is_playing = True
+        player.is_paused = False
+        player.is_buffering = False
+        player.media_position = 34
+        player.media_duration = 180
+        started = datetime(2026, 11, 25, 13, 1, 52, tzinfo=UTC)
+
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=started):
+            media_player._update_position_from_coordinator()
+
+        player.is_playing = False
+        player.is_paused = True
+        paused_at = started + timedelta(seconds=30)
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=paused_at):
+            media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_position_updated_at == started
+
+        player.is_playing = True
+        player.is_paused = False
+        resumed = paused_at + timedelta(seconds=10)
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=resumed):
+            media_player._update_position_from_coordinator()
+
+        assert media_player._attr_media_position == 34
+        assert media_player._attr_media_position_updated_at == resumed
+
 
 class TestWiiMMediaPlayerServiceHandlers:
     """Test service handler methods."""

@@ -554,6 +554,31 @@ class TestWiiMGroupMediaPlayerMediaInfo:
         entity._update_position_from_coordinator()
         assert entity.media_position == 60
 
+    def test_playing_poll_keeps_timestamp_when_group_position_is_unchanged(
+        self, mock_group_master_setup, mock_master_player
+    ):
+        """Group playback must not restamp the position on a poll that matches the clock (issue #324)."""
+        from datetime import UTC, datetime, timedelta
+
+        mock_master_player.group.play_state = "play"
+        mock_master_player.group.media_position = 34
+        mock_master_player.group.media_duration = None
+        entity = WiiMGroupMediaPlayer(mock_group_master_setup.coordinator, mock_group_master_setup.config_entry)
+        started = datetime(2026, 11, 25, 13, 1, 52, tzinfo=UTC)
+
+        with patch("custom_components.wiim.media_player_base.dt_util.utcnow", return_value=started):
+            entity._update_position_from_coordinator()
+
+        mock_master_player.group.media_position = 35
+        with patch(
+            "custom_components.wiim.media_player_base.dt_util.utcnow",
+            return_value=started + timedelta(seconds=1),
+        ):
+            entity._update_position_from_coordinator()
+
+        assert entity._attr_media_position == 34
+        assert entity._attr_media_position_updated_at == started
+
 
 class TestWiiMGroupMediaPlayerShuffleRepeat:
     """Test group shuffle and repeat functionality."""

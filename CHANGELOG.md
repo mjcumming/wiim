@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-11-25
+
+### Fixed
+
+- Keep the playing position sample across polls that match the clock, so a player that stays on `playing` no longer emits `state_changed` once a second ([#324](https://github.com/mjcumming/wiim/issues/324)).
+
 ## [1.1.4] - 2026-11-24
 
 ### Changed

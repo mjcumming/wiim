@@ -15,6 +15,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Home Assistant extrapolates the playhead from the last sample. Refresh only
+# when the device disagrees by more than a poll or two. A smaller gap is clock
+# jitter; a frozen input never moves and must not be restamped every poll.
+_POSITION_RESYNC_SECONDS = 3.0
+
 
 class WiiMMediaPlayerMixin:
     """Mixin providing shared media player functionality.
@@ -82,6 +87,7 @@ class WiiMMediaPlayerMixin:
             self._attr_media_duration = None
             return
 
+        previous_state = self._attr_state
         current_state = self._derive_state_from_player(player)
         self._attr_state = current_state
 
@@ -113,8 +119,10 @@ class WiiMMediaPlayerMixin:
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
         elif current_state == MediaPlayerState.PLAYING:
-            self._attr_media_position = new_position
-            self._attr_media_position_updated_at = dt_util.utcnow()
+            self._publish_playing_position(
+                new_position,
+                already_playing=previous_state == MediaPlayerState.PLAYING,
+            )
         elif current_state == MediaPlayerState.IDLE or current_state is None:
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
@@ -135,6 +143,26 @@ class WiiMMediaPlayerMixin:
         # Note: group player may override this to skip feature updates
         if hasattr(self, "_update_supported_features"):
             self._update_supported_features()
+
+    def _publish_playing_position(self, new_position: float, *, already_playing: bool) -> None:
+        """Store a playhead sample without restamping it on every poll.
+
+        While playback continues, Home Assistant advances ``media_position`` from
+        ``media_position_updated_at``. A new timestamp is written when playback
+        starts or the device position jumps (seek, resume, track change). A poll
+        that matches the clock, and a position the device repeats, keep the
+        previous sample so ``state_changed`` is not emitted once a second.
+        """
+        updated_at = self._attr_media_position_updated_at
+        previous = self._attr_media_position
+        if already_playing and updated_at is not None and previous is not None:
+            if new_position == previous:
+                return
+            elapsed = (dt_util.utcnow() - updated_at).total_seconds()
+            if abs(new_position - (previous + elapsed)) <= _POSITION_RESYNC_SECONDS:
+                return
+        self._attr_media_position = new_position
+        self._attr_media_position_updated_at = dt_util.utcnow()
 
     def _get_metadata_player(self):
         """Return the player that should be used for metadata display.
