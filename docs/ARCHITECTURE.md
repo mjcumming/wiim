@@ -118,6 +118,7 @@ For **what this integration is for**, **how we collaborate**, **contracts** (cha
 - **Responsibilities**:
   - Wrap pywiim Player in DataUpdateCoordinator
   - Handle polling intervals
+  - Subscribe to UPnP events (see [UPnP events](#upnp-events))
   - Provide data to entities
 - **DO NOT**: Implement polling logic (pywiim handles this)
 
@@ -145,6 +146,17 @@ EQ already follows the desired pattern: pywiim refresh owns the slow reads, and 
 - Make channel balance coordinator updates cache-first only; direct reads should happen on startup, explicit user action, or slow/throttled refresh.
 - Avoid duplicate listener waves from coordinator refreshes; a timed refresh should normally produce one HA entity update pass.
 - Add tests proving entity `_handle_coordinator_update()` does not call slow HTTP getters.
+
+### UPnP events
+
+`WiiMCoordinator` subscribes to the speaker's UPnP events. pywiim's `UpnpEventer` applies each event to the `Player`, and the coordinator then updates its listeners. Polling is unchanged and is the fallback.
+
+- The subscription uses the `UpnpClient` that the `Player` creates during refresh. The coordinator does not create a second one.
+- pywiim listens on the local address that routes to the speaker, which is what Home Assistant's DLNA integration does. The operating system picks the port. `network.async_get_source_ip` is not used: it only returns addresses of enabled adapters, and on a host with several adapters that can be one the speaker cannot reach.
+- The subscription follows reachability. It is released when a poll fails as unreachable and made again once polls succeed, because `async-upnp-client` drops a subscription it cannot renew and does not retry.
+- A failed subscribe is tried again after 60 seconds, doubling up to one hour.
+- Entry unload and Home Assistant stop both unsubscribe.
+- The device diagnostics download reports the state under `connection_info.upnp_events`.
 
 #### `data.py`
 
