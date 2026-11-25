@@ -48,21 +48,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "⚙️ Podešavanja WiiM uređaja",
+        "title": "Podešavanja WiiM uređaja",
         "description": "Konfigurišite osnovna podešavanja uređaja:",
         "data": {
-          "playing_update_rate": "🎵 Učestalost ažuriranja tokom reprodukcije (sekunde)",
-          "idle_update_rate": "💤 Učestalost ažuriranja u stanju mirovanja (sekunde)",
-          "volume_step_percent": "🔊 Korak promene jačine zvuka (%)",
-          "enable_maintenance_buttons": "🔧 Dugmad za održavanje",
-          "enable_diagnostic_entities": "📊 Dijagnostički senzori"
+          "volume_step_percent": "Korak promene jačine zvuka (%)",
+          "enable_maintenance_buttons": "Dugmad za održavanje"
         },
         "data_description": {
-          "playing_update_rate": "Brzo prozivanje (polling) kada se muzika reprodukuje radi glatkog ažuriranja pozicije (1-5 sekundi)",
-          "idle_update_rate": "Sporije prozivanje (polling) kada se muzika ne reprodukuje radi efikasnosti (5-60 sekundi)",
           "volume_step_percent": "Iznos promene jačine zvuka kada koristite dugmad za pojačavanje/utišavanje (1-50%). Manji koraci omogućavaju precizniju kontrolu.",
-          "enable_maintenance_buttons": "Prikaži dugmad za održavanje uređaja (ponovno pokretanje, sinhronizacija vremena) radi rešavanja problema",
-          "enable_diagnostic_entities": "Prikaži napredne dijagnostičke senzore radi otklanjanja grešaka i praćenja performansi"
+          "enable_maintenance_buttons": "Prikaži dugmad za održavanje uređaja (ponovno pokretanje, sinhronizacija vremena) radi rešavanja problema"
         }
       }
     }

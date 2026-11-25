@@ -13,7 +13,6 @@ body:
 
         **Before submitting**, please:
         - Search existing issues to see if someone has already requested this feature
-        - Check our [roadmap](https://github.com/mjcumming/wiim/blob/main/README.md#roadmap) to see if it's already planned
         - Consider if this fits with the integration's scope and Home Assistant patterns
 
   - type: checkboxes

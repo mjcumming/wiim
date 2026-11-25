@@ -41,21 +41,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "⚙️ Paramètres de l'appareil WiiM",
+        "title": "Paramètres de l'appareil WiiM",
         "description": "Configurer les paramètres essentiels de l'appareil:",
         "data": {
-          "playing_update_rate": "🎵 Fréquence de mise à jour en lecture (secondes)",
-          "idle_update_rate": "💤 Fréquence de mise à jour en veille (secondes)",
-          "volume_step_percent": "🔊 Taille du pas de volume (%)",
-          "enable_maintenance_buttons": "🔧 Boutons de maintenance",
-          "enable_diagnostic_entities": "📊 Capteurs de diagnostic"
+          "volume_step_percent": "Taille du pas de volume (%)",
+          "enable_maintenance_buttons": "Boutons de maintenance"
         },
         "data_description": {
-          "playing_update_rate": "Interrogation rapide pendant la lecture de musique pour des mises à jour de position fluides (1-5 secondes)",
-          "idle_update_rate": "Interrogation plus lente en l'absence de lecture pour l'efficacité (5-60 secondes)",
           "volume_step_percent": "Montant de changement de volume lors de l'utilisation des boutons de volume haut/bas (1-50%). Des pas plus petits offrent un contrôle plus fin.",
-          "enable_maintenance_buttons": "Afficher les boutons de maintenance de l'appareil (redémarrage, synchronisation de l'heure) pour le dépannage",
-          "enable_diagnostic_entities": "Afficher les capteurs de diagnostic avancés pour le débogage et la surveillance des performances"
+          "enable_maintenance_buttons": "Afficher les boutons de maintenance de l'appareil (redémarrage, synchronisation de l'heure) pour le dépannage"
         }
       }
     }

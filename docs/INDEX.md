@@ -4,11 +4,11 @@
 
 ### Architecture & Design
 
-1. **[DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md)** ⭐ **Rules map first**
+1. **[DEVELOPMENT-RULES.md](DEVELOPMENT-RULES.md)** - **Rules map first**
 
    - **[Rules map (read this first)](DEVELOPMENT-RULES.md#rules-map-read-this-first)** — what the integration does, how it works, pywiim, collaboration, contracts, ADRs
    - Repository ownership, tests, review, releases, and ADRs
-   - **AI / Cursor seed:** [`.cursor/rules/wiim-project.mdc`](../.cursor/rules/wiim-project.mdc) (always on) and root [`AGENTS.md`](../AGENTS.md)
+   - **Agent context:** root [`AGENTS.md`](../AGENTS.md)
 
 2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — Structure and patterns
 
@@ -81,12 +81,14 @@ wiim/
 
 ### When to Create Documentation
 
-- ✅ Architecture decisions ([adr/](adr/README.md) for durable ADRs)
-- ✅ Design patterns
-- ✅ Testing strategies
-- ✅ User guides
-- ❌ Don't create docs without being asked
-- ❌ Don't duplicate existing docs
+Create docs for:
+
+- Architecture decisions ([adr/](adr/README.md) for durable ADRs)
+- Design patterns
+- Testing strategies
+- User guides
+
+Don't create docs without being asked, and don't duplicate existing docs.
 
 ### Documentation Format
 

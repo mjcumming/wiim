@@ -10,24 +10,24 @@ Complete guide to using your WiiM speakers with Home Assistant.
 
 Everything you need for everyday use - playing music, controlling volume, and grouping speakers.
 
-### 🎵 Basic Playback
+### Basic Playback
 
 **Play, Pause, Stop, and Turn Off**
 
 ```yaml
-service: media_player.media_play
+action: media_player.media_play
 target:
   entity_id: media_player.living_room
 
-service: media_player.media_pause
+action: media_player.media_pause
 target:
   entity_id: media_player.living_room
 
-service: media_player.media_stop
+action: media_player.media_stop
 target:
   entity_id: media_player.living_room
 
-service: media_player.turn_off
+action: media_player.turn_off
 target:
   entity_id: media_player.living_room
 ```
@@ -37,21 +37,21 @@ target:
 **Next and Previous Track**
 
 ```yaml
-service: media_player.media_next_track
+action: media_player.media_next_track
 target:
   entity_id: media_player.living_room
 
-service: media_player.media_previous_track
+action: media_player.media_previous_track
 target:
   entity_id: media_player.living_room
 ```
 
-### 🔊 Volume Control
+### Volume Control
 
 **Set Volume**
 
 ```yaml
-service: media_player.volume_set
+action: media_player.volume_set
 target:
   entity_id: media_player.living_room
 data:
@@ -61,11 +61,11 @@ data:
 **Volume Up/Down**
 
 ```yaml
-service: media_player.volume_up
+action: media_player.volume_up
 target:
   entity_id: media_player.living_room
 
-service: media_player.volume_down
+action: media_player.volume_down
 target:
   entity_id: media_player.living_room
 ```
@@ -73,7 +73,7 @@ target:
 **Mute**
 
 ```yaml
-service: media_player.volume_mute
+action: media_player.volume_mute
 target:
   entity_id: media_player.living_room
 data:
@@ -82,24 +82,24 @@ data:
 
 **Volume Step Size** - Configurable in device options (default: 5%)
 
-### 📻 Playing Media
+### Playing Media
 
 **Play from URL**
 
 ```yaml
-service: wiim.play_url
+action: wiim.play_url
 target:
   entity_id: media_player.living_room
 data:
   url: "http://ice2.somafm.com/groovesalad-128-mp3"
 ```
 
-> **⚠️ Note:** WiiM devices accept play commands silently even if the stream fails (geo-blocked, invalid URL, etc.). If nothing plays, check that the device state changed to "playing". HTTP streams are more reliable than HTTPS. See [FAQ](faq-and-troubleshooting.md#q-i-sent-a-play-command-but-nothing-happened---no-error-shown) for troubleshooting.
+> **Note:** WiiM devices accept play commands silently even if the stream fails (geo-blocked, invalid URL, etc.). If nothing plays, check that the device state changed to "playing". HTTP streams are more reliable than HTTPS. See [FAQ](faq-and-troubleshooting.md#playback-questions) for troubleshooting.
 
 **Play Preset** (configured in WiiM app)
 
 ```yaml
-service: wiim.play_preset
+action: wiim.play_preset
 target:
   entity_id: media_player.living_room
 data:
@@ -110,16 +110,15 @@ data:
 
 Access via any media player card → **Browse Media**:
 
-- Hardware presets from WiiM app (with cover art)
+- A **Presets** folder with the presets saved in the WiiM Home app
 - Home Assistant media sources
-- Refreshes automatically every 30 seconds
 
-### 🎚️ Audio Sources
+### Audio Sources
 
 **Switch Input Source**
 
 ```yaml
-service: media_player.select_source
+action: media_player.select_source
 target:
   entity_id: media_player.living_room
 data:
@@ -140,7 +139,7 @@ The integration shows what's actually playing instead of technical details:
 | Bluetooth    | Bluetooth    | Direct BT connection   |
 | Line In      | Line In      | Physical audio input   |
 
-### 🏠 Multiroom Grouping
+### Multiroom Grouping
 
 **Understanding Speaker Roles**
 
@@ -163,7 +162,7 @@ sensor.bedroom_multiroom_role: "Solo"
 **Create a Group**
 
 ```yaml
-service: media_player.join
+action: media_player.join
 target:
   entity_id: media_player.living_room # This becomes the master
 data:
@@ -175,17 +174,17 @@ data:
 **Ungroup Speakers**
 
 ```yaml
-service: media_player.unjoin
+action: media_player.unjoin
 target:
   entity_id: media_player.living_room
 ```
 
-### 👥 Group Coordinator (Virtual Group Master)
+### Group Master Entity
 
-When a speaker becomes a master controlling other speakers, Home Assistant shows the **group coordinator** entity:
+When a speaker becomes a master controlling other speakers, Home Assistant shows the **group master** entity:
 
 ```yaml
-media_player.living_room_group_coordinator
+media_player.living_room_group_master
 ```
 
 **What It Does:**
@@ -195,20 +194,20 @@ media_player.living_room_group_coordinator
 - Stays available while hidden. `unavailable` means the speaker cannot be reached
 - `group_status` is `active` while coordinating and `inactive` otherwise
 
-**Using the Group Coordinator:**
+**Using the Group Master:**
 
 ```yaml
 # Control entire group volume
-service: media_player.volume_set
+action: media_player.volume_set
 target:
-  entity_id: media_player.living_room_group_coordinator
+  entity_id: media_player.living_room_group_master
 data:
   volume_level: 0.5
 
 # Mute entire group
-service: media_player.volume_mute
+action: media_player.volume_mute
 target:
-  entity_id: media_player.living_room_group_coordinator
+  entity_id: media_player.living_room_group_master
 data:
   is_volume_muted: true
 ```
@@ -216,7 +215,7 @@ data:
 **Group Volume Behavior:**
 
 - Displays the **maximum volume** of any member
-- Setting volume applies the same level to all speakers
+- Setting volume moves every speaker by the same proportion, so the differences between them are kept
 - Individual speakers can still be adjusted separately
 
 **Group Mute Behavior:**
@@ -227,11 +226,11 @@ data:
 
 **Announcements / TTS in a group**
 
-- **`tts.speak` / `media_player.play_media` with `announce: true`:** Use the **master** `media_player` for that group or the **`media_player.*_group_coordinator`** entity. You will hear the announcement on **all grouped speakers** (the master drives group playback, including notification URLs).
+- **`tts.speak` / `media_player.play_media` with `announce: true`:** Use the **master** `media_player` for that group or the **`media_player.*_group_master`** entity. You will hear the announcement on **all grouped speakers** (the master drives group playback, including notification URLs).
 - **Slave `media_player` entities** also advertise `play_media` / announce (for compatibility with tools that require those feature bits), but **playing a notification directly on a slave** can **remove it from the group** on firmware. Prefer master or coordinator for group-wide TTS; see [ADR 0005](adr/0005-slave-supported-features.md).
 - Details: [TTS Guide](TTS_GUIDE.md#group-behavior-master-slave-coordinator).
 
-### 📱 Dashboard Cards
+### Dashboard Cards
 
 **Basic Media Control**
 
@@ -244,7 +243,7 @@ entity: media_player.living_room
 
 ```yaml
 type: media-control
-entity: media_player.living_room_group_coordinator
+entity: media_player.living_room_group_master
 ```
 
 **System Status**
@@ -264,7 +263,7 @@ entities:
 
 Power user features for customization, automation, and advanced control.
 
-### ⏰ Alarms and Timers
+### Alarms and Timers
 
 **Sleep Timer** (WiiM devices only)
 
@@ -272,14 +271,14 @@ Set a timer to automatically stop playback:
 
 ```yaml
 # Set sleep timer for 30 minutes
-service: wiim.set_sleep_timer
+action: wiim.set_sleep_timer
 target:
   entity_id: media_player.living_room
 data:
   sleep_time: 1800  # Seconds (0-7200)
 
 # Clear sleep timer
-service: wiim.clear_sleep_timer
+action: wiim.clear_sleep_timer
 target:
   entity_id: media_player.living_room
 ```
@@ -290,7 +289,7 @@ WiiM devices support 3 alarm slots (0-2). Alarm times must be in **UTC format**.
 
 ```yaml
 # Create a daily alarm at 7:00 AM UTC
-service: wiim.update_alarm
+action: wiim.update_alarm
 target:
   entity_id: media_player.bedroom
 data:
@@ -300,7 +299,7 @@ data:
   operation: "playback"  # or "1" for ALARM_OP_PLAYBACK
 
 # Update existing alarm (change time only)
-service: wiim.update_alarm
+action: wiim.update_alarm
 target:
   entity_id: media_player.bedroom
 data:
@@ -310,7 +309,7 @@ data:
 
 **Important:** Alarm times are in UTC. Convert your local time to UTC when setting alarms. For example, 7:00 AM EST (UTC-5) would be `12:00:00` in UTC.
 
-### 🎚️ Equalizer Control
+### Equalizer Control
 
 **Select EQ Preset**
 
@@ -320,14 +319,14 @@ The current input's unsaved graphic bands appear as **Custom**. While EQ is off 
 
 ```yaml
 # Recommended: dedicated select entity
-service: select.select_option
+action: select.select_option
 target:
   entity_id: select.living_room_eq_preset
 data:
   option: "Rock"
 
 # Same control via the media player
-service: media_player.select_sound_mode
+action: media_player.select_sound_mode
 target:
   entity_id: media_player.living_room
 data:
@@ -339,7 +338,7 @@ data:
 Custom-band writes use pywiim's verified graphic EQ path. This was tested on a WiiM Pro running firmware `Linkplay.4.8.833748`; other models, firmware and inputs remain unconfirmed. A device that cannot confirm the requested bands reports an error. Supply all ten gains; index-keyed maps must contain each band from 0 through 9 exactly once.
 
 ```yaml
-service: wiim.set_eq
+action: wiim.set_eq
 target:
   entity_id: media_player.living_room
 data:
@@ -353,14 +352,14 @@ On a compatible player, the **Parametric EQ Preset** select can turn active PEQ 
 
 If a saved PEQ preset is itself named **Off**, it retains that name and the separate disable option is **Off (disable)**. If that name is also taken, the disable option uses an available numbered variant.
 
-### 🔊 Audio Output Modes
+### Audio Output Modes
 
 **Select Output Mode**
 
 Available options vary by device. Streamers typically list Line Out / Optical Out / Coax Out (plus USB or HDMI where the hardware has those jacks). **WiiM Sound** and **Sound Lite** list **Speaker Out** (the built-in speakers).
 
 ```yaml
-service: select.select_option
+action: select.select_option
 target:
   entity_id: select.living_room_audio_output_mode
 data:
@@ -373,7 +372,7 @@ Connect to previously paired Bluetooth devices:
 
 ```yaml
 # Select paired Bluetooth device
-service: select.select_option
+action: select.select_option
 target:
   entity_id: select.living_room_audio_output_mode
 data:
@@ -393,12 +392,12 @@ Use this in automations to detect Bluetooth output:
 
 ```yaml
 # Check if ANY Bluetooth output is active
-condition:
+conditions:
   - condition: template
     value_template: "{{ states('select.living_room_audio_output_mode').startswith('BT:') }}"
 
 # Check for a specific Bluetooth device
-condition:
+conditions:
   - condition: state
     entity_id: select.living_room_audio_output_mode
     state: "BT: Sony WH-1000XM4"
@@ -406,14 +405,14 @@ condition:
 
 See the [Automation Cookbook](automation-cookbook.md#bluetooth-output-detection) for complete automation examples.
 
-### 🎤 Text-to-Speech
+### Text-to-Speech
 
 The integration supports TTS announcements with automatic group coordination. See the [TTS Guide](TTS_GUIDE.md) for complete details.
 
 **Basic TTS Example:**
 
 ```yaml
-service: media_player.play_media
+action: media_player.play_media
 target:
   entity_id: media_player.living_room
 data:
@@ -422,12 +421,12 @@ data:
   announce: true
 ```
 
-### 🔧 Device Maintenance
+### Device Maintenance
 
 **Reboot Device**
 
 ```yaml
-service: wiim.reboot_device
+action: wiim.reboot_device
 target:
   entity_id: media_player.living_room
 ```
@@ -435,17 +434,17 @@ target:
 **Sync Time**
 
 ```yaml
-service: wiim.sync_time
+action: wiim.sync_time
 target:
   entity_id: media_player.living_room
 ```
 
-### 🎯 Group-Aware Automations
+### Group-Aware Automations
 
 **Target Only Master Speakers**
 
 ```yaml
-service: media_player.volume_set
+action: media_player.volume_set
 target:
   entity_id: >
     {{ states.sensor
@@ -453,7 +452,7 @@ target:
        | selectattr('state', 'eq', 'Master')
        | map(attribute='entity_id')
        | map('replace', 'sensor.', 'media_player.')
-       | map('replace', '_multiroom_role', '_group_coordinator')
+       | map('replace', '_multiroom_role', '_group_master')
        | list }}
 data:
   volume_level: 0.5
@@ -464,17 +463,17 @@ data:
 ```yaml
 automation:
   - alias: "Group Formation Alert"
-    trigger:
-      platform: state
-      entity_id: sensor.living_room_multiroom_role
-      to: "Master"
-    action:
-      service: notify.mobile_app
-      data:
-        message: "Living Room is now controlling a speaker group"
+    triggers:
+      - trigger: state
+        entity_id: sensor.living_room_multiroom_role
+        to: "Master"
+    actions:
+      - action: notify.mobile_app
+        data:
+          message: "Living Room is now controlling a speaker group"
 ```
 
-### 📋 Queue Management
+### Queue Management
 
 Enqueue a URL with Home Assistant's native `play_media` action, or use the WiiM queue actions below. Gate on the device: queue add/play/remove needs AVTransport `AddURIToQueue` **or** WiiM PlayQueue (Pro / Pro Plus). `get_queue` needs ContentDirectory (Amp/Ultra USB) or PlayQueue `BrowseQueue`. `queue_position` and `queue_count` are on the media player for all devices (HTTP `plicurr`/`plicount`, or a PlayQueue overlay when those stay empty).
 
@@ -483,7 +482,7 @@ Enqueue a URL with Home Assistant's native `play_media` action, or use the WiiM 
 **Enqueue a URL** (AVTransport or PlayQueue)
 
 ```yaml
-service: media_player.play_media
+action: media_player.play_media
 target:
   entity_id: media_player.living_room
 data:
@@ -497,7 +496,7 @@ Queued URLs play through in order (PlayQueue auto-advance). Streaming apps such 
 **Play from Queue Position** (AVTransport or PlayQueue)
 
 ```yaml
-service: wiim.play_queue
+action: wiim.play_queue
 target:
   entity_id: media_player.living_room
 data:
@@ -507,7 +506,7 @@ data:
 **Remove from Queue** (AVTransport or PlayQueue)
 
 ```yaml
-service: wiim.remove_from_queue
+action: wiim.remove_from_queue
 target:
   entity_id: media_player.living_room
 data:
@@ -517,7 +516,7 @@ data:
 **Get Queue Contents** (ContentDirectory or PlayQueue `BrowseQueue`)
 
 ```yaml
-service: wiim.get_queue
+action: wiim.get_queue
 target:
   entity_id: media_player.living_room
 # Returns: queue items with title, artist, album, URL
@@ -528,13 +527,13 @@ target:
 
 You can check if your device supports queue operations by looking at the `capabilities` attribute:
 
-```yaml
-# In a template or automation
-{{ state_attr('media_player.living_room', 'capabilities').queue_browse }}  # Full queue retrieval
-{{ state_attr('media_player.living_room', 'capabilities').queue_add }}     # Add/remove from queue
+```jinja
+{# In a template or automation #}
+{{ state_attr('media_player.living_room', 'capabilities').queue_browse }}  {# Full queue retrieval #}
+{{ state_attr('media_player.living_room', 'capabilities').queue_add }}     {# Add/remove from queue #}
 ```
 
-### ⚠️ Unofficial API Actions
+### Unofficial API Actions
 
 These actions use reverse-engineered endpoints that may not work on all firmware versions. Test thoroughly before using in production.
 
@@ -542,7 +541,7 @@ These actions use reverse-engineered endpoints that may not work on all firmware
 
 ```yaml
 # Channel balance (-1.0 left to 1.0 right)
-service: wiim.set_channel_balance
+action: wiim.set_channel_balance
 target:
   entity_id: media_player.living_room
 data:
@@ -553,7 +552,7 @@ data:
 
 ```yaml
 # Scan for nearby Bluetooth devices
-service: wiim.scan_bluetooth
+action: wiim.scan_bluetooth
 target:
   entity_id: media_player.living_room
 data:
@@ -566,19 +565,19 @@ data:
 
 Complete reference for all entities, configuration options, and technical details.
 
-### 📊 Available Entities
+### Available Entities
 
 **Media Players**
 
 - `media_player.{device_name}` - Main device control
-- `media_player.{device_name}_group_coordinator` - Virtual group master (hidden unless this speaker is master)
+- `media_player.{device_name}_group_master` - Group master (hidden unless this speaker is master)
 
 **Sensors** (always created)
 
 - `sensor.{device_name}_multiroom_role` - Current role (Solo/Master/Slave)
-- `sensor.{device_name}_input` - Current audio input source
+- `sensor.{device_name}_current_input` - Current source, including streaming services
 - `sensor.{device_name}_firmware` - Firmware version
-- `sensor.{device_name}_diagnostic` - Comprehensive device health
+- `sensor.{device_name}_device_status` - Device health: Wi-Fi signal or Online/Offline, with details in the attributes
 
 **Audio Quality Sensors** (when supported)
 
@@ -593,17 +592,26 @@ Complete reference for all entities, configuration options, and technical detail
 - `sensor.{device_name}_bluetooth_output` - Bluetooth output status (on/off)
   - **Tip**: For automations, the `select.{device}_audio_output_mode` entity is often more useful as it shows the specific Bluetooth device name (e.g., "BT: Sony WH-1000XM4")
 
-**Selects**
+**Selects** (each is created only when the speaker supports it)
 
+- `select.{device_name}_eq_preset` - Equalizer preset: Off, the speaker's presets, or Custom. The same list is the media player's sound mode.
+- `select.{device_name}_parametric_eq_preset` - Saved parametric EQ preset for the current input, or Off
 - `select.{device_name}_audio_output_mode` - Output mode (model-specific: Line Out, Speaker Out, Optical, `BT: …`, and so on)
 - `select.{device_name}_dac_filter` - DAC digital filter, when the device returns a filter list (WiiM Pro Plus). Applies to analog Line Out only.
 - `select.{device_name}_standby_timeout` - How long the speaker stays idle before standby, when the device reports that setting. The choices match the WiiM Home app, from 30 seconds through 4 hours, plus Never.
-- `select.{device_name}_room_fit` - Saved RoomFit profile, when the device has at least one. `Off` turns RoomFit off. Choosing a name loads that profile. A device with no saved profiles does not get this select until the integration is reloaded after the first profile is saved.
+- `select.{device_name}_roomfit` - Saved RoomFit profile, when the device has at least one. `Off` turns RoomFit off. Choosing a name loads that profile. A device with no saved profiles does not get this select until the integration is reloaded after the first profile is saved.
 - `select.{device_name}_channel` - Output channel: Stereo, Left, Right, or Mono, when the device supports channel selection. Mono is offered only while the player is solo and supports standalone channel mode. Solo and grouped playback can have separate settings. Set one grouped speaker to Left and another to Right for a stereo pair. This is not the balance control.
 
-**Switches**
+**Switches** (each is created only when the speaker supports it)
 
-- Various control switches (mute, shuffle, repeat)
+- `switch.{device_name}_subwoofer` - Subwoofer output on or off
+- `switch.{device_name}_main_speaker_bass` - Whether the main speakers keep their bass when a subwoofer is in use
+- `switch.{device_name}_12v_trigger` - 12V trigger output, on WiiM models that have one
+
+**Numbers** (each is created only when the speaker supports it)
+
+- `number.{device_name}_subwoofer_level` - Subwoofer level, -15 to +15 dB
+- `number.{device_name}_channel_balance` - Left/right balance, -1.0 to 1.0
 
 **Buttons** (optional - enable in device options)
 
@@ -613,33 +621,33 @@ Complete reference for all entities, configuration options, and technical detail
 **Lights** (device dependent)
 
 - `light.{device_name}_led` - Front panel LED (on/off only)
-- `light.{device_name}_display` - LCD screen on WiiM Ultra and WiiM Sound (on/off and brightness). Sound Lite has no screen. Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale (pywiim `set_display_enabled` / `setLightOperationBrightConfig`). Turning the display on sends an explicit level so the screen does not stay at minimum brightness (Ultra since **pywiim 2.1.98+**; Sound since **pywiim 2.3.11+**). From **pywiim 2.3.12+** the light reads the screen's power and configured brightness at startup and about once a minute, so it catches changes made in the WiiM app. Until that read succeeds the light is unknown. The brightness shown is the configured level, including while adaptive brightness is on in the app.
+- `light.{device_name}_display` - LCD screen on WiiM Ultra and WiiM Sound (on/off and brightness). Sound Lite has no screen. Home Assistant brightness (0–255) is mapped to the device's **1–100** brightness scale. Turning the display on sends an explicit level so the screen does not stay at minimum brightness. The light reads the screen's power and configured brightness at startup and about once a minute, so it catches changes made in the WiiM app. Until that read succeeds the light is unknown. The brightness shown is the configured level, including while adaptive brightness is on in the app.
 
 **Updates** (WiiM devices that support API firmware install)
 
 - `update.{device_name}_firmware_update` - Shows the installed and latest firmware and installs the downloaded update. After you click **Update**, the dialog stays in installing until the speaker finishes flashing and reboots. Do not power off the speaker during this process. Non-WiiM LinkPlay devices still apply a downloaded update by rebooting (maintenance **Reboot** button).
 
-**Binary Sensors** (optional - enable network monitoring)
+### Configuration Options
 
-- `binary_sensor.{device_name}_connectivity` - Connection status
+Configure via the speaker's options (Settings → Devices & Services → WiiM → Configure):
 
-### ⚙️ Configuration Options
+| Option                  | Default | Range  | Description                       |
+| ----------------------- | ------- | ------ | --------------------------------- |
+| **Volume Step Size**    | 5%      | 1-50%  | Volume button increment           |
+| **Maintenance Buttons** | Off     | On/Off | Show reboot and sync time buttons |
 
-Configure via **Device Options** (Settings → Devices & Services → WiiM Audio → Device → Configure):
+### Network Requirements
 
-| Option                         | Default | Range  | Description                       |
-| ------------------------------ | ------- | ------ | --------------------------------- |
-| **Volume Step**                | 5%      | 1-50%  | Volume button increment           |
-| **Enable Maintenance Buttons** | Off     | On/Off | Show reboot and sync time buttons |
-| **Enable Network Monitoring**  | Off     | On/Off | Show connectivity binary sensor   |
+**Ports**
 
-### 🌐 Network Requirements
+Home Assistant connects to the speaker on:
 
-**Required Ports**
+- **HTTPS 443**: WiiM devices and most others
+- **HTTPS 4443**: Audio Pro MkII
+- **HTTPS 8443, HTTP 80 and HTTP 8080**: tried in turn when the others don't answer
+- **UDP 1900 (SSDP) and mDNS**: discovery
 
-- **HTTPS**: 443 (primary API)
-- **HTTP**: 8080 (fallback)
-- **UPnP/SSDP**: 1900 (discovery)
+For UPnP events the speaker connects back to Home Assistant, on a port the operating system picks. A firewall between the two has to allow connections in that direction too.
 
 **Network Setup**
 
@@ -647,30 +655,20 @@ Configure via **Device Options** (Settings → Devices & Services → WiiM Audio
 - Multicast traffic allowed between devices
 - DHCP reservations recommended for stable IPs
 
-### 📋 Supported Audio Formats
+### Supported Audio Formats
 
-**Lossless**
+The speaker decides which formats, sample rates and bit depths it can play. Home Assistant only hands it the URL, so check the manufacturer's specifications for your model.
 
-- FLAC, WAV, ALAC up to 24-bit/192kHz
-
-**Compressed**
-
-- MP3, AAC, OGG up to 320kbps
-
-**Streaming**
-
-- HTTP/HTTPS streams, HLS, DLNA
-
-### 🔍 Diagnostics
+### Diagnostics
 
 Download comprehensive diagnostic information:
 
-1. **Device Diagnostics**: Settings → Devices & Services → WiiM Audio → Device → Download Diagnostics
-2. **Integration Diagnostics**: Settings → Devices & Services → WiiM Audio → ⋮ → Download Diagnostics
+1. **Device Diagnostics**: Settings → Devices & Services → WiiM → Device → Download Diagnostics
+2. **Integration Diagnostics**: Settings → Devices & Services → WiiM → ⋮ → Download Diagnostics
 
-Includes device info, group configuration, playback state, polling statistics, and more. All sensitive data is automatically redacted.
+Includes device info, group configuration, playback state, and whether UPnP events are arriving (`connection_info.upnp_events`). IP addresses, MAC addresses and Wi-Fi names are redacted.
 
-### 🐛 Debug Logging
+### Debug Logging
 
 ```yaml
 logger:
@@ -679,7 +677,7 @@ logger:
     pywiim: debug
 ```
 
-### 💡 Best Practices
+### Best Practices
 
 **Network Optimization**
 
@@ -691,33 +689,31 @@ logger:
 **Automation Guidelines**
 
 - Always check role sensor before group commands
-- Use group coordinators for group operations
+- Use group master entities for group operations
 - Add small delays between group operations
 - Include error handling with `continue_on_error: true`
 
 **Performance Tips**
 
-- Integration uses adaptive polling (fast during playback, slow when idle)
-- Monitor entity count (3-4 entities per speaker typically)
+- The integration subscribes to the speaker's UPnP events and also polls it (fast during playback, slow when idle). Polling carries on if events can't reach Home Assistant
 - Test multiroom functionality regularly
 - Keep speaker firmware updated
 
-### 🎵 Music Assistant Integration
+### Music Assistant Integration
 
 **Compatible Entities:**
 
 - Use individual speaker entities: `media_player.{device_name}`
-- **Do not** use group coordinators with Music Assistant
+- **Do not** use group master entities with Music Assistant
 
 **Why?**
 
-- Group coordinators are marked with `music_assistant_excluded: true`
 - Music Assistant provides its own group management
-- Individual speakers integrate seamlessly with Music Assistant
+- Individual speakers work with Music Assistant as ordinary players
 
 ---
 
-## 📚 Related Documentation
+## Related Documentation
 
 - **[Quick Start Guide](README.md)** - Installation and first steps
 - **[Automation Cookbook](automation-cookbook.md)** - Ready-to-use automation examples
@@ -726,4 +722,4 @@ logger:
 
 ---
 
-**Need Help?** Check the [FAQ & Troubleshooting](faq-and-troubleshooting.md) guide or visit the [GitHub Discussions](https://github.com/mjcumming/wiim/discussions).
+**Need Help?** Check the [FAQ & Troubleshooting](faq-and-troubleshooting.md) guide or open an issue on [GitHub](https://github.com/mjcumming/wiim/issues).

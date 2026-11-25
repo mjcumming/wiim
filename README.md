@@ -1,476 +1,272 @@
-# WiiM Audio Integration for Home Assistant
+# WiiM Audio for Home Assistant
 
 <p align="center">
-  <img src="images/logo.png" alt="WiiM Integration Logo" width="200"/>
+  <img src="images/logo.png" alt="WiiM Audio logo" width="200"/>
 </p>
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
-[![Installations](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.wiim.total&label=installs&color=41BDF5&logo=home-assistant&cacheSeconds=3600)](https://analytics.home-assistant.io/custom_integrations.json)
 [![GitHub Release](https://img.shields.io/github/release/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/releases)
-[![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/blob/main/LICENSE)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/default)
+[![Installs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.wiim.total&label=installs&color=41BDF5&logo=home-assistant&cacheSeconds=3600)](https://analytics.home-assistant.io/custom_integrations.json)
 [![Home Assistant](https://img.shields.io/badge/home%20assistant-2024.12.0+-blue.svg)](https://www.home-assistant.io/)
-[![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/mjcumming/wiim)
-[![Quality Scale](https://img.shields.io/badge/quality%20scale-gold-brightgreen.svg)](https://www.home-assistant.io/docs/quality_scale/)
-[![Project Status](https://img.shields.io/badge/project%20status-active-success.svg)](https://github.com/mjcumming/wiim)
 [![CI](https://img.shields.io/github/actions/workflow/status/mjcumming/wiim/tests.yaml?branch=main&label=CI)](https://github.com/mjcumming/wiim/actions/workflows/tests.yaml)
-[![codecov](https://codecov.io/gh/mjcumming/wiim/branch/main/graph/badge.svg)](https://codecov.io/gh/mjcumming/wiim)
-[![GitHub Issues](https://img.shields.io/github/issues/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/mjcumming/wiim.svg)](https://github.com/mjcumming/wiim/pulls)
+[![License](https://img.shields.io/github/license/mjcumming/wiim.svg)](LICENSE)
 
-> ⭐ **Love this integration?** Please star us on GitHub if you use this integration! It helps others discover the project and shows your support for the development effort.
+WiiM Audio connects WiiM streamers, amplifiers and speakers to Home Assistant, along with speakers from other brands built on the same LinkPlay platform, such as Audio Pro and Arylic. Each speaker becomes a media player. The settings you'd otherwise open the WiiM Home app for become entities you can put on a dashboard or use in an automation: the equalizer, the audio output, the subwoofer, the display and the firmware update. It talks to the speakers directly over your network and needs no cloud account.
 
-Transform your WiiM and LinkPlay speakers into powerful Home Assistant media players with full multiroom support. Built on the brand new, fully async [`pywiim`](https://github.com/mjcumming/pywiim) library we wrote for reliable, high-performance device communication.
+## What you can do with it
 
-## Why Choose This Integration?
+- Announce the doorbell on the kitchen speaker with any text-to-speech engine.
+- Group the downstairs speakers from a dashboard button and move the volume of all of them with one slider.
+- Send the living room streamer to Bluetooth headphones at 10 pm and back to the amplifier in the morning.
+- Change the equalizer preset when the TV input becomes the source.
+- Start a radio preset in the kitchen at 7 am and set a sleep timer on the bedroom speaker at night.
 
-- **🎵 Complete Media Control** - Full transport controls, volume, sources, presets, TTS, and media browsing
-- **🔗 True Multiroom** - Uses Home Assistant's native grouping for reliable synchronized playback
-- **⚡ Powered by pywiim** - Built on the brand new, fully async [`pywiim`](https://github.com/mjcumming/pywiim) library we wrote for robust, high-performance device communication
-- **🚀 Auto-Discovery** - Finds speakers automatically via UPnP/SSDP/Zeroconf
-- **📱 Universal Compatibility** - Works with all Home Assistant dashboards, voice assistants, and media sources
-- **⚡ Hybrid State Updates** - UPnP events for real-time updates + HTTP polling for reliability
-- **🎛️ Advanced Audio** - 10-band EQ, subwoofer control, audio quality sensors, output mode control, and format support
-- **⏰ Timer & Alarms** - Sleep timer and alarm management for WiiM devices
-- **📊 Rich Diagnostics** - Comprehensive statistics, health monitoring, and troubleshooting tools
-- **🔄 Scene Support** - Full scene restoration including EQ presets and playback state
-- **🎯 Smart Features** - Optimistic UI updates, adaptive polling, and intelligent source detection
+## How it compares with the built-in integrations
 
-## Supported Devices
+Home Assistant includes two integrations for these speakers: [WiiM](https://www.home-assistant.io/integrations/wiim/), added in 2026.4, and [LinkPlay](https://www.home-assistant.io/integrations/linkplay/). If playback, grouping and presets are all you need, they cover that. WiiM Audio is for when you also want the rest of this table on dashboards and in automations.
 
-- **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
-- **LinkPlay Compatible**: Arylic, Audio Pro (including Gen1: A26, C10, C5a and MkII models), Dayton Audio, DOSS, Edifier (MS50A), and many more
-- **Enhanced Compatibility**: Automatic protocol fallback for devices with non-standard configurations
-- **Requirements**: Home Assistant 2024.12.0+ on same network as speakers
+The table shows what each integration's documentation lists. "Not listed" means its page doesn't mention the feature.
 
-## Quick Start
+| | WiiM Audio | Built-in WiiM | Built-in LinkPlay |
+| --- | --- | --- | --- |
+| Speakers | WiiM, Audio Pro, Arylic and other LinkPlay brands | WiiM models | LinkPlay-based players |
+| Media player with multiroom grouping | Yes | Yes | Yes |
+| Presets | Yes | Yes | Yes |
+| Audio output select | Yes | Yes | Not listed |
+| Playback queue | Add, play from a position, remove and read, on speakers with a queue | Browse | Not listed |
+| Equalizer, parametric EQ and RoomFit | Yes | Not listed | Not listed |
+| Subwoofer, balance and channel | Yes | Not listed | Not listed |
+| Sleep timer and alarms | Yes, on WiiM devices | Not listed | Not listed |
+| Firmware update entity | Yes, on WiiM devices | Not listed | Not listed |
+| Reboot and clock sync | Yes | Not listed | Yes |
 
-### 1. Install via HACS (Recommended)
+WiiM Audio and the built-in WiiM integration share the internal name `wiim`, so only one of them runs. Once WiiM Audio is installed and Home Assistant has restarted, Home Assistant loads it in place of the built-in one, and the install dialog in Home Assistant 2026.11 and newer warns you about this.
 
-1. **Find in HACS**: HACS → Integrations → Search "WiiM Audio"
-2. **Install**: Download → Restart Home Assistant
-3. **Configure**: Settings → Devices & Services → Add Integration → "WiiM Audio"
+If you've already set up speakers with the built-in WiiM integration, delete them there before you install WiiM Audio, and add them again afterwards. The two integrations identify their entities differently, so a setup carried over from one to the other can leave you with duplicate or unavailable entities. To go back, follow [Remove the integration](#remove-the-integration). The built-in LinkPlay integration has its own name and keeps running, so a speaker added to both appears twice.
 
-### 2. Manual Installation
+## Supported speakers
 
-1. Download [latest release](https://github.com/mjcumming/wiim/releases)
-2. Extract to `/config/custom_components/wiim/`
-3. Restart Home Assistant and add integration
+| Brand | Models |
+| --- | --- |
+| WiiM | Mini, Pro, Pro Plus, Amp, Amp Pro, Amp Ultra, Ultra, Sound, Sound Lite |
+| Audio Pro | Original, W-generation and MkII speakers, such as the Addon C10, A10, A15 and A28 |
+| Arylic | Up2Stream boards and the S10+ |
+| Other LinkPlay brands | Edifier MS50A, DOSS, Dayton Audio, iEast and others |
+
+WiiM, Audio Pro and Arylic speakers each have a profile that covers how that brand's firmware behaves. Audio Pro MkII speakers need a secured connection, which the integration sets up for you. Other LinkPlay speakers are identified when you add them and use a general profile.
+
+The hardware this has been run against, with the firmware and where each record comes from, is in [pywiim's tested devices list](https://github.com/mjcumming/pywiim/blob/main/docs/user/TESTED_DEVICES.md). The integration and the library share that one list, and it has a section on how to add your speaker.
+
+Speakers differ in what they can do, and a firmware update can change it. When you add a speaker, the integration asks it what it supports and creates only the entities that work on it. That's why a WiiM Mini has fewer entities than a WiiM Ultra.
+
+You need Home Assistant 2024.12.0 or newer, on the same network as the speakers.
+
+## Install
+
+WiiM Audio installs from the Marketplace, which is part of Home Assistant 2026.11 and newer. On older versions, use [HACS](https://hacs.xyz/). The steps are the same, with HACS in the sidebar in place of **Settings** > **Marketplace**, and **Download** in place of **Install**.
+
+If you use the built-in WiiM integration, read [the note on switching](#how-it-compares-with-the-built-in-integrations) first.
+
+This button opens WiiM Audio in either one. It's labelled for HACS and works in both.
+
+[![Open WiiM Audio in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mjcumming&repository=wiim&category=integration)
+
+1. Use the button above, or go to **Settings** > **Marketplace** and search for "WiiM Audio".
+2. Select **Install**.
+3. Restart Home Assistant.
+
+To install by hand, download `wiim.zip` from the [latest release](https://github.com/mjcumming/wiim/releases/latest). In your Home Assistant configuration folder, the one that holds `configuration.yaml`, create `custom_components/wiim` and extract the zip into it. Then restart.
 
 ### Beta versions
 
-A beta is a GitHub pre-release, for example `1.0.116-beta.1`. HACS keeps it off the normal install path until you opt in:
+Betas are published as GitHub pre-releases, and you only get them if you ask for them. Go to **Settings** > **Devices & services**, open the Marketplace integration (or HACS), and open the WiiM Audio device. Its **Pre-release** switch is disabled at first: enable the entity in its settings, then turn the switch on. Turn it off to stay on stable releases.
 
-1. Open **HACS → Integrations → WiiM Audio**
-2. Open the three-dot menu and turn on **Show beta**
-3. Download the beta, then restart Home Assistant
+## Add your speakers
 
-Turn **Show beta** off to stay on stable releases. The [releases page](https://github.com/mjcumming/wiim/releases) marks betas as pre-releases.
+Home Assistant finds speakers on your network by itself. Go to **Settings** > **Devices & services**, where discovered speakers appear at the top of the page, and add each one.
 
-## Key Features
+To add a speaker yourself, select **Add integration**, search for **WiiM** and enter the speaker's IP address. Inside Home Assistant the integration is called WiiM; WiiM Audio is its name in the Marketplace and HACS. This button opens the same dialog:
 
-### 🎵 Media Playback & Control
+[![Add WiiM to Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=wiim)
 
-| Feature              | Description                                                                       |
-| -------------------- | --------------------------------------------------------------------------------- |
-| **Media Control**    | Play, pause, stop, turn off, next/previous, seek with resume support              |
-| **Volume Control**   | Individual and synchronized group volume with debouncing                          |
-| **Smart Sources**    | Detects streaming services (Spotify, Amazon Music, Apple Music, etc.)             |
-| **Media Browser**    | Browse Home Assistant media sources, DLNA servers, and custom radio stations      |
-| **TTS Support**      | Full Text-to-Speech integration for all TTS engines (Google, Amazon, Azure, etc.) |
-| **Shuffle & Repeat** | Toggle shuffle and repeat modes for playlists                                     |
-| **Presets**          | Hardware preset buttons (device dependent, up to 20)                              |
-| **URL Playback**     | Play audio from any URL (radio streams, files, playlists)                         |
-| **Playback Queue**   | Enqueue URLs (`add` / `next`) on devices with AVTransport or WiiM PlayQueue (Pro / Pro Plus). Position and count on the media player. |
+Each speaker is a device of its own. A speaker that's grouped with one you've added is picked up too, and if Home Assistant can't find its address it asks you for it. If a speaker's IP address changes, open the three-dot menu of its entry, select **Reconfigure** and enter the new one. Reserving the address in your router keeps it from changing.
 
-### 🎛️ Audio Enhancement
+Select **Configure** on a speaker's entry to change its options:
 
-| Feature            | Description                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| **EQ Control**     | 10-band equalizer with 24 presets (Flat, Rock, Jazz, Classical, Pop, etc.)         |
-| **Custom EQ**      | Fine-tune each of 10 frequency bands (-12dB to +12dB)                              |
-| **Subwoofer**      | Enable/disable and adjust level (-15 to +15 dB) for connected subwoofers           |
-| **Audio Output**   | Hardware outputs vary by model (Line Out, Optical, Coax, Speaker Out, HDMI, USB, headphone). Paired Bluetooth devices appear as `BT: …`. |
-| **Audio Quality**  | Real-time sensors for sample rate, bit depth, and bit rate                         |
-| **Format Support** | Lossless (FLAC, WAV, ALAC up to 24-bit/192kHz) and compressed formats              |
+| Option | Default | What it does |
+| --- | --- | --- |
+| Volume Step Size | 5% | How far one volume up or volume down step moves, from 1% to 50% |
+| Maintenance Buttons | Off | Adds **Reboot** and **Sync Time** buttons to the device |
 
-### 🏠 Multiroom & Grouping
+## Entities
 
-| Feature                | Description                                                     |
-| ---------------------- | --------------------------------------------------------------- |
-| **Multiroom Groups**   | Synchronized playback across speaker groups with perfect timing |
-| **Group Coordinators** | Virtual entities for unified group control                      |
-| **Role Detection**     | Automatic master/slave/solo role detection with sensors         |
-| **Group Volume**       | Synchronized volume control across all group members            |
-| **Smart Grouping**     | Uses Home Assistant's native grouping for reliable sync         |
+| Entity | What it does | Created |
+| --- | --- | --- |
+| Media player | Playback, volume, source, sound mode, media browser, grouping and announcements | Always |
+| Group Master media player | Controls a whole group through the speaker that leads it | Always, and hidden until the speaker leads a group |
+| Audio Output Mode select | Picks the hardware output or a paired Bluetooth device | When the speaker can switch outputs |
+| EQ Preset select | Off, the speaker's presets, or Custom | When the speaker has an equalizer |
+| Parametric EQ Preset select | Loads a saved parametric EQ preset, or turns it off | When the speaker has parametric EQ |
+| RoomFit select | Applies a saved room correction profile, or turns it off | When the speaker has a saved profile |
+| Channel select | Stereo, Left, Right or Mono | When the speaker can change its output channel |
+| Channel balance number | Left/right balance from -1.0 to 1.0 | When the speaker supports it |
+| Subwoofer switch, Main speaker bass switch, Subwoofer Level number | Turn the subwoofer output on or off, keep bass in the main speakers, and set the subwoofer level from -15 to +15 dB | When the speaker has a subwoofer output |
+| 12V trigger switch | Turns the trigger output on or off | WiiM Ultra, Pro and Pro Plus |
+| DAC Filter select | Picks the digital filter used for the analog line output | When the speaker reports its filters |
+| Standby Timeout select | How long the speaker stays idle before standby, from 30 seconds to 4 hours, or Never | When the speaker reports the setting |
+| LED light | Turns the status LED on or off | Always |
+| Display light | Turns the screen on or off and sets its brightness | WiiM Ultra, Amp Ultra and Sound |
+| Firmware Update | Shows a new firmware version and installs it | WiiM devices |
+| Multiroom Role sensor | Solo, Master or Slave | Always |
+| Current Input sensor | The current source, including streaming services | Always |
+| Diagnostic sensors | Device Status, Firmware, Bluetooth Output, Audio Quality, Sample Rate, Bit Depth and Bit Rate | Device Status and Firmware always, the others when the speaker reports them |
+| Reboot and Sync Time buttons | Restart the speaker, or set its clock from Home Assistant | When the Maintenance Buttons option is on |
 
-### ⏰ Timer & Alarm Features (WiiM Devices)
+The YAML samples below are actions. Paste one into **Developer tools** > **Actions** to try it, or use it as a step in an automation or a script.
 
-| Feature              | Description                                                       |
-| -------------------- | ----------------------------------------------------------------- |
-| **Sleep Timer**      | Set sleep timer (0-7200 seconds) to automatically turn off device |
-| **Alarm Management** | Create and manage up to 3 alarms with daily/weekly schedules      |
-| **Alarm Control**    | Full alarm creation, update, and deletion via services            |
+## Multiroom
 
-### 📊 Sensors & Diagnostics
-
-| Feature               | Description                                      |
-| --------------------- | ------------------------------------------------ |
-| **Role Sensor**       | Shows current multiroom role (Master/Slave/Solo) |
-| **Input Sensor**      | Current audio input source                       |
-| **Audio Quality**     | Sample rate, bit depth, and bit rate sensors     |
-| **Diagnostic Sensor** | Comprehensive device health and statistics       |
-| **Firmware Sensor**   | Device firmware version tracking                 |
-| **Bluetooth Status**  | Bluetooth output and connected device status     |
-
-### 🔧 Advanced Features
-
-| Feature                  | Description                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| **Auto-Discovery**       | Finds speakers automatically via UPnP/SSDP/Zeroconf                           |
-| **Real-Time Updates**    | UPnP event subscriptions for instant state changes with HTTP polling fallback |
-| **Scene Support**        | Full scene restoration including EQ presets and playback state                |
-| **Optimistic Updates**   | Immediate UI feedback for all controls                                        |
-| **Enhanced Diagnostics** | Comprehensive device diagnostics with statistics and health monitoring        |
-| **Protocol Fallback**    | Automatic HTTP/HTTPS protocol detection with multi-port fallback              |
-| **Audio Pro Support**    | Full support for Audio Pro MkII with mTLS client certificate authentication   |
-
-## How It Works
-
-The integration uses a **hybrid approach** combining UPnP event subscriptions and HTTP polling for optimal reliability and responsiveness:
-
-- **UPnP Events (Primary)**: Real-time state updates via DLNA DMR event subscriptions
-  - Instant updates when device state changes (play/pause/volume/mute)
-  - Reduces network traffic and improves responsiveness
-  - Automatically falls back to polling if UPnP becomes unavailable
-
-- **HTTP Polling (Fallback)**: Adaptive polling strategy ensures reliability
-  - 1-second polling during active playback for position updates
-  - 5-second polling when idle for resource efficiency
-  - Always available as fallback if UPnP subscriptions fail
-  - Gracefully handles network issues and device restarts
-
-This dual approach ensures you get the best of both worlds: real-time responsiveness when UPnP is working, and reliable operation even when it's not.
-
-## Usage Examples
-
-### Multiroom Audio
+Group speakers with Home Assistant's own grouping, either from the media player's dialog or with the `media_player.join` and `media_player.unjoin` actions. Groups made in the WiiM Home app show up in Home Assistant as well.
 
 ```yaml
-# Create speaker group
-service: media_player.join
+action: media_player.join
 target:
   entity_id: media_player.living_room
 data:
   group_members:
     - media_player.kitchen
     - media_player.bedroom
+```
 
-# Remove from group
-service: media_player.unjoin
+The speaker you target leads the group, and its Multiroom Role sensor reads Master. The others follow it and read Slave. A speaker on its own reads Solo. Joining adds speakers to the group that's already there. To take one out, call `media_player.unjoin` on it.
+
+Each speaker also has a group media player, `media_player.<speaker>_group_master`. It plays, pauses and skips for the whole group, mutes every member, and its volume slider moves every member while keeping the differences between them. Home Assistant hides it until its speaker leads a group, and an action sent to it at any other time fails with an error. A dashboard card that names it still shows it.
+
+## Sound
+
+The EQ Preset select and the media player's sound mode are the same list, so you can use whichever fits your dashboard. For your own curve, `wiim.set_eq` takes ten band values from -12 to +12 dB.
+
+The Parametric EQ Preset and RoomFit selects load what you've saved in the WiiM Home app. Home Assistant switches between those presets and room correction profiles; creating and measuring them stays in the app.
+
+## Sources and outputs
+
+On WiiM devices the source list follows the WiiM Home app. An input you renamed there shows its new name, and an input you turned off there is hidden. The Current Input sensor also reports streaming services such as Spotify, so an automation can react when someone starts casting.
+
+The Audio Output Mode select lists the outputs your model has, such as Line Out, Optical Out or Speaker Out. Bluetooth devices you've paired in the WiiM Home app appear in the same list as `BT: <name>`.
+
+```yaml
+action: select.select_option
 target:
-  entity_id: media_player.living_room
+  entity_id: select.living_room_audio_output_mode
+data:
+  option: "BT: Bedroom Headphones"
 ```
 
-### Custom Radio Stations
+## Playing media
 
-Create `wiim_stations.yaml` in your config folder:
+The media browser has a **Presets** folder with the presets you saved in the WiiM Home app, next to your Home Assistant media sources. `media_player.play_media` plays a URL or anything from a media source. To play a preset from an automation:
 
 ```yaml
-- name: BBC Radio 2
-  url: http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two
-- name: Groove Salad (SomaFM)
-  url: http://ice2.somafm.com/groovesalad-128-mp3
+action: wiim.play_preset
+target:
+  entity_id: media_player.kitchen
+data:
+  preset: 1
 ```
 
-Access via **Browse Media → Quick Stations** on any WiiM device.
+On speakers with a playback queue, such as the WiiM Pro and Pro Plus, `media_player.play_media` with `enqueue: add` or `enqueue: next` adds to the queue, and the `wiim.play_queue`, `wiim.remove_from_queue` and `wiim.get_queue` actions work with it. The media player's `queue_position` and `queue_count` attributes show where playback is.
 
-### Audio Output Control
+## Announcements
 
-Options on `select.{device}_audio_output_mode` are model-specific. Pair Bluetooth in the WiiM app first; Home Assistant then shows `BT: Device Name`, not a generic `"Bluetooth Out"`.
+Any text-to-speech engine in Home Assistant can speak through a speaker. Replace `tts.home_assistant_cloud` with your own TTS entity:
 
 ```yaml
-# Streamer: Line Out
-- service: select.select_option
-  target: select.living_room_audio_output_mode
-  data:
-    option: "Line Out"
-
-# WiiM Sound / Sound Lite: built-in speakers
-- service: select.select_option
-  target: select.kitchen_audio_output_mode
-  data:
-    option: "Speaker Out"
-
-# Already-paired Bluetooth device
-- service: select.select_option
-  target: select.living_room_audio_output_mode
-  data:
-    option: "BT: Sony WH-1000XM4"
-
-# USB DAC (WiiM Ultra)
-- service: select.select_option
-  target: select.living_room_audio_output_mode
-  data:
-    option: "USB Out"
+action: tts.speak
+target:
+  entity_id: tts.home_assistant_cloud
+data:
+  media_player_entity_id: media_player.kitchen
+  message: "Someone's at the front door."
 ```
 
-### Subwoofer Control (WiiM Ultra)
+`media_player.play_media` with `announce: true` and `wiim.play_notification` do the same for a sound file. To reach a whole group, target the speaker that leads it or its group media player.
+
+The speaker fetches the audio from Home Assistant over your network. If an announcement stays silent, check the local network address in **Home Assistant URL** under **Settings** > **System** > **Network**. The speaker needs an `http://` address with your Home Assistant's IP, such as `http://192.168.1.10:8123`.
+
+The [TTS guide](docs/TTS_GUIDE.md) has more examples.
+
+## Sleep timer and alarms
+
+WiiM devices have a sleep timer and three alarms. This action stops the bedroom speaker in an hour. The longest timer is two hours, which is 7200 seconds.
 
 ```yaml
-# Enable subwoofer
-- service: switch.turn_on
-  target:
-    entity_id: switch.living_room_subwoofer
-
-# Set subwoofer level
-- service: number.set_value
-  target:
-    entity_id: number.living_room_subwoofer_level
-  data:
-    value: 3
+action: wiim.set_sleep_timer
+target:
+  entity_id: media_player.bedroom
+data:
+  sleep_time: 3600
 ```
 
-### Automation Examples
+`wiim.clear_sleep_timer` cancels the timer. `wiim.update_alarm` creates or changes an alarm, with its time in UTC. The [user guide](docs/user-guide.md) has an example.
 
-```yaml
-# Morning radio with TTS announcement
-- alias: "Morning Routine"
-  trigger:
-    platform: time
-    at: "07:00:00"
-  action:
-    - service: tts.google_translate_say
-      target:
-        entity_id: media_player.kitchen
-      data:
-        message: "Good morning! Starting your favorite radio station."
-    - service: media_player.play_media
-      target:
-        entity_id: media_player.kitchen
-      data:
-        media_content_type: url
-        media_content_id: "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two"
+## Actions
 
-# Play preset button
-- service: wiim.play_preset
-  target:
-    entity_id: media_player.living_room
-  data:
-    preset: 1
+| Action | What it does |
+| --- | --- |
+| `wiim.play_preset` | Plays a preset saved in the WiiM Home app, by number |
+| `wiim.play_url` | Plays audio from a URL, such as a radio stream or a file |
+| `wiim.play_playlist` | Plays an M3U playlist from a URL |
+| `wiim.play_notification` | Plays a sound from a URL as an announcement |
+| `wiim.play_queue` | Starts playing the queue at a position |
+| `wiim.remove_from_queue` | Removes the item at a position from the queue |
+| `wiim.get_queue` | Returns the queue with title, artist, album and URL |
+| `wiim.set_eq` | Sets an EQ preset or ten custom band values |
+| `wiim.set_sleep_timer` | Stops playback after a number of seconds |
+| `wiim.clear_sleep_timer` | Cancels the sleep timer |
+| `wiim.update_alarm` | Creates or changes one of the three alarms |
+| `wiim.set_channel_balance` | Sets the left/right balance |
+| `wiim.scan_bluetooth` | Scans for nearby Bluetooth devices |
+| `wiim.sync_time` | Sets the speaker's clock from Home Assistant |
+| `wiim.reboot_device` | Restarts the speaker |
 
-# Set sleep timer before bed
-- alias: "Bedtime Sleep Timer"
-  trigger:
-    platform: time
-    at: "22:30:00"
-  action:
-    - service: wiim.set_sleep_timer
-      target:
-        entity_id: media_player.bedroom
-      data:
-        sleep_time: 3600 # 1 hour
+The [user guide](docs/user-guide.md) has the fields and an example for each action, and the [automation cookbook](docs/automation-cookbook.md) has longer automations.
 
-# Create morning alarm
-- service: wiim.update_alarm
-  target:
-    entity_id: media_player.bedroom
-  data:
-    alarm_id: 0
-    time: "07:00:00" # UTC time
-    trigger: "daily"
-    operation: "playback"
+## How it stays in sync
 
-# Set EQ for different music types
-- alias: "Rock Music EQ"
-  trigger:
-    platform: state
-    entity_id: media_player.living_room
-    attribute: source
-    to: "Spotify"
-  action:
-    - service: wiim.set_eq
-      target:
-        entity_id: media_player.living_room
-      data:
-        preset: "rock"
-```
+A speaker tells Home Assistant when its play state, volume or track changes, so those show up right away. The integration also asks every speaker for its state on a schedule: about once a second while it's playing and every 5 seconds when it's idle, with older LinkPlay hardware asked less often.
 
-## Actions (Services)
+The first path needs the speaker to be able to connect back to Home Assistant, which some container and VLAN setups prevent. When it can't, the scheduled checks carry on and changes show up a few seconds later. To see which path you have, download the diagnostics as described under [Troubleshooting](#troubleshooting) and look at `connection_info.upnp_events`: an `event_count` above zero means the speaker is reaching Home Assistant.
 
-> **Note**: Home Assistant now calls "services" as "actions" in the UI. Both terms refer to the same functionality.
+A speaker that stops answering becomes unavailable and comes back without a restart when it answers again.
 
-### Media Playback Actions
+## Known limitations
 
-| Action                   | Description                                       |
-| ------------------------ | ------------------------------------------------- |
-| `wiim.play_preset`       | Play hardware preset (device dependent, up to 20) |
-| `wiim.play_url`          | Play audio from URL (radio streams, files)        |
-| `wiim.play_playlist`     | Play M3U playlist from URL                        |
-| `wiim.play_notification` | Play notification sound with auto volume restore  |
+- Don't count on the music coming back after an announcement. On Spotify, AirPlay, Bluetooth and the physical inputs, the announcement always replaces what was playing. On a network source (a preset, a radio stream, a URL or a USB drive) the integration uses the speaker's own announcement command, which is meant to lower the music and resume it but rarely does in practice.
+- An announcement sent to a speaker that's following a group can take that speaker out of the group.
+- Streaming services such as Spotify show as the current source, but you can't start them from the source list. Start them from their own app.
+- The RoomFit select is created when the speaker has a saved profile. After you save the first one in the WiiM Home app, reload the speaker's entry from its three-dot menu.
+- `wiim.scan_bluetooth` and `wiim.set_channel_balance` use commands that aren't part of the published WiiM API, so a firmware update can break them.
 
-### Queue Management Actions
+## Troubleshooting
 
-> **Device support**: Enqueue (`media_player.play_media` with `enqueue: add` / `next`) and play/remove work when the device advertises AVTransport `AddURIToQueue` **or** WiiM PlayQueue (Pro / Pro Plus). `get_queue` works when ContentDirectory or PlayQueue `BrowseQueue` is available. `queue_position` and `queue_count` are on the media player for all devices. See the [User Guide](docs/user-guide.md#queue-management) and [pywiim](https://github.com/mjcumming/pywiim/tree/main/docs).
+The [FAQ and troubleshooting guide](docs/faq-and-troubleshooting.md) covers the common problems. When you report one, attach the diagnostics: go to **Settings** > **Devices & services** > **WiiM**, open the speaker's device and select **Download diagnostics**. IP addresses, MAC addresses and Wi-Fi names are removed from the file.
 
-| Action                   | Description                                                      |
-| ------------------------ | ---------------------------------------------------------------- |
-| `media_player.play_media` | Play a URL, or enqueue with `enqueue: add` / `next` / `play`   |
-| `wiim.play_queue`        | Play from queue at a specific position (AVTransport or PlayQueue) |
-| `wiim.remove_from_queue` | Remove item from queue at position (AVTransport or PlayQueue)   |
-| `wiim.get_queue`         | Get queue contents with metadata (ContentDirectory or PlayQueue) |
+Report bugs and ask questions in [GitHub Issues](https://github.com/mjcumming/wiim/issues).
 
-### Audio & EQ Actions
+## Remove the integration
 
-| Action        | Description                                    |
-| ------------- | ---------------------------------------------- |
-| `wiim.set_eq` | Set equalizer presets or custom 10-band values |
-
-### Timer & Alarm Actions (WiiM Devices Only)
-
-| Action                   | Description                             |
-| ------------------------ | --------------------------------------- |
-| `wiim.set_sleep_timer`   | Set sleep timer (0-7200 seconds)        |
-| `wiim.clear_sleep_timer` | Clear active sleep timer                |
-| `wiim.update_alarm`      | Create/update alarm (3 slots, UTC time) |
-
-### Device Management Actions
-
-| Action               | Description                                 |
-| -------------------- | ------------------------------------------- |
-| `wiim.reboot_device` | Reboot device (temporarily unavailable)     |
-| `wiim.sync_time`     | Synchronize device time with Home Assistant |
-
-### Unofficial API Actions
-
-⚠️ **Advanced users only** - These actions use reverse-engineered API endpoints that may not work on all firmware versions:
-
-| Action                     | Description                       |
-| -------------------------- | --------------------------------- |
-| `wiim.scan_bluetooth`      | Scan for nearby Bluetooth devices |
-| `wiim.set_channel_balance` | Adjust left/right channel balance |
-
-See the [User Guide](docs/user-guide.md) for complete action documentation with examples.
-
-## Source Names
-
-On **WiiM** devices, the source list follows the WiiM app: labels you set there appear in Home Assistant, and inputs you disabled in the app are hidden. Automations can still use the previous names (for example `"Optical In"`). Home Assistant does not add a second rename layer — the device is the source of truth.
-
-To change how the **entity** appears on dashboards, rename the media player in Home Assistant (or use a card `name:`). That does not change the source list.
-
-## Platforms & Entities
-
-The integration creates multiple entity types for comprehensive control:
-
-### Media Player
-
-- Main media player entity with full transport controls (`queue_position` and `queue_count` attributes)
-- Group coordinator entities for multiroom groups
-- Browse media support for all Home Assistant media sources
-
-### Sensors
-
-- **Multiroom Role** - Current role (Master/Slave/Solo)
-- **Input Source** - Current audio input
-- **Audio Quality** - Sample rate, bit depth, bit rate (when available)
-- **Firmware Version** - Device firmware tracking
-- **Bluetooth Status** - Bluetooth output and connected device
-- **Diagnostic** - Comprehensive device health and statistics
-
-### Select Entities
-
-- **Audio Output Mode** - Model-specific hardware modes (Line Out, Optical, Coax, Speaker Out, HDMI, USB, headphone) plus paired `BT: …` devices
-- **EQ Preset** - Device equalizer presets (created when the device supports EQ). The same list is also the media player's **sound mode**.
-
-### Buttons
-
-- **Sync Time** - Synchronize device clock
-- **Reboot Device** - Restart device
-- **Clear Sleep Timer** - Clear active sleep timer
-
-### Switches
-
-- **Mute** - Toggle mute state
-- **Shuffle** - Toggle shuffle mode
-- **Repeat** - Toggle repeat mode
-- **Subwoofer** - Enable/disable subwoofer output (WiiM Ultra with firmware 5.2+)
-
-### Number Entities
-
-- **Subwoofer Level** - Adjust subwoofer level (-15 to +15 dB, WiiM Ultra with firmware 5.2+)
-
-### Lights (Device Dependent)
-
-- **LED** - Front panel status LED (on/off only)
-- **Display** - WiiM Ultra LCD screen (on/off and brightness; Ultra only)
-
-## Diagnostics & Troubleshooting
-
-When experiencing issues, you can download comprehensive diagnostic information to help with troubleshooting:
-
-1. **Device Diagnostics**: Go to Settings → Devices & Services → WiiM Audio → (Select device) → Download Diagnostics
-2. **Integration Diagnostics**: Go to Settings → Devices & Services → WiiM Audio → (⋮ Menu) → Download Diagnostics
-
-The diagnostics include:
-
-- Device information (model, firmware, network status)
-- Multiroom group configuration and roles
-- Media playback state and current sources
-- **HTTP polling statistics** (total polls, success rate, response times)
-- **Command statistics** (total commands, success rate, failure tracking)
-- UPnP subscription status and health
-- EQ settings and sound modes
-- Audio output configuration
-
-**All sensitive data (IP addresses, MAC addresses, network names) is automatically redacted.**
-
-### Real-time Device Monitoring
-
-For real-time device monitoring and debugging, use the `monitor_cli` tool from the `pywiim` library:
-
-```bash
-# Install pywiim
-pip3 install pywiim
-
-# Monitor a device (replace with your device IP)
-python3 -m pywiim.cli.monitor_cli YOUR_DEVICE_IP
-```
-
-This shows real-time device state including audio output mode, playback state, and multiroom status. Use `--verbose` for detailed logging or `--no-tui` for scrolling log output. Press `Ctrl+C` to stop.
-
-## Documentation
-
-- **[📚 Quick Start Guide](docs/README.md)** - Installation and basic setup
-- **[🎛️ User Guide](docs/user-guide.md)** - Complete features and configuration
-- **[🤖 Automation Cookbook](docs/automation-cookbook.md)** - Ready-to-use automation patterns
-- **[❓ FAQ & Troubleshooting](docs/faq-and-troubleshooting.md)** - Quick answers to common questions and solutions to common problems
-
-## Support & Community
-
-- **🐛 Issues**: [GitHub Issues](https://github.com/mjcumming/wiim/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/mjcumming/wiim/discussions)
-- **🏠 Community**: [Home Assistant Community](https://community.home-assistant.io/)
+Delete each speaker under **Settings** > **Devices & services** > **WiiM**, then uninstall WiiM Audio in the Marketplace or HACS and restart Home Assistant.
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines:
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how to set up a development environment and what a pull request needs. Reports from speakers that aren't in the table above are especially useful. Device communication lives in the [pywiim](https://github.com/mjcumming/pywiim) library, so a problem with how a speaker is detected or controlled usually belongs there.
 
-- Code improvements and bug fixes
-- Documentation updates
-- Testing on different speaker models
-- Example automations and scripts
+## Credits
 
-## Acknowledgments
-
-This integration builds upon excellent work from:
-
-- **[pywiim](https://github.com/mjcumming/pywiim)** - The brand new, fully async Python library we wrote that powers this integration's device communication
-- [python-linkplay](https://github.com/Velleman/python-linkplay) - Comprehensive LinkPlay library (inspiration for pywiim)
-- [LinkPlay HA Integration](https://github.com/nagyrobi/home-assistant-custom-components-linkplay) - Original LinkPlay integration
+WiiM Audio is built on [pywiim](https://github.com/mjcumming/pywiim), an async Python library for WiiM and LinkPlay devices. It draws on earlier work in [python-linkplay](https://github.com/Velleman/python-linkplay) and the original [LinkPlay custom integration](https://github.com/nagyrobi/home-assistant-custom-components-linkplay).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).
 
----
-
-_This integration is not affiliated with WiiM or LinkPlay. All trademarks belong to their respective owners._
+This project isn't affiliated with WiiM or LinkPlay. All trademarks belong to their owners.

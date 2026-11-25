@@ -1,6 +1,6 @@
 # WiiM TTS (Text-to-Speech) Guide
 
-The WiiM integration supports TTS announcements via `media_player.play_media` with `announce: true` and via `tts.speak`. For **multiroom groups**, still target the **master** or **group coordinator** entity so every grouped speaker hears the announcement without breaking the group. **Slave** `media_player` entities also advertise these services, but **firmware may remove a slave from its group** if notification-style playback hits the slave device directly (see [Group behavior](#group-behavior-master-slave-coordinator) and [ADR 0005](adr/0005-slave-supported-features.md)).
+The WiiM integration supports TTS announcements via `media_player.play_media` with `announce: true` and via `tts.speak`. For **multiroom groups**, still target the **master** or **group master** entity so every grouped speaker hears the announcement without breaking the group. **Slave** `media_player` entities also advertise these services, but **firmware may remove a slave from its group** if notification-style playback hits the slave device directly (see [Group behavior](#group-behavior-master-slave-coordinator) and [ADR 0005](adr/0005-slave-supported-features.md)).
 
 ## Developer Tools / Actions (correct payload)
 
@@ -32,7 +32,7 @@ data:
 ### Simple TTS Announcement
 
 ```yaml
-service: media_player.play_media
+action: media_player.play_media
 target:
   entity_id: media_player.living_room
 data:
@@ -41,50 +41,36 @@ data:
   announce: true
 ```
 
-### TTS with Custom Volume
-
-```yaml
-service: media_player.play_media
-target:
-  entity_id: media_player.living_room
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts/google_translate?message=Volume test"
-  announce: true
-  extra:
-    tts_volume: 75 # 75% volume
-```
-
 ## Group behavior (master, slave, coordinator)
 
 ### What happens on the device
 
 - **Solo** speaker: `media_player.play_media` / `tts.speak` with `announce: true` plays the notification on that unit only.
 - **Master** in a multiroom group: the same announcement is played through the **group audio path**. Slaves follow the master, so **they will play the announcement too** (it is still a URL fetched and rendered as part of grouped playback—you do not need to target each slave).
-- **Slave** speaker: on LinkPlay / WiiM firmware, starting a **notification-style URL on the slave itself** can cause the device to **leave the group**. The integration still exposes `media_player.play_media` / `announce` on slaves so tools such as Music Assistant can treat them as normal players; **for stable group-wide TTS, use the master or `*_group_coordinator`**, not the slave entity.
+- **Slave** speaker: on LinkPlay / WiiM firmware, starting a **notification-style URL on the slave itself** can cause the device to **leave the group**. The integration still exposes `media_player.play_media` / `announce` on slaves so tools such as Music Assistant can treat them as normal players; **for stable group-wide TTS, use the master or `*_group_master`**, not the slave entity.
 
 ### What to target
 
 | Your goal                         | Target entity                                                                 |
 | --------------------------------- | ----------------------------------------------------------------------------- |
-| Announce to the **whole group**   | The **master** `media_player` for that group, or `media_player.*_group_coordinator` |
+| Announce to the **whole group**   | The **master** `media_player` for that group, or `media_player.*_group_master` |
 | Announce to one **ungrouped** box | That speaker’s `media_player` while it is **solo**                          |
-| Slave `media_player`              | **Avoid** for group-wide `play_media` / `tts.speak` / announce — prefer **master** or **coordinator** so the group stays intact; direct slave playback may **unjoin** the device |
+| Slave `media_player`              | **Avoid** for group-wide `play_media` / `tts.speak` / announce — prefer **master** or **group master** so the group stays intact; direct slave playback may **unjoin** the device |
 
 ### Example: group-wide TTS (recommended)
 
 ```yaml
-# Option A — group coordinator (when the group exists)
-service: media_player.play_media
+# Option A — group master (when the group exists)
+action: media_player.play_media
 target:
-  entity_id: media_player.living_room_group_coordinator
+  entity_id: media_player.living_room_group_master
 data:
   media_content_type: music
   media_content_id: "media-source://tts?message=Dinner is ready"
   announce: true
 
 # Option B — master speaker entity (same effective outcome for announcements)
-service: media_player.play_media
+action: media_player.play_media
 target:
   entity_id: media_player.living_room  # Master, not a slave
 data:
@@ -95,67 +81,50 @@ data:
 
 ### `wiim.play_notification`
 
-Use a **direct HTTP URL** the device can fetch. For a **grouped** home, target the **master** or **group coordinator** so the announcement follows the same rule as above. Avoid pushing notification URLs at a **slave** player if you want the group to stay intact.
+Use a **direct HTTP URL** the device can fetch. For a **grouped** home, target the **master** or **group master** so the announcement follows the same rule as above. Avoid pushing notification URLs at a **slave** player if you want the group to stay intact.
 
-## Volume Control
+## Volume and what happens to the music
 
-### Default TTS Volume
+An announcement plays at the speaker's current volume. The integration doesn't set a separate announcement volume, so to make one louder, set the volume with `media_player.volume_set` before the announcement and set it back afterwards.
 
-- **70% of current volume** (minimum 30%)
-- Automatically adjusted for optimal TTS clarity
+What happens to the music depends on the source that is playing:
 
-### Custom TTS Volume
-
-```yaml
-service: media_player.play_media
-target:
-  entity_id: media_player.living_room
-data:
-  media_content_type: music
-  media_content_id: "media-source://tts/google_translate?message=Custom volume test"
-  announce: true
-  extra:
-    tts_volume: 80 # 80% volume (0-100)
-```
-
-## State Management
-
-TTS announcements automatically:
-
-1. **Save current state** (volume, mute, playback)
-2. **Pause current playback** (if playing)
-3. **Set TTS volume**
-4. **Play TTS audio**
-5. **Wait for completion**
-6. **Restore original state**
+- **Network sources** (presets, radio streams, URLs, USB): the integration uses the speaker's own announcement command, which is meant to lower the music and resume it afterwards. In practice it rarely does, so don't build automations that rely on it.
+- **Spotify, AirPlay, Bluetooth and physical inputs**: the announcement plays in place of the current audio, and the music doesn't resume on its own.
 
 ## Error handling
 
 ### Slave `media_player` and `tts.speak`
 
-Slave entities **do** advertise `media_player.play_media` / announce (see [ADR 0005](adr/0005-slave-supported-features.md)), but **playing a notification directly on a slave** can still **remove it from the group** on firmware. For **group-wide** announcements, use the **master** or **`*_group_coordinator`** so all speakers hear it and membership stays predictable.
+Slave entities **do** advertise `media_player.play_media` / announce (see [ADR 0005](adr/0005-slave-supported-features.md)), but **playing a notification directly on a slave** can still **remove it from the group** on firmware. For **group-wide** announcements, use the **master** or **`*_group_master`** so all speakers hear it and membership stays predictable.
 
 ### Network issues
 
-TTS will fail gracefully with network issues and restore original state.
+If the speaker can't be reached, the action fails with an error.
 
 ## Integration with TTS Services
 
-### Google Cloud TTS
+`tts.speak` works with any TTS entity. Target the TTS entity and name the speaker in `media_player_entity_id`.
+
+### Home Assistant Cloud
 
 ```yaml
-service: tts.cloud_say
+action: tts.speak
+target:
+  entity_id: tts.home_assistant_cloud
 data:
-  entity_id: media_player.living_room
-  message: "Hello from Google Cloud TTS"
+  media_player_entity_id: media_player.living_room
+  message: "Hello from Home Assistant Cloud"
 ```
 
 ### Local TTS
 
 ```yaml
-service: tts.picotts_say
+action: tts.speak
+target:
+  entity_id: tts.piper
 data:
-  entity_id: media_player.living_room
+  media_player_entity_id: media_player.living_room
   message: "Hello from local TTS"
 ```
 
@@ -166,14 +135,14 @@ data:
 ```yaml
 automation:
   - alias: "Doorbell TTS"
-    trigger:
-      platform: state
-      entity_id: binary_sensor.doorbell
-      to: "on"
-    action:
-      - service: media_player.play_media
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.doorbell
+        to: "on"
+    actions:
+      - action: media_player.play_media
         target:
-          entity_id: media_player.living_room_group_coordinator
+          entity_id: media_player.living_room_group_master
         data:
           media_content_type: music
           media_content_id: "media-source://tts/google_translate?message=Someone is at the door"
@@ -185,20 +154,18 @@ automation:
 ```yaml
 automation:
   - alias: "Weather Alert TTS"
-    trigger:
-      platform: state
-      entity_id: sensor.weather_alert
-      to: "severe"
-    action:
-      - service: media_player.play_media
+    triggers:
+      - trigger: state
+        entity_id: sensor.weather_alert
+        to: "severe"
+    actions:
+      - action: media_player.play_media
         target:
           entity_id: media_player.living_room
         data:
           media_content_type: music
           media_content_id: "media-source://tts/google_translate?message=Severe weather warning"
           announce: true
-          extra:
-            tts_volume: 90
 ```
 
 ## Debugging TTS (action not working)
@@ -243,7 +210,8 @@ Click **Perform action**. Then open **Developer tools → Logs** (or Settings �
 
 - `[Master Bedroom] Resolving media source: media-source://tts/...`
 - `[Master Bedroom] Resolved media source - url: http://..., mime_type: ...`
-- `[Master Bedroom] Playing notification via device firmware: http://...`
+- `[Master Bedroom] Playing announcement: http://...`
+- `[Master Bedroom] Announcement played via prompt (source was 'wifi').`
 
 **If you see an error instead:**
 
@@ -252,9 +220,9 @@ Click **Perform action**. Then open **Developer tools → Logs** (or Settings �
 | (no WiiM lines at all)                                                  | Service not reaching the entity, or wrong payload | Use flat `data` (no `media:` wrapper). Check **States** for `media_player.master_bedroom` and that it is **available**.                                                                                          |
 | `Failed to resolve media source` / TTS error                            | TTS engine or media source problem                | Check **Settings → Voice assistants → Text-to-speech**: the engine in the URL (e.g. `tts.google_translate_en_com`) must exist. Test TTS from Media or another player.                                            |
 | `Media source resolved to empty URL`                                    | TTS returned no URL                               | Same as above: fix TTS engine / config.                                                                                                                                                                          |
-| `Cannot build playable URL` / `NoURLAvailableError`                     | HA has no Internal URL                            | **Settings → System → Network**: set **Internal URL** to your HA LAN address (e.g. `http://192.168.1.x:8123`).                                                                                                   |
-| Action / `tts.speak` fails or group breaks after TTS                    | Often targeting a **slave** with announce         | Use the **master** `media_player` or **`media_player.*_group_coordinator`** for group-wide TTS; see [ADR 0005](adr/0005-slave-supported-features.md).                                                            |
-| `Playing notification via device firmware: http://...` but **no sound** | WiiM cannot reach the URL or gets 401             | Internal URL must be the IP the WiiM can reach. Open that `http://...` URL in a browser on the same network; if it asks for login, the WiiM will get 401 (see “No audio even when the URL looks correct” below). |
+| `Cannot build playable URL` / `NoURLAvailableError`                     | HA has no Internal URL                            | **Settings → System → Network**: under **Home Assistant URL**, set the local network address (the internal URL) to your HA LAN address (e.g. `http://192.168.1.x:8123`).                                                                                                   |
+| Action / `tts.speak` fails or group breaks after TTS                    | Often targeting a **slave** with announce         | Use the **master** `media_player` or **`media_player.*_group_master`** for group-wide TTS; see [ADR 0005](adr/0005-slave-supported-features.md).                                                            |
+| `Playing announcement: http://...` but **no sound**                     | WiiM cannot reach the URL or gets 401             | Internal URL must be the IP the WiiM can reach. Open that `http://...` URL in a browser on the same network; if it asks for login, the WiiM will get 401 (see “No audio even when the URL looks correct” below). |
 
 ### 3. Check the entity and payload
 
@@ -272,13 +240,13 @@ data:
 
 ### 4. Confirm Internal URL (no sound / URL unreachable)
 
-- **Settings → System → Network** → **Internal URL** = `http://YOUR_HA_IP:8123` (same LAN as the WiiM).
+- **Settings → System → Network** → **Home Assistant URL** → local network address = `http://YOUR_HA_IP:8123` (same LAN as the WiiM). The rest of this page calls it the Internal URL, as the integration's error message does.
 - If Internal URL is empty or `localhost`, the TTS URL sent to the WiiM will be wrong and you get no sound.
 
 ### 5. Test TTS and the URL by hand
 
 - In **Media** (or another media player card), try playing the same TTS source; if that fails, fix TTS first.
-- After a successful action, copy the URL from the log line `Playing notification via device firmware: <url>`. Open `<url>` in a browser on a device on the same LAN. If you get a login page or 401, the WiiM will too (see next section).
+- After a successful action, copy the URL from the log line `Playing announcement: <url>`. Open `<url>` in a browser on a device on the same LAN. If you get a login page or 401, the WiiM will too (see next section).
 
 ---
 
@@ -321,9 +289,9 @@ After that, TTS can work from a dev container the same way as on a normal HA ins
 
 **Dev container on WSL on Windows:** Use your **Windows PC's LAN IP** as Internal URL (not the router). On Windows run `ipconfig` and use the IPv4 Address of your Ethernet or Wi-Fi adapter (e.g. `192.168.1.100`). If the WiiM still cannot connect, allow inbound TCP port **8123** in Windows Firewall (Windows Security → Firewall → Advanced, or Admin PowerShell: `New-NetFirewallRule -DisplayName "HA 8123" -Direction Inbound -LocalPort 8123 -Protocol TCP -Action Allow`).
 
-### Spotify Connect: announcements may not interrupt
+### Spotify, AirPlay, Bluetooth and physical inputs: the music doesn't resume
 
-When the device is used as a **Spotify Connect** target, the firmware may not support interrupting playback for announcements. If you hear no TTS while Spotify is playing, that is a **device/firmware limitation**, not an integration bug. The integration cannot fix it. Use another source (e.g. WiFi) for reliable TTS, or check with WiiM for firmware updates that add this behavior.
+On these sources the speaker can't lower the music for an announcement. The integration plays the announcement in place of the current audio so it is still heard, and the music doesn't resume afterwards. Start playback again from the app or an automation.
 
 ### Group Issues
 
@@ -333,9 +301,7 @@ When the device is used as a **Spotify Connect** target, the firmware may not su
 
 ### Volume Issues
 
-1. **Check current volume**: TTS volume is based on current speaker volume
-2. **Verify TTS volume setting**: Custom TTS volume should be 0-100
-3. **Test volume restoration**: Original volume should be restored after TTS
+Announcements play at the speaker's current volume. If one is too quiet, check the speaker's volume before it plays.
 
 ## Technical Details
 
@@ -356,21 +322,10 @@ media-source://tts/<engine>?message=<text>&language=<lang>
 
 Example: `media-source://tts/google_translate?message=Hello` (replace `google_translate` with your configured TTS engine).
 
-### Timeout
+### How announcements are played
 
-TTS completion detection has a 30-second timeout by default.
+The integration hands the announcement URL to pywiim, which picks the method from the source that is playing:
 
-### State Restoration
-
-- Volume and mute state are always restored
-- Playback state is conditionally restored (only if it was playing before TTS)
-
-### WiiM Device Limitations: No playPromptUrl Support
-
-**WiiM firmware does not support the `playPromptUrl` announcement endpoint.** This command exists in some Arylic/Linkplay documentation but returns "unknown command" on WiiM devices. The official WiiM HTTP API (v1.2) and the wiim-httpapi OpenAPI spec do not include `playPromptUrl`.
-
-**How the integration works instead:** TTS announcements use `setPlayerCmd:play:{url}` to play the TTS URL as normal playback. This means:
-
-- **TTS replaces current content** — Unlike devices with true announcement support, there is no ducking or interruption of music; the TTS plays as the new track.
-- **Network source required** — The WiiM must be on Network (WiFi) source for URL playback; the integration switches to Network temporarily if needed.
+- **Network sources** (presets, radio streams, URLs, USB): the firmware's announcement command, `playPromptUrl`. It's meant to lower the music and resume afterwards, but rarely does in practice.
+- **Spotify, AirPlay, Bluetooth, physical inputs, or an unknown source**: normal URL playback, which replaces what was playing.
 - **URL must be reachable** — The TTS proxy URL (e.g. `http://HA_IP:8123/api/tts_proxy/...`) must be reachable from the WiiM on your LAN (see [Internal URL](#4-confirm-internal-url-no-sound--url-unreachable) and [401 Unauthorized](#no-audio-even-when-the-url-looks-correct-401-unauthorized)).

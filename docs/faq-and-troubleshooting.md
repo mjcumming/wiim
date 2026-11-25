@@ -4,7 +4,7 @@ Quick answers to common questions and solutions to common problems.
 
 ---
 
-## 📋 Frequently Asked Questions
+## Frequently Asked Questions
 
 ### General Questions
 
@@ -12,8 +12,8 @@ Quick answers to common questions and solutions to common problems.
 
 All WiiM and LinkPlay-based devices:
 
-- **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Ultra, Ultra, Sound, Sound Lite
-- **LinkPlay Partners**: Arylic, DOSS, Dayton Audio, Edifier (MS50A), iEast, and many more
+- **WiiM**: Mini, Pro, Pro Plus, Amp, Amp Pro, Amp Ultra, Ultra, Sound, Sound Lite
+- **LinkPlay Partners**: Arylic, Audio Pro, DOSS, Dayton Audio, Edifier (MS50A), iEast, and others
 
 **Q: Do I need the WiiM Home app?**
 
@@ -66,19 +66,19 @@ Essential for:
 
 The role sensor is **always visible** - it's one of the most important entities for multiroom automation.
 
-**Q: What's the difference between the speaker entity and the group coordinator?**
+**Q: What's the difference between the speaker entity and the group master?**
 
 - **Speaker entity** (`media_player.living_room`): Controls individual speaker, always present
-- **Group coordinator** (`media_player.living_room_group_coordinator`): Virtual entity shown while that speaker is master with slaves. Hidden otherwise. Controls the whole group.
+- **Group master** (`media_player.living_room_group_master`): Virtual entity shown while that speaker is master with slaves. Hidden otherwise. Controls the whole group.
 
-Use the speaker entity for individual control and Music Assistant integration. Use the group coordinator for controlling the whole group at once.
+Use the speaker entity for individual control and Music Assistant integration. Use the group master for controlling the whole group at once.
 
-**Q: What's the group coordinator entity?**
+**Q: What's the group master entity?**
 
-When a speaker becomes master with slaves, Home Assistant shows the group coordinator:
+When a speaker becomes master with slaves, Home Assistant shows the group master:
 
 ```yaml
-media_player.living_room_group_coordinator
+media_player.living_room_group_master
 ```
 
 Features:
@@ -101,38 +101,26 @@ Common fixes:
 
 **Q: Can I use groups created in the WiiM app?**
 
-Yes! Groups created in the WiiM Home app automatically sync to Home Assistant within 5 seconds. The integration detects group changes and updates entities accordingly.
+Yes. Groups created in the WiiM Home app show up in Home Assistant, usually within 15 seconds. The integration detects group changes and updates entities accordingly.
 
 ### Volume Questions
 
 **Q: How does group volume work?**
 
-The group coordinator shows the **maximum volume** of any member and sets all speakers to the same level when adjusted.
+The group master shows the **maximum volume** of any member. Changing it moves every member by the same proportion, so the differences between speakers are kept.
 
 ```yaml
-# Use group coordinator to control entire group
-service: media_player.volume_set
+# Use group master to control entire group
+action: media_player.volume_set
 target:
-  entity_id: media_player.living_room_group_coordinator
+  entity_id: media_player.living_room_group_master
 data:
   volume_level: 0.5
 ```
 
 **Q: Can I maintain relative volumes between speakers in a group?**
 
-Not currently. When you set the group coordinator volume, all speakers are set to the same level.
-
-**Workaround:** Use scenes to save/restore volume relationships:
-
-```yaml
-scene:
-  - name: "Speaker Volumes"
-    entities:
-      media_player.living_room:
-        volume_level: 0.6
-      media_player.kitchen:
-        volume_level: 0.3
-```
+Yes. Setting the group master volume scales every speaker and keeps the ratio between them. With the master at 50% and another speaker at 30%, setting the group to 80% puts them at 80% and 48%.
 
 ### Playback Questions
 
@@ -153,7 +141,7 @@ Check in order:
 
 **Q: I sent a play command but nothing happened - no error shown?**
 
-⚠️ **This is a known device limitation.** WiiM/LinkPlay devices accept play commands silently even when playback fails. The device returns "success" to the integration, but the stream may fail to play due to:
+**This is a known device limitation.** WiiM/LinkPlay devices accept play commands silently even when playback fails. The device returns "success" to the integration, but the stream may fail to play due to:
 
 - **Geo-restrictions** - Stream blocked in your region
 - **Invalid URL** - Stream moved or no longer available
@@ -175,7 +163,7 @@ Check in order:
 
 These HTTP streams are tested and reliable:
 
-```yaml
+```text
 # SomaFM (Various genres)
 http://ice2.somafm.com/groovesalad-128-mp3   # Ambient/Chill
 http://ice2.somafm.com/secretagent-128-mp3   # Lounge
@@ -220,7 +208,7 @@ If pause/stop commands don't reliably stop Bluetooth playback, you can stop it b
 
 ```yaml
 # Switch to WiFi (or another available source) to disconnect Bluetooth
-service: media_player.select_source
+action: media_player.select_source
 target:
   entity_id: media_player.your_device
 data:
@@ -235,8 +223,8 @@ Switching sources will disconnect Bluetooth and stop playback. You can create an
 
 Not all speakers support all features:
 
-- **EQ**: Pro/Pro Plus/Ultra only
-- **Display (`light.*_display`)**: WiiM Ultra and WiiM Sound. Sound Lite has no screen. Requires **pywiim 2.1.98+** for Ultra and **pywiim 2.3.11+** for Sound, so turning the display on sets brightness explicitly (1–100 on the device). **pywiim 2.3.12+** also reads that state back, so Home Assistant matches the screen after a restart or a change in the WiiM app (about once a minute). If the screen stays barely readable after “on”, upgrade dependencies; adaptive brightness is controlled in the WiiM app, not Home Assistant.
+- **EQ**: Only on speakers that report an equalizer
+- **Display (`light.*_display`)**: WiiM Ultra and WiiM Sound. Sound Lite has no screen. Turning the display on sets brightness explicitly (1–100 on the device). Home Assistant reads the state back about once a minute, so it matches the screen after a restart or a change in the WiiM app. Adaptive brightness is controlled in the WiiM app.
 - **Presets**: Check available slots in WiiM app
 - **Sources**: Varies by model
 - **Alarms/Sleep Timer**: WiiM devices only
@@ -247,21 +235,21 @@ Use the **EQ Preset** select (`select.{device}_eq_preset`) or the media player's
 
 ```yaml
 # Dedicated select entity
-service: select.select_option
+action: select.select_option
 target:
   entity_id: select.living_room_eq_preset
 data:
   option: "Rock"
 
 # Same control via the media player
-service: media_player.select_sound_mode
+action: media_player.select_sound_mode
 target:
   entity_id: media_player.living_room
 data:
   sound_mode: "Rock"
 
 # Custom EQ (10 bands: 31.5Hz to 16kHz)
-service: wiim.set_eq
+action: wiim.set_eq
 target:
   entity_id: media_player.living_room
 data:
@@ -276,7 +264,7 @@ data:
 WiiM devices support 3 alarm slots (0-2). Times must be in **UTC**:
 
 ```yaml
-service: wiim.update_alarm
+action: wiim.update_alarm
 target:
   entity_id: media_player.bedroom
 data:
@@ -291,7 +279,7 @@ Remember to convert your local time to UTC!
 **Q: How do I set a sleep timer?**
 
 ```yaml
-service: wiim.set_sleep_timer
+action: wiim.set_sleep_timer
 target:
   entity_id: media_player.living_room
 data:
@@ -307,7 +295,7 @@ Alarm times are in **UTC**, not your local time. Convert your local time to UTC 
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Connection Issues
 
@@ -352,7 +340,7 @@ Alarm times are in **UTC**, not your local time. Convert your local time to UTC 
 4. Try creating group in WiiM app first
 5. Check router multicast/IGMP settings
 
-**Problem: Group coordinator not showing**
+**Problem: Group master not showing**
 
 **Reasons:**
 
@@ -377,19 +365,18 @@ Alarm times are in **UTC**, not your local time. Convert your local time to UTC 
 
 **Solution:**
 
-- Check that you selected **individual speaker entities**, not group coordinators
-- Group coordinators have names ending with "Group" or "group coordinator"
-- Individual speakers have clean names like "Living Room" or "Kitchen"
-- Look for the `music_assistant_excluded: true` attribute (group coordinators have this)
+- Check that you selected **individual speaker entities**, not group master entities
+- Group master entities have names ending with "Group Master"
+- Individual speakers have plain names like "Living Room" or "Kitchen"
 
 **Problem: Music Assistant can't control my speakers**
 
 **Solution:**
 
 1. In Music Assistant, select **Home Assistant Player Provider**
-2. Choose only **individual speaker entities** (not group coordinators)
+2. Choose only **individual speaker entities** (not group master entities)
 3. Let Music Assistant handle its own grouping
-4. Individual speaker entities work seamlessly with Music Assistant
+4. Individual speaker entities work with Music Assistant
 
 ### Debug Logging
 
@@ -412,10 +399,10 @@ View logs: Settings → System → Logs
 | `Connection timeout`                            | Can't reach device                                          | Check network, verify IP                                                                                                                                                       |
 | `Invalid response`                              | Firmware issue                                              | Update speaker firmware                                                                                                                                                        |
 | `Unknown command`                               | Not supported                                               | Check device model capabilities                                                                                                                                                |
-| `Slave speaker cannot play independently`       | Legacy / misleading                                         | Prefer: target **master** or **`*_group_coordinator`** for group-wide TTS; **slave** entities expose `play_media` / announce but notification playback on a slave can **unjoin** the group on firmware. See [TTS Guide](TTS_GUIDE.md) and [ADR 0005](adr/0005-slave-supported-features.md). |
-| `tts.speak` / play_media issues in a group      | Often wrong **target** (e.g. slave)                        | Use **master** `media_player` or **group coordinator** for announcements everyone should hear without breaking membership.                                                                                                                  |
+| `Slave speaker cannot play independently`       | Legacy / misleading                                         | Prefer: target **master** or **`*_group_master`** for group-wide TTS; **slave** entities expose `play_media` / announce but notification playback on a slave can **unjoin** the group on firmware. See [TTS Guide](TTS_GUIDE.md) and [ADR 0005](adr/0005-slave-supported-features.md). |
+| `tts.speak` / play_media issues in a group      | Often wrong **target** (e.g. slave)                        | Use **master** `media_player` or **group master** for announcements everyone should hear without breaking membership.                                                                                                                  |
 | TTS URL works in browser but no audio on device | Device gets 401 on TTS proxy                                | Configure HA HTTP (internal URL, trusted_networks, or allowlist) so device can fetch TTS without auth; see [HTTP docs](https://www.home-assistant.io/docs/configuration/http/) |
-| No TTS when using Spotify Connect               | Device/firmware may not interrupt Spotify for announcements | Device limitation; use WiFi source or check WiiM firmware updates                                                                                                              |
+| Music doesn't resume after an announcement      | The source was Spotify, AirPlay, Bluetooth or a physical input | On those sources the speaker can't lower the music for an announcement, so it plays in place of the current audio. On network sources (presets, radio, URLs, USB) the speaker is meant to resume but rarely does. Start playback again from an automation. |
 
 ### Performance Issues
 
@@ -425,9 +412,8 @@ View logs: Settings → System → Logs
 
 1. Check WiFi signal strength
 2. Verify network isn't congested
-3. Reduce polling frequency (integration auto-adjusts)
-4. Check Home Assistant system resources
-5. Update speaker firmware
+3. Check Home Assistant system resources
+4. Update speaker firmware
 
 **Problem: Entities not updating**
 
@@ -489,27 +475,29 @@ This integration is a **wrapper around the pywiim library**:
 - Protocol detection, connection management, and error handling managed by library
 - Integration focuses on Home Assistant-specific concerns (entities, coordinators, config flow)
 
+**State Updates**
+
+The integration subscribes to each speaker's UPnP events and also polls it. If the speaker can't reach Home Assistant to deliver events, polling carries on and changes show up at the next poll. The device diagnostics download shows the subscription under `connection_info.upnp_events`.
+
 **Library Version**
 
-The integration requires `pywiim>=1.0.22`. If you encounter issues:
+The pywiim version the integration needs is pinned in its manifest and installed with it. If you encounter issues:
 
-- Check that pywiim is up to date
 - Review pywiim documentation for library-specific troubleshooting
 - Report library issues to the pywiim project if appropriate
 
 ---
 
-## 💡 Pro Tips
+## Pro Tips
 
 1. **Use Role Sensors** - Check `sensor.{device}_multiroom_role` before sending commands
 2. **DHCP Reservations** - Assign static IPs to prevent connection issues
-3. **Group Coordinators** - Use `*_group_coordinator` entities for group operations
-4. **Network Monitoring** - Enable connectivity sensor for better diagnostics
-5. **Keep Firmware Updated** - Use the **Firmware Update** entity on WiiM devices, or the WiiM app
+3. **Group Master Entities** - Use `*_group_master` entities for group operations
+4. **Keep Firmware Updated** - Use the **Firmware Update** entity on WiiM devices, or the WiiM app
 
 ---
 
-## 📚 Related Documentation
+## Related Documentation
 
 - **[Quick Start Guide](README.md)** - Installation and first steps
 - **[User Guide](user-guide.md)** - Complete feature reference
@@ -518,4 +506,4 @@ The integration requires `pywiim>=1.0.22`. If you encounter issues:
 
 ---
 
-**Still need help?** Visit [GitHub Discussions](https://github.com/mjcumming/wiim/discussions) or the [Home Assistant Community](https://community.home-assistant.io/).
+**Still need help?** Open an issue on [GitHub](https://github.com/mjcumming/wiim/issues) or ask in the [Home Assistant Community](https://community.home-assistant.io/).

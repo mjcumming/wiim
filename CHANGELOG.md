@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The options dialog labels no longer carry emoji. Three labels for options that no longer exist (playing update rate, idle update rate and diagnostic sensors) were removed from the English, French, Norwegian and Serbian translations.
+- The **Play Notification** action description no longer says the speaker lowers the music and restores it afterwards. Most firmware doesn't.
+
+### Fixed
+
+- The 15 `wiim.*` actions and the system information page show their names and descriptions. The text existed in `strings.json` but was missing from the English translation file that Home Assistant loads.
+
 ## [1.1.7-beta.1] - 2026-11-25
 
 Beta. In HACS, open WiiM Audio and turn on **Show beta** to install it. After changing the volume or the track in the WiiM app, the device diagnostics download should show `connection_info.upnp_events.event_count` above zero.

@@ -41,21 +41,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "⚙️ WiiM-enhetsinnstillinger",
+        "title": "WiiM-enhetsinnstillinger",
         "description": "Konfigurer essensielle enhetsinnstillinger:",
         "data": {
-          "playing_update_rate": "🎵 Oppdateringsrate under avspilling (sekunder)",
-          "idle_update_rate": "💤 Oppdateringsrate når inaktiv (sekunder)",
-          "volume_step_percent": "🔊 Volumtrinnstørrelse (%)",
-          "enable_maintenance_buttons": "🔧 Vedlikeholdsknapper",
-          "enable_diagnostic_entities": "📊 Diagnosesensorer"
+          "volume_step_percent": "Volumtrinnstørrelse (%)",
+          "enable_maintenance_buttons": "Vedlikeholdsknapper"
         },
         "data_description": {
-          "playing_update_rate": "Rask spørring når musikk spilles for jevne posisjonsoppdateringer (1-5 sekunder)",
-          "idle_update_rate": "Langsommere spørring når ikke spiller for effektivitet (5-60 sekunder)",
           "volume_step_percent": "Volumendringsstørrelse når volum opp/ned-knapper brukes (1-50%). Mindre trinn gir finere kontroll.",
-          "enable_maintenance_buttons": "Vis enhetsvedlikeholdsknapper (omstart, synkroniser tid) for feilsøking",
-          "enable_diagnostic_entities": "Vis avanserte diagnosesensorer for debugging og ytelsesovervåking"
+          "enable_maintenance_buttons": "Vis enhetsvedlikeholdsknapper (omstart, synkroniser tid) for feilsøking"
         }
       }
     }

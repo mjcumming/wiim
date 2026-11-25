@@ -57,14 +57,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "⚙️ WiiM Device Settings",
+        "title": "WiiM Device Settings",
         "description": "Configure essential device settings:",
         "data": {
-          "playing_update_rate": "🎵 Playing Update Rate (seconds)",
-          "idle_update_rate": "💤 Idle Update Rate (seconds)",
-          "volume_step_percent": "🔊 Volume Step Size (%)",
-          "enable_maintenance_buttons": "🔧 Maintenance Buttons",
-          "enable_diagnostic_entities": "📊 Diagnostic Sensors"
+          "volume_step_percent": "Volume Step Size (%)",
+          "enable_maintenance_buttons": "Maintenance Buttons"
+        },
+        "data_description": {
+          "volume_step_percent": "Volume change amount when using volume up/down buttons (1-50%). Smaller steps provide finer control.",
+          "enable_maintenance_buttons": "Show device maintenance buttons (reboot, sync time) for troubleshooting"
         }
       }
     }
@@ -163,7 +164,7 @@
     },
     "play_notification": {
       "name": "Play Notification",
-      "description": "Play a notification sound. The device automatically lowers current playback, plays the notification, then restores volume.",
+      "description": "Play a notification sound from a URL. Current playback may be interrupted and may not resume afterwards.",
       "fields": {
         "url": {
           "name": "Notification URL",

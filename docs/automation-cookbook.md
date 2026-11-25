@@ -2,7 +2,7 @@
 
 Essential automation patterns for your WiiM speakers. Copy these proven examples and adapt to your setup.
 
-## 🚀 Quick Start Scripts
+## Quick Start Scripts
 
 Add these to your `scripts.yaml`:
 
@@ -12,7 +12,7 @@ wiim_party_mode:
   alias: "WiiM Party Mode"
   icon: mdi:party-popper
   sequence:
-    - service: media_player.join
+    - action: media_player.join
       target:
         entity_id: media_player.living_room
       data:
@@ -20,9 +20,9 @@ wiim_party_mode:
           - media_player.kitchen
           - media_player.bedroom
           - media_player.patio
-    - service: media_player.volume_set
+    - action: media_player.volume_set
       target:
-        entity_id: media_player.living_room_group_coordinator
+        entity_id: media_player.living_room_group_master
       data:
         volume_level: 0.7
 
@@ -31,7 +31,7 @@ wiim_ungroup_all:
   alias: "WiiM Ungroup All"
   icon: mdi:speaker-off
   sequence:
-    - service: media_player.unjoin
+    - action: media_player.unjoin
       target:
         entity_id:
           - media_player.living_room
@@ -44,19 +44,19 @@ wiim_morning_routine:
   alias: "WiiM Morning Routine"
   icon: mdi:weather-sunny
   sequence:
-    - service: media_player.volume_set
+    - action: media_player.volume_set
       target:
         entity_id: media_player.bedroom
       data:
         volume_level: 0.2
-    - service: wiim.play_preset
+    - action: wiim.play_preset
       target:
         entity_id: media_player.bedroom
       data:
         preset: 1
 ```
 
-## ⏰ Alarms and Sleep Timers
+## Alarms and Sleep Timers
 
 ### Morning Alarm with Music
 
@@ -66,10 +66,10 @@ Wake up to your favorite music using WiiM's built-in alarm:
 automation:
   alias: "Bedroom Morning Alarm"
   description: "Set daily alarm for weekday mornings (WiiM devices only)"
-  trigger:
-    platform: time
-    at: "22:00:00" # Set alarm the night before
-  condition:
+  triggers:
+    - trigger: time
+      at: "22:00:00" # Set alarm the night before
+  conditions:
     - condition: time
       weekday:
         - mon
@@ -77,11 +77,11 @@ automation:
         - wed
         - thu
         - fri
-  action:
+  actions:
     # Set alarm for 7:00 AM local time (convert to UTC!)
     # For EST (UTC-5): 7:00 AM = 12:00:00 UTC
     # For PST (UTC-8): 7:00 AM = 15:00:00 UTC
-    - service: wiim.update_alarm
+    - action: wiim.update_alarm
       target:
         entity_id: media_player.bedroom
       data:
@@ -98,18 +98,18 @@ Different alarm times for weekends:
 ```yaml
 automation:
   - alias: "Set Weekday Alarm"
-    trigger:
-      platform: time
-      at: "22:00:00"
-    condition:
+    triggers:
+      - trigger: time
+        at: "22:00:00"
+    conditions:
       - condition: time
         weekday:
           - mon
           - tue
           - wed
           - thu
-    action:
-      - service: wiim.update_alarm
+    actions:
+      - action: wiim.update_alarm
         target:
           entity_id: media_player.bedroom
         data:
@@ -119,16 +119,16 @@ automation:
           operation: "playback"
 
   - alias: "Set Weekend Alarm"
-    trigger:
-      platform: time
-      at: "22:00:00"
-    condition:
+    triggers:
+      - trigger: time
+        at: "22:00:00"
+    conditions:
       - condition: time
         weekday:
           - fri
           - sat
-    action:
-      - service: wiim.update_alarm
+    actions:
+      - action: wiim.update_alarm
         target:
           entity_id: media_player.bedroom
         data:
@@ -146,25 +146,25 @@ Automatically set sleep timer when starting bedtime music:
 automation:
   alias: "Bedtime Music with Sleep Timer"
   description: "Play sleep sounds and auto-shutoff after 30 minutes"
-  trigger:
-    platform: state
-    entity_id: input_boolean.bedtime_mode
-    to: "on"
-  action:
+  triggers:
+    - trigger: state
+      entity_id: input_boolean.bedtime_mode
+      to: "on"
+  actions:
     # Start playing sleep sounds
-    - service: wiim.play_preset
+    - action: wiim.play_preset
       target:
         entity_id: media_player.bedroom
       data:
         preset: 6 # Your sleep sounds preset
     # Set volume low
-    - service: media_player.volume_set
+    - action: media_player.volume_set
       target:
         entity_id: media_player.bedroom
       data:
         volume_level: 0.15
     # Set 30 minute sleep timer
-    - service: wiim.set_sleep_timer
+    - action: wiim.set_sleep_timer
       target:
         entity_id: media_player.bedroom
       data:
@@ -178,19 +178,19 @@ Fade volume before sleep timer ends:
 ```yaml
 automation:
   alias: "Fade to Sleep"
-  trigger:
-    platform: state
-    entity_id: input_boolean.sleep_mode
-    to: "on"
-  action:
+  triggers:
+    - trigger: state
+      entity_id: input_boolean.sleep_mode
+      to: "on"
+  actions:
     # Start music
-    - service: wiim.play_preset
+    - action: wiim.play_preset
       target:
         entity_id: media_player.bedroom
       data:
         preset: 6
     # Initial volume
-    - service: media_player.volume_set
+    - action: media_player.volume_set
       target:
         entity_id: media_player.bedroom
       data:
@@ -198,7 +198,7 @@ automation:
     # Wait 15 minutes
     - delay: "00:15:00"
     # Reduce volume
-    - service: media_player.volume_set
+    - action: media_player.volume_set
       target:
         entity_id: media_player.bedroom
       data:
@@ -206,13 +206,13 @@ automation:
     # Wait 10 minutes
     - delay: "00:10:00"
     # Further reduce
-    - service: media_player.volume_set
+    - action: media_player.volume_set
       target:
         entity_id: media_player.bedroom
       data:
         volume_level: 0.05
     # Set sleep timer for final 5 minutes
-    - service: wiim.set_sleep_timer
+    - action: wiim.set_sleep_timer
       target:
         entity_id: media_player.bedroom
       data:
@@ -226,18 +226,18 @@ Only set sleep timer if everyone is home:
 ```yaml
 automation:
   alias: "Conditional Sleep Timer"
-  trigger:
-    platform: time
-    at: "22:30:00"
-  condition:
+  triggers:
+    - trigger: time
+      at: "22:30:00"
+  conditions:
     - condition: state
       entity_id: group.family
       state: "home"
     - condition: state
       entity_id: media_player.bedroom
       state: "playing"
-  action:
-    - service: wiim.set_sleep_timer
+  actions:
+    - action: wiim.set_sleep_timer
       target:
         entity_id: media_player.bedroom
       data:
@@ -251,21 +251,21 @@ Cancel sleep timer when you get up early:
 ```yaml
 automation:
   alias: "Cancel Sleep Timer on Movement"
-  trigger:
-    platform: state
-    entity_id: binary_sensor.bedroom_motion
-    to: "on"
-  condition:
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.bedroom_motion
+      to: "on"
+  conditions:
     - condition: time
       after: "05:00:00"
       before: "07:00:00"
-  action:
-    - service: wiim.clear_sleep_timer
+  actions:
+    - action: wiim.clear_sleep_timer
       target:
         entity_id: media_player.bedroom
 ```
 
-## ⏰ Time-Based Automations
+## Time-Based Automations
 
 ### Morning Music Routine
 
@@ -273,29 +273,29 @@ automation:
 automation:
   - alias: "Morning Music"
     description: "Gentle wake-up music in bedroom"
-    trigger:
-      platform: time
-      at: "07:00:00"
-    condition:
+    triggers:
+      - trigger: time
+        at: "07:00:00"
+    conditions:
       - condition: state
         entity_id: binary_sensor.workday_sensor
         state: "on"
       - condition: state
         entity_id: person.you
         state: "home"
-    action:
-      - service: media_player.volume_set
+    actions:
+      - action: media_player.volume_set
         target:
           entity_id: media_player.bedroom
         data:
           volume_level: 0.15
-      - service: wiim.play_preset
+      - action: wiim.play_preset
         target:
           entity_id: media_player.bedroom
         data:
           preset: 1
       - delay: "00:15:00"
-      - service: media_player.volume_set
+      - action: media_player.volume_set
         target:
           entity_id: media_player.bedroom
         data:
@@ -308,24 +308,24 @@ automation:
 automation:
   - alias: "Evening Multiroom"
     description: "Create dining group at dinner time"
-    trigger:
-      platform: time
-      at: "18:00:00"
-    condition:
+    triggers:
+      - trigger: time
+        at: "18:00:00"
+    conditions:
       - condition: state
         entity_id: group.family
         state: "home"
-    action:
-      - service: media_player.join
+    actions:
+      - action: media_player.join
         target:
           entity_id: media_player.dining_room
         data:
           group_members:
             - media_player.kitchen
             - media_player.living_room
-      - service: wiim.play_preset
+      - action: wiim.play_preset
         target:
-          entity_id: media_player.dining_room_group_coordinator
+          entity_id: media_player.dining_room_group_master
         data:
           preset: 3
 ```
@@ -336,12 +336,12 @@ automation:
 automation:
   - alias: "Bedtime Music"
     description: "Transition to sleep sounds"
-    trigger:
-      platform: time
-      at: "22:30:00"
-    action:
+    triggers:
+      - trigger: time
+        at: "22:30:00"
+    actions:
       # Gradually lower volume on active groups
-      - service: media_player.volume_set
+      - action: media_player.volume_set
         target:
           entity_id: >
             {{ states.sensor
@@ -349,22 +349,22 @@ automation:
                | selectattr('state', 'eq', 'Master')
                | map(attribute='entity_id')
                | map('replace', 'sensor.', 'media_player.')
-               | map('replace', '_multiroom_role', '_group_coordinator')
+               | map('replace', '_multiroom_role', '_group_master')
                | list }}
         data:
           volume_level: 0.1
       # Wait then ungroup all
       - delay: "00:02:00"
-      - service: script.wiim_ungroup_all
+      - action: script.wiim_ungroup_all
       # Start sleep sounds in bedroom only
-      - service: wiim.play_preset
+      - action: wiim.play_preset
         target:
           entity_id: media_player.bedroom
         data:
           preset: 6
 ```
 
-## 🏠 Presence-Based Automations
+## Presence-Based Automations
 
 ### Welcome Home Music
 
@@ -372,22 +372,22 @@ automation:
 automation:
   - alias: "Welcome Home Music"
     description: "Start music when family arrives"
-    trigger:
-      platform: state
-      entity_id: group.family
-      from: "not_home"
-      to: "home"
-    condition:
+    triggers:
+      - trigger: state
+        entity_id: group.family
+        from: "not_home"
+        to: "home"
+    conditions:
       - condition: time
         after: "08:00:00"
         before: "22:00:00"
-    action:
-      - service: wiim.play_preset
+    actions:
+      - action: wiim.play_preset
         target:
           entity_id: media_player.living_room
         data:
           preset: 2
-      - service: media_player.volume_set
+      - action: media_player.volume_set
         target:
           entity_id: media_player.living_room
         data:
@@ -395,13 +395,13 @@ automation:
 
   - alias: "Away Mode"
     description: "Turn off all speakers when everyone leaves"
-    trigger:
-      platform: state
-      entity_id: group.family
-      to: "not_home"
-      for: "00:15:00"
-    action:
-      - service: media_player.turn_off
+    triggers:
+      - trigger: state
+        entity_id: group.family
+        to: "not_home"
+        for: "00:15:00"
+    actions:
+      - action: media_player.turn_off
         target:
           entity_id:
             - media_player.living_room
@@ -410,7 +410,7 @@ automation:
             - media_player.patio
 ```
 
-## 🚨 Event-Driven Automations
+## Event-Driven Automations
 
 ### Source Change Detection
 
@@ -420,18 +420,18 @@ automation:
 automation:
   - alias: "Bluetooth Connected"
     description: "Adjust volume when Bluetooth source is selected"
-    trigger:
-      platform: state
-      entity_id: media_player.living_room
-      attribute: source
-      to: "Bluetooth"
-    action:
-      - service: media_player.volume_set
+    triggers:
+      - trigger: state
+        entity_id: media_player.living_room
+        attribute: source
+        to: "Bluetooth"
+    actions:
+      - action: media_player.volume_set
         target:
           entity_id: media_player.living_room
         data:
           volume_level: 0.6
-      - service: notify.mobile_app
+      - action: notify.mobile_app
         data:
           message: "Bluetooth connected to Living Room speaker"
 ```
@@ -444,29 +444,29 @@ automation:
 automation:
   - alias: "Bluetooth Output Active"
     description: "Notify when audio is being sent to Bluetooth device"
-    trigger:
-      platform: state
-      entity_id: select.living_room_audio_output_mode
-    condition:
+    triggers:
+      - trigger: state
+        entity_id: select.living_room_audio_output_mode
+    conditions:
       - condition: template
         value_template: "{{ trigger.to_state.state.startswith('BT:') }}"
-    action:
-      - service: notify.mobile_app
+    actions:
+      - action: notify.mobile_app
         data:
           message: "Audio now playing to: {{ trigger.to_state.state }}"
 
   - alias: "Bluetooth Output Deactivated"
     description: "Notify when switching away from Bluetooth output"
-    trigger:
-      platform: state
-      entity_id: select.living_room_audio_output_mode
-    condition:
+    triggers:
+      - trigger: state
+        entity_id: select.living_room_audio_output_mode
+    conditions:
       - condition: template
         value_template: >
           {{ trigger.from_state.state.startswith('BT:') and
              not trigger.to_state.state.startswith('BT:') }}
-    action:
-      - service: notify.mobile_app
+    actions:
+      - action: notify.mobile_app
         data:
           message: "Switched from Bluetooth to {{ trigger.to_state.state }}"
 ```
@@ -474,7 +474,7 @@ automation:
 **Check Specific Bluetooth Device:**
 
 ```yaml
-condition:
+conditions:
   - condition: state
     entity_id: select.living_room_audio_output_mode
     state: "BT: Sony WH-1000XM4"
@@ -483,7 +483,7 @@ condition:
 **Check Any Bluetooth Output (Template):**
 
 ```yaml
-condition:
+conditions:
   - condition: template
     value_template: "{{ states('select.living_room_audio_output_mode').startswith('BT:') }}"
 ```
@@ -494,13 +494,13 @@ condition:
 automation:
   - alias: "Source Change Notification"
     description: "Notify when input source changes"
-    trigger:
-      platform: template
-      value_template: >
-        {{ states.media_player.living_room.attributes.source !=
-           state_attr('media_player.living_room', 'source') }}
-    action:
-      - service: notify.mobile_app
+    triggers:
+      - trigger: template
+        value_template: >
+          {{ states.media_player.living_room.attributes.source !=
+             state_attr('media_player.living_room', 'source') }}
+    actions:
+      - action: notify.mobile_app
         data:
           message: >
             Input changed to: {{ states.media_player.living_room.attributes.source }}
@@ -512,27 +512,28 @@ automation:
 automation:
   - alias: "Doorbell Announcement"
     description: "Pause music and announce doorbell"
-    trigger:
-      platform: state
-      entity_id: binary_sensor.front_door_button
-      to: "on"
-    action:
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.front_door_button
+        to: "on"
+    actions:
       # Store current state
-      - service: scene.create
+      - action: scene.create
         data:
           scene_id: before_doorbell
           snapshot_entities:
             - media_player.living_room
             - media_player.kitchen
       # Make announcement (uses TTS)
-      - service: tts.speak
+      - action: tts.speak
         target:
-          entity_id: media_player.living_room
+          entity_id: tts.home_assistant_cloud # your TTS entity
         data:
+          media_player_entity_id: media_player.living_room
           message: "Someone is at the front door"
       # Restore after 10 seconds
       - delay: "00:00:10"
-      - service: scene.turn_on
+      - action: scene.turn_on
         target:
           entity_id: scene.before_doorbell
 ```
@@ -543,14 +544,14 @@ automation:
 automation:
   - alias: "Dynamic Volume Control"
     description: "Adjust volume based on time of day"
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id:
           - media_player.living_room
           - media_player.kitchen
         to: "playing"
-    action:
-      - service: media_player.volume_set
+    actions:
+      - action: media_player.volume_set
         target:
           entity_id: "{{ trigger.entity_id }}"
         data:
@@ -567,7 +568,7 @@ automation:
             {% endif %}
 ```
 
-## 📱 Group Management Dashboard
+## Group Management Dashboard
 
 ### Group Preset Selector
 
@@ -588,23 +589,23 @@ input_select:
 automation:
   - alias: "Apply WiiM Group Preset"
     description: "Apply selected group configuration"
-    trigger:
-      platform: state
-      entity_id: input_select.wiim_group_presets
-    action:
+    triggers:
+      - trigger: state
+        entity_id: input_select.wiim_group_presets
+    actions:
       - choose:
           - conditions:
               - condition: state
                 entity_id: input_select.wiim_group_presets
                 state: "Solo (No Groups)"
             sequence:
-              - service: script.wiim_ungroup_all
+              - action: script.wiim_ungroup_all
           - conditions:
               - condition: state
                 entity_id: input_select.wiim_group_presets
                 state: "Kitchen + Dining"
             sequence:
-              - service: media_player.join
+              - action: media_player.join
                 target:
                   entity_id: media_player.kitchen
                 data:
@@ -615,7 +616,7 @@ automation:
                 entity_id: input_select.wiim_group_presets
                 state: "Party Mode (All)"
             sequence:
-              - service: script.wiim_party_mode
+              - action: script.wiim_party_mode
 ```
 
 ### System Status Dashboard
@@ -634,7 +635,7 @@ entities:
     name: Group Preset
 ```
 
-## 🎵 Role-Based Automations
+## Role-Based Automations
 
 ### Control Only Group Masters
 
@@ -642,12 +643,12 @@ entities:
 automation:
   - alias: "Control Via Masters Only"
     description: "Send commands to group masters for efficiency"
-    trigger:
-      platform: state
-      entity_id: input_boolean.music_mode
-      to: "on"
-    action:
-      - service: media_player.media_play
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.music_mode
+        to: "on"
+    actions:
+      - action: media_player.media_play
         target:
           entity_id: >
             {{ states.sensor
@@ -665,20 +666,20 @@ automation:
 automation:
   - alias: "Notify Group Formation"
     description: "Alert when speakers join groups"
-    trigger:
-      platform: state
-      entity_id:
-        - sensor.living_room_multiroom_role
-        - sensor.kitchen_multiroom_role
-        - sensor.bedroom_multiroom_role
-      to: "Master"
-    action:
-      - service: notify.mobile_app
+    triggers:
+      - trigger: state
+        entity_id:
+          - sensor.living_room_multiroom_role
+          - sensor.kitchen_multiroom_role
+          - sensor.bedroom_multiroom_role
+        to: "Master"
+    actions:
+      - action: notify.mobile_app
         data:
           message: "{{ trigger.to_state.name }} is now controlling a speaker group"
 ```
 
-## 🛠️ Maintenance Automations
+## Maintenance Automations
 
 ### Weekly Health Check
 
@@ -686,15 +687,16 @@ automation:
 automation:
   - alias: "WiiM Health Check"
     description: "Weekly maintenance and sync"
-    trigger:
-      platform: time
-      at: "03:00:00"
-    condition:
-      platform: time
-      weekday: sun
-    action:
+    triggers:
+      - trigger: time
+        at: "03:00:00"
+    conditions:
+      - condition: time
+        weekday:
+          - sun
+    actions:
       # Sync time on all devices
-      - service: wiim.sync_time
+      - action: wiim.sync_time
         target:
           entity_id:
             - media_player.living_room
@@ -708,13 +710,13 @@ automation:
               | selectattr('state', 'equalto', 'unavailable')
               | map(attribute='entity_id') | list }}
           sequence:
-            - service: wiim.reboot_device
+            - action: wiim.reboot_device
               target:
                 entity_id: "{{ repeat.item }}"
             - delay: "00:01:00"
 ```
 
-## 📚 Template Helpers
+## Template Helpers
 
 Essential templates for WiiM automations:
 
@@ -747,15 +749,15 @@ input_boolean:
     icon: mdi:party-popper
 ```
 
-## 🎯 Pro Tips
+## Pro Tips
 
 1. **Use Role Sensors**: Always check `sensor.{device}_multiroom_role` before sending commands
 2. **Group First**: Create groups before setting volume/playback
-3. **Master Control**: Use group coordinators (`*_group_coordinator`) for group operations
+3. **Master Control**: Use group master entities (`*_group_master`) for group operations
 4. **Error Handling**: Add `continue_on_error: true` for robust automations
 5. **Timing**: Add small delays between group operations for reliability
 
-## 📱 Quick Station Switching
+## Quick Station Switching
 
 ```yaml
 input_select:
@@ -766,28 +768,28 @@ input_select:
       - Classic FM
 
 automation:
-  - trigger:
-      platform: state
-      entity_id: input_select.radio_station
-    action:
-      service: media_player.play_media
-      target:
-        entity_id: media_player.living_room
-      data:
-        media_content_type: music
-        media_content_id: >
-          {% set stations = {
-            'BBC Radio 2': 'http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two',
-            'Jazz FM': 'http://jazz.fm/stream',
-            'Classic FM': 'http://classic.fm/stream'
-          } %}
-          {{ stations[trigger.to_state.state] }}
+  - triggers:
+      - trigger: state
+        entity_id: input_select.radio_station
+    actions:
+      - action: media_player.play_media
+        target:
+          entity_id: media_player.living_room
+        data:
+          media_content_type: music
+          media_content_id: >
+            {% set stations = {
+              'BBC Radio 2': 'http://stream.live.vc.bbcmedia.co.uk/bbc_radio_two',
+              'Jazz FM': 'http://jazz.fm/stream',
+              'Classic FM': 'http://classic.fm/stream'
+            } %}
+            {{ stations[trigger.to_state.state] }}
 ```
 
-## 📚 More Resources
+## More Resources
 
-- **[🎛️ User Guide](user-guide.md)** - Complete features and configuration reference
-- **[❓ FAQ & Troubleshooting](faq-and-troubleshooting.md)** - Quick answers and solutions
+- **[User Guide](user-guide.md)** - Complete features and configuration reference
+- **[FAQ & Troubleshooting](faq-and-troubleshooting.md)** - Quick answers and solutions
 
 ---
 
