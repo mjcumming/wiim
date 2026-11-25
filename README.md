@@ -15,11 +15,13 @@ WiiM Audio connects WiiM streamers, amplifiers and speakers to Home Assistant, a
 
 ## What you can do with it
 
-- Announce the doorbell on the kitchen speaker with any text-to-speech engine.
-- Group the downstairs speakers from a dashboard button and move the volume of all of them with one slider.
+- Group the whole house with one tap, then move the volume of every speaker with one slider while each room keeps its own level.
+- Switch the amplifier to the TV input when the TV turns on, load a movie EQ preset, and go back to your music preset afterwards.
+- Power an amplifier from the streamer's 12V trigger when music starts, and cut it when the music stops.
 - Send the living room streamer to Bluetooth headphones at 10 pm and back to the amplifier in the morning.
-- Change the equalizer preset when the TV input becomes the source.
-- Start a radio preset in the kitchen at 7 am and set a sleep timer on the bedroom speaker at night.
+- Turn the subwoofer off and dim the screen and status LED at the kids' bedtime.
+- Wake up to a radio preset and fall asleep with a sleep timer.
+- Put the current source, sample rate and bit depth on a dashboard, and install speaker firmware updates from Home Assistant.
 
 ## How it compares with the built-in integrations
 
