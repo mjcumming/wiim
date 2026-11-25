@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.1.7-beta.1] - 2026-11-25
+
+Beta. In HACS, open WiiM Audio and turn on **Show beta** to install it. After changing the volume or the track in the WiiM app, the device diagnostics download should show `connection_info.upnp_events.event_count` above zero.
+
+### Fixed
+
+- Subscribe to the speaker's UPnP events again. The subscription was lost when the device layer moved into pywiim in November 2025, so every change waited for the next poll. Play state, volume and track changes now reach Home Assistant when the speaker reports them. Polling is unchanged and remains the fallback: a speaker that rejects the subscription, or a Home Assistant address the speaker cannot reach, behaves as before. The device diagnostics download shows whether the subscription is active and how many events have arrived, under `connection_info.upnp_events`. Requires pywiim 3.0.6, which fixes two faults in its event handling: an event cancelled the task that last refreshed the player, which could interrupt a group join, and a Spotify track change left the title and artist empty. On a WiiM Pro (firmware `Linkplay.4.8.833748`) playing Spotify, the integration's coordinator ran in a Home Assistant core on the same network: it received the events, showed a track change before the next poll, and kept the title. Not yet run in a full Home Assistant install, with a group, or on other models.
+
+### Changed
+
+- **Dependency**: `pywiim` **3.0.6**.
+
 ## [1.1.6] - 2026-11-25
 
 ### Added

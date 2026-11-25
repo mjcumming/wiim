@@ -333,6 +333,8 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
         # UPnP availability
         upnp_client = getattr(player, "_upnp_client", None)
         connection_info["upnp_available"] = upnp_client is not None
+        # Whether the speaker pushes state changes, and how many have arrived
+        connection_info["upnp_events"] = coordinator.upnp_event_state
 
         # =================================================================
         # COORDINATOR INFO

@@ -13,7 +13,7 @@
 
 - Prefer the `Player` wrapper when integrating with Home Assistant’s `DataUpdateCoordinator`; it handles caching, HTTP + UPnP merging, and exposes convenient properties.
 - Use `PollingStrategy` from the library to adapt polling intervals instead of hardcoding scan intervals.
-- When you enable UPnP queue operations or event subscriptions, create the UPnP client inside the integration and pass it to `Player` and (optionally) `UpnpEventer`.
+- `Player` creates its own UPnP client during refresh. For event subscriptions the coordinator passes that client to `UpnpEventer`; see [UPnP events](../docs/ARCHITECTURE.md#upnp-events). The upstream guide still describes creating the client in the integration.
 - Group operations (`join_group`, `leave_group`) are already orchestrated by the library—call them and rely on the callback to update entities.
 
 Refer to the full upstream guide whenever you need code samples, diagrams, or the complete checklist.
@@ -112,3 +112,5 @@ the custom label plus the previous/canonical names, so the integration consumes 
 **Review 2026-11-03 (prepared for pywiim 2.3.22):** `Player.eq_preset` keeps the `EQGetBand` name when `getPlayerStatus` `eq` stays flat. The integration still reads `eq_preset` / `eq_presets` and calls `set_eq_preset`. No Home Assistant API change.
 
 **Review 2026-11-03 (prepared for pywiim 3.0.0, PR #37):** `Player.eq_preset` can be `None` when state is unknown, and unsaved bands appear as `Custom` with `eq_is_custom` true. `Player.peq_enabled` distinguishes active, inactive, and unknown; `disable_peq()` turns PEQ off without shadowing a saved preset named Off. The player verifies graphic preset/enable, custom bands, and PEQ preset/disable commands and reconciles both states. PEQ profile creation and editing remain library APIs. Merge and release require the published dependency and pinned-package validation.
+
+**Review 2026-11-25 (pywiim 3.0.6):** fixes for the UPnP event path. A Spotify `TrackSource` URI is the `spotify` source and no longer clears the track, metadata containing `&` parses, and metadata enrichment no longer cancels the task that called `Player.refresh()` (this last one also affected polling: a poll could cancel a group join). The integration subscribes to UPnP events again from this version; see [UPnP events](../docs/ARCHITECTURE.md#upnp-events). No Player API change.

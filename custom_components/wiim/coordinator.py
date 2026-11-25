@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
+from collections.abc import Coroutine
 from datetime import timedelta
 from typing import Any
 
@@ -11,8 +14,14 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pywiim import Player, PollingStrategy, WiiMClient
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
+from pywiim.upnp import UpnpClient, UpnpEventer
 
 _LOGGER = logging.getLogger(__name__)
+
+# Wait before subscribing to UPnP events again. After a failed attempt it
+# doubles up to the maximum, so a speaker that never accepts is not asked often.
+_UPNP_RETRY_INITIAL = 60.0
+_UPNP_RETRY_MAX = 3600.0
 _PYWIIM_MISC_LOGGER_NAME = "pywiim.api.misc"
 _LED_READ_FALLBACK_MESSAGE = "LED indicator read not available for device (no API or read failed); assuming on"
 _EXPECTED_PYWIIM_LOG_FILTER_INSTALLED = False
@@ -139,6 +148,13 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._polling_strategy = PollingStrategy(self._capabilities) if self._capabilities else PollingStrategy({})
         self._refresh_in_progress = False
 
+        # UPnP events are an addition to polling. See async_start_upnp_events().
+        self._upnp_events_enabled = False
+        self._upnp_eventer: UpnpEventer | None = None
+        self._upnp_task: asyncio.Task[None] | None = None
+        self._upnp_retry_delay = _UPNP_RETRY_INITIAL
+        self._upnp_retry_at = 0.0
+
     def update_capabilities(self, capabilities: dict[str, Any]) -> None:
         """Apply a refreshed capabilities mapping (e.g. after firmware change).
 
@@ -213,6 +229,112 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         self.async_update_listeners()
 
+    # ===== UPnP events =====
+
+    @callback
+    def async_start_upnp_events(self) -> None:
+        """Subscribe to UPnP events once the Player has a UPnP client.
+
+        Events report play state, volume and track changes without waiting for
+        the next poll. Polling is unchanged, so a speaker that rejects the
+        subscription, or a Home Assistant address the speaker cannot reach,
+        leaves the integration working as it does without events.
+        """
+        self._upnp_events_enabled = True
+        self._async_update_upnp_events(reachable=self.last_update_success)
+
+    async def async_stop_upnp_events(self) -> None:
+        """Unsubscribe from UPnP events and close the callback listener."""
+        self._upnp_events_enabled = False
+        if (task := self._upnp_task) is not None:
+            await asyncio.wait([task])
+        if (eventer := self._upnp_eventer) is not None:
+            self._upnp_eventer = None
+            await eventer.async_unsubscribe()
+
+    @property
+    def upnp_event_state(self) -> dict[str, Any]:
+        """Return the UPnP event subscription state for diagnostics."""
+        if (eventer := self._upnp_eventer) is None:
+            return {"subscribed": False}
+        stats = eventer.statistics
+        return {
+            "subscribed": True,
+            "event_count": stats["event_count"],
+            "seconds_since_last_event": stats["time_since_last_event"],
+        }
+
+    @callback
+    def _async_update_upnp_events(self, reachable: bool) -> None:
+        """Bring the UPnP subscription in line with the latest poll result."""
+        if self._upnp_task is not None:
+            # A subscribe or unsubscribe is still running. The next poll re-checks.
+            return
+
+        if (eventer := self._upnp_eventer) is not None:
+            if reachable:
+                return
+            # async-upnp-client drops a subscription it cannot renew while the
+            # speaker is away and does not retry. Release this one now and
+            # subscribe again once the speaker answers polls. The wait keeps a
+            # speaker with a poor connection from being re-subscribed every poll.
+            self._upnp_eventer = None
+            self._upnp_retry_at = time.monotonic() + _UPNP_RETRY_INITIAL
+            self._async_run_upnp_task(eventer.async_unsubscribe(), "unsubscribe")
+            return
+
+        if not (reachable and self._upnp_events_enabled) or time.monotonic() < self._upnp_retry_at:
+            return
+        # pywiim's Player creates its UPnP client in the background and retries
+        # on its own, so the client can appear on any poll.
+        upnp_client = getattr(self.player, "_upnp_client", None)
+        if isinstance(upnp_client, UpnpClient):
+            self._async_run_upnp_task(self._async_subscribe_upnp(upnp_client), "subscribe")
+
+    @callback
+    def _async_run_upnp_task(self, coro: Coroutine[Any, Any, None], action: str) -> None:
+        """Run one subscribe or unsubscribe at a time, off the polling path."""
+        task = self.hass.async_create_background_task(coro, f"wiim_upnp_{action}_{self.player.host}")
+        self._upnp_task = task
+        task.add_done_callback(self._async_upnp_task_done)
+
+    @callback
+    def _async_upnp_task_done(self, task: asyncio.Task[None]) -> None:
+        """Allow the next subscribe or unsubscribe."""
+        if self._upnp_task is task:
+            self._upnp_task = None
+
+    async def _async_subscribe_upnp(self, upnp_client: UpnpClient) -> None:
+        """Subscribe to the speaker's UPnP events through the Player's client."""
+        host = self.player.host
+        eventer = UpnpEventer(
+            upnp_client,
+            self.player,
+            self.player.uuid or host,
+            state_updated_callback=self._on_player_state_changed,
+        )
+        try:
+            # pywiim listens on the local address that routes to the speaker, as
+            # Home Assistant's DLNA integration does. network.async_get_source_ip
+            # only returns addresses of enabled adapters, so on a host with several
+            # adapters it can name one the speaker cannot reach.
+            await eventer.start()
+        except Exception as err:  # noqa: BLE001 - events are optional and polling continues
+            _LOGGER.debug(
+                "UPnP event subscription failed for %s, polling continues; next attempt in %.0fs: %s",
+                host,
+                self._upnp_retry_delay,
+                err,
+            )
+            self._upnp_retry_at = time.monotonic() + self._upnp_retry_delay
+            self._upnp_retry_delay = min(self._upnp_retry_delay * 2, _UPNP_RETRY_MAX)
+            await eventer.async_unsubscribe()
+            return
+
+        self._upnp_retry_delay = _UPNP_RETRY_INITIAL
+        self._upnp_eventer = eventer
+        _LOGGER.debug("Subscribed to UPnP events for %s", host)
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Update coordinator data - polls device following pywiim's PollingStrategy."""
         try:
@@ -243,11 +365,14 @@ class WiiMCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.player.media_title,
                 )
 
+            self._async_update_upnp_events(reachable=True)
+
             result = {"player": self.player}
             return result
 
         except WiiMError as err:
             if _is_expected_unreachable_error(err):
+                self._async_update_upnp_events(reachable=False)
                 _LOGGER.debug("Update failed for %s: %s", self.player.host, _compact_wiim_error(err))
                 # Powered-off / unreachable devices must go unavailable so automations
                 # that wait on availability (e.g. smart-plug scripts) can proceed.

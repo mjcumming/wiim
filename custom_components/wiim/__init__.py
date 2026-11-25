@@ -43,8 +43,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
@@ -838,6 +838,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         len(enabled_platforms),
     )
 
+    # UPnP events add push updates on top of polling. Subscribing happens in
+    # the background and cannot fail setup; without it the entry polls as before.
+    coordinator.async_start_upnp_events()
+
+    async def _async_stop_upnp_events(_event: Event) -> None:
+        """Release the speaker's subscriptions when Home Assistant stops."""
+        await coordinator.async_stop_upnp_events()
+
+    entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop_upnp_events))
+
     # After every setup-time entry write. An earlier listener would reload the
     # entry when those writes change data (Issue #275).
     entry.async_on_unload(entry.add_update_listener(_update_listener))
@@ -853,6 +863,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_data = hass.data[DOMAIN].pop(entry.entry_id, {})
         coordinator = entry_data.get("coordinator")
         if coordinator:
+            await coordinator.async_stop_upnp_events()
             device_name = coordinator.player.name or entry.title or "WiiM Speaker"
             _LOGGER.debug("Unloaded WiiM integration for %s", device_name)
     return unload_ok
