@@ -21,7 +21,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.util import dt as dt_util
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
 from .const import CONF_VOLUME_STEP, DEFAULT_VOLUME_STEP, DOMAIN
@@ -139,6 +138,7 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             group_play_state = player.play_state
 
         # Derive state from play_state string (group uses master's play_state)
+        previous_state = self._attr_state
         if group_play_state in ("play", "playing"):
             current_state = MediaPlayerState.PLAYING
         elif group_play_state == "pause":
@@ -169,8 +169,10 @@ class WiiMGroupMediaPlayer(WiiMMediaPlayerMixin, WiimEntity, MediaPlayerEntity):
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
         elif current_state == MediaPlayerState.PLAYING:
-            self._attr_media_position = new_position
-            self._attr_media_position_updated_at = dt_util.utcnow()
+            self._publish_playing_position(
+                new_position,
+                already_playing=previous_state == MediaPlayerState.PLAYING,
+            )
         elif current_state == MediaPlayerState.IDLE or current_state is None:
             self._attr_media_position = None
             self._attr_media_position_updated_at = None
