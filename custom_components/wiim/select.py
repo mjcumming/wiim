@@ -10,6 +10,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from pywiim import STANDBY_TIMEOUTS
 from pywiim.exceptions import WiiMError
 
 from .const import DOMAIN
@@ -61,6 +62,13 @@ async def async_setup_entry(
         _LOGGER.debug("Creating DAC filter select entity - device supports digital filter")
     else:
         _LOGGER.debug("Skipping DAC filter select entity - device does not support digital filter")
+
+    # Idle time before standby. pywiim sets this only when getPowerModeTime returns idleInterval.
+    if coordinator.player.supports_standby_timeout:
+        entities.append(WiiMStandbyTimeoutSelect(coordinator, config_entry))
+        _LOGGER.debug("Creating standby timeout select entity - device supports standby timeout")
+    else:
+        _LOGGER.debug("Skipping standby timeout select entity - device does not support standby timeout")
 
     # RoomFit: created when the device has saved profiles. An empty list means
     # none are saved yet, so a later first profile needs an integration reload.
@@ -316,6 +324,43 @@ class WiiMDACFilterSelect(WiimEntity, SelectEntity):
         """Set the DAC filter by the name pywiim cached from the device."""
         async with self.wiim_command(f"select DAC filter '{option}'"):
             await self.coordinator.player.set_digital_filter(option)
+
+
+class WiiMStandbyTimeoutSelect(WiimEntity, SelectEntity):
+    """Select for how long the speaker stays idle before standby.
+
+    Created only when ``player.supports_standby_timeout`` is true. The options
+    are the nine labels from the WiiM Home app. ``-1`` is Never.
+    """
+
+    _attr_icon = "mdi:timer-sand"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "standby_timeout"
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_standby_timeout"
+        self._attr_name = "Standby Timeout"
+
+    @property
+    def options(self) -> list[str]:
+        """Return the app's nine timeout labels."""
+        return list(STANDBY_TIMEOUTS.values())
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the label for the cached idle seconds."""
+        return STANDBY_TIMEOUTS.get(self.coordinator.player.standby_timeout)
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the idle time from one of the app labels."""
+        seconds = next((value for value, label in STANDBY_TIMEOUTS.items() if label == option), None)
+        if seconds is None:
+            raise HomeAssistantError(f"Unknown standby timeout {option!r}")
+        async with self.wiim_command(f"select standby timeout '{option}'"):
+            await self.coordinator.player.set_standby_timeout(seconds)
 
 
 class WiiMRoomFitSelect(WiimEntity, SelectEntity):

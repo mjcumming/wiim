@@ -87,6 +87,9 @@
       "dac_filter": {
         "name": "DAC Filter"
       },
+      "standby_timeout": {
+        "name": "Standby Timeout"
+      },
       "room_fit": {
         "name": "RoomFit"
       },
