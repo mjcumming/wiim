@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-11-25
+
+### Added
+
+- Add a Standby Timeout select for how long a speaker stays idle before standby. The nine choices match the WiiM Home app, including Never. Requires pywiim 3.0.5 ([#321](https://github.com/mjcumming/wiim/issues/321)). On Home Assistant, Main Floor Speakers, Outdoor, and Master Bedroom (WiiM Pro, firmware `Linkplay.4.8.833748`) and Cabin Speakers showed 2 mins. Main Floor Speakers was set to 30 seconds and restored. Dock Speakers (firmware `4.6.415145`) does not report the setting, so it has no select.
+
+### Changed
+
+- **Dependency**: `pywiim` **3.0.5**.
+
 ## [1.1.5] - 2026-11-25
 
 ### Fixed

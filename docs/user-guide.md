@@ -597,6 +597,7 @@ Complete reference for all entities, configuration options, and technical detail
 
 - `select.{device_name}_audio_output_mode` - Output mode (model-specific: Line Out, Speaker Out, Optical, `BT: …`, and so on)
 - `select.{device_name}_dac_filter` - DAC digital filter, when the device returns a filter list (WiiM Pro Plus). Applies to analog Line Out only.
+- `select.{device_name}_standby_timeout` - How long the speaker stays idle before standby, when the device reports that setting. The choices match the WiiM Home app, from 30 seconds through 4 hours, plus Never.
 - `select.{device_name}_room_fit` - Saved RoomFit profile, when the device has at least one. `Off` turns RoomFit off. Choosing a name loads that profile. A device with no saved profiles does not get this select until the integration is reloaded after the first profile is saved.
 - `select.{device_name}_channel` - Output channel: Stereo, Left, Right, or Mono, when the device supports channel selection. Mono is offered only while the player is solo and supports standalone channel mode. Solo and grouped playback can have separate settings. Set one grouped speaker to Left and another to Right for a stereo pair. This is not the balance control.
 

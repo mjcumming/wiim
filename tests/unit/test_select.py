@@ -55,6 +55,9 @@ def mock_coordinator():
     coordinator.player.digital_filter_types = []
     coordinator.player.digital_filter = None
     coordinator.player.set_digital_filter = AsyncMock()
+    coordinator.player.supports_standby_timeout = False
+    coordinator.player.standby_timeout = None
+    coordinator.player.set_standby_timeout = AsyncMock()
     coordinator.player.room_correction_profiles = []
     coordinator.player.room_correction = None
     coordinator.player.set_room_correction = AsyncMock()
@@ -973,6 +976,117 @@ class TestWiiMDACFilterSelect:
         await async_setup_entry(hass, mock_config_entry, add_entities)
 
         assert len(entities) == 2
+
+
+class TestWiiMStandbyTimeoutSelect:
+    """Standby timeout select uses the app labels and writes idle seconds."""
+
+    def test_initialization(self, mock_coordinator, mock_config_entry):
+        """Test unique id, name, and configuration category."""
+        from homeassistant.const import EntityCategory
+
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect
+
+        entity = WiiMStandbyTimeoutSelect(mock_coordinator, mock_config_entry)
+        assert entity.unique_id == "test-uuid_standby_timeout"
+        assert entity.name == "Standby Timeout"
+        assert entity.entity_category is EntityCategory.CONFIG
+        assert entity.icon == "mdi:timer-sand"
+
+    def test_options_and_current(self, mock_coordinator, mock_config_entry):
+        """Options are the nine app labels, and the current value is the cached seconds."""
+        from pywiim import STANDBY_TIMEOUTS
+
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect
+
+        mock_coordinator.player.standby_timeout = 120
+        entity = WiiMStandbyTimeoutSelect(mock_coordinator, mock_config_entry)
+        assert entity.options == list(STANDBY_TIMEOUTS.values())
+        assert entity.current_option == "2 mins"
+
+    def test_current_option_unknown_is_none(self, mock_coordinator, mock_config_entry):
+        """A missing or unlisted interval does not invent a selection."""
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect
+
+        entity = WiiMStandbyTimeoutSelect(mock_coordinator, mock_config_entry)
+        mock_coordinator.player.standby_timeout = None
+        assert entity.current_option is None
+        mock_coordinator.player.standby_timeout = 45
+        assert entity.current_option is None
+
+    async def test_select_option(self, mock_coordinator, mock_config_entry):
+        """Selecting a label writes the matching idle seconds."""
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect
+
+        entity = WiiMStandbyTimeoutSelect(mock_coordinator, mock_config_entry)
+        await entity.async_select_option("30 seconds")
+        mock_coordinator.player.set_standby_timeout.assert_awaited_once_with(30)
+
+    async def test_select_option_rejects_unknown_label(self, mock_coordinator, mock_config_entry):
+        """A label outside the nine app options is not sent."""
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect
+
+        entity = WiiMStandbyTimeoutSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="Unknown standby timeout"):
+            await entity.async_select_option("10 seconds")
+        mock_coordinator.player.set_standby_timeout.assert_not_called()
+
+    async def test_select_option_handles_error(self, mock_coordinator, mock_config_entry):
+        """WiiMError from the setter becomes a Home Assistant error."""
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect
+
+        mock_coordinator.player.set_standby_timeout = AsyncMock(side_effect=WiiMError("rejected"))
+        entity = WiiMStandbyTimeoutSelect(mock_coordinator, mock_config_entry)
+        with pytest.raises(HomeAssistantError, match="Failed to select standby timeout"):
+            await entity.async_select_option("Never")
+
+    @pytest.mark.asyncio
+    async def test_setup_creates_entity_when_supported(self, hass, mock_coordinator, mock_config_entry):
+        """The select exists only when the speaker reports an idle interval."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect, async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = False
+        mock_coordinator.player.supports_eq = False
+        mock_coordinator.player.supports_standby_timeout = True
+        mock_config_entry.entry_id = "test-entry"
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 1
+        assert isinstance(entities[0], WiiMStandbyTimeoutSelect)
+
+    @pytest.mark.asyncio
+    async def test_setup_skips_entity_when_unsupported(self, hass, mock_coordinator, mock_config_entry):
+        """No standby select when getPowerModeTime did not return an interval."""
+        from custom_components.wiim.const import DOMAIN
+        from custom_components.wiim.select import WiiMStandbyTimeoutSelect, async_setup_entry
+
+        mock_coordinator.player.supports_audio_output = True
+        mock_coordinator.player.supports_eq = False
+        mock_coordinator.player.supports_standby_timeout = False
+        mock_config_entry.entry_id = "test-entry"
+        hass.data.setdefault(DOMAIN, {})[mock_config_entry.entry_id] = {
+            "coordinator": mock_coordinator,
+            "entry": mock_config_entry,
+        }
+        entities = []
+
+        def add_entities(new_entities, update_before_add=False):
+            entities.extend(new_entities)
+
+        await async_setup_entry(hass, mock_config_entry, add_entities)
+
+        assert len(entities) == 1
+        assert not any(isinstance(entity, WiiMStandbyTimeoutSelect) for entity in entities)
 
 
 class TestWiiMRoomFitSelect:
