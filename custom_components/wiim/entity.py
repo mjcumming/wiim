@@ -1,12 +1,16 @@
 """Base entity class for WiiM integration - minimal HA glue only."""
 
 import logging
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pywiim.exceptions import WiiMConnectionError, WiiMError, WiiMTimeoutError
 
@@ -14,6 +18,9 @@ from .const import DOMAIN
 from .coordinator import WiiMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Shown when the remote has not reported a name (it normally reports "WiiM Voice Remote")
+REMOTE_DEFAULT_NAME = "WiiM Voice Remote"
 
 
 def build_device_info(player: Any, config_entry: ConfigEntry) -> DeviceInfo:
@@ -96,3 +103,125 @@ class WiimEntity(CoordinatorEntity):
 
             _LOGGER.error("[%s] %s failed: %s", self.name, operation, err, exc_info=True)
             raise HomeAssistantError(f"Failed to {operation}: {err}") from err
+
+
+def remote_paired(player: Any) -> bool:
+    """Return True when the speaker supports a WiiM Voice Remote and one is paired.
+
+    Both values come from pywiim (ADR 0006/0007). ``ble_remote`` keeps its last
+    value when a read fails, so one failed poll does not make this False.
+    """
+    if not player.supports_ble_remote:
+        return False
+    remote = player.ble_remote
+    return remote is not None and remote.paired is True
+
+
+def remote_possible(player: Any) -> bool:
+    """Return False only when pywiim knows the speaker has no remote support.
+
+    ``supports_ble_remote`` is None while the connect-time probe was inconclusive;
+    pywiim sets it True on a later successful read (ADR 025), so wait for it.
+    """
+    client = player.client
+    return bool(client) and client.capabilities.get("supports_ble_remote", False) is not False
+
+
+def format_remote_firmware(firmware: str | None) -> str | None:
+    """Show the remote's firmware like the WiiM Home app: ``0054`` as ``54``, all zeros as ``0``.
+
+    Anything that is not all digits is shown as pywiim reports it.
+    """
+    if not firmware:
+        return None
+    return str(int(firmware)) if firmware.isdigit() else firmware
+
+
+def remote_identifier(config_entry: ConfigEntry, player: Any) -> tuple[str, str]:
+    """Return the device registry identifier of the entry's WiiM Voice Remote."""
+    return (DOMAIN, f"{config_entry.unique_id or player.host}_remote")
+
+
+def build_remote_device_info(player: Any, config_entry: ConfigEntry) -> DeviceInfo:
+    """Build the HA device for the WiiM Voice Remote, linked to its speaker.
+
+    The remote is its own device with the speaker as ``via_device``. Name and
+    firmware come from the remote; the BLE MAC is its only connection.
+    """
+    uuid = config_entry.unique_id or player.host
+    remote = player.ble_remote
+
+    device_info = DeviceInfo(
+        identifiers={remote_identifier(config_entry, player)},
+        via_device=(DOMAIN, uuid),
+        manufacturer="WiiM",
+        model=REMOTE_DEFAULT_NAME,
+        name=(remote.name if remote else None) or REMOTE_DEFAULT_NAME,
+        sw_version=format_remote_firmware(remote.firmware if remote else None),
+    )
+    if remote and remote.mac:
+        device_info["connections"] = {(CONNECTION_BLUETOOTH, remote.mac)}
+    return device_info
+
+
+@callback
+def async_add_remote_entities(
+    coordinator: WiiMCoordinator,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+    create_entities: Callable[[], list[Entity]],
+) -> None:
+    """Add a platform's remote entities once a remote is paired.
+
+    Adds them now when a remote is already paired, otherwise on the first
+    coordinator update after pairing. Nothing is removed afterwards: a remote
+    that is unpaired or not connected makes its entities unavailable.
+    """
+    if remote_paired(coordinator.player):
+        async_add_entities(create_entities())
+        return
+    if not remote_possible(coordinator.player):
+        return
+
+    remove_listener: Callable[[], None] | None = None
+    added = False
+
+    @callback
+    def _unsubscribe() -> None:
+        """Remove the coordinator listener once, whichever of pairing or unload comes first."""
+        nonlocal remove_listener
+        if remove_listener is not None:
+            remove_listener()
+            remove_listener = None
+
+    @callback
+    def _add_when_paired() -> None:
+        nonlocal added
+        if added or not remote_paired(coordinator.player):
+            return
+        added = True
+        _unsubscribe()
+        async_add_entities(create_entities())
+
+    remove_listener = coordinator.async_add_listener(_add_when_paired)
+    config_entry.async_on_unload(_unsubscribe)
+
+
+class WiimRemoteEntity(WiimEntity):
+    """Base class for entities on the WiiM Voice Remote device."""
+
+    _attr_has_entity_name = True
+    # Battery, signal strength and volume step make no sense for a remote that is away
+    _requires_connection = True
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the remote's own device, linked to the speaker."""
+        return build_remote_device_info(self.coordinator.player, self._config_entry)
+
+    @property
+    def available(self) -> bool:
+        """Unavailable while the speaker, the pairing or (where needed) the connection is down."""
+        if not self.coordinator.last_update_success or not remote_paired(self.coordinator.player):
+            return False
+        return self.coordinator.player.ble_remote.connected or not self._requires_connection

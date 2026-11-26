@@ -602,6 +602,15 @@ Complete reference for all entities, configuration options, and technical detail
 - `select.{device_name}_roomfit` - Saved RoomFit profile, when the device has at least one. `Off` turns RoomFit off. Choosing a name loads that profile. A device with no saved profiles does not get this select until the integration is reloaded after the first profile is saved.
 - `select.{device_name}_channel` - Output channel: Stereo, Left, Right, or Mono, when the device supports channel selection. Mono is offered only while the player is solo and supports standalone channel mode. Solo and grouped playback can have separate settings. Set one grouped speaker to Left and another to Right for a stereo pair. This is not the balance control.
 
+**WiiM Voice Remote** (its own device, linked to the speaker; created when the speaker supports a remote and one is paired)
+
+- `select.{remote_name}_volume_adjustment_step` - Volume adjustment step: how far one press on the remote moves the volume: Fine Adjustment, Small Step, Medium Step, Large Step or Quick Adjustment. These are the WiiM Home app's labels for steps 1 to 5.
+- `sensor.{remote_name}_battery` - Battery level in percent
+- `binary_sensor.{remote_name}_connected` - Whether the remote is connected to the speaker
+- `sensor.{remote_name}_signal_strength` - Bluetooth signal in dBm. A diagnostic sensor, disabled by default.
+
+`{remote_name}` is the name the remote reports, usually `wiim_voice_remote`. Battery, signal strength and the volume adjustment step are unavailable while the remote is not connected, and every remote entity is unavailable while no remote is paired. The device shows the remote's firmware without leading zeros, as the app does (`0054` shows as `54`). Its diagnostics download holds only the `ble_remote` section and the speaker's name; the speaker's own download is unchanged. The remote's state is read from the speaker about once a minute, so a change can take that long to show. The battery value can lag after a battery change. A remote paired after Home Assistant has started gets its device without a restart, within about five minutes, which is how often the speaker is asked while no remote is paired. The device diagnostics download has a `ble_remote` section with the BLE address masked.
+
 **Switches** (each is created only when the speaker supports it)
 
 - `switch.{device_name}_subwoofer` - Subwoofer output on or off

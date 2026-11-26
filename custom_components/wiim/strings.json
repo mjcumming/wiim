@@ -96,6 +96,9 @@
       },
       "output_channel": {
         "name": "Channel"
+      },
+      "remote_volume_step": {
+        "name": "Volume adjustment step"
       }
     },
     "switch": {
@@ -110,6 +113,19 @@
     "number": {
       "subwoofer_level": {
         "name": "Subwoofer Level"
+      }
+    },
+    "sensor": {
+      "remote_battery": {
+        "name": "Battery"
+      },
+      "remote_rssi": {
+        "name": "Signal strength"
+      }
+    },
+    "binary_sensor": {
+      "remote_connected": {
+        "name": "Connected"
       }
     }
   },

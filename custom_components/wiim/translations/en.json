@@ -3,6 +3,22 @@
     "select": {
       "peq_preset": {
         "name": "Parametric EQ Preset"
+      },
+      "remote_volume_step": {
+        "name": "Volume adjustment step"
+      }
+    },
+    "sensor": {
+      "remote_battery": {
+        "name": "Battery"
+      },
+      "remote_rssi": {
+        "name": "Signal strength"
+      }
+    },
+    "binary_sensor": {
+      "remote_connected": {
+        "name": "Connected"
       }
     }
   },

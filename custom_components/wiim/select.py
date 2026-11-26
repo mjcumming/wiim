@@ -10,12 +10,12 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pywiim import STANDBY_TIMEOUTS
+from pywiim import REMOTE_VOLUME_STEPS, STANDBY_TIMEOUTS
 from pywiim.exceptions import WiiMError
 
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
-from .entity import WiimEntity
+from .entity import WiimEntity, WiimRemoteEntity, async_add_remote_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,6 +86,15 @@ async def async_setup_entry(
         _LOGGER.debug("Skipping channel select entity - device does not support output channel")
 
     async_add_entities(entities)
+
+    # WiiM Voice Remote: its own device, created once a remote is paired
+    async_add_remote_entities(
+        coordinator,
+        config_entry,
+        async_add_entities,
+        lambda: [WiiMRemoteVolumeStepSelect(coordinator, config_entry)],
+    )
+
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
     _LOGGER.debug(
         "Created %d select entities for %s",
@@ -443,3 +452,40 @@ class WiiMChannelSelect(WiimEntity, SelectEntity):
         """Set the output channel."""
         async with self.wiim_command(f"select channel '{option}'"):
             await self.coordinator.player.set_output_channel(CHANNEL_OPTIONS[option])
+
+
+class WiiMRemoteVolumeStepSelect(WiimRemoteEntity, SelectEntity):
+    """Select for how far one press on the WiiM Voice Remote moves the volume.
+
+    The five options are the labels from the WiiM Home app. Unavailable while
+    the remote is not paired or not connected.
+    """
+
+    _attr_icon = "mdi:volume-plus"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "remote_volume_step"
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_remote_volume_step"
+        # Explicit like the other entities here; the translation key keeps the same name in strings.json
+        self._attr_name = "Volume adjustment step"
+
+    @property
+    def options(self) -> list[str]:
+        """Return the app's five step labels."""
+        return list(REMOTE_VOLUME_STEPS.values())
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the label for the cached step, None when unknown."""
+        return REMOTE_VOLUME_STEPS.get(self.coordinator.player.remote_volume_step)
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the step from one of the app labels; pywiim confirms it by reading it back."""
+        step = next((value for value, label in REMOTE_VOLUME_STEPS.items() if label == option), None)
+        if step is None:
+            raise HomeAssistantError(f"Unknown remote volume step {option!r}")
+        async with self.wiim_command(f"select remote volume step '{option}'"):
+            await self.coordinator.player.set_remote_volume_step(step)

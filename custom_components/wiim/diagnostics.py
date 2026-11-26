@@ -13,6 +13,7 @@ from homeassistant.helpers.device_registry import DeviceEntry
 
 from .capability_flags import client_has_capability, get_client_capability
 from .data import get_all_coordinators, get_coordinator_from_entry
+from .entity import remote_identifier
 from .subwoofer_helpers import subwoofer_status_for_diagnostics
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +75,20 @@ TO_REDACT = [
     "location",
     "upnp_udn",
 ]
+
+
+def _ble_remote_diagnostics(player: Any) -> dict[str, Any]:
+    """Return the WiiM Voice Remote section. pywiim masks the BLE MAC in ``diagnostics_dict()``."""
+    try:
+        if not player.supports_ble_remote:
+            return {"supported": False}
+        if player.ble_remote is None:
+            return {"supported": True, "paired": None}
+        section: dict[str, Any] = player.ble_remote.diagnostics_dict()
+        section["volume_step"] = player.remote_volume_step
+        return section
+    except Exception as err:
+        return {"error": type(err).__name__}
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
@@ -142,6 +157,10 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             return {"error": "Coordinator not found for device"}
 
         player = coordinator.player
+
+        # The remote's own device gets only its section and the speaker it is linked to
+        if remote_identifier(entry, player) in device.identifiers:
+            return {"ble_remote": _ble_remote_diagnostics(player), "speaker_name": player.name}
 
         # =================================================================
         # DEVICE INFO
@@ -304,6 +323,11 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             subwoofer_info = {"supported": False, "error": "Failed to check subwoofer support"}
 
         # =================================================================
+        # WIIM VOICE REMOTE (pywiim masks the BLE MAC)
+        # =================================================================
+        ble_remote_info = _ble_remote_diagnostics(player)
+
+        # =================================================================
         # FIRMWARE UPDATE STATUS
         # =================================================================
         firmware_update = {
@@ -366,6 +390,7 @@ async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, 
             "media_info": media_info,
             "audio_quality": audio_quality,
             "subwoofer_info": subwoofer_info,
+            "ble_remote": ble_remote_info,
             "firmware_update": firmware_update,
             "connection_info": connection_info,
             "coordinator_info": coordinator_info,

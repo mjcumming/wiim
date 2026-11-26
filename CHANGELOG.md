@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add the WiiM Voice Remote as its own device, linked to the speaker ([#320](https://github.com/mjcumming/wiim/issues/320)). It has a **Volume adjustment step** select with the five WiiM Home app choices (Fine Adjustment, Small Step, Medium Step, Large Step, Quick Adjustment), a **Battery** sensor, a **Connected** sensor and a **Signal strength** sensor that is disabled by default. The device exists only when the speaker supports a remote and one is paired, appears without a restart (within about five minutes) when a remote is paired later, and is kept when one poll fails to read it. While the remote is not connected, Battery, Signal strength and the volume adjustment step are unavailable and Connected shows off; while no remote is paired, every entity is unavailable. The remote's own diagnostics download holds a `ble_remote` section with the BLE address masked and the speaker's name; the speaker's download has the same section. Uses pywiim 3.0.6, already pinned. Tested on a WiiM Pro Plus (firmware `Linkplay.4.8.833841`) in Home Assistant 2026.11.2: all five steps set in both directions, Connected off with the batteries out or out of Bluetooth range and on again, every entity unavailable after the remote was forgotten in the app and back on its own after re-pairing. Not tested on other models or firmware.
+
 ## [1.1.7] - 2026-11-26
 
 ### Fixed
