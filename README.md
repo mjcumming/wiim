@@ -1,5 +1,7 @@
 # WiiM Audio for Home Assistant
 
+If you like WiiM Audio, [star the repository](https://github.com/mjcumming/wiim). It helps other people find it.
+
 <p align="center">
   <img src="images/logo.png" alt="WiiM Audio logo" width="200"/>
 </p>
