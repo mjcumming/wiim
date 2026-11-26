@@ -2,14 +2,18 @@
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-11-26
+
+### Fixed
+
+- Subscribe to the speaker's UPnP events again. The subscription was lost when the device layer moved into pywiim in November 2025, so every change waited for the next poll. Play state, volume and track changes now reach Home Assistant when the speaker reports them. Polling is unchanged and remains the fallback: a speaker that rejects the subscription, or a Home Assistant address the speaker cannot reach, behaves as before. The device diagnostics download shows whether the subscription is active and how many events have arrived, under `connection_info.upnp_events`. Requires pywiim 3.0.6. On Home Assistant OS 18.1 (2026.11.3) on a Raspberry Pi, Main Floor Speakers, Master Bedroom, and Outdoor (WiiM Pro, firmware `Linkplay.4.8.833748`, each solo) subscribed. Main Floor Speakers, while playing, had received 22 events, the latest under a minute old. Master Bedroom and Outdoor had received their opening events. Not run with a group or on other models.
+- The 15 `wiim.*` actions and the system information page show their names and descriptions. The text existed in `strings.json` but was missing from the English translation file that Home Assistant loads.
+
 ### Changed
 
 - The options dialog labels no longer carry emoji. Three labels for options that no longer exist (playing update rate, idle update rate and diagnostic sensors) were removed from the English, French, Norwegian and Serbian translations.
 - The **Play Notification** action description no longer says the speaker lowers the music and restores it afterwards. Most firmware doesn't.
-
-### Fixed
-
-- The 15 `wiim.*` actions and the system information page show their names and descriptions. The text existed in `strings.json` but was missing from the English translation file that Home Assistant loads.
+- **Dependency**: `pywiim` **3.0.6**.
 
 ## [1.1.7-beta.1] - 2026-11-25
 
