@@ -172,7 +172,7 @@ EQ already follows the desired pattern: pywiim refresh owns the slow reads, and 
 - **Purpose**: Base entity class
 - **Responsibilities**:
   - Common entity functionality
-  - Device info
+  - Device info for the speaker, and for the WiiM Voice Remote as its own device linked with `via_device` when one is paired
   - Availability
 - **DO NOT**: Platform-specific logic
 
