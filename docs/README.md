@@ -115,6 +115,7 @@ These are created only when the speaker supports them:
 - Display light
 - Firmware Update (WiiM devices)
 - Bluetooth Output and audio quality sensors (sample rate, bit depth, bit rate)
+- WiiM Voice Remote device, when a remote is paired: Volume adjustment step select, Battery, Connected and Signal strength sensors
 
 The Reboot and Sync Time buttons are created when you turn on the Maintenance Buttons option.
 

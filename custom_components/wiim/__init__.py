@@ -225,6 +225,11 @@ def get_enabled_platforms(
     if bool(caps.get("supports_firmware_install")):
         platforms.append(Platform.UPDATE)
 
+    # The WiiM Voice Remote's Connected sensor is a binary sensor. None means the probe was
+    # inconclusive and pywiim may still set True (ADR 025); only False rules the remote out.
+    if caps.get("supports_ble_remote", False) is not False:
+        platforms.append(Platform.BINARY_SENSOR)
+
     # Add optional platforms based on user preferences
     # Note: BUTTON is in CORE_PLATFORMS (for Bluetooth scan), but maintenance buttons are optional
     for config_key, platform in OPTIONAL_PLATFORMS.items():

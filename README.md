@@ -124,6 +124,7 @@ Select **Configure** on a speaker's entry to change its options:
 | Multiroom Role sensor | Solo, Master or Slave | Always |
 | Current Input sensor | The current source, including streaming services | Always |
 | Diagnostic sensors | Device Status, Firmware, Bluetooth Output, Audio Quality, Sample Rate, Bit Depth and Bit Rate | Device Status and Firmware always, the others when the speaker reports them |
+| WiiM Voice Remote device | A separate device linked to the speaker, with a **Volume adjustment step** select (Fine Adjustment, Small Step, Medium Step, Large Step or Quick Adjustment), a **Battery** sensor and a **Connected** sensor. A **Signal strength** sensor is there too, disabled by default. Battery, signal strength and the volume adjustment step are unavailable while the remote is not connected | When the speaker supports a remote and one is paired |
 | Reboot and Sync Time buttons | Restart the speaker, or set its clock from Home Assistant | When the Maintenance Buttons option is on |
 
 The YAML samples below are actions. Paste one into **Developer tools** > **Actions** to try it, or use it as a step in an automation or a script.

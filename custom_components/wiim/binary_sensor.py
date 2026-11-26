@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_ENABLE_NETWORK_MONITORING, DOMAIN
 from .coordinator import WiiMCoordinator
-from .entity import WiimEntity
+from .entity import WiimEntity, WiimRemoteEntity, async_add_remote_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +51,30 @@ class WiiMConnectivityBinarySensor(WiimEntity, BinarySensorEntity):
         return attrs
 
 
+class WiiMRemoteConnectedBinarySensor(WiimRemoteEntity, BinarySensorEntity):
+    """Whether the WiiM Voice Remote is connected to its speaker.
+
+    Stays available while the remote is paired but away, so it can report off.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_translation_key = "remote_connected"
+    _requires_connection = False
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_remote_connected"
+        # Explicit like the other entities here; the translation key keeps the same name in strings.json
+        self._attr_name = "Connected"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True while the remote is connected."""
+        remote = self.coordinator.player.ble_remote
+        return remote.connected if remote else None
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -65,6 +89,15 @@ async def async_setup_entry(
         entities.append(WiiMConnectivityBinarySensor(coordinator, config_entry))
 
     async_add_entities(entities)
+
+    # WiiM Voice Remote: its own device, created once a remote is paired
+    async_add_remote_entities(
+        coordinator,
+        config_entry,
+        async_add_entities,
+        lambda: [WiiMRemoteConnectedBinarySensor(coordinator, config_entry)],
+    )
+
     _LOGGER.debug(
         "Created %d binary sensor entities for %s",
         len(entities),

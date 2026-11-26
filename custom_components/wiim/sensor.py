@@ -9,16 +9,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
+from homeassistant.const import PERCENTAGE, SIGNAL_STRENGTH_DECIBELS_MILLIWATT, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .capability_flags import client_has_capability, get_client_capability
 from .const import DOMAIN
 from .coordinator import WiiMCoordinator
-from .entity import WiimEntity
+from .entity import WiimEntity, WiimRemoteEntity, async_add_remote_entities
 from .version import get_pywiim_version
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,6 +70,18 @@ async def async_setup_entry(
         entities.append(WiiMBitRateSensor(coordinator, config_entry))
 
     async_add_entities(entities)
+
+    # WiiM Voice Remote: its own device, created once a remote is paired
+    async_add_remote_entities(
+        coordinator,
+        config_entry,
+        async_add_entities,
+        lambda: [
+            WiiMRemoteBatterySensor(coordinator, config_entry),
+            WiiMRemoteSignalSensor(coordinator, config_entry),
+        ],
+    )
+
     device_name = coordinator.player.name or config_entry.title or "WiiM Speaker"
     _LOGGER.debug(
         "Created %d sensor entities for %s (role sensor always included)",
@@ -501,3 +513,53 @@ class WiiMBitRateSensor(WiimEntity, SensorEntity):
     def native_value(self) -> int | None:
         """Return current track's bit rate in kbps."""
         return self.coordinator.player.media_bit_rate
+
+
+class WiiMRemoteBatterySensor(WiimRemoteEntity, SensorEntity):
+    """Battery level of the WiiM Voice Remote.
+
+    Unavailable while the remote is not connected. The value can lag after a
+    battery change.
+    """
+
+    _attr_device_class = SensorDeviceClass.BATTERY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_translation_key = "remote_battery"
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_remote_battery"
+        # Explicit like the other entities here; the translation key keeps the same name in strings.json
+        self._attr_name = "Battery"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the battery percent."""
+        remote = self.coordinator.player.ble_remote
+        return remote.battery if remote else None
+
+
+class WiiMRemoteSignalSensor(WiimRemoteEntity, SensorEntity):
+    """Bluetooth signal strength of the WiiM Voice Remote. Disabled by default."""
+
+    _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "remote_rssi"
+
+    def __init__(self, coordinator: WiiMCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        uuid = config_entry.unique_id or coordinator.player.host
+        self._attr_unique_id = f"{uuid}_remote_rssi"
+        # Explicit like the other entities here; the translation key keeps the same name in strings.json
+        self._attr_name = "Signal strength"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the signal strength in dBm."""
+        remote = self.coordinator.player.ble_remote
+        return remote.rssi if remote else None
